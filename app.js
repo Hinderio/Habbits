@@ -13,6 +13,34 @@
     { key: 'urge-surf', title: 'Craving-Welle', subtitle: 'Drang beobachten, ohne sofort zu handeln', minutes: 4, pattern: 'wahrnehmen · warten · wählen' },
     { key: 'gratitude', title: 'Dankbarkeits-Minute', subtitle: 'Kurzer mentaler Reset mit positiver Ankerung', minutes: 3, pattern: '3 Dinge benennen' }
   ];
+
+  const SMOKING_TIPS = [
+    {
+      title: '10-Minuten-Verzögerung',
+      body: 'Stell dir innerlich nur ein kleines Ziel: nicht nie wieder, sondern jetzt 10 Minuten später. Öffne danach bewusst neu, ob du wirklich rauchen willst.',
+      meta: '+10 Min.'
+    },
+    {
+      title: 'Wasser + kurzer Weg',
+      body: 'Trink ein Glas Wasser und geh einmal kurz weg vom Trigger-Ort. Die App soll genau diesen Moment zwischen Reiz und Zigarette stärker machen.',
+      meta: 'Reset'
+    },
+    {
+      title: 'Atmung statt Autopilot',
+      body: 'Mach 3 ruhige Atemzüge mit langer Ausatmung. Wenn der Druck noch da ist, logge die Craving-Welle und warte eine weitere Minute.',
+      meta: 'Atem'
+    },
+    {
+      title: 'Hände beschäftigen',
+      body: 'Nimm für 2 Minuten etwas in die Hand: Tee, Kaugummi, Stift, kurzer Notiz-Check. Ziel ist Ablenkung ohne Ersatz-Stress.',
+      meta: 'Ablenkung'
+    },
+    {
+      title: 'Trigger bewusst benennen',
+      body: 'Sag dir kurz: „Das ist gerade ein Craving, kein Befehl.“ Benenne Ort, Gefühl und nächster kleiner Schritt – dann erst entscheiden.',
+      meta: 'Klarheit'
+    }
+  ];
   const DAY_MS = 24 * 60 * 60 * 1000;
   const DEFAULT_HABIT_IDS = Object.freeze({
     weight: '00000000-0000-4000-8000-000000000101',
@@ -38,6 +66,9 @@
   let calendarCursor = new Date();
   let charts = { trend: null, points: null };
   let selectedTrendMetric = localStorage.getItem(TREND_METRIC_KEY) || 'points';
+  let activeSmokingTipIndex = 0;
+  let editingHabitId = null;
+  let editingTaskId = null;
   let renderQueued = false;
 
   const els = {};
@@ -92,11 +123,20 @@
       alcoholTodayBtn: $('#alcoholTodayBtn'),
       smokeHistory: $('#smokeHistory'),
       lastSmokePoints: $('#lastSmokePoints'),
+      cravingTipTitle: $('#cravingTipTitle'),
+      cravingTipBody: $('#cravingTipBody'),
+      cravingTipMeta: $('#cravingTipMeta'),
       meditationTechniqueGrid: $('#meditationTechniqueGrid'),
       meditationHistory: $('#meditationHistory'),
       habitForm: $('#habitForm'),
+      habitFormTitle: $('#habitFormTitle'),
+      habitSubmitBtn: $('#habitSubmitBtn'),
+      cancelHabitEditBtn: $('#cancelHabitEditBtn'),
       habitCards: $('#habitCards'),
       taskForm: $('#taskForm'),
+      taskFormTitle: $('#taskFormTitle'),
+      taskSubmitBtn: $('#taskSubmitBtn'),
+      cancelTaskEditBtn: $('#cancelTaskEditBtn'),
       taskPointsPreview: $('#taskPointsPreview'),
       tasksList: $('#tasksList'),
       calendarTitle: $('#calendarTitle'),
@@ -136,7 +176,9 @@
     });
     els.habitForm.addEventListener('submit', createHabit);
     els.taskForm.addEventListener('submit', createTask);
-    els.taskForm.effort.addEventListener('change', updateTaskPreview);
+    els.taskForm.elements.effort.addEventListener('change', updateTaskPreview);
+    if (els.cancelHabitEditBtn) els.cancelHabitEditBtn.addEventListener('click', resetHabitFormMode);
+    if (els.cancelTaskEditBtn) els.cancelTaskEditBtn.addEventListener('click', resetTaskFormMode);
     els.prevMonthBtn.addEventListener('click', () => moveMonth(-1));
     els.nextMonthBtn.addEventListener('click', () => moveMonth(1));
     els.todayMonthBtn.addEventListener('click', () => {
@@ -163,10 +205,15 @@
       if (!actionEl) return;
       const { action, id } = actionEl.dataset;
       if (action === 'complete-task') completeTask(id);
+      if (action === 'edit-task') editTask(id);
+      if (action === 'delete-task') deleteTask(id);
       if (action === 'archive-task') archiveTask(id);
+      if (action === 'edit-habit') editHabit(id);
+      if (action === 'delete-habit') deleteHabit(id);
       if (action === 'archive-habit') archiveHabit(id);
       if (action === 'log-habit') logHabit(id);
       if (action === 'delete-smoke') deleteSmoke(id);
+      if (action === 'rotate-craving-tip') rotateSmokingTip();
       if (action === 'log-meditation') logMeditationTechnique(id);
       if (action === 'select-day') {
         selectedCalendarDate = actionEl.dataset.day;
@@ -507,6 +554,10 @@
     return habit;
   }
 
+  function isSystemMeditationHabit(habit) {
+    return Boolean(habit && (habit.system_key === 'meditation' || habit.id === DEFAULT_HABIT_IDS.meditation || String(habit.name || '').trim().toLowerCase() === 'meditation'));
+  }
+
   function renderSmoking() {
     const todayAlcohol = alcoholForDate(toDateKey(new Date()));
     els.alcoholTodayBtn.textContent = todayAlcohol?.consumed ? 'Ja' : 'Nein';
@@ -514,6 +565,7 @@
     els.alcoholTodayBtn.setAttribute('aria-pressed', String(Boolean(todayAlcohol?.consumed)));
     const last = getLastCigarette();
     els.lastSmokePoints.textContent = `${last?.points || 0} Pkt.`;
+    renderSmokingTip(last);
 
     const items = [...state.cigarettes]
       .sort((a, b) => new Date(b.smoked_at) - new Date(a.smoked_at))
@@ -539,6 +591,46 @@
     }).join('');
   }
 
+
+  function renderSmokingTip(last = getLastCigarette()) {
+    if (!els.cravingTipTitle || !els.cravingTipBody || !els.cravingTipMeta) return;
+    const pauseMinutes = last ? Math.max(0, Math.floor((Date.now() - new Date(last.smoked_at).getTime()) / 60000)) : null;
+    const contextIndex = getContextualSmokingTipIndex(pauseMinutes);
+    const tip = SMOKING_TIPS[(activeSmokingTipIndex || contextIndex) % SMOKING_TIPS.length] || SMOKING_TIPS[contextIndex];
+    const nextGoal = getNextPauseGoalMinutes(pauseMinutes);
+    const goalText = pauseMinutes == null
+      ? 'Erste Pause bewusst starten'
+      : `Mini-Ziel: ${formatDuration(nextGoal)}`;
+
+    els.cravingTipTitle.textContent = tip.title;
+    els.cravingTipBody.innerHTML = `${escapeHtml(tip.body)} <strong>${escapeHtml(goalText)}</strong>`;
+    els.cravingTipMeta.textContent = tip.meta;
+  }
+
+  function getContextualSmokingTipIndex(pauseMinutes) {
+    const alcoholToday = Boolean(alcoholForDate(toDateKey(new Date()))?.consumed);
+    if (alcoholToday) return 4;
+    if (pauseMinutes == null) return 0;
+    if (pauseMinutes < 10) return 2;
+    if (pauseMinutes < 30) return 0;
+    if (pauseMinutes < 90) return 1;
+    return 3;
+  }
+
+  function getNextPauseGoalMinutes(pauseMinutes) {
+    if (pauseMinutes == null) return 10;
+    if (pauseMinutes < 30) return Math.min(30, pauseMinutes + 10);
+    if (pauseMinutes < 60) return 60;
+    if (pauseMinutes < 120) return 120;
+    if (pauseMinutes < 240) return 240;
+    return pauseMinutes + 30;
+  }
+
+  function rotateSmokingTip() {
+    activeSmokingTipIndex = (activeSmokingTipIndex + 1) % SMOKING_TIPS.length;
+    renderSmokingTip();
+  }
+
   function renderHabits() {
     const activeHabits = state.habits.filter(h => !h.is_archived);
     if (!activeHabits.length) {
@@ -556,11 +648,16 @@
       const control = habit.type === 'boolean'
         ? `<button class="pill primary" type="button" data-action="log-habit" data-id="${habit.id}">${todayValue ? 'Heute erledigt' : 'Heute abhaken'}</button>`
         : `<div class="habit-log-row"><input id="habit-input-${habit.id}" type="number" step="0.01" placeholder="Wert ${unit ? `(${escapeHtml(unit)})` : ''}" /><button class="pill primary" type="button" data-action="log-habit" data-id="${habit.id}">Loggen</button></div>`;
+      const isSystemHabit = isSystemMeditationHabit(habit);
+      const habitActions = `
+        <button class="mini-btn" type="button" data-action="edit-habit" data-id="${habit.id}">Bearbeiten</button>
+        <button class="mini-btn" type="button" data-action="archive-habit" data-id="${habit.id}">Archiv</button>
+        ${isSystemHabit ? '<span class="badge muted">System</span>' : `<button class="mini-btn danger" type="button" data-action="delete-habit" data-id="${habit.id}">Löschen</button>`}`;
 
-      return `<article class="habit-card">
+      return `<article class="habit-card ${editingHabitId === habit.id ? 'is-editing' : ''}">
         <div class="habit-card-head">
           <div class="habit-title"><span class="habit-icon">${escapeHtml(habit.icon || '✨')}</span><div><strong>${escapeHtml(habit.name)}</strong><small>${habit.typeLabel || typeLabel(habit.type)}${unit ? ` · ${escapeHtml(unit)}` : ''}</small></div></div>
-          <button class="mini-btn" type="button" data-action="archive-habit" data-id="${habit.id}">Archiv</button>
+          <div class="list-actions">${habitActions}</div>
         </div>
         ${control}
         <div class="meta" style="margin-top:10px">Heute: <strong>${formatHabitValue(habit, todayValue)}</strong>${habit.target ? ` · Ziel: ${habit.target} ${escapeHtml(unit)}` : ''}</div>
@@ -577,7 +674,7 @@
       els.tasksList.innerHTML = '<div class="empty-state">Keine offenen Aufgaben. Neue Aufgaben erhalten je nach Aufwand Punkte beim Abschliessen.</div>';
       return;
     }
-    els.tasksList.innerHTML = open.map(task => `<article class="list-card">
+    els.tasksList.innerHTML = open.map(task => `<article class="list-card ${editingTaskId === task.id ? 'is-editing' : ''}">
       <div class="list-card-main">
         <h4>${escapeHtml(task.title)}</h4>
         <p class="meta">Aufwand ${task.effort}/5 · ${task.due_at ? `Fällig ${formatDateTime(task.due_at)}` : 'ohne Fälligkeitsdatum'}${task.description ? `<br>${escapeHtml(task.description)}` : ''}</p>
@@ -585,7 +682,9 @@
       <div class="list-actions">
         <span class="badge">+${taskPoints(task)} Pkt.</span>
         <button class="mini-btn primary" type="button" data-action="complete-task" data-id="${task.id}">Erledigt</button>
+        <button class="mini-btn" type="button" data-action="edit-task" data-id="${task.id}">Bearbeiten</button>
         <button class="mini-btn" type="button" data-action="archive-task" data-id="${task.id}">Archiv</button>
+        <button class="mini-btn danger" type="button" data-action="delete-task" data-id="${task.id}">Löschen</button>
       </div>
     </article>`).join('');
   }
@@ -727,24 +826,43 @@
     event.preventDefault();
     const data = new FormData(els.habitForm);
     const type = data.get('type');
-    const habit = {
-      id: uid(),
+    const values = {
       name: String(data.get('name') || '').trim(),
       type,
       unit: String(data.get('unit') || defaultUnit(type)).trim(),
       direction: data.get('direction') || 'increase',
       target: data.get('target') ? Number(data.get('target')) : null,
       icon: String(data.get('icon') || '✨').trim().slice(0, 2),
-      color: '#4ad7d1',
-      is_archived: false,
-      created_at: nowIso(),
       updated_at: nowIso(),
       synced: false
     };
-    if (!habit.name) return;
-    state.habits.push(habit);
-    els.habitForm.reset();
-    els.habitForm.icon.value = '✨';
+    if (!values.name) return;
+
+    if (editingHabitId) {
+      const habit = state.habits.find(h => h.id === editingHabitId);
+      if (!habit) {
+        resetHabitFormMode();
+        toast('Habit wurde nicht gefunden.');
+        return;
+      }
+      Object.assign(habit, values, { is_archived: false });
+      resetHabitFormMode({ clearForm: true });
+      saveState();
+      toast('Habit aktualisiert');
+      syncWithSupabase({ silent: true });
+      return;
+    }
+
+    const created = nowIso();
+    state.habits.push({
+      id: uid(),
+      ...values,
+      color: '#4ad7d1',
+      is_archived: false,
+      created_at: created,
+      updated_at: created
+    });
+    resetHabitFormMode({ clearForm: true });
     saveState();
     toast('Habit erstellt');
     syncWithSupabase({ silent: true });
@@ -781,33 +899,111 @@
     if (!habit) return;
     habit.is_archived = true;
     habit.updated_at = nowIso();
+    if (editingHabitId === id) resetHabitFormMode({ clearForm: true });
     saveState();
     toast('Habit archiviert');
     syncWithSupabase({ silent: true });
   }
 
+
+  function editHabit(id) {
+    const habit = state.habits.find(h => h.id === id);
+    if (!habit) return;
+    editingHabitId = id;
+    const fields = els.habitForm.elements;
+    fields.name.value = habit.name || '';
+    fields.type.value = habit.type || 'number';
+    fields.unit.value = habit.unit || '';
+    fields.direction.value = habit.direction || 'increase';
+    fields.target.value = habit.target ?? '';
+    fields.icon.value = habit.icon || '✨';
+    els.habitFormTitle.textContent = 'Gewohnheit bearbeiten';
+    els.habitSubmitBtn.textContent = 'Änderungen speichern';
+    els.cancelHabitEditBtn.classList.remove('hidden');
+    showScreen('habits');
+    els.habitForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    renderHabits();
+  }
+
+  function resetHabitFormMode({ clearForm = true } = {}) {
+    editingHabitId = null;
+    if (clearForm) {
+      els.habitForm.reset();
+      els.habitForm.elements.icon.value = '✨';
+    }
+    els.habitFormTitle.textContent = 'Gewohnheit anlegen';
+    els.habitSubmitBtn.textContent = 'Habit erstellen';
+    els.cancelHabitEditBtn.classList.add('hidden');
+    renderHabits();
+  }
+
+  async function deleteHabit(id) {
+    const habit = state.habits.find(h => h.id === id);
+    if (!habit) return;
+    if (isSystemMeditationHabit(habit)) {
+      toast('Meditation ist ein System-Habit und bleibt für Atem-Logs aktiv.');
+      return;
+    }
+    if (!confirm(`Habit „${habit.name}“ und zugehörige Logs wirklich löschen?`)) return;
+    const removedEntryIds = state.habitEntries.filter(e => e.habit_id === id).map(e => e.id);
+    const removedLedgerIds = state.pointsLedger
+      .filter(p => p.source_type === 'habit' && removedEntryIds.includes(p.source_id))
+      .map(p => p.id);
+    state.habits = state.habits.filter(h => h.id !== id);
+    state.habitEntries = state.habitEntries.filter(e => e.habit_id !== id);
+    state.pointsLedger = state.pointsLedger.filter(p => !(p.source_type === 'habit' && removedEntryIds.includes(p.source_id)));
+    if (editingHabitId === id) resetHabitFormMode({ clearForm: true });
+    saveState();
+    await deleteRemoteByIds('points_ledger', removedLedgerIds);
+    await deleteRemoteByIds('habit_entries', removedEntryIds);
+    await deleteRemoteById('habit_definitions', id);
+    toast('Habit gelöscht');
+    syncWithSupabase({ silent: true, pullFirst: false });
+  }
+
   function createTask(event) {
     event.preventDefault();
     const data = new FormData(els.taskForm);
-    const created = nowIso();
-    const task = {
-      id: uid(),
+    const values = {
       title: String(data.get('title') || '').trim(),
       description: String(data.get('description') || '').trim(),
       effort: Number(data.get('effort') || 3),
-      status: 'open',
       due_at: data.get('due_at') ? new Date(data.get('due_at')).toISOString() : null,
+      updated_at: nowIso(),
+      synced: false
+    };
+    if (!values.title) return;
+
+    if (editingTaskId) {
+      const task = state.tasks.find(t => t.id === editingTaskId);
+      if (!task) {
+        resetTaskFormMode();
+        toast('Aufgabe wurde nicht gefunden.');
+        return;
+      }
+      Object.assign(task, values);
+      if (task.status === 'done') {
+        task.points = taskPoints(task);
+        addPoints('task', task.id, task.points, `Aufgabe abgeschlossen: ${task.title}`, task.completed_at || nowIso());
+      }
+      resetTaskFormMode({ clearForm: true });
+      saveState();
+      toast('Aufgabe aktualisiert');
+      syncWithSupabase({ silent: true });
+      return;
+    }
+
+    const created = nowIso();
+    state.tasks.push({
+      id: uid(),
+      ...values,
+      status: 'open',
       completed_at: null,
       points: 0,
       created_at: created,
-      updated_at: created,
-      synced: false
-    };
-    if (!task.title) return;
-    state.tasks.push(task);
-    els.taskForm.reset();
-    els.taskForm.effort.value = '3';
-    updateTaskPreview();
+      updated_at: created
+    });
+    resetTaskFormMode({ clearForm: true });
     saveState();
     toast('Aufgabe gespeichert');
     syncWithSupabase({ silent: true });
@@ -821,9 +1017,59 @@
     task.updated_at = nowIso();
     task.points = taskPoints(task);
     addPoints('task', task.id, task.points, `Aufgabe abgeschlossen: ${task.title}`, task.completed_at);
+    if (editingTaskId === id) resetTaskFormMode({ clearForm: true });
     saveState();
     toast(`Aufgabe erledigt · +${task.points} Punkte`);
     syncWithSupabase({ silent: true });
+  }
+
+
+  function editTask(id) {
+    const task = state.tasks.find(t => t.id === id);
+    if (!task) return;
+    editingTaskId = id;
+    const fields = els.taskForm.elements;
+    fields.title.value = task.title || '';
+    fields.description.value = task.description || '';
+    fields.effort.value = String(task.effort || 3);
+    fields.due_at.value = toDateTimeLocalValue(task.due_at);
+    els.taskFormTitle.textContent = 'Aufgabe bearbeiten';
+    els.taskSubmitBtn.textContent = 'Änderungen speichern';
+    els.cancelTaskEditBtn.classList.remove('hidden');
+    updateTaskPreview();
+    showScreen('tasks');
+    els.taskForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    renderTasks();
+  }
+
+  function resetTaskFormMode({ clearForm = true } = {}) {
+    editingTaskId = null;
+    if (clearForm) {
+      els.taskForm.reset();
+      els.taskForm.elements.effort.value = '3';
+    }
+    els.taskFormTitle.textContent = 'Aufgabe erfassen';
+    els.taskSubmitBtn.textContent = 'Aufgabe speichern';
+    els.cancelTaskEditBtn.classList.add('hidden');
+    updateTaskPreview();
+    renderTasks();
+  }
+
+  async function deleteTask(id) {
+    const task = state.tasks.find(t => t.id === id);
+    if (!task) return;
+    if (!confirm(`Aufgabe „${task.title}“ wirklich löschen?`)) return;
+    const removedLedgerIds = state.pointsLedger
+      .filter(p => p.source_type === 'task' && p.source_id === id)
+      .map(p => p.id);
+    state.tasks = state.tasks.filter(t => t.id !== id);
+    state.pointsLedger = state.pointsLedger.filter(p => !(p.source_type === 'task' && p.source_id === id));
+    if (editingTaskId === id) resetTaskFormMode({ clearForm: true });
+    saveState();
+    await deleteRemoteByIds('points_ledger', removedLedgerIds);
+    await deleteRemoteById('tasks', id);
+    toast('Aufgabe gelöscht');
+    syncWithSupabase({ silent: true, pullFirst: false });
   }
 
   function archiveTask(id) {
@@ -831,13 +1077,14 @@
     if (!task) return;
     task.status = 'archived';
     task.updated_at = nowIso();
+    if (editingTaskId === id) resetTaskFormMode({ clearForm: true });
     saveState();
     toast('Aufgabe archiviert');
     syncWithSupabase({ silent: true });
   }
 
   function updateTaskPreview() {
-    const effort = Number(els.taskForm.effort.value || 3);
+    const effort = Number(els.taskForm.elements.effort.value || 3);
     els.taskPointsPreview.textContent = `+${effort * 20} Pkt.`;
   }
 
@@ -958,6 +1205,14 @@
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return '–';
     return date.toLocaleString('de-CH', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  }
+
+  function toDateTimeLocalValue(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 16);
   }
 
   function formatDuration(minutes) {

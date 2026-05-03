@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v4-direct-supabase';
+const CACHE_NAME = 'habitflow-v5-dashboard-edit-coach';
 const ASSETS = ['./', './index.html', './style.css', './app.js', './supabase-config.js', './supabase-schema.js', './manifest.json'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
