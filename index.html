@@ -195,19 +195,21 @@
       <section id="screen-settings" class="screen" data-screen="settings">
         <div class="grid two-columns">
           <section class="panel glass">
-            <div class="panel-head"><div><p class="eyebrow">Supabase</p><h3>Konto & Sync</h3></div><span id="syncStatus" class="badge muted">Login nötig</span></div>
+            <div class="panel-head"><div><p class="eyebrow">Supabase</p><h3>Direkter Sync</h3></div><span id="syncStatus" class="badge muted">Verbinde…</span></div>
             <form id="settingsForm" class="form-grid">
-              <label class="full"><span>E-Mail für Magic Link</span><input name="email" type="email" autocomplete="email" placeholder="du@example.com" /></label>
+              <div class="sync-live-card full">
+                <strong>Automatisch verbunden</strong>
+                <span>Die App nutzt dieselbe direkte Supabase-Verbindung wie FishTrack: öffnen, erfassen, speichern – ohne Login-Schritt.</span>
+              </div>
               <div class="form-actions full">
-                <button id="sendMagicLinkBtn" class="pill primary" type="submit">Login-Link senden</button>
-                <button id="logoutBtn" class="pill danger" type="button">Logout</button>
+                <button id="manualSyncBtn" class="pill primary" type="submit">Jetzt synchronisieren</button>
               </div>
             </form>
             <div class="sync-info-grid">
-              <article><strong>Automatisch verbunden</strong><span>Supabase URL und Anon Key sind in der App-Konfiguration hinterlegt und werden hier nicht angezeigt.</span></article>
-              <article><strong>Privater Sync</strong><span>Daten werden erst nach Magic-Link-Login nutzerbezogen über Supabase RLS synchronisiert.</span></article>
+              <article><strong>Laufender Abgleich</strong><span>Beim Start, nach Aktionen, beim Zurückkehren in die App und zusätzlich periodisch wird synchronisiert.</span></article>
+              <article><strong>Offline zuerst</strong><span>Die App speichert lokal weiter und gleicht später wieder mit Supabase ab.</span></article>
             </div>
-            <p class="settings-note">Die App bleibt offline nutzbar. Sobald du eingeloggt bist, synchronisiert sie beim Speichern und über den Sync-Button.</p>
+            <p class="settings-note">Keine Supabase-Zugangsdaten und kein SQL-Setup werden in der Oberfläche angezeigt.</p>
           </section>
 
           <section class="panel glass">
@@ -228,7 +230,7 @@
       <button data-target="habits" class="nav-btn" type="button"><span>✦</span>Habits</button>
       <button data-target="tasks" class="nav-btn" type="button"><span>✓</span>Tasks</button>
       <button data-target="calendar" class="nav-btn" type="button"><span>□</span>Kalender</button>
-      <button data-target="settings" class="nav-btn" type="button"><span>⚙</span>Konto</button>
+      <button data-target="settings" class="nav-btn" type="button"><span>⚙</span>Sync</button>
     </nav>
   </div>
 

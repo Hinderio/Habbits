@@ -12,21 +12,19 @@ Premium PWA für schlechte Gewohnheiten reduzieren, Zigarettenkonsum tracken, fl
 - Aufgaben mit Aufwand 1–5 und Punktebelohnung
 - Dashboard mit KPIs, auswählbarem Trend pro Habit, Heatmap und Insights
 - Kalender mit Aufgaben, Zigaretten und Alkohol-Kontext; Habit-Verläufe bleiben im Dashboard/Heatmap
-- Supabase Magic-Link Login und Sync mit hinterlegter App-Konfiguration
+- Direkte Supabase-Verbindung über die hinterlegte App-Konfiguration wie bei FishTrack
+- Automatischer Sync beim App-Start, nach Aktionen, bei Rückkehr in die App, periodisch und optional per Realtime-Event
 - Lokale Offline-Nutzung via localStorage
-- SQL-Schema mit RLS Policies
 
 ## Supabase Setup
 
-Die Supabase URL und der Anon Key sind in `supabase-config.js` hinterlegt und werden nicht mehr in der App-Oberfläche angezeigt.
+Die Supabase URL und der Anon Key sind in `supabase-config.js` hinterlegt und werden nicht in der App-Oberfläche angezeigt.
 
-1. `supabase.sql` im Supabase SQL Editor ausführen, falls das HabitFlow-Schema im Zielprojekt noch nicht existiert.
-2. In Supabase Authentication Magic Link aktivieren.
-3. Redirect URL auf die gehostete App-URL setzen.
-4. App öffnen, unter Konto die E-Mail eintragen und Magic Link senden.
-5. Nach Login synchronisiert die App automatisch; zusätzlich kann der Sync-Button manuell genutzt werden.
+Die App arbeitet bewusst wie FishTrack mit direktem anon-client Sync. Das bedeutet: kein Magic-Link-Login, keine Account-Seite und keine Eingabe von Supabase-Zugangsdaten in der UI.
 
-Wichtig: Der Supabase Anon Key ist bei statischen Frontend-Apps technisch öffentlich, aber durch RLS-Policies geschützt. Niemals einen Service-Role-Key in dieses Projekt legen.
+Falls die HabitFlow-Tabellen im Supabase-Projekt noch nicht existieren oder vorher das private Magic-Link-Schema genutzt wurde, `supabase.sql` einmal im Supabase SQL Editor ausführen. Das Schema aktiviert public anon Policies für diese App-Tabellen.
+
+Wichtig: Dieses Modell erzeugt eine gemeinsame globale Datenbasis für alle, die dieselbe App-URL und denselben Supabase anon key nutzen. Für ein späteres privates Multi-User-Produkt sollte wieder RLS mit Login verwendet werden.
 
 ## Lokal starten
 

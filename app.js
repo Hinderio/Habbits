@@ -14,6 +14,13 @@
     { key: 'gratitude', title: 'Dankbarkeits-Minute', subtitle: 'Kurzer mentaler Reset mit positiver Ankerung', minutes: 3, pattern: '3 Dinge benennen' }
   ];
   const DAY_MS = 24 * 60 * 60 * 1000;
+  const DEFAULT_HABIT_IDS = Object.freeze({
+    weight: '00000000-0000-4000-8000-000000000101',
+    water: '00000000-0000-4000-8000-000000000102',
+    sport: '00000000-0000-4000-8000-000000000103',
+    meditation: '00000000-0000-4000-8000-000000000104'
+  });
+  const SYNC_TABLES = ['habit_definitions', 'habit_entries', 'cigarette_events', 'alcohol_logs', 'tasks', 'points_ledger'];
   const nowIso = () => new Date().toISOString();
   const uid = () => (crypto && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
 
@@ -23,8 +30,10 @@
   let state = loadState();
   let settings = loadSettings();
   let supabaseClient = null;
-  let currentUser = null;
-  let authSubscription = null;
+  let syncSubscription = null;
+  let syncInFlight = false;
+  let lastSyncAt = null;
+  let remotePullTimer = null;
   let selectedCalendarDate = toDateKey(new Date());
   let calendarCursor = new Date();
   let charts = { trend: null, points: null };
@@ -41,6 +50,7 @@
     fillSettingsForm();
     bindEvents();
     await initSupabase();
+    initOngoingSync();
     registerServiceWorker();
     render();
     setInterval(renderTimers, 30_000);
@@ -97,7 +107,7 @@
       todayMonthBtn: $('#todayMonthBtn'),
       nextMonthBtn: $('#nextMonthBtn'),
       settingsForm: $('#settingsForm'),
-      sendMagicLinkBtn: $('#sendMagicLinkBtn'),
+      manualSyncBtn: $('#manualSyncBtn'),
       logoutBtn: $('#logoutBtn'),
       syncStatus: $('#syncStatus'),
       exportBtn: $('#exportBtn'),
@@ -135,9 +145,14 @@
       renderCalendar();
       renderDayDetails();
     });
-    els.settingsForm.addEventListener('submit', sendMagicLink);
-    els.logoutBtn.addEventListener('click', logout);
-    els.syncNowBtn.addEventListener('click', syncWithSupabase);
+    if (els.settingsForm) {
+      els.settingsForm.addEventListener('submit', event => {
+        event.preventDefault();
+        syncWithSupabase({ silent: false, pullFirst: true });
+      });
+    }
+    if (els.logoutBtn) els.logoutBtn.addEventListener('click', () => syncWithSupabase({ silent: false, pullFirst: true }));
+    els.syncNowBtn.addEventListener('click', () => syncWithSupabase({ silent: false, pullFirst: true }));
     els.exportBtn.addEventListener('click', exportJson);
     els.importInput.addEventListener('change', importJson);
     els.resetBtn.addEventListener('click', resetDemo);
@@ -166,9 +181,9 @@
     return {
       version: 1,
       habits: [
-        { id: uid(), name: 'Gewicht', type: 'weight', unit: 'kg', direction: 'decrease', target: null, icon: '⚖️', color: '#4ad7d1', is_archived: false, created_at: created, updated_at: created },
-        { id: uid(), name: 'Wasser', type: 'number', unit: 'Gläser', direction: 'increase', target: 8, icon: '💧', color: '#66e7ff', is_archived: false, created_at: created, updated_at: created },
-        { id: uid(), name: 'Sport', type: 'duration', unit: 'Min.', direction: 'increase', target: 30, icon: '🏃', color: '#8ff0a7', is_archived: false, created_at: created, updated_at: created },
+        { id: DEFAULT_HABIT_IDS.weight, name: 'Gewicht', type: 'weight', unit: 'kg', direction: 'decrease', target: null, icon: '⚖️', color: '#4ad7d1', is_archived: false, created_at: created, updated_at: created },
+        { id: DEFAULT_HABIT_IDS.water, name: 'Wasser', type: 'number', unit: 'Gläser', direction: 'increase', target: 8, icon: '💧', color: '#66e7ff', is_archived: false, created_at: created, updated_at: created },
+        { id: DEFAULT_HABIT_IDS.sport, name: 'Sport', type: 'duration', unit: 'Min.', direction: 'increase', target: 30, icon: '🏃', color: '#8ff0a7', is_archived: false, created_at: created, updated_at: created },
         createSystemMeditationHabit(created)
       ],
       habitEntries: [],
@@ -206,7 +221,7 @@
 
   function createSystemMeditationHabit(created = nowIso()) {
     return {
-      id: uid(),
+      id: DEFAULT_HABIT_IDS.meditation,
       name: 'Meditation',
       type: 'duration',
       unit: 'Min.',
@@ -259,7 +274,7 @@
   }
 
   function fillSettingsForm() {
-    els.settingsForm.email.value = settings.email || '';
+    if (els.settingsForm?.email) els.settingsForm.email.value = settings.email || '';
     if (els.sqlPreview) els.sqlPreview.textContent = window.HABITFLOW_SUPABASE_SQL || 'supabase.sql konnte nicht geladen werden.';
   }
 
@@ -669,14 +684,18 @@
     syncWithSupabase({ silent: true });
   }
 
-  function deleteSmoke(id) {
+  async function deleteSmoke(id) {
     const index = state.cigarettes.findIndex(c => c.id === id);
     if (index === -1) return;
+    const removedLedgerIds = state.pointsLedger.filter(p => p.source_type === 'cigarette' && p.source_id === id).map(p => p.id);
     state.cigarettes.splice(index, 1);
     state.pointsLedger = state.pointsLedger.filter(p => !(p.source_type === 'cigarette' && p.source_id === id));
     recalculateSmokeIntervals();
     saveState();
+    await deleteRemoteById('cigarette_events', id);
+    await deleteRemoteByIds('points_ledger', removedLedgerIds);
     toast('Zigaretten-Eintrag entfernt');
+    syncWithSupabase({ silent: true, pullFirst: false });
   }
 
   function recalculateSmokeIntervals() {
@@ -1004,133 +1023,115 @@
   async function initSupabase() {
     const config = getSupabaseConfig();
     if (!config.url || !config.anonKey || !window.supabase) {
-      renderSyncStatus();
+      renderSyncStatus('offline');
       return;
     }
     try {
-      supabaseClient = window.supabase.createClient(config.url, config.anonKey, {
-        auth: {
-          persistSession: true,
-          autoRefreshToken: true,
-          detectSessionInUrl: true
-        }
-      });
-      const { data } = await supabaseClient.auth.getSession();
-      currentUser = data.session?.user || null;
-      if (!authSubscription) {
-        const { data: listener } = supabaseClient.auth.onAuthStateChange((_event, session) => {
-          currentUser = session?.user || null;
-          renderSyncStatus();
-          if (currentUser) syncWithSupabase({ silent: true });
-        });
-        authSubscription = listener?.subscription || listener || null;
-      }
-      renderSyncStatus();
-      if (currentUser) await syncWithSupabase({ silent: true });
+      supabaseClient = window.supabase.createClient(config.url, config.anonKey);
+      renderSyncStatus('syncing');
+      await syncWithSupabase({ silent: true, pullFirst: true });
+      subscribeToRemoteChanges();
+      renderSyncStatus('connected');
+      console.log('HabitFlow Supabase direkt verbunden');
     } catch (error) {
       console.warn('Supabase init error', error);
-      renderSyncStatus();
-      toast('Supabase konnte nicht initialisiert werden.');
+      renderSyncStatus('error');
+      toast('Supabase konnte nicht initialisiert werden. App läuft lokal weiter.');
     }
   }
 
-  function renderSyncStatus() {
+  function initOngoingSync() {
+    if (!isSupabaseConfigured()) return;
+    setInterval(() => syncWithSupabase({ silent: true, pullFirst: true }), 60_000);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') syncWithSupabase({ silent: true, pullFirst: true });
+    });
+    window.addEventListener('online', () => syncWithSupabase({ silent: true, pullFirst: true }));
+  }
+
+  function renderSyncStatus(mode) {
     if (!els.syncStatus) return;
     if (!isSupabaseConfigured()) {
       els.syncStatus.textContent = 'Lokal';
       els.syncStatus.className = 'badge muted';
       return;
     }
-    if (!currentUser) {
-      els.syncStatus.textContent = 'Login nötig';
+    if (mode === 'syncing' || syncInFlight) {
+      els.syncStatus.textContent = 'Synchronisiert';
       els.syncStatus.className = 'badge muted';
       return;
     }
-    els.syncStatus.textContent = 'Sync aktiv';
+    if (mode === 'error') {
+      els.syncStatus.textContent = 'Sync prüfen';
+      els.syncStatus.className = 'badge danger-badge';
+      return;
+    }
+    els.syncStatus.textContent = lastSyncAt ? 'Sync aktiv' : 'Verbunden';
     els.syncStatus.className = 'badge';
   }
 
-  async function sendMagicLink(event) {
+  async function manualSyncFromSettings(event) {
     if (event) event.preventDefault();
-    if (!isSupabaseConfigured()) {
-      toast('Supabase-Konfiguration konnte nicht geladen werden.');
-      return;
-    }
-    if (!supabaseClient) await initSupabase();
-    const email = els.settingsForm.email.value.trim() || settings.email;
-    if (!email) {
-      toast('Bitte E-Mail eintragen.');
-      return;
-    }
-    settings.email = email;
-    saveSettingsToStorage();
-    const redirectUrl = new URL(window.location.href);
-    redirectUrl.search = '';
-    redirectUrl.hash = '';
-    const { error } = await supabaseClient.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: redirectUrl.toString() }
-    });
-    if (error) {
-      toast(`Login-Link Fehler: ${error.message}`);
-      return;
-    }
-    toast('Login-Link wurde gesendet.');
+    await syncWithSupabase({ silent: false, pullFirst: true });
   }
 
   async function logout() {
-    if (supabaseClient) await supabaseClient.auth.signOut();
-    currentUser = null;
-    renderSyncStatus();
-    toast('Logout erledigt');
+    await syncWithSupabase({ silent: false, pullFirst: true });
   }
 
-  async function syncWithSupabase({ silent = false } = {}) {
-    if (!supabaseClient || !currentUser) {
-      if (!silent) toast(isSupabaseConfigured() ? 'Bitte zuerst per Magic Link einloggen.' : 'Supabase ist noch nicht konfiguriert.');
+  async function syncWithSupabase({ silent = false, pullFirst = true } = {}) {
+    if (!supabaseClient) {
+      if (!silent) toast(isSupabaseConfigured() ? 'Supabase ist noch nicht bereit.' : 'Supabase ist nicht konfiguriert.');
       return;
     }
+    if (syncInFlight) return;
+    syncInFlight = true;
+    renderSyncStatus('syncing');
     try {
-      const userId = currentUser.id;
-      await supabaseClient.from('profiles').upsert({ id: userId, timezone: 'Europe/Zurich', updated_at: nowIso() });
+      if (pullFirst) await pullSupabaseData();
 
       await upsertRows('habit_definitions', state.habits.map(h => ({
-        id: h.id, user_id: userId, name: h.name, type: h.type, unit: h.unit, direction: h.direction, target: h.target,
+        id: h.id, name: h.name, type: h.type, unit: h.unit, direction: h.direction, target: h.target,
         icon: h.icon, color: h.color || '#4ad7d1', is_archived: Boolean(h.is_archived), created_at: h.created_at, updated_at: h.updated_at || nowIso()
       })));
 
       await upsertRows('habit_entries', state.habitEntries.map(e => ({
-        id: e.id, user_id: userId, habit_id: e.habit_id, value_num: e.value_num, value_bool: e.value_bool, note: e.note || null,
+        id: e.id, habit_id: e.habit_id, value_num: e.value_num, value_bool: e.value_bool, note: e.note || null,
         occurred_at: e.occurred_at, created_at: e.created_at, updated_at: e.updated_at || nowIso()
       })));
 
       await upsertRows('cigarette_events', state.cigarettes.map(c => ({
-        id: c.id, user_id: userId, smoked_at: c.smoked_at, interval_minutes: c.interval_minutes, alcohol_context: Boolean(c.alcohol_context),
+        id: c.id, smoked_at: c.smoked_at, interval_minutes: c.interval_minutes, alcohol_context: Boolean(c.alcohol_context),
         points: Number(c.points || 0), note: c.note || null, created_at: c.created_at, updated_at: c.updated_at || nowIso()
       })));
 
       await upsertRows('alcohol_logs', state.alcoholLogs.map(a => ({
-        id: a.id, user_id: userId, log_date: a.log_date, consumed: Boolean(a.consumed), note: a.note || null,
+        id: a.id, log_date: a.log_date, consumed: Boolean(a.consumed), note: a.note || null,
         created_at: a.created_at, updated_at: a.updated_at || nowIso()
       })));
 
       await upsertRows('tasks', state.tasks.map(t => ({
-        id: t.id, user_id: userId, title: t.title, description: t.description || null, effort: Number(t.effort || 3), status: t.status,
+        id: t.id, title: t.title, description: t.description || null, effort: Number(t.effort || 3), status: t.status,
         due_at: t.due_at, completed_at: t.completed_at, points: Number(t.points || 0), created_at: t.created_at, updated_at: t.updated_at || nowIso()
       })));
 
       await upsertRows('points_ledger', state.pointsLedger.map(p => ({
-        id: p.id, user_id: userId, source_type: p.source_type, source_id: p.source_id, points: Number(p.points || 0), reason: p.reason || null,
+        id: p.id, source_type: p.source_type, source_id: p.source_id, points: Number(p.points || 0), reason: p.reason || null,
         earned_at: p.earned_at, created_at: p.created_at || nowIso()
       })));
 
-      await pullSupabaseData(userId);
+      await pullSupabaseData();
       saveState({ skipRender: true });
+      lastSyncAt = new Date();
       render();
       if (!silent) toast('Sync abgeschlossen');
     } catch (error) {
       console.error(error);
       if (!silent) toast(`Sync Fehler: ${error.message || error}`);
+      renderSyncStatus('error');
+    } finally {
+      syncInFlight = false;
+      renderSyncStatus();
     }
   }
 
@@ -1140,16 +1141,49 @@
     if (error) throw error;
   }
 
-  async function pullSupabaseData(userId) {
+  async function deleteRemoteById(table, id) {
+    if (!supabaseClient || !id) return;
+    try {
+      const { error } = await supabaseClient.from(table).delete().eq('id', id);
+      if (error) console.warn(`Remote-Delete ${table} fehlgeschlagen`, error);
+    } catch (error) {
+      console.warn(`Remote-Delete ${table} nicht möglich`, error);
+    }
+  }
+
+  async function deleteRemoteByIds(table, ids) {
+    if (!supabaseClient || !ids?.length) return;
+    try {
+      const { error } = await supabaseClient.from(table).delete().in('id', ids);
+      if (error) console.warn(`Remote-Delete ${table} fehlgeschlagen`, error);
+    } catch (error) {
+      console.warn(`Remote-Delete ${table} nicht möglich`, error);
+    }
+  }
+
+  async function pullSupabaseData() {
+    if (!supabaseClient) return;
     const [habits, entries, cigarettes, alcohol, tasks, ledger] = await Promise.all([
-      supabaseClient.from('habit_definitions').select('*').eq('user_id', userId),
-      supabaseClient.from('habit_entries').select('*').eq('user_id', userId),
-      supabaseClient.from('cigarette_events').select('*').eq('user_id', userId),
-      supabaseClient.from('alcohol_logs').select('*').eq('user_id', userId),
-      supabaseClient.from('tasks').select('*').eq('user_id', userId),
-      supabaseClient.from('points_ledger').select('*').eq('user_id', userId)
+      supabaseClient.from('habit_definitions').select('*'),
+      supabaseClient.from('habit_entries').select('*'),
+      supabaseClient.from('cigarette_events').select('*'),
+      supabaseClient.from('alcohol_logs').select('*'),
+      supabaseClient.from('tasks').select('*'),
+      supabaseClient.from('points_ledger').select('*')
     ]);
     for (const result of [habits, entries, cigarettes, alcohol, tasks, ledger]) if (result.error) throw result.error;
+
+    const remoteHasData = [habits, entries, cigarettes, alcohol, tasks, ledger].some(result => (result.data || []).length > 0);
+    if (remoteHasData && isLocalPristine()) {
+      state.habits = (habits.data || []).map(mapRemoteHabit);
+      state.habitEntries = (entries.data || []).map(mapRemoteEntry);
+      state.cigarettes = (cigarettes.data || []).map(mapRemoteCigarette);
+      state.alcoholLogs = (alcohol.data || []).map(mapRemoteAlcohol);
+      state.tasks = (tasks.data || []).map(mapRemoteTask);
+      state.pointsLedger = (ledger.data || []).map(mapRemoteLedger);
+      ensureSystemHabits(state);
+      return;
+    }
 
     state.habits = mergeById(state.habits, habits.data || [], mapRemoteHabit);
     state.habitEntries = mergeById(state.habitEntries, entries.data || [], mapRemoteEntry);
@@ -1157,6 +1191,7 @@
     state.alcoholLogs = mergeById(state.alcoholLogs, alcohol.data || [], mapRemoteAlcohol);
     state.tasks = mergeById(state.tasks, tasks.data || [], mapRemoteTask);
     state.pointsLedger = mergeById(state.pointsLedger, ledger.data || [], mapRemoteLedger);
+    ensureSystemHabits(state);
   }
 
   function mergeById(localRows, remoteRows, mapper) {
@@ -1168,6 +1203,31 @@
       }
     });
     return Array.from(map.values());
+  }
+
+  function isLocalPristine() {
+    const defaultIds = new Set(Object.values(DEFAULT_HABIT_IDS));
+    const defaultNames = new Set(['gewicht', 'wasser', 'sport', 'meditation']);
+    const hasOnlyDefaultHabits = state.habits.every(h => defaultIds.has(h.id) || defaultNames.has(String(h.name || '').trim().toLowerCase()));
+    return hasOnlyDefaultHabits && !state.habitEntries.length && !state.cigarettes.length && !state.alcoholLogs.length && !state.tasks.length && !state.pointsLedger.length;
+  }
+
+  function subscribeToRemoteChanges() {
+    if (!supabaseClient || syncSubscription || !supabaseClient.channel) return;
+    try {
+      const channel = supabaseClient.channel('habitflow-direct-sync');
+      SYNC_TABLES.forEach(table => {
+        channel.on('postgres_changes', { event: '*', schema: 'public', table }, scheduleRemotePull);
+      });
+      syncSubscription = channel.subscribe();
+    } catch (error) {
+      console.warn('Realtime Sync konnte nicht aktiviert werden.', error);
+    }
+  }
+
+  function scheduleRemotePull() {
+    clearTimeout(remotePullTimer);
+    remotePullTimer = setTimeout(() => syncWithSupabase({ silent: true, pullFirst: true }), 900);
   }
 
   const mapRemoteHabit = h => ({ id: h.id, name: h.name, type: h.type, unit: h.unit, direction: h.direction, target: h.target, icon: h.icon, color: h.color, is_archived: h.is_archived, created_at: h.created_at, updated_at: h.updated_at, synced: true });
