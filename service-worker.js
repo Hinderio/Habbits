@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v11-alcohol-coach-ux';
+const CACHE_NAME = 'habitflow-v12-ios-smoke-alcohol-ux';
 const ASSETS = ['./', './index.html', './style.css', './app.js', './supabase-config.js', './supabase-schema.js', './manifest.json', './icons/coach-clean.svg'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));

@@ -940,11 +940,17 @@
       const cls = c.points < 0 ? 'danger-text' : c.points >= 40 ? 'positive-text' : '';
       const isEditing = editingSmokeId === c.id;
       const editBlock = isEditing
-        ? `<div class="smoke-edit-row">
-            <label><span>Zeitpunkt</span><input id="smoke-input-${c.id}" type="datetime-local" value="${toDateTimeLocalValue(c.smoked_at)}" /></label>
-            <button class="mini-btn primary" type="button" data-action="save-smoke-time" data-id="${c.id}">Speichern</button>
-            <button class="mini-btn" type="button" data-action="cancel-smoke-edit" data-id="${c.id}">Abbrechen</button>
-          </div>`
+        ? (() => {
+            const [dateValue = '', timeValue = ''] = toDateTimeLocalValue(c.smoked_at).split('T');
+            return `<div class="smoke-edit-row">
+              <label><span>Datum</span><input id="smoke-date-${c.id}" type="date" value="${dateValue}" max="${toDateKey(new Date())}" /></label>
+              <label><span>Zeit</span><input id="smoke-time-${c.id}" type="time" value="${timeValue}" step="60" /></label>
+              <div class="smoke-edit-actions">
+                <button class="mini-btn primary" type="button" data-action="save-smoke-time" data-id="${c.id}">Speichern</button>
+                <button class="mini-btn" type="button" data-action="cancel-smoke-edit" data-id="${c.id}">Abbrechen</button>
+              </div>
+            </div>`;
+          })()
         : '';
       return `<article class="list-card ${isEditing ? 'is-editing' : ''}">
         <div class="list-card-main">
@@ -1459,12 +1465,16 @@ function renderSmokingTip(last = getLastCigarette()) {
 
   function saveSmokeTime(id) {
     const cigarette = state.cigarettes.find(c => c.id === id);
-    const input = $(`#smoke-input-${cssEscape(id)}`);
-    if (!cigarette || !input) return;
+    const dateInput = $(`#smoke-date-${cssEscape(id)}`);
+    const timeInput = $(`#smoke-time-${cssEscape(id)}`);
+    const legacyInput = $(`#smoke-input-${cssEscape(id)}`);
+    if (!cigarette || (!legacyInput && (!dateInput || !timeInput))) return;
 
-    const nextDate = new Date(input.value);
-    if (!input.value || Number.isNaN(nextDate.getTime())) {
-      toast('Bitte einen gültigen Zeitpunkt eintragen.');
+    const nextDate = legacyInput
+      ? new Date(legacyInput.value)
+      : localDateTimeFromParts(dateInput.value, timeInput.value);
+    if (Number.isNaN(nextDate.getTime())) {
+      toast('Bitte Datum und Zeit vollständig eintragen.');
       return;
     }
     if (nextDate.getTime() > Date.now() + 60_000) {
@@ -2027,6 +2037,21 @@ async function deleteAlcoholLog(id) {
     if (Number.isNaN(date.getTime())) return '';
     const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
     return local.toISOString().slice(0, 16);
+  }
+
+  function localDateTimeFromParts(dateValue, timeValue) {
+    const dateParts = String(dateValue || '').split('-').map(Number);
+    const timeParts = String(timeValue || '').split(':').map(Number);
+    const [year, month, day] = dateParts;
+    const [hours, minutes] = timeParts;
+    if (dateParts.length !== 3 || timeParts.length < 2 || [year, month, day, hours, minutes].some(value => !Number.isInteger(value))) {
+      return new Date(NaN);
+    }
+    const date = new Date(year, month - 1, day, hours, minutes, 0, 0);
+    if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day || date.getHours() !== hours || date.getMinutes() !== minutes) {
+      return new Date(NaN);
+    }
+    return date;
   }
 
   function formatDuration(minutes) {
