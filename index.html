@@ -105,21 +105,14 @@
               <span>+</span>
               Zigarette
             </button>
-            <div class="alcohol-quick-card">
-              <label><span>Alkohol-Art</span><select id="alcoholTypeSelect" aria-label="Alkohol-Art"><option value="beer">Bier</option><option value="wine">Wein</option><option value="cocktail">Drink</option><option value="shot">Shot</option><option value="other">Anderes</option></select></label>
-              <button id="recordAlcoholUnitBtn" class="alcohol-button" type="button"><span>+</span> Alkohol-Einheit</button>
-            </div>
-            <div class="alcohol-toggle-card">
-              <div>
-                <strong>Alkohol heute?</strong>
-                <p class="subtle">Schnellschalter für den heutigen Kontext.</p>
+            <div class="alcohol-quick-card alcohol-quick-card--simple">
+              <div class="alcohol-copy">
+                <p class="eyebrow">Alkohol</p>
+                <h4>Eine Einheit erfassen</h4>
+                <p class="subtle">Art wählen, speichern – der Zeitpunkt wird automatisch gesetzt.</p>
               </div>
-              <button id="alcoholTodayBtn" class="toggle-pill" type="button" aria-pressed="false">Nein</button>
-            </div>
-            <div class="alcohol-entry-card">
-              <label><span>Alkohol-Tag erfassen</span><input id="alcoholDateInput" type="date" /></label>
-              <label><span>Notiz</span><input id="alcoholNoteInput" type="text" placeholder="optional, z. B. Ausgang" /></label>
-              <button id="alcoholLogBtn" class="pill secondary" type="button">Alkohol speichern</button>
+              <label><span>Art</span><select id="alcoholTypeSelect" aria-label="Alkohol-Art"><option value="beer">Bier</option><option value="wine">Wein</option><option value="cocktail">Drink</option><option value="shot">Shot</option><option value="other">Anderes</option></select></label>
+              <button id="recordAlcoholUnitBtn" class="alcohol-button" type="button"><span>+</span> Einheit speichern</button>
             </div>
           </section>
 
@@ -128,8 +121,7 @@
             <div id="smokeHistory" class="stack-list tall"></div>
             <div class="panel-head compact alcohol-history-head"><div><p class="eyebrow">Alkohol</p><h3>Einheiten-Verlauf</h3></div></div>
             <div id="alcoholUnitHistory" class="stack-list alcohol-history-list"></div>
-            <div class="panel-head compact alcohol-history-head"><div><p class="eyebrow">Kontext</p><h3>Alkohol-Tage</h3></div></div>
-            <div id="alcoholHistory" class="stack-list alcohol-history-list"></div>
+
           </section>
         </div>
 
@@ -169,7 +161,7 @@
             <div class="coach-hero-copy">
               <p class="eyebrow">Clean Coach</p>
               <h2 id="coachModalTitle">Der nächste bessere Entscheid.</h2>
-              <p>Der Coach verbindet deine aktuelle Pause, den heutigen Verlauf, Alkohol-Kontext und deinen Trigger zu einem konkreten Mini-Plan für genau jetzt.</p>
+              <p>Der Coach verbindet Konsum, offene Aufgaben, Habit-Rhythmus und aktuelle Trigger zu einem konkreten Mini-Plan für genau jetzt.</p>
             </div>
           </div>
         </section>
@@ -182,7 +174,7 @@
             </div>
             <div class="coach-check-grid">
               <label><span>Drang</span><select id="coachUrgeLevel" aria-label="Aktuelle Drangstärke"><option value="1">1 · kaum spürbar</option><option value="2">2 · leicht</option><option value="3" selected>3 · mittel</option><option value="4">4 · stark</option><option value="5">5 · sehr stark</option></select></label>
-              <label><span>Trigger</span><select id="coachTrigger" aria-label="Aktueller Trigger"><option value="stress">Stress / Druck</option><option value="coffee">Kaffee / Routine</option><option value="alcohol">Alkohol / Ausgang</option><option value="boredom">Langeweile</option><option value="reward">Belohnung</option><option value="social">Sozialer Moment</option><option value="meal">Nach dem Essen</option></select></label>
+              <label><span>Trigger</span><select id="coachTrigger" aria-label="Aktueller Trigger"><option value="stress">Stress / Druck</option><option value="coffee">Kaffee / Routine</option><option value="alcohol">Alkohol / Ausgang</option><option value="boredom">Langeweile</option><option value="reward">Belohnung</option><option value="social">Sozialer Moment</option><option value="meal">Nach dem Essen</option><option value="tasks">Aufgaben-Druck</option><option value="habits">Habit-Check</option></select></label>
             </div>
             <div id="coachChallengeCard" class="coach-challenge-card"></div>
             <div class="coach-actions">

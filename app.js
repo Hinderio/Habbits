@@ -50,7 +50,9 @@
     boredom: { label: 'Langeweile', action: 'Hände beschäftigen: kurze Nachricht, Kaugummi, Stift oder 20 Schritte gehen.', icon: 'boredom' },
     reward: { label: 'Belohnung', action: 'Belohnung ersetzen: Tee, Musik, kurze Dusche oder 5 Minuten frische Luft ohne Zigarette.', icon: 'reward' },
     social: { label: 'Sozialer Moment', action: 'Kurz draussen mitgehen ohne zu rauchen oder bewusst innen bleiben und später neu entscheiden.', icon: 'social' },
-    meal: { label: 'Nach dem Essen', action: 'Direkt Zähne putzen, Tee machen oder Küche verlassen. Die Routine wird zuerst gebrochen.', icon: 'meal' }
+    meal: { label: 'Nach dem Essen', action: 'Direkt Zähne putzen, Tee machen oder Küche verlassen. Die Routine wird zuerst gebrochen.', icon: 'meal' },
+    tasks: { label: 'Aufgaben-Druck', action: 'Wähle eine offene Karte, ziehe sie in Bearbeitung und arbeite nur 5 Minuten am kleinsten nächsten Schritt.', icon: 'tasks' },
+    habits: { label: 'Habit-Check', action: 'Logge den kleinsten heute noch offenen Habit. Eine Mini-Einheit reicht, um Momentum zu halten.', icon: 'habits' }
   };
   const DAY_MS = 24 * 60 * 60 * 1000;
   const DEFAULT_HABIT_IDS = Object.freeze({
@@ -214,13 +216,8 @@
       recordSmokeBtn: $('#recordSmokeBtn'),
       smokePauseLive: $('#smokePauseLive'),
       smokePauseHint: $('#smokePauseHint'),
-      alcoholTodayBtn: $('#alcoholTodayBtn'),
       alcoholTypeSelect: $('#alcoholTypeSelect'),
       recordAlcoholUnitBtn: $('#recordAlcoholUnitBtn'),
-      alcoholDateInput: $('#alcoholDateInput'),
-      alcoholNoteInput: $('#alcoholNoteInput'),
-      alcoholLogBtn: $('#alcoholLogBtn'),
-      alcoholHistory: $('#alcoholHistory'),
       alcoholUnitHistory: $('#alcoholUnitHistory'),
       smokeHistory: $('#smokeHistory'),
       lastSmokePoints: $('#lastSmokePoints'),
@@ -289,9 +286,7 @@
       });
     }
     els.recordSmokeBtn.addEventListener('click', () => recordCigarette());
-    els.alcoholTodayBtn.addEventListener('click', () => toggleAlcoholToday());
     if (els.recordAlcoholUnitBtn) els.recordAlcoholUnitBtn.addEventListener('click', recordAlcoholUnit);
-    if (els.alcoholLogBtn) els.alcoholLogBtn.addEventListener('click', saveAlcoholLogForSelectedDate);
     els.trendMetricSelect.addEventListener('change', () => {
       selectedTrendMetric = els.trendMetricSelect.value;
       localStorage.setItem(TREND_METRIC_KEY, selectedTrendMetric);
@@ -750,13 +745,13 @@
   function renderInsights() {
     const last7 = daysBack(7);
     const cigarettes7 = state.cigarettes.filter(c => last7.includes(toDateKey(c.smoked_at))).length;
-    const alcoholDays7 = state.alcoholLogs.filter(a => last7.includes(a.log_date) && a.consumed).length;
+    const alcoholUnits7 = state.alcoholUnits.filter(unit => last7.includes(toDateKey(unit.occurred_at))).length;
     const completed7 = state.tasks.filter(t => t.status === 'done' && last7.includes(toDateKey(t.completed_at || t.updated_at || t.created_at))).length;
     const activeTasks7 = state.tasks.filter(isActiveTask).length;
     const bestPause = bestPauseMinutes();
     const insights = [
       { title: '7-Tage-Konsum', body: `${cigarettes7} Zigaretten in den letzten 7 Tagen. Der Trend wird aussagekräftiger, je konsequenter du trackst.` },
-      { title: 'Alkohol-Kontext', body: alcoholDays7 ? `${alcoholDays7} Alkohol-Tag(e) in 7 Tagen. Vergleiche diese Tage bewusst mit Rauch-Peaks.` : 'Keine Alkohol-Tage in den letzten 7 Tagen getrackt.' },
+      { title: 'Alkohol-Kontext', body: alcoholUnits7 ? `${alcoholUnits7} Alkohol-Einheit(en) in 7 Tagen. Vergleiche diese Zeitpunkte bewusst mit Rauch-Peaks.` : 'Keine Alkohol-Einheiten in den letzten 7 Tagen getrackt.' },
       { title: 'Task-Momentum', body: `${completed7} Aufgabe(n) diese Woche abgeschlossen, ${activeTasks7} aktiv. Priorität und Kanban-Status helfen beim Fokus.` },
       { title: 'Beste Pause', body: bestPause ? `Längste Pause bisher: ${formatDuration(bestPause)}. Das ist dein aktueller Highscore.` : 'Noch keine Intervall-Daten vorhanden.' }
     ];
@@ -782,7 +777,7 @@
     return [
       { value: 'points', label: 'Punkte' },
       { value: 'cigarettes', label: 'Zigaretten' },
-      { value: 'alcohol', label: 'Alkohol-Tage' },
+      { value: 'alcohol', label: 'Alkohol-Einheiten' },
       ...activeHabits.map(habit => ({ value: `habit:${habit.id}`, label: habit.name }))
     ];
   }
@@ -792,7 +787,7 @@
       return { title: 'Zigaretten pro Tag', label: 'Zigaretten', data: keys.map(k => cigarettesOnDate(k).length), beginAtZero: true };
     }
     if (selectedTrendMetric === 'alcohol') {
-      return { title: 'Alkohol-Kontext', label: 'Alkohol', data: keys.map(k => alcoholForDate(k)?.consumed ? 1 : 0), beginAtZero: true };
+      return { title: 'Alkohol-Einheiten', label: 'Einheiten', data: keys.map(k => alcoholUnitsOnDate(k).length), beginAtZero: true };
     }
     if (selectedTrendMetric.startsWith('habit:')) {
       const habitId = selectedTrendMetric.slice(6);
@@ -927,17 +922,10 @@
   }
 
   function renderSmoking() {
-    const todayKey = toDateKey(new Date());
-    if (els.alcoholDateInput && !els.alcoholDateInput.value) els.alcoholDateInput.value = todayKey;
-    const todayAlcohol = alcoholForDate(todayKey);
-    els.alcoholTodayBtn.textContent = todayAlcohol?.consumed ? 'Ja' : 'Nein';
-    els.alcoholTodayBtn.classList.toggle('is-on', Boolean(todayAlcohol?.consumed));
-    els.alcoholTodayBtn.setAttribute('aria-pressed', String(Boolean(todayAlcohol?.consumed)));
     const last = getLastCigarette();
     els.lastSmokePoints.textContent = `${last?.points || 0} Pkt.`;
     renderSmokingTip(last);
     renderAlcoholUnitHistory();
-    renderAlcoholHistory();
 
     const items = [...state.cigarettes]
       .sort((a, b) => new Date(b.smoked_at) - new Date(a.smoked_at))
@@ -996,28 +984,7 @@
   }
 
 
-  function renderAlcoholHistory() {
-    if (!els.alcoholHistory) return;
-    const logs = [...state.alcoholLogs]
-      .sort((a, b) => sortDate(b.log_date || b.updated_at) - sortDate(a.log_date || a.updated_at))
-      .slice(0, 8);
-    if (!logs.length) {
-      els.alcoholHistory.innerHTML = '<div class="empty-state compact">Noch kein Alkohol-Kontext erfasst. Speichere den Tag, damit Auswertungen und Coach genauer werden.</div>';
-      return;
-    }
-    els.alcoholHistory.innerHTML = logs.map(log => `<article class="list-card compact">
-      <div class="list-card-main">
-        <h4>${new Date(`${log.log_date}T12:00:00`).toLocaleDateString('de-CH', { weekday: 'short', day: '2-digit', month: '2-digit' })}</h4>
-        <p class="meta">${log.consumed ? 'Alkohol getrackt' : 'Kein Alkohol'}${log.note ? ` · ${escapeHtml(log.note)}` : ''}</p>
-      </div>
-      <div class="list-actions">
-        <span class="badge ${log.consumed ? '' : 'muted'}">${log.consumed ? 'Ja' : 'Nein'}</span>
-        <button class="mini-btn danger" type="button" data-action="delete-alcohol" data-id="${log.id}">Löschen</button>
-      </div>
-    </article>`).join('');
-  }
-
-  function renderSmokingTip(last = getLastCigarette()) {
+function renderSmokingTip(last = getLastCigarette()) {
     if (!els.cravingTipTitle || !els.cravingTipBody || !els.cravingTipMeta) return;
     const pauseMinutes = last ? Math.max(0, Math.floor((Date.now() - new Date(last.smoked_at).getTime()) / 60000)) : null;
     const contextIndex = getContextualSmokingTipIndex(pauseMinutes);
@@ -1165,21 +1132,25 @@
       coachLine = urge >= 4
         ? 'Der Abstand ist kurz und der Drang hoch. Genau hier entstehen Ketten – starte den Puffer, bevor du neu entscheidest.'
         : 'Der Abstand ist noch kurz. Ziel ist nicht Verzicht für immer, sondern diese eine Lücke zu vergrössern.';
+    } else if (coachSession.trigger === 'tasks' || overdueTasks.length) {
+      headline = overdueTasks.length ? 'Fokus zurückholen: eine überfällige Aufgabe reicht.' : 'Aufgaben-Druck in Bewegung verwandeln.';
+      coachLine = focusTask
+        ? `Der Coach sieht deine offenen Aufgaben. Starte nicht alles, sondern nur „${focusTask.title}“ mit einem 5-Minuten-Schritt.`
+        : 'Der Coach sieht gerade keinen aktiven Task. Lege bei Bedarf eine kleine Karte an und starte mit dem ersten sichtbaren Schritt.';
+    } else if (coachSession.trigger === 'habits' || focusHabit) {
+      headline = focusHabit ? 'Ein kleiner Habit-Log stabilisiert den Tag.' : 'Habit-Rhythmus halten, ohne Druck.';
+      coachLine = focusHabit
+        ? `Heute ist „${focusHabit.name}“ noch offen. Logge eine kleine Einheit – nicht perfekt, nur messbar.`
+        : 'Deine aktiven Habits sind heute gut im Rhythmus. Halte es leicht und nutze den Flow für die nächste kleine Entscheidung.';
     } else if (alcoholToday || coachSession.trigger === 'alcohol') {
       headline = 'Alkohol-Trigger entschärfen.';
       coachLine = 'Heute zählt Umgebung stärker als Willenskraft. Verlasse kurz die Rauch-Situation und trink Wasser, bevor du neu entscheidest.';
     } else if (urge >= 4) {
       headline = 'Drang ist hoch – Welle reiten.';
       coachLine = 'Ein starkes Craving ist unangenehm, aber nicht automatisch ein Auftrag. Beobachte es ein paar Minuten und verschiebe die Entscheidung.';
-    } else if (overdueTasks.length) {
-      headline = 'Fokus zurückholen: eine überfällige Aufgabe reicht.';
-      coachLine = 'Der Coach sieht nicht nur Konsum, sondern auch Task-Druck. Wähle jetzt eine einzige Karte und ziehe sie durch den nächsten Mini-Schritt.';
     } else if (focusTask && inProgressTasks.length) {
       headline = 'Bleib bei der Aufgabe in Bearbeitung.';
       coachLine = 'Du hast bereits aktiven Fokus markiert. Nicht Kontext wechseln – mach den nächsten kleinsten Schritt sichtbar.';
-    } else if (focusHabit) {
-      headline = 'Ein kleiner Habit-Log stabilisiert den Tag.';
-      coachLine = 'Der Coach nutzt deine Habit-Daten als Gegenpol zum Autopilot. Logge jetzt etwas Kleines, damit der Tag messbar weiterläuft.';
     } else if (todayCount > Math.max(1, Math.ceil(avgPerDay))) {
       headline = 'Heute nicht eskalieren.';
       coachLine = 'Du liegst über deinem aktuellen Muster. Ein einziges Delay kann den Tag wieder stabilisieren.';
@@ -1226,17 +1197,17 @@
     }
 
     els.coachChallengeCard.innerHTML = renderCoachChallenge(insight);
+    const focusTaskTitle = insight.focusTask ? insight.focusTask.title : 'keine aktive Aufgabe';
+    const focusHabitTitle = insight.focusHabit ? insight.focusHabit.name : (insight.activeHabits.length ? 'alle aktiven Habits geloggt' : 'noch keine Habits');
     els.coachResult.innerHTML = `
       <div class="coach-result-topline"><small>${escapeHtml(insight.stage)} · Drang ${insight.urge}/5</small><h3>${escapeHtml(insight.headline)}</h3><p>${escapeHtml(insight.coachLine)}</p></div>
-      <div class="coach-tip-grid">
-        <article><span>Mini-Ziel</span><strong>${escapeHtml(insight.microGoal)}</strong></article>
-        <article><span>Heute</span><strong>${escapeHtml(insight.comparison)}</strong></article>
-        <article><span>Tasks</span><strong>${escapeHtml(insight.taskText)}</strong></article>
-        <article><span>Habits</span><strong>${escapeHtml(insight.habitText)}</strong></article>
-        <article><span>Beste Pause</span><strong>${escapeHtml(insight.bestText)}</strong></article>
-        <article><span>Kontext</span><strong>${insight.alcoholToday ? 'Alkohol aktiv' : escapeHtml(insight.trigger.label)}</strong></article>
+      <div class="coach-context-grid">
+        <article class="coach-context-card is-primary"><span>${svgIcon('delay', 'ui-icon')}</span><div><small>Mini-Ziel</small><strong>${escapeHtml(insight.microGoal)}</strong><p>${escapeHtml(insight.comparison)}</p></div></article>
+        <article class="coach-context-card"><span>${svgIcon('tasks', 'ui-icon')}</span><div><small>Aufgaben</small><strong>${escapeHtml(focusTaskTitle)}</strong><p>${escapeHtml(insight.taskText)}</p></div></article>
+        <article class="coach-context-card"><span>${svgIcon(insight.focusHabit ? habitIconKey(insight.focusHabit) : 'habits', 'ui-icon')}</span><div><small>Habits</small><strong>${escapeHtml(focusHabitTitle)}</strong><p>${escapeHtml(insight.habitText)}</p></div></article>
+        <article class="coach-context-card"><span>${svgIcon(insight.trigger.icon, 'ui-icon')}</span><div><small>Kontext</small><strong>${insight.alcoholToday ? 'Alkohol aktiv' : escapeHtml(insight.trigger.label)}</strong><p>Beste Pause: ${escapeHtml(insight.bestText)}</p></div></article>
       </div>
-      <div class="coach-callout"><b>Coach sagt:</b> ${escapeHtml(insight.steps[0].body)} <em>${escapeHtml(insight.microGoal)}</em></div>`;
+      <div class="coach-callout"><b>Nächster Schritt:</b> ${escapeHtml(insight.steps[0].body)} <em>${escapeHtml(insight.microGoal)}</em></div>`;
     els.coachPlanGrid.innerHTML = insight.steps.map((step, index) => `<article class="coach-plan-card"><span>${svgIcon(step.icon, 'ui-icon')}</span><small>Schritt ${index + 1}</small><strong>${escapeHtml(step.title)}</strong><p>${escapeHtml(step.body)}</p></article>`).join('');
   }
 
@@ -1581,7 +1552,7 @@
       updated_at: occurredAt,
       synced: false
     });
-    ensureAlcoholDayLog(toDateKey(new Date()), label);
+    ensureAlcoholDayLog(toDateKey(new Date()));
     dedupeAlcoholLogs(state);
     saveState();
     toast(`${label} erfasst · 1 Einheit`);
@@ -1609,47 +1580,7 @@
   }
 
 
-  function toggleAlcoholToday() {
-    const key = toDateKey(new Date());
-    const existing = alcoholForDate(key);
-    if (existing) {
-      existing.consumed = !existing.consumed;
-      existing.updated_at = nowIso();
-      existing.synced = false;
-    } else {
-      ensureAlcoholDayLog(key);
-    }
-    dedupeAlcoholLogs(state);
-    saveState();
-    toast(`Alkohol heute: ${alcoholForDate(key)?.consumed ? 'Ja' : 'Nein'}`);
-    syncWithSupabase({ silent: true });
-  }
-
-  function saveAlcoholLogForSelectedDate() {
-    const key = els.alcoholDateInput?.value || toDateKey(new Date());
-    if (!key) {
-      toast('Bitte ein gültiges Datum wählen.');
-      return;
-    }
-    const existing = alcoholForDate(key);
-    const note = String(els.alcoholNoteInput?.value || '').trim();
-    if (existing) {
-      existing.consumed = true;
-      existing.note = note || existing.note || '';
-      existing.updated_at = nowIso();
-      existing.synced = false;
-    } else {
-      const created = nowIso();
-      state.alcoholLogs.push({ id: uid(), log_date: key, consumed: true, note, created_at: created, updated_at: created, synced: false });
-    }
-    if (els.alcoholNoteInput) els.alcoholNoteInput.value = '';
-    dedupeAlcoholLogs(state);
-    saveState();
-    toast('Alkohol-Kontext gespeichert');
-    syncWithSupabase({ silent: true });
-  }
-
-  async function deleteAlcoholLog(id) {
+async function deleteAlcoholLog(id) {
     const log = state.alcoholLogs.find(a => a.id === id);
     if (!log) return;
     if (!confirm('Alkohol-Eintrag wirklich löschen?')) return;

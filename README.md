@@ -6,7 +6,7 @@ Premium PWA für schlechte Gewohnheiten reduzieren, Zigarettenkonsum tracken, fl
 
 - Zigaretten-Quick-Button mit Intervallberechnung
 - Pausen-basiertes Punktesystem
-- Alkohol-Tages-Toggle
+- Vereinfachte Alkohol-Einheiten-Erfassung mit automatisch gespeichertem Zeitpunkt
 - Flexible Habits: Gewicht, Anzahl/Zahl, Ja/Nein, Dauer
 - Meditation-Schnellerfassung mit 7-3-11, Box Breathing, Body Scan, Craving-Welle und Dankbarkeits-Minute
 - Aufgaben mit Aufwand 1–5 und Punktebelohnung
