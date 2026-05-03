@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>HabitFlow</title>
+  <meta name="theme-color" content="#08111b" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="HabitFlow" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="toast" class="save-toast hidden" role="status" aria-live="polite"></div>
+
+  <div class="app-shell">
+    <header class="topbar glass">
+      <div>
+        <p class="eyebrow">Habit OS</p>
+        <h1>HabitFlow</h1>
+      </div>
+      <div class="topbar-actions">
+        <button id="themeToggle" class="icon-btn" type="button" aria-label="Theme wechseln">◐</button>
+        <button id="syncNowBtn" class="pill secondary" type="button">Sync</button>
+      </div>
+    </header>
+
+    <main class="content">
+      <section id="screen-dashboard" class="screen active" data-screen="dashboard">
+        <div class="hero-card glass hero-card--premium">
+          <div class="hero-copy">
+            <p class="eyebrow">Heute</p>
+            <h2 id="dashboardTitle">Dein Fokus zählt.</h2>
+            <p id="dashboardSubtitle">Tracke schlechte Gewohnheiten, Aufgaben und Fortschritt ohne Reibung.</p>
+            <div class="hero-actions">
+              <button id="heroSmokeBtn" class="pill primary large" type="button">+ Zigarette erfassen</button>
+              <button id="heroTaskBtn" class="pill secondary large" type="button">Aufgabe anlegen</button>
+            </div>
+          </div>
+          <div class="level-orb" aria-label="Gamification Level">
+            <span id="levelLabel">Level 1</span>
+            <strong id="totalPoints">0</strong>
+            <small>Clean Points</small>
+            <div class="orb-progress"><i id="levelProgress"></i></div>
+          </div>
+        </div>
+
+        <div class="grid cards-4">
+          <article class="metric-card glass"><span class="metric-label">Aktuelle Pause</span><strong id="currentPause">–</strong><small>seit letzter Zigarette</small></article>
+          <article class="metric-card glass"><span class="metric-label">Heute</span><strong id="todayCigarettes">0</strong><small>Zigaretten</small></article>
+          <article class="metric-card glass"><span class="metric-label">Ø Pause 7T</span><strong id="avgPause7">–</strong><small>zwischen Zigaretten</small></article>
+          <article class="metric-card glass"><span class="metric-label">Aufgaben</span><strong id="openTasksCount">0</strong><small>offen</small></article>
+        </div>
+
+        <div class="grid two-columns">
+          <section class="panel glass">
+            <div class="panel-head"><div><p class="eyebrow">Trend</p><h3>Zigaretten pro Tag</h3></div><span class="subtle">14 Tage</span></div>
+            <div class="chart-wrap"><canvas id="cigaretteChart"></canvas></div>
+          </section>
+          <section class="panel glass">
+            <div class="panel-head"><div><p class="eyebrow">XP</p><h3>Punkteentwicklung</h3></div><span class="subtle">14 Tage</span></div>
+            <div class="chart-wrap"><canvas id="pointsChart"></canvas></div>
+          </section>
+        </div>
+
+        <section class="panel glass">
+          <div class="panel-head"><div><p class="eyebrow">Insights</p><h3>Automatisch berechnet</h3></div></div>
+          <div id="insightsGrid" class="insights-grid"></div>
+        </section>
+      </section>
+
+      <section id="screen-smoking" class="screen" data-screen="smoking">
+        <div class="grid two-columns smoking-layout">
+          <section class="panel glass smoke-control-card">
+            <div class="panel-head compact"><div><p class="eyebrow">Rauchen</p><h3>Schnell erfassen</h3></div></div>
+            <div class="smoke-ring" aria-live="polite">
+              <small>Aktuelle Pause</small>
+              <strong id="smokePauseLive">–</strong>
+              <span id="smokePauseHint">Noch kein Eintrag vorhanden</span>
+            </div>
+            <button id="recordSmokeBtn" class="smoke-button" type="button">
+              <span>+</span>
+              Zigarette
+            </button>
+            <div class="alcohol-toggle-card">
+              <div>
+                <strong>Alkohol heute?</strong>
+                <p class="subtle">Wird für Muster und Rückfall-Risiko mitgetrackt.</p>
+              </div>
+              <button id="alcoholTodayBtn" class="toggle-pill" type="button" aria-pressed="false">Nein</button>
+            </div>
+          </section>
+
+          <section class="panel glass">
+            <div class="panel-head"><div><p class="eyebrow">Verlauf</p><h3>Letzte Zigaretten</h3></div><span id="lastSmokePoints" class="badge muted">0 Pkt.</span></div>
+            <div id="smokeHistory" class="stack-list tall"></div>
+          </section>
+        </div>
+
+        <section class="panel glass">
+          <div class="panel-head"><div><p class="eyebrow">Regelwerk</p><h3>Pause → Punkte</h3></div></div>
+          <div class="score-rules-grid">
+            <article><strong>&lt; 30 Min.</strong><span>-5</span><small>zu kurzer Abstand</small></article>
+            <article><strong>30–59 Min.</strong><span>+2</span><small>kleiner Fortschritt</small></article>
+            <article><strong>1–2 Std.</strong><span>+8</span><small>solide Pause</small></article>
+            <article><strong>2–4 Std.</strong><span>+18</span><small>guter Abstand</small></article>
+            <article><strong>4–8 Std.</strong><span>+40</span><small>stark</small></article>
+            <article><strong>8+ Std.</strong><span>+80</span><small>sehr stark</small></article>
+          </div>
+        </section>
+      </section>
+
+      <section id="screen-habits" class="screen" data-screen="habits">
+        <div class="grid two-columns">
+          <section class="panel glass">
+            <div class="panel-head"><div><p class="eyebrow">Flexible Habits</p><h3>Gewohnheit anlegen</h3></div></div>
+            <form id="habitForm" class="form-grid">
+              <label><span>Name</span><input name="name" required placeholder="z. B. Gewicht, Wasser, Sport" /></label>
+              <label><span>Typ</span><select name="type"><option value="number">Anzahl / Zahl</option><option value="weight">Gewicht</option><option value="boolean">Ja/Nein</option><option value="duration">Dauer</option></select></label>
+              <label><span>Einheit</span><input name="unit" placeholder="kg, Stück, Minuten" /></label>
+              <label><span>Zielrichtung</span><select name="direction"><option value="increase">mehr ist besser</option><option value="decrease">weniger ist besser</option></select></label>
+              <label><span>Tagesziel</span><input name="target" type="number" step="0.01" placeholder="optional" /></label>
+              <label><span>Icon</span><input name="icon" maxlength="2" value="✨" /></label>
+              <div class="form-actions full"><button class="pill primary" type="submit">Habit erstellen</button></div>
+            </form>
+          </section>
+
+          <section class="panel glass">
+            <div class="panel-head"><div><p class="eyebrow">Heute</p><h3>Quick Logging</h3></div></div>
+            <div id="habitCards" class="habit-card-grid"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="screen-tasks" class="screen" data-screen="tasks">
+        <div class="grid two-columns">
+          <section class="panel glass">
+            <div class="panel-head"><div><p class="eyebrow">Tasks</p><h3>Aufgabe erfassen</h3></div></div>
+            <form id="taskForm" class="form-grid">
+              <label class="full"><span>Titel</span><input name="title" required placeholder="Was willst du erledigen?" /></label>
+              <label><span>Aufwand</span><select name="effort"><option value="1">1 · sehr klein</option><option value="2">2 · klein</option><option value="3" selected>3 · mittel</option><option value="4">4 · gross</option><option value="5">5 · sehr gross</option></select></label>
+              <label><span>Fällig</span><input name="due_at" type="datetime-local" /></label>
+              <label class="full"><span>Notiz</span><textarea name="description" rows="3" placeholder="optional"></textarea></label>
+              <div class="form-actions full"><button class="pill primary" type="submit">Aufgabe speichern</button></div>
+            </form>
+          </section>
+          <section class="panel glass">
+            <div class="panel-head"><div><p class="eyebrow">Queue</p><h3>Offene Aufgaben</h3></div><span id="taskPointsPreview" class="badge muted">Aufwand × 20 Pkt.</span></div>
+            <div id="tasksList" class="stack-list tall"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="screen-calendar" class="screen" data-screen="calendar">
+        <section class="panel glass calendar-panel">
+          <div class="panel-head calendar-head">
+            <div><p class="eyebrow">Kalender</p><h3 id="calendarTitle">Monat</h3></div>
+            <div class="action-row">
+              <button id="prevMonthBtn" class="icon-btn" type="button" aria-label="Vorheriger Monat">‹</button>
+              <button id="todayMonthBtn" class="pill secondary" type="button">Heute</button>
+              <button id="nextMonthBtn" class="icon-btn" type="button" aria-label="Nächster Monat">›</button>
+            </div>
+          </div>
+          <div class="calendar-weekdays"><span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span></div>
+          <div id="calendarGrid" class="calendar-grid"></div>
+        </section>
+        <section class="panel glass">
+          <div class="panel-head"><div><p class="eyebrow">Tagesdetails</p><h3 id="selectedDateTitle">Heute</h3></div></div>
+          <div id="dayDetails" class="stack-list"></div>
+        </section>
+      </section>
+
+      <section id="screen-settings" class="screen" data-screen="settings">
+        <div class="grid two-columns">
+          <section class="panel glass">
+            <div class="panel-head"><div><p class="eyebrow">Supabase</p><h3>Datenbank & Sync</h3></div><span id="syncStatus" class="badge muted">Lokal</span></div>
+            <form id="settingsForm" class="form-grid">
+              <label class="full"><span>Supabase URL</span><input name="supabaseUrl" placeholder="https://xxxxx.supabase.co" /></label>
+              <label class="full"><span>Anon Key</span><input name="supabaseAnonKey" placeholder="eyJ..." /></label>
+              <label class="full"><span>E-Mail für Magic Link</span><input name="email" type="email" placeholder="du@example.com" /></label>
+              <div class="form-actions full">
+                <button id="saveSettingsBtn" class="pill primary" type="submit">Einstellungen speichern</button>
+                <button id="sendMagicLinkBtn" class="pill secondary" type="button">Login-Link senden</button>
+                <button id="logoutBtn" class="pill danger" type="button">Logout</button>
+              </div>
+            </form>
+            <p class="settings-note">Die App funktioniert lokal sofort. Sobald Supabase URL, Anon Key und Login aktiv sind, werden Daten nutzerbezogen synchronisiert.</p>
+          </section>
+
+          <section class="panel glass">
+            <div class="panel-head"><div><p class="eyebrow">Daten</p><h3>Backup & Restore</h3></div></div>
+            <div class="action-row data-actions">
+              <button id="exportBtn" class="pill secondary" type="button">JSON exportieren</button>
+              <label class="pill secondary file-input-pill">JSON importieren<input id="importInput" type="file" accept=".json,application/json" /></label>
+              <button id="resetBtn" class="pill danger" type="button">Demo zurücksetzen</button>
+            </div>
+          </section>
+        </div>
+
+        <section class="panel glass">
+          <div class="panel-head"><div><p class="eyebrow">DB Statement</p><h3>Supabase SQL</h3></div><button id="copySqlBtn" class="pill secondary" type="button">SQL kopieren</button></div>
+          <pre id="sqlPreview" class="sql-preview"></pre>
+        </section>
+      </section>
+    </main>
+
+    <nav class="bottom-nav glass" aria-label="Hauptnavigation">
+      <button data-target="dashboard" class="nav-btn active" type="button"><span>◎</span>Dashboard</button>
+      <button data-target="smoking" class="nav-btn" type="button"><span>◉</span>Rauchen</button>
+      <button data-target="habits" class="nav-btn" type="button"><span>✦</span>Habits</button>
+      <button data-target="tasks" class="nav-btn" type="button"><span>✓</span>Tasks</button>
+      <button data-target="calendar" class="nav-btn" type="button"><span>□</span>Kalender</button>
+      <button data-target="settings" class="nav-btn" type="button"><span>⚙</span>Setup</button>
+    </nav>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="supabase-schema.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

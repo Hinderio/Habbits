@@ -1,0 +1,15 @@
+{
+  "name": "HabitFlow",
+  "short_name": "HabitFlow",
+  "description": "Premium Habit-, Zigaretten-, Aufgaben- und Gamification-Tracker mit Supabase Sync.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#08111b",
+  "theme_color": "#08111b",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
