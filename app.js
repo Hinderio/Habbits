@@ -4,6 +4,14 @@
   const STORAGE_KEY = 'habitflow-state-v1';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
+  const TREND_METRIC_KEY = 'habitflow-trend-metric';
+  const MEDITATION_TECHNIQUES = [
+    { key: '7-3-11', title: '7-3-11 Atemtechnik', subtitle: 'Runterfahren mit langer Ausatmung', minutes: 6, pattern: '7 ein · 3 halten · 11 aus' },
+    { key: 'box', title: 'Box Breathing', subtitle: 'Klarer Fokus vor schwierigen Momenten', minutes: 5, pattern: '4 · 4 · 4 · 4' },
+    { key: 'body-scan', title: 'Body Scan', subtitle: 'Körper wahrnehmen und Spannung lösen', minutes: 10, pattern: 'ruhig scannen' },
+    { key: 'urge-surf', title: 'Craving-Welle', subtitle: 'Drang beobachten, ohne sofort zu handeln', minutes: 4, pattern: 'wahrnehmen · warten · wählen' },
+    { key: 'gratitude', title: 'Dankbarkeits-Minute', subtitle: 'Kurzer mentaler Reset mit positiver Ankerung', minutes: 3, pattern: '3 Dinge benennen' }
+  ];
   const DAY_MS = 24 * 60 * 60 * 1000;
   const nowIso = () => new Date().toISOString();
   const uid = () => (crypto && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
@@ -17,7 +25,8 @@
   let currentUser = null;
   let selectedCalendarDate = toDateKey(new Date());
   let calendarCursor = new Date();
-  let charts = { cigarettes: null, points: null };
+  let charts = { trend: null, points: null };
+  let selectedTrendMetric = localStorage.getItem(TREND_METRIC_KEY) || 'points';
   let renderQueued = false;
 
   const els = {};
@@ -60,7 +69,10 @@
       avgPause7: $('#avgPause7'),
       openTasksCount: $('#openTasksCount'),
       insightsGrid: $('#insightsGrid'),
-      cigaretteChart: $('#cigaretteChart'),
+      habitHeatmap: $('#habitHeatmap'),
+      trendMetricSelect: $('#trendMetricSelect'),
+      trendChartTitle: $('#trendChartTitle'),
+      trendChart: $('#trendChart'),
       pointsChart: $('#pointsChart'),
       recordSmokeBtn: $('#recordSmokeBtn'),
       smokePauseLive: $('#smokePauseLive'),
@@ -68,6 +80,8 @@
       alcoholTodayBtn: $('#alcoholTodayBtn'),
       smokeHistory: $('#smokeHistory'),
       lastSmokePoints: $('#lastSmokePoints'),
+      meditationTechniqueGrid: $('#meditationTechniqueGrid'),
+      meditationHistory: $('#meditationHistory'),
       habitForm: $('#habitForm'),
       habitCards: $('#habitCards'),
       taskForm: $('#taskForm'),
@@ -103,6 +117,11 @@
     els.heroTaskBtn.addEventListener('click', () => showScreen('tasks'));
     els.recordSmokeBtn.addEventListener('click', () => recordCigarette());
     els.alcoholTodayBtn.addEventListener('click', () => toggleAlcoholToday());
+    els.trendMetricSelect.addEventListener('change', () => {
+      selectedTrendMetric = els.trendMetricSelect.value;
+      localStorage.setItem(TREND_METRIC_KEY, selectedTrendMetric);
+      renderCharts();
+    });
     els.habitForm.addEventListener('submit', createHabit);
     els.taskForm.addEventListener('submit', createTask);
     els.taskForm.effort.addEventListener('change', updateTaskPreview);
@@ -132,6 +151,7 @@
       if (action === 'archive-habit') archiveHabit(id);
       if (action === 'log-habit') logHabit(id);
       if (action === 'delete-smoke') deleteSmoke(id);
+      if (action === 'log-meditation') logMeditationTechnique(id);
       if (action === 'select-day') {
         selectedCalendarDate = actionEl.dataset.day;
         renderCalendar();
@@ -147,7 +167,8 @@
       habits: [
         { id: uid(), name: 'Gewicht', type: 'weight', unit: 'kg', direction: 'decrease', target: null, icon: '⚖️', color: '#4ad7d1', is_archived: false, created_at: created, updated_at: created },
         { id: uid(), name: 'Wasser', type: 'number', unit: 'Gläser', direction: 'increase', target: 8, icon: '💧', color: '#66e7ff', is_archived: false, created_at: created, updated_at: created },
-        { id: uid(), name: 'Sport', type: 'duration', unit: 'Min.', direction: 'increase', target: 30, icon: '🏃', color: '#8ff0a7', is_archived: false, created_at: created, updated_at: created }
+        { id: uid(), name: 'Sport', type: 'duration', unit: 'Min.', direction: 'increase', target: 30, icon: '🏃', color: '#8ff0a7', is_archived: false, created_at: created, updated_at: created },
+        createSystemMeditationHabit(created)
       ],
       habitEntries: [],
       cigarettes: [],
@@ -178,7 +199,31 @@
     next.alcoholLogs = Array.isArray(next.alcoholLogs) ? next.alcoholLogs : [];
     next.tasks = Array.isArray(next.tasks) ? next.tasks : [];
     next.pointsLedger = Array.isArray(next.pointsLedger) ? next.pointsLedger : [];
+    ensureSystemHabits(next);
     return next;
+  }
+
+  function createSystemMeditationHabit(created = nowIso()) {
+    return {
+      id: uid(),
+      name: 'Meditation',
+      type: 'duration',
+      unit: 'Min.',
+      direction: 'increase',
+      target: 10,
+      icon: '🧘',
+      color: '#b79cff',
+      system_key: 'meditation',
+      is_archived: false,
+      created_at: created,
+      updated_at: created,
+      synced: false
+    };
+  }
+
+  function ensureSystemHabits(nextState = state) {
+    const hasMeditation = nextState.habits.some(h => h.system_key === 'meditation' || String(h.name || '').trim().toLowerCase() === 'meditation');
+    if (!hasMeditation) nextState.habits.push(createSystemMeditationHabit());
   }
 
   function saveState({ skipRender = false } = {}) {
@@ -231,6 +276,7 @@
     renderTimers();
     renderDashboard();
     renderSmoking();
+    renderMeditation();
     renderHabits();
     renderTasks();
     renderCalendar();
@@ -253,20 +299,22 @@
     els.totalPoints.textContent = total.toLocaleString('de-CH');
     els.levelLabel.textContent = `Level ${level}`;
     els.levelProgress.style.width = `${Math.min(100, (levelPoints / 500) * 100)}%`;
-    els.todayCigarettes.textContent = cigarettesOnDate(toDateKey(new Date())).length;
-    els.avgPause7.textContent = averagePauseText(7);
+    const todayKey = toDateKey(new Date());
+    const todayCount = cigarettesOnDate(todayKey).length;
+    const habitLogsToday = state.habitEntries.filter(e => toDateKey(e.occurred_at) === todayKey).length;
+    const completedToday = state.tasks.filter(t => t.status === 'done' && toDateKey(t.completed_at || t.updated_at || t.created_at) === todayKey).length;
+    els.todayCigarettes.textContent = todayCount;
+    els.avgPause7.textContent = habitLogsToday;
     els.openTasksCount.textContent = state.tasks.filter(t => t.status === 'open').length;
 
-    const todayCount = cigarettesOnDate(toDateKey(new Date())).length;
-    if (todayCount === 0) {
-      els.dashboardTitle.textContent = 'Starker rauchfreier Start.';
-      els.dashboardSubtitle.textContent = 'Jede Minute Pause zählt. Nutze Tasks und Habits, um Momentum aufzubauen.';
-    } else {
-      els.dashboardTitle.textContent = 'Bewusst tracken, ruhig verbessern.';
-      els.dashboardSubtitle.textContent = `${todayCount} Zigarette${todayCount === 1 ? '' : 'n'} heute. Der nächste Hebel ist eine längere Pause.`;
-    }
+    els.dashboardTitle.textContent = 'Dein Fortschritt auf einen Blick.';
+    els.dashboardSubtitle.textContent = habitLogsToday || completedToday || todayCount
+      ? `${habitLogsToday} Habit-Log${habitLogsToday === 1 ? '' : 's'}, ${completedToday} erledigte Aufgabe${completedToday === 1 ? '' : 'n'} und ${todayCount} Zigarette${todayCount === 1 ? '' : 'n'} heute.`
+      : 'Wähle eine Auswertung, erfasse kleine Schritte und halte deine wichtigsten Muster sichtbar.';
 
+    renderTrendOptions();
     renderInsights();
+    renderHabitHeatmap();
     renderCharts();
   }
 
@@ -283,6 +331,165 @@
       { title: 'Beste Pause', body: bestPause ? `Längste Pause bisher: ${formatDuration(bestPause)}. Das ist dein aktueller Highscore.` : 'Noch keine Intervall-Daten vorhanden.' }
     ];
     els.insightsGrid.innerHTML = insights.map(item => `<article class="insight-card"><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.body)}</p></article>`).join('');
+  }
+
+
+  function renderTrendOptions() {
+    if (!els.trendMetricSelect) return;
+    const options = getTrendMetricOptions();
+    if (!options.some(option => option.value === selectedTrendMetric)) {
+      selectedTrendMetric = options[0]?.value || 'points';
+      localStorage.setItem(TREND_METRIC_KEY, selectedTrendMetric);
+    }
+    const current = els.trendMetricSelect.value;
+    const nextHtml = options.map(option => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`).join('');
+    if (els.trendMetricSelect.innerHTML !== nextHtml) els.trendMetricSelect.innerHTML = nextHtml;
+    if (current !== selectedTrendMetric) els.trendMetricSelect.value = selectedTrendMetric;
+  }
+
+  function getTrendMetricOptions() {
+    const activeHabits = state.habits.filter(h => !h.is_archived);
+    return [
+      { value: 'points', label: 'Punkte' },
+      { value: 'cigarettes', label: 'Zigaretten' },
+      { value: 'alcohol', label: 'Alkohol-Tage' },
+      ...activeHabits.map(habit => ({ value: `habit:${habit.id}`, label: `${habit.icon || '✨'} ${habit.name}` }))
+    ];
+  }
+
+  function getTrendMetricConfig(keys) {
+    if (selectedTrendMetric === 'cigarettes') {
+      return { title: 'Zigaretten pro Tag', label: 'Zigaretten', data: keys.map(k => cigarettesOnDate(k).length), beginAtZero: true };
+    }
+    if (selectedTrendMetric === 'alcohol') {
+      return { title: 'Alkohol-Kontext', label: 'Alkohol', data: keys.map(k => alcoholForDate(k)?.consumed ? 1 : 0), beginAtZero: true };
+    }
+    if (selectedTrendMetric.startsWith('habit:')) {
+      const habitId = selectedTrendMetric.slice(6);
+      const habit = state.habits.find(h => h.id === habitId && !h.is_archived);
+      if (habit) {
+        return {
+          title: `${habit.name} Verlauf`,
+          label: habit.unit || typeLabel(habit.type),
+          data: keys.map(k => habitValueForDay(habit, k).value),
+          beginAtZero: habit.type !== 'weight'
+        };
+      }
+    }
+    selectedTrendMetric = 'points';
+    return { title: 'Punkteentwicklung', label: 'Punkte', data: keys.map(k => pointsOnDate(k)), beginAtZero: true };
+  }
+
+  function renderHabitHeatmap() {
+    if (!els.habitHeatmap) return;
+    const activeHabits = state.habits.filter(h => !h.is_archived);
+    const keys = daysBack(14);
+    if (!activeHabits.length) {
+      els.habitHeatmap.innerHTML = '<div class="empty-state">Noch keine aktiven Habits vorhanden. Sobald du Habits anlegst oder loggst, erscheint hier dein Rhythmus.</div>';
+      return;
+    }
+
+    const header = keys.map(key => {
+      const date = new Date(`${key}T12:00:00`);
+      return `<div class="heatmap-day-label"><span>${date.toLocaleDateString('de-CH', { weekday: 'short' }).slice(0, 2)}</span><strong>${date.getDate()}</strong></div>`;
+    }).join('');
+
+    const rows = activeHabits.map(habit => {
+      const cells = keys.map(key => {
+        const day = habitValueForDay(habit, key);
+        const level = day.logged ? (day.ratio >= 1 ? 'is-full' : day.ratio >= .5 ? 'is-mid' : 'is-low') : 'is-empty';
+        return `<span class="heatmap-cell ${level}" title="${escapeHtml(habit.name)} · ${key}: ${escapeHtml(day.label)}"></span>`;
+      }).join('');
+      return `<div class="heatmap-row-label"><span>${escapeHtml(habit.icon || '✨')}</span><strong>${escapeHtml(habit.name)}</strong></div>${cells}`;
+    }).join('');
+
+    els.habitHeatmap.innerHTML = `<div class="heatmap-scroll"><div class="heatmap-grid" style="--heatmap-days:${keys.length}"><div class="heatmap-corner">Habit</div>${header}${rows}</div></div>`;
+  }
+
+  function habitValueForDay(habit, key) {
+    const entries = entriesForHabitOnDate(habit.id, key).sort((a, b) => new Date(a.occurred_at) - new Date(b.occurred_at));
+    if (!entries.length) return { value: null, label: 'kein Eintrag', logged: false, ratio: 0 };
+    if (habit.type === 'boolean') {
+      const done = entries.some(e => e.value_bool);
+      return { value: done ? 1 : 0, label: done ? 'Ja' : 'Nein', logged: true, ratio: done ? 1 : .25 };
+    }
+    const unit = habit.unit || defaultUnit(habit.type);
+    let value;
+    if (habit.type === 'weight') {
+      value = Number(entries[entries.length - 1].value_num || 0);
+    } else {
+      value = sum(entries.map(e => Number(e.value_num || 0)));
+    }
+    const ratio = habit.target
+      ? habit.direction === 'decrease'
+        ? (value <= Number(habit.target) ? 1 : Math.max(.15, Number(habit.target) / Math.max(value, .01)))
+        : Math.min(1, value / Math.abs(Number(habit.target)))
+      : 1;
+    const display = `${Number.isInteger(value) ? value : value.toFixed(2)} ${unit}`.trim();
+    return { value, label: display, logged: true, ratio };
+  }
+
+  function renderMeditation() {
+    if (!els.meditationTechniqueGrid || !els.meditationHistory) return;
+    const meditationHabit = getMeditationHabit({ createIfMissing: true });
+    els.meditationTechniqueGrid.innerHTML = MEDITATION_TECHNIQUES.map(technique => `<article class="meditation-card">
+      <div>
+        <strong>${escapeHtml(technique.title)}</strong>
+        <p>${escapeHtml(technique.subtitle)}</p>
+        <small>${escapeHtml(technique.pattern)} · ${technique.minutes} Min.</small>
+      </div>
+      <button class="mini-btn primary" type="button" data-action="log-meditation" data-id="${escapeHtml(technique.key)}">Loggen</button>
+    </article>`).join('');
+
+    const sessions = state.habitEntries
+      .filter(entry => entry.habit_id === meditationHabit.id)
+      .sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at))
+      .slice(0, 5);
+
+    if (!sessions.length) {
+      els.meditationHistory.innerHTML = '<div class="empty-state">Noch keine Meditation erfasst. Wähle oben eine Technik – sie wird als normaler Habit-Eintrag gespeichert und synchronisiert.</div>';
+      return;
+    }
+
+    els.meditationHistory.innerHTML = sessions.map(session => `<article class="list-card">
+      <div class="list-card-main">
+        <h4>${escapeHtml(session.note || 'Meditation')}</h4>
+        <p class="meta">${formatDateTime(session.occurred_at)} · ${formatHabitValue(meditationHabit, session.value_num || 0)}</p>
+      </div>
+    </article>`).join('');
+  }
+
+  function logMeditationTechnique(key) {
+    const technique = MEDITATION_TECHNIQUES.find(item => item.key === key);
+    if (!technique) return;
+    const meditationHabit = getMeditationHabit({ createIfMissing: true });
+    const occurredAt = nowIso();
+    const entry = {
+      id: uid(),
+      habit_id: meditationHabit.id,
+      value_num: technique.minutes,
+      value_bool: null,
+      note: technique.title,
+      occurred_at: occurredAt,
+      created_at: occurredAt,
+      updated_at: occurredAt,
+      synced: false
+    };
+    state.habitEntries.push(entry);
+    const points = habitPoints(meditationHabit, entry);
+    addPoints('habit', entry.id, points, `${technique.title} abgeschlossen`, occurredAt);
+    saveState();
+    toast(`${technique.title} geloggt · +${points} Punkte`);
+    syncWithSupabase({ silent: true });
+  }
+
+  function getMeditationHabit({ createIfMissing = false } = {}) {
+    let habit = state.habits.find(h => h.system_key === 'meditation' || String(h.name || '').trim().toLowerCase() === 'meditation');
+    if (!habit && createIfMissing) {
+      habit = createSystemMeditationHabit();
+      state.habits.push(habit);
+    }
+    return habit;
   }
 
   function renderSmoking() {
@@ -385,13 +592,11 @@
       const key = toDateKey(date);
       const cigarettes = cigarettesOnDate(key).length;
       const tasks = state.tasks.filter(t => toDateKey(t.due_at || t.completed_at || t.created_at) === key);
-      const habitEntries = state.habitEntries.filter(e => toDateKey(e.occurred_at) === key).length;
       const alcohol = alcoholForDate(key)?.consumed;
-      const points = pointsOnDate(key);
+      const points = calendarPointsOnDate(key);
       const chips = [];
       if (cigarettes) chips.push(`<span class="day-chip smoke">${cigarettes} Zig.</span>`);
       if (tasks.length) chips.push(`<span class="day-chip task">${tasks.length} Task</span>`);
-      if (habitEntries) chips.push(`<span class="day-chip habit">${habitEntries} Habit</span>`);
       if (alcohol) chips.push('<span class="day-chip alcohol">Alk.</span>');
       cells.push(`<button class="calendar-day ${date.getMonth() !== month ? 'is-muted' : ''} ${key === toDateKey(new Date()) ? 'is-today' : ''} ${key === selectedCalendarDate ? 'is-selected' : ''}" type="button" data-action="select-day" data-day="${key}">
         <span class="calendar-day-head"><strong>${date.getDate()}</strong>${points ? `<em class="day-points">${points > 0 ? '+' : ''}${points}</em>` : ''}</span>
@@ -411,12 +616,6 @@
     if (alcohol) details.push(`<article class="list-card"><div><h4>Alkohol</h4><p class="meta">${alcohol.consumed ? 'Ja' : 'Nein'} getrackt</p></div></article>`);
     const tasks = state.tasks.filter(t => toDateKey(t.due_at || t.completed_at || t.created_at) === key);
     tasks.forEach(t => details.push(`<article class="list-card ${t.status === 'done' ? 'done' : ''}"><div><h4>${escapeHtml(t.title)}</h4><p class="meta">${t.status === 'done' ? 'Erledigt' : 'Offen'} · Aufwand ${t.effort}/5</p></div></article>`));
-    const entries = state.habitEntries.filter(e => toDateKey(e.occurred_at) === key);
-    entries.forEach(entry => {
-      const habit = state.habits.find(h => h.id === entry.habit_id);
-      if (!habit) return;
-      details.push(`<article class="list-card"><div><h4>${escapeHtml(habit.icon || '✨')} ${escapeHtml(habit.name)}</h4><p class="meta">${formatHabitValue(habit, habit.type === 'boolean' ? entry.value_bool : entry.value_num)}</p></div></article>`);
-    });
     els.dayDetails.innerHTML = details.length ? details.join('') : '<div class="empty-state">Für diesen Tag gibt es noch keine Einträge.</div>';
   }
 
@@ -424,30 +623,33 @@
     if (!window.Chart) return;
     const keys = daysBack(14);
     const labels = keys.map(k => new Date(`${k}T12:00:00`).toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' }));
-    const cigaretteData = keys.map(k => cigarettesOnDate(k).length);
+    const trend = getTrendMetricConfig(keys);
     const pointsData = keys.map(k => pointsOnDate(k));
-    charts.cigarettes = drawChart(charts.cigarettes, els.cigaretteChart, labels, cigaretteData, 'Zigaretten');
-    charts.points = drawChart(charts.points, els.pointsChart, labels, pointsData, 'Punkte');
+    if (els.trendChartTitle) els.trendChartTitle.textContent = trend.title;
+    charts.trend = drawChart(charts.trend, els.trendChart, labels, trend.data, trend.label, { beginAtZero: trend.beginAtZero });
+    charts.points = drawChart(charts.points, els.pointsChart, labels, pointsData, 'Punkte', { beginAtZero: true });
   }
 
-  function drawChart(existing, canvas, labels, data, label) {
+  function drawChart(existing, canvas, labels, data, label, options = {}) {
     if (!canvas) return existing;
     if (existing) {
       existing.data.labels = labels;
       existing.data.datasets[0].data = data;
+      existing.data.datasets[0].label = label;
+      existing.options.scales.y.beginAtZero = options.beginAtZero !== false;
       existing.update();
       return existing;
     }
     return new Chart(canvas, {
       type: 'line',
-      data: { labels, datasets: [{ label, data, tension: .42, fill: true, pointRadius: 3 }] },
+      data: { labels, datasets: [{ label, data, tension: .42, fill: true, spanGaps: true, pointRadius: 3 }] },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         plugins: { legend: { display: false } },
         scales: {
           x: { grid: { display: false }, ticks: { color: getComputedStyle(document.documentElement).getPropertyValue('--muted') || '#9db0c3' } },
-          y: { beginAtZero: true, ticks: { precision: 0, color: getComputedStyle(document.documentElement).getPropertyValue('--muted') || '#9db0c3' }, grid: { color: 'rgba(255,255,255,.07)' } }
+          y: { beginAtZero: options.beginAtZero !== false, ticks: { precision: 0, color: getComputedStyle(document.documentElement).getPropertyValue('--muted') || '#9db0c3' }, grid: { color: 'rgba(255,255,255,.07)' } }
         }
       }
     });
@@ -671,6 +873,16 @@
   function pointsOnDate(key) {
     return sum(state.pointsLedger.filter(p => toDateKey(p.earned_at) === key).map(p => Number(p.points || 0))) +
       sum(state.cigarettes.filter(c => toDateKey(c.smoked_at) === key && !state.pointsLedger.some(p => p.source_type === 'cigarette' && p.source_id === c.id)).map(c => Number(c.points || 0)));
+  }
+
+
+  function calendarPointsOnDate(key) {
+    return sum(state.pointsLedger
+      .filter(p => p.source_type !== 'habit' && toDateKey(p.earned_at) === key)
+      .map(p => Number(p.points || 0))) +
+      sum(state.cigarettes
+        .filter(c => toDateKey(c.smoked_at) === key && !state.pointsLedger.some(p => p.source_type === 'cigarette' && p.source_id === c.id))
+        .map(c => Number(c.points || 0)));
   }
 
   function getLastCigarette() {

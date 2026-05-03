@@ -8,9 +8,10 @@ Premium PWA für schlechte Gewohnheiten reduzieren, Zigarettenkonsum tracken, fl
 - Pausen-basiertes Punktesystem
 - Alkohol-Tages-Toggle
 - Flexible Habits: Gewicht, Anzahl/Zahl, Ja/Nein, Dauer
+- Meditation-Schnellerfassung mit 7-3-11, Box Breathing, Body Scan, Craving-Welle und Dankbarkeits-Minute
 - Aufgaben mit Aufwand 1–5 und Punktebelohnung
-- Dashboard mit KPIs, Trends und Insights
-- Kalender mit Aufgaben, Habits, Zigaretten und Alkohol-Kontext
+- Dashboard mit KPIs, auswählbarem Trend pro Habit, Heatmap und Insights
+- Kalender mit Aufgaben, Zigaretten und Alkohol-Kontext; Habit-Verläufe bleiben im Dashboard/Heatmap
 - Supabase Magic-Link Login und Sync
 - Lokale Offline-Nutzung via localStorage
 - SQL-Schema mit RLS Policies

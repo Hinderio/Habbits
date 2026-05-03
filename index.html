@@ -48,22 +48,30 @@
         </div>
 
         <div class="grid cards-4">
-          <article class="metric-card glass"><span class="metric-label">Aktuelle Pause</span><strong id="currentPause">–</strong><small>seit letzter Zigarette</small></article>
-          <article class="metric-card glass"><span class="metric-label">Heute</span><strong id="todayCigarettes">0</strong><small>Zigaretten</small></article>
-          <article class="metric-card glass"><span class="metric-label">Ø Pause 7T</span><strong id="avgPause7">–</strong><small>zwischen Zigaretten</small></article>
+          <article class="metric-card glass"><span class="metric-label">Fokus-Pause</span><strong id="currentPause">–</strong><small>seit letzter Zigarette</small></article>
+          <article class="metric-card glass"><span class="metric-label">Zigaretten heute</span><strong id="todayCigarettes">0</strong><small>kurz erfasst</small></article>
+          <article class="metric-card glass"><span class="metric-label">Habits heute</span><strong id="avgPause7">0</strong><small>geloggte Einträge</small></article>
           <article class="metric-card glass"><span class="metric-label">Aufgaben</span><strong id="openTasksCount">0</strong><small>offen</small></article>
         </div>
 
         <div class="grid two-columns">
           <section class="panel glass">
-            <div class="panel-head"><div><p class="eyebrow">Trend</p><h3>Zigaretten pro Tag</h3></div><span class="subtle">14 Tage</span></div>
-            <div class="chart-wrap"><canvas id="cigaretteChart"></canvas></div>
+            <div class="panel-head chart-head">
+              <div><p class="eyebrow">Auswertung</p><h3 id="trendChartTitle">Trend auswählen</h3></div>
+              <label class="trend-picker"><span>Habit</span><select id="trendMetricSelect" aria-label="Dashboard-Trend auswählen"></select></label>
+            </div>
+            <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
           </section>
           <section class="panel glass">
             <div class="panel-head"><div><p class="eyebrow">XP</p><h3>Punkteentwicklung</h3></div><span class="subtle">14 Tage</span></div>
             <div class="chart-wrap"><canvas id="pointsChart"></canvas></div>
           </section>
         </div>
+
+        <section class="panel glass">
+          <div class="panel-head"><div><p class="eyebrow">Heatmap</p><h3>Habit-Rhythmus</h3></div><span class="subtle">14 Tage</span></div>
+          <div id="habitHeatmap" class="habit-heatmap"></div>
+        </section>
 
         <section class="panel glass">
           <div class="panel-head"><div><p class="eyebrow">Insights</p><h3>Automatisch berechnet</h3></div></div>
@@ -74,7 +82,7 @@
       <section id="screen-smoking" class="screen" data-screen="smoking">
         <div class="grid two-columns smoking-layout">
           <section class="panel glass smoke-control-card">
-            <div class="panel-head compact"><div><p class="eyebrow">Rauchen</p><h3>Schnell erfassen</h3></div></div>
+            <div class="panel-head compact"><div><p class="eyebrow">Direkt-Tracking</p><h3>Schnell erfassen</h3></div></div>
             <div class="smoke-ring" aria-live="polite">
               <small>Aktuelle Pause</small>
               <strong id="smokePauseLive">–</strong>
@@ -98,6 +106,18 @@
             <div id="smokeHistory" class="stack-list tall"></div>
           </section>
         </div>
+
+        <section class="panel glass meditation-panel">
+          <div class="panel-head">
+            <div><p class="eyebrow">Atem & Reset</p><h3>Meditation</h3></div>
+            <span class="subtle">1 Tap speichern</span>
+          </div>
+          <div id="meditationTechniqueGrid" class="meditation-grid"></div>
+          <div class="meditation-history-block">
+            <div class="panel-head compact"><div><p class="eyebrow">Zuletzt</p><h3>Meditationsverlauf</h3></div></div>
+            <div id="meditationHistory" class="stack-list"></div>
+          </div>
+        </section>
 
         <section class="panel glass">
           <div class="panel-head"><div><p class="eyebrow">Regelwerk</p><h3>Pause → Punkte</h3></div></div>
