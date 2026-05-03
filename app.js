@@ -5,6 +5,7 @@
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
+  const SUPABASE_CONFIG = window.HABITFLOW_SUPABASE_CONFIG || {};
   const MEDITATION_TECHNIQUES = [
     { key: '7-3-11', title: '7-3-11 Atemtechnik', subtitle: 'Runterfahren mit langer Ausatmung', minutes: 6, pattern: '7 ein · 3 halten · 11 aus' },
     { key: 'box', title: 'Box Breathing', subtitle: 'Klarer Fokus vor schwierigen Momenten', minutes: 5, pattern: '4 · 4 · 4 · 4' },
@@ -23,6 +24,7 @@
   let settings = loadSettings();
   let supabaseClient = null;
   let currentUser = null;
+  let authSubscription = null;
   let selectedCalendarDate = toDateKey(new Date());
   let calendarCursor = new Date();
   let charts = { trend: null, points: null };
@@ -133,14 +135,13 @@
       renderCalendar();
       renderDayDetails();
     });
-    els.settingsForm.addEventListener('submit', saveSettings);
-    els.sendMagicLinkBtn.addEventListener('click', sendMagicLink);
+    els.settingsForm.addEventListener('submit', sendMagicLink);
     els.logoutBtn.addEventListener('click', logout);
     els.syncNowBtn.addEventListener('click', syncWithSupabase);
     els.exportBtn.addEventListener('click', exportJson);
     els.importInput.addEventListener('change', importJson);
     els.resetBtn.addEventListener('click', resetDemo);
-    els.copySqlBtn.addEventListener('click', copySql);
+    if (els.copySqlBtn) els.copySqlBtn.addEventListener('click', copySql);
 
     document.addEventListener('click', event => {
       const actionEl = event.target.closest('[data-action]');
@@ -242,9 +243,10 @@
 
   function loadSettings() {
     try {
-      return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || { supabaseUrl: '', supabaseAnonKey: '', email: '' };
+      const stored = JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {};
+      return { email: stored.email || '' };
     } catch {
-      return { supabaseUrl: '', supabaseAnonKey: '', email: '' };
+      return { email: '' };
     }
   }
 
@@ -257,10 +259,8 @@
   }
 
   function fillSettingsForm() {
-    els.settingsForm.supabaseUrl.value = settings.supabaseUrl || '';
-    els.settingsForm.supabaseAnonKey.value = settings.supabaseAnonKey || '';
     els.settingsForm.email.value = settings.email || '';
-    els.sqlPreview.textContent = window.HABITFLOW_SUPABASE_SQL || 'supabase.sql konnte nicht geladen werden.';
+    if (els.sqlPreview) els.sqlPreview.textContent = window.HABITFLOW_SUPABASE_SQL || 'supabase.sql konnte nicht geladen werden.';
   }
 
   function showScreen(screen) {
@@ -989,36 +989,60 @@
     toast._timer = setTimeout(() => els.toast.classList.add('hidden'), 2600);
   }
 
+  function getSupabaseConfig() {
+    return {
+      url: String(SUPABASE_CONFIG.url || SUPABASE_CONFIG.supabaseUrl || '').trim(),
+      anonKey: String(SUPABASE_CONFIG.anonKey || SUPABASE_CONFIG.supabaseAnonKey || '').trim()
+    };
+  }
+
+  function isSupabaseConfigured() {
+    const config = getSupabaseConfig();
+    return Boolean(config.url && config.anonKey && window.supabase);
+  }
+
   async function initSupabase() {
-    if (!settings.supabaseUrl || !settings.supabaseAnonKey || !window.supabase) {
+    const config = getSupabaseConfig();
+    if (!config.url || !config.anonKey || !window.supabase) {
       renderSyncStatus();
       return;
     }
     try {
-      supabaseClient = window.supabase.createClient(settings.supabaseUrl, settings.supabaseAnonKey);
-      const { data } = await supabaseClient.auth.getSession();
-      currentUser = data?.session?.user || null;
-      supabaseClient.auth.onAuthStateChange((_event, session) => {
-        currentUser = session?.user || null;
-        renderSyncStatus();
-        if (currentUser) syncWithSupabase({ silent: true });
+      supabaseClient = window.supabase.createClient(config.url, config.anonKey, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: true
+        }
       });
+      const { data } = await supabaseClient.auth.getSession();
+      currentUser = data.session?.user || null;
+      if (!authSubscription) {
+        const { data: listener } = supabaseClient.auth.onAuthStateChange((_event, session) => {
+          currentUser = session?.user || null;
+          renderSyncStatus();
+          if (currentUser) syncWithSupabase({ silent: true });
+        });
+        authSubscription = listener?.subscription || listener || null;
+      }
+      renderSyncStatus();
       if (currentUser) await syncWithSupabase({ silent: true });
     } catch (error) {
       console.warn('Supabase init error', error);
+      renderSyncStatus();
       toast('Supabase konnte nicht initialisiert werden.');
     }
-    renderSyncStatus();
   }
 
   function renderSyncStatus() {
-    if (!settings.supabaseUrl || !settings.supabaseAnonKey) {
+    if (!els.syncStatus) return;
+    if (!isSupabaseConfigured()) {
       els.syncStatus.textContent = 'Lokal';
       els.syncStatus.className = 'badge muted';
       return;
     }
     if (!currentUser) {
-      els.syncStatus.textContent = 'Nicht eingeloggt';
+      els.syncStatus.textContent = 'Login nötig';
       els.syncStatus.className = 'badge muted';
       return;
     }
@@ -1026,21 +1050,10 @@
     els.syncStatus.className = 'badge';
   }
 
-  async function saveSettings(event) {
-    event.preventDefault();
-    settings = {
-      supabaseUrl: els.settingsForm.supabaseUrl.value.trim(),
-      supabaseAnonKey: els.settingsForm.supabaseAnonKey.value.trim(),
-      email: els.settingsForm.email.value.trim()
-    };
-    saveSettingsToStorage();
-    await initSupabase();
-    toast('Einstellungen gespeichert');
-  }
-
-  async function sendMagicLink() {
-    if (!settings.supabaseUrl || !settings.supabaseAnonKey) {
-      toast('Bitte zuerst Supabase URL und Anon Key speichern.');
+  async function sendMagicLink(event) {
+    if (event) event.preventDefault();
+    if (!isSupabaseConfigured()) {
+      toast('Supabase-Konfiguration konnte nicht geladen werden.');
       return;
     }
     if (!supabaseClient) await initSupabase();
@@ -1051,9 +1064,12 @@
     }
     settings.email = email;
     saveSettingsToStorage();
+    const redirectUrl = new URL(window.location.href);
+    redirectUrl.search = '';
+    redirectUrl.hash = '';
     const { error } = await supabaseClient.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: window.location.href.split('#')[0] }
+      options: { emailRedirectTo: redirectUrl.toString() }
     });
     if (error) {
       toast(`Login-Link Fehler: ${error.message}`);
@@ -1071,7 +1087,7 @@
 
   async function syncWithSupabase({ silent = false } = {}) {
     if (!supabaseClient || !currentUser) {
-      if (!silent) toast('Supabase ist noch nicht verbunden.');
+      if (!silent) toast(isSupabaseConfigured() ? 'Bitte zuerst per Magic Link einloggen.' : 'Supabase ist noch nicht konfiguriert.');
       return;
     }
     try {
@@ -1162,7 +1178,7 @@
   const mapRemoteLedger = p => ({ id: p.id, source_type: p.source_type, source_id: p.source_id, points: p.points, reason: p.reason, earned_at: p.earned_at, created_at: p.created_at, updated_at: p.created_at, synced: true });
 
   function exportJson() {
-    const blob = new Blob([JSON.stringify({ state, settings: { ...settings, supabaseAnonKey: '' } }, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ state, settings: { email: settings.email || '' } }, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;

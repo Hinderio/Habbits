@@ -1,5 +1,5 @@
-const CACHE_NAME = 'habitflow-v2';
-const ASSETS = ['./', './index.html', './style.css', './app.js', './supabase-schema.js', './manifest.json'];
+const CACHE_NAME = 'habitflow-v3-auto-supabase';
+const ASSETS = ['./', './index.html', './style.css', './app.js', './supabase-config.js', './supabase-schema.js', './manifest.json'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
   self.skipWaiting();
