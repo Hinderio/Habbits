@@ -83,7 +83,7 @@
       <section id="screen-smoking" class="screen" data-screen="smoking">
         <div class="grid two-columns smoking-layout">
           <section class="panel glass smoke-control-card">
-            <div class="panel-head compact"><div><p class="eyebrow">Direkt-Tracking</p><h3>Schnell erfassen</h3></div></div>
+            <div class="panel-head compact"><div><p class="eyebrow">Konsum & Kontext</p><h3>Schnell erfassen</h3></div></div>
             <div class="smoke-ring" aria-live="polite">
               <small>Aktuelle Pause</small>
               <strong id="smokePauseLive">–</strong>
@@ -108,15 +108,22 @@
             <div class="alcohol-toggle-card">
               <div>
                 <strong>Alkohol heute?</strong>
-                <p class="subtle">Wird für Muster und Rückfall-Risiko mitgetrackt.</p>
+                <p class="subtle">Schnellschalter für den heutigen Kontext.</p>
               </div>
               <button id="alcoholTodayBtn" class="toggle-pill" type="button" aria-pressed="false">Nein</button>
+            </div>
+            <div class="alcohol-entry-card">
+              <label><span>Alkohol-Tag erfassen</span><input id="alcoholDateInput" type="date" /></label>
+              <label><span>Notiz</span><input id="alcoholNoteInput" type="text" placeholder="optional, z. B. Ausgang" /></label>
+              <button id="alcoholLogBtn" class="pill secondary" type="button">Alkohol speichern</button>
             </div>
           </section>
 
           <section class="panel glass">
             <div class="panel-head"><div><p class="eyebrow">Verlauf</p><h3>Letzte Zigaretten</h3></div><span id="lastSmokePoints" class="badge muted">0 Pkt.</span></div>
             <div id="smokeHistory" class="stack-list tall"></div>
+            <div class="panel-head compact alcohol-history-head"><div><p class="eyebrow">Kontext</p><h3>Alkohol-Verlauf</h3></div></div>
+            <div id="alcoholHistory" class="stack-list alcohol-history-list"></div>
           </section>
         </div>
 
@@ -145,7 +152,9 @@
         </section>
       </section>
 
-      <section id="screen-coach" class="screen" data-screen="coach">
+      <div id="coachModal" class="coach-modal hidden" role="dialog" aria-modal="true" aria-labelledby="coachModalTitle">
+        <section id="coachDialog" class="coach-modal-card">
+          <button id="coachCloseBtn" class="icon-btn coach-close-btn" type="button" aria-label="Coach schliessen">×</button>
         <section class="panel glass coach-hero-panel">
           <div class="coach-hero">
             <div class="coach-avatar-wrap" aria-hidden="true">
@@ -153,7 +162,7 @@
             </div>
             <div class="coach-hero-copy">
               <p class="eyebrow">Clean Coach</p>
-              <h2>Der nächste bessere Entscheid.</h2>
+              <h2 id="coachModalTitle">Der nächste bessere Entscheid.</h2>
               <p>Der Coach verbindet deine aktuelle Pause, den heutigen Verlauf, Alkohol-Kontext und deinen Trigger zu einem konkreten Mini-Plan für genau jetzt.</p>
             </div>
           </div>
@@ -190,7 +199,8 @@
           <div class="panel-head"><div><p class="eyebrow">Plan</p><h3>3-Schritt-Strategie</h3></div><span class="subtle">kurz, konkret, machbar</span></div>
           <div id="coachPlanGrid" class="coach-plan-grid"></div>
         </section>
-      </section>
+        </section>
+      </div>
 
       <section id="screen-habits" class="screen" data-screen="habits">
         <div class="grid two-columns">
@@ -202,7 +212,7 @@
               <label><span>Einheit</span><input name="unit" placeholder="kg, Stück, Minuten" /></label>
               <label><span>Zielrichtung</span><select name="direction"><option value="increase">mehr ist besser</option><option value="decrease">weniger ist besser</option></select></label>
               <label><span>Tagesziel</span><input name="target" type="number" step="0.01" placeholder="optional" /></label>
-              <label><span>Icon</span><input name="icon" maxlength="2" value="✨" /></label>
+              <label><span>Icon-Stil</span><input name="icon" value="number" placeholder="number, water, sport" /></label>
               <div class="form-actions full"><button id="habitSubmitBtn" class="pill primary" type="submit">Habit erstellen</button><button id="cancelHabitEditBtn" class="pill secondary hidden" type="button">Abbrechen</button></div>
             </form>
           </section>
@@ -227,8 +237,8 @@
             </form>
           </section>
           <section class="panel glass">
-            <div class="panel-head"><div><p class="eyebrow">Queue</p><h3>Offene Aufgaben</h3></div><span id="taskPointsPreview" class="badge muted">Aufwand × 20 Pkt.</span></div>
-            <div id="tasksList" class="stack-list tall"></div>
+            <div class="panel-head"><div><p class="eyebrow">Kanban</p><h3>Aufgaben-Board</h3></div><span id="taskPointsPreview" class="badge muted">Aufwand × 20 Pkt.</span></div>
+            <div id="tasksList" class="kanban-shell"></div>
           </section>
         </div>
       </section>
@@ -285,13 +295,12 @@
     </main>
 
     <nav class="bottom-nav glass" aria-label="Hauptnavigation">
-      <button data-target="dashboard" class="nav-btn active" type="button"><span>◎</span>Dashboard</button>
-      <button data-target="smoking" class="nav-btn" type="button"><span>◉</span>Rauchen</button>
-      <button data-target="coach" class="nav-btn" type="button"><span>◆</span>Coach</button>
-      <button data-target="habits" class="nav-btn" type="button"><span>✦</span>Habits</button>
-      <button data-target="tasks" class="nav-btn" type="button"><span>✓</span>Tasks</button>
-      <button data-target="calendar" class="nav-btn" type="button"><span>□</span>Kalender</button>
-      <button data-target="settings" class="nav-btn" type="button"><span>⚙</span>Sync</button>
+      <button data-target="dashboard" class="nav-btn active" type="button"><span data-icon="dashboard"></span>Dashboard</button>
+      <button data-target="smoking" class="nav-btn" type="button"><span data-icon="smoke"></span>Konsum</button>
+      <button data-target="habits" class="nav-btn" type="button"><span data-icon="habits"></span>Habits</button>
+      <button data-target="tasks" class="nav-btn" type="button"><span data-icon="tasks"></span>Tasks</button>
+      <button data-target="calendar" class="nav-btn" type="button"><span data-icon="calendar"></span>Kalender</button>
+      <button data-target="settings" class="nav-btn" type="button"><span data-icon="sync"></span>Sync</button>
     </nav>
   </div>
 
