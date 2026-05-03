@@ -67,6 +67,7 @@
   let charts = { trend: null, points: null };
   let selectedTrendMetric = localStorage.getItem(TREND_METRIC_KEY) || 'points';
   let activeSmokingTipIndex = 0;
+  let editingSmokeId = null;
   let editingHabitId = null;
   let editingTaskId = null;
   let renderQueued = false;
@@ -212,6 +213,9 @@
       if (action === 'delete-habit') deleteHabit(id);
       if (action === 'archive-habit') archiveHabit(id);
       if (action === 'log-habit') logHabit(id);
+      if (action === 'edit-smoke') editSmoke(id);
+      if (action === 'save-smoke-time') saveSmokeTime(id);
+      if (action === 'cancel-smoke-edit') cancelSmokeEdit();
       if (action === 'delete-smoke') deleteSmoke(id);
       if (action === 'rotate-craving-tip') rotateSmokingTip();
       if (action === 'log-meditation') logMeditationTechnique(id);
@@ -578,13 +582,23 @@
 
     els.smokeHistory.innerHTML = items.map(c => {
       const cls = c.points < 0 ? 'danger-text' : c.points >= 40 ? 'positive-text' : '';
-      return `<article class="list-card">
+      const isEditing = editingSmokeId === c.id;
+      const editBlock = isEditing
+        ? `<div class="smoke-edit-row">
+            <label><span>Zeitpunkt</span><input id="smoke-input-${c.id}" type="datetime-local" value="${toDateTimeLocalValue(c.smoked_at)}" /></label>
+            <button class="mini-btn primary" type="button" data-action="save-smoke-time" data-id="${c.id}">Speichern</button>
+            <button class="mini-btn" type="button" data-action="cancel-smoke-edit" data-id="${c.id}">Abbrechen</button>
+          </div>`
+        : '';
+      return `<article class="list-card ${isEditing ? 'is-editing' : ''}">
         <div class="list-card-main">
           <h4>${formatDateTime(c.smoked_at)}</h4>
           <p class="meta">Pause davor: <strong>${c.interval_minutes == null ? '–' : formatDuration(c.interval_minutes)}</strong>${c.alcohol_context ? ' · Alkohol-Kontext' : ''}</p>
+          ${editBlock}
         </div>
         <div class="list-actions">
           <span class="badge ${cls ? '' : 'muted'} ${cls}">${c.points > 0 ? '+' : ''}${c.points} Pkt.</span>
+          ${isEditing ? '' : `<button class="mini-btn" type="button" data-action="edit-smoke" data-id="${c.id}">Bearbeiten</button>`}
           <button class="mini-btn danger" type="button" data-action="delete-smoke" data-id="${c.id}">Löschen</button>
         </div>
       </article>`;
@@ -783,13 +797,51 @@
     syncWithSupabase({ silent: true });
   }
 
+  function editSmoke(id) {
+    if (!state.cigarettes.some(c => c.id === id)) return;
+    editingSmokeId = id;
+    renderSmoking();
+  }
+
+  function cancelSmokeEdit() {
+    editingSmokeId = null;
+    renderSmoking();
+  }
+
+  function saveSmokeTime(id) {
+    const cigarette = state.cigarettes.find(c => c.id === id);
+    const input = $(`#smoke-input-${cssEscape(id)}`);
+    if (!cigarette || !input) return;
+
+    const nextDate = new Date(input.value);
+    if (!input.value || Number.isNaN(nextDate.getTime())) {
+      toast('Bitte einen gültigen Zeitpunkt eintragen.');
+      return;
+    }
+    if (nextDate.getTime() > Date.now() + 60_000) {
+      toast('Der Zeitpunkt darf nicht in der Zukunft liegen.');
+      return;
+    }
+
+    const nextIso = nextDate.toISOString();
+    cigarette.smoked_at = nextIso;
+    cigarette.updated_at = nowIso();
+    cigarette.synced = false;
+    editingSmokeId = null;
+    recalculateSmokeIntervals({ markUpdated: true });
+    saveState();
+    toast('Zigaretten-Zeitpunkt aktualisiert');
+    syncWithSupabase({ silent: true, pullFirst: false });
+  }
+
   async function deleteSmoke(id) {
     const index = state.cigarettes.findIndex(c => c.id === id);
     if (index === -1) return;
     const removedLedgerIds = state.pointsLedger.filter(p => p.source_type === 'cigarette' && p.source_id === id).map(p => p.id);
     state.cigarettes.splice(index, 1);
     state.pointsLedger = state.pointsLedger.filter(p => !(p.source_type === 'cigarette' && p.source_id === id));
-    recalculateSmokeIntervals();
+    if (editingSmokeId === id) editingSmokeId = null;
+    recalculateSmokeIntervals({ markUpdated: true });
     saveState();
     await deleteRemoteById('cigarette_events', id);
     await deleteRemoteByIds('points_ledger', removedLedgerIds);
@@ -797,14 +849,19 @@
     syncWithSupabase({ silent: true, pullFirst: false });
   }
 
-  function recalculateSmokeIntervals() {
+  function recalculateSmokeIntervals({ markUpdated = false } = {}) {
+    const touchedAt = nowIso();
     const sorted = [...state.cigarettes].sort((a, b) => new Date(a.smoked_at) - new Date(b.smoked_at));
     sorted.forEach((c, index) => {
       const prev = sorted[index - 1];
-      c.interval_minutes = prev ? Math.max(0, Math.round((new Date(c.smoked_at) - new Date(prev.smoked_at)) / 60000)) : null;
-      c.points = cigarettePoints(c.interval_minutes);
-      const ledger = state.pointsLedger.find(p => p.source_type === 'cigarette' && p.source_id === c.id);
-      if (ledger) ledger.points = c.points;
+      const interval = prev ? Math.max(0, Math.round((new Date(c.smoked_at) - new Date(prev.smoked_at)) / 60000)) : null;
+      c.interval_minutes = interval;
+      c.points = cigarettePoints(interval);
+      if (markUpdated) {
+        c.updated_at = touchedAt;
+        c.synced = false;
+      }
+      addPoints('cigarette', c.id, c.points, interval == null ? 'Erste Zigarette erfasst' : `Pause ${formatDuration(interval)}`, c.smoked_at);
     });
   }
 
