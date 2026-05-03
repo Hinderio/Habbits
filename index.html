@@ -64,7 +64,7 @@
             <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
           </section>
           <section class="panel glass dashboard-chart-panel">
-            <div class="panel-head"><div><p class="eyebrow">XP</p><h3>Punkteentwicklung</h3></div><span class="subtle">14 Tage</span></div>
+            <div class="panel-head chart-head"><div><p class="eyebrow">XP</p><h3>Punkteentwicklung</h3></div><span class="subtle">14 Tage</span></div>
             <div class="chart-wrap"><canvas id="pointsChart"></canvas></div>
           </section>
         </div>
@@ -105,6 +105,10 @@
               <span>+</span>
               Zigarette
             </button>
+            <div class="alcohol-quick-card">
+              <label><span>Alkohol-Art</span><select id="alcoholTypeSelect" aria-label="Alkohol-Art"><option value="beer">Bier</option><option value="wine">Wein</option><option value="cocktail">Drink</option><option value="shot">Shot</option><option value="other">Anderes</option></select></label>
+              <button id="recordAlcoholUnitBtn" class="alcohol-button" type="button"><span>+</span> Alkohol-Einheit</button>
+            </div>
             <div class="alcohol-toggle-card">
               <div>
                 <strong>Alkohol heute?</strong>
@@ -122,7 +126,9 @@
           <section class="panel glass">
             <div class="panel-head"><div><p class="eyebrow">Verlauf</p><h3>Letzte Zigaretten</h3></div><span id="lastSmokePoints" class="badge muted">0 Pkt.</span></div>
             <div id="smokeHistory" class="stack-list tall"></div>
-            <div class="panel-head compact alcohol-history-head"><div><p class="eyebrow">Kontext</p><h3>Alkohol-Verlauf</h3></div></div>
+            <div class="panel-head compact alcohol-history-head"><div><p class="eyebrow">Alkohol</p><h3>Einheiten-Verlauf</h3></div></div>
+            <div id="alcoholUnitHistory" class="stack-list alcohol-history-list"></div>
+            <div class="panel-head compact alcohol-history-head"><div><p class="eyebrow">Kontext</p><h3>Alkohol-Tage</h3></div></div>
             <div id="alcoholHistory" class="stack-list alcohol-history-list"></div>
           </section>
         </div>
@@ -203,44 +209,48 @@
       </div>
 
       <section id="screen-habits" class="screen" data-screen="habits">
-        <div class="grid two-columns">
-          <section class="panel glass">
-            <div class="panel-head"><div><p class="eyebrow">Flexible Habits</p><h3 id="habitFormTitle">Gewohnheit anlegen</h3></div></div>
-            <form id="habitForm" class="form-grid">
-              <label><span>Name</span><input name="name" required placeholder="z. B. Gewicht, Wasser, Sport" /></label>
-              <label><span>Typ</span><select name="type"><option value="number">Anzahl / Zahl</option><option value="weight">Gewicht</option><option value="boolean">Ja/Nein</option><option value="duration">Dauer</option></select></label>
-              <label><span>Einheit</span><input name="unit" placeholder="kg, Stück, Minuten" /></label>
-              <label><span>Zielrichtung</span><select name="direction"><option value="increase">mehr ist besser</option><option value="decrease">weniger ist besser</option></select></label>
-              <label><span>Tagesziel</span><input name="target" type="number" step="0.01" placeholder="optional" /></label>
-              <label><span>Icon-Stil</span><input name="icon" value="number" placeholder="number, water, sport" /></label>
-              <div class="form-actions full"><button id="habitSubmitBtn" class="pill primary" type="submit">Habit erstellen</button><button id="cancelHabitEditBtn" class="pill secondary hidden" type="button">Abbrechen</button></div>
-            </form>
-          </section>
-
-          <section class="panel glass">
-            <div class="panel-head"><div><p class="eyebrow">Heute</p><h3>Quick Logging</h3></div></div>
-            <div id="habitCards" class="habit-card-grid"></div>
-          </section>
+        <div class="section-toolbar glass">
+          <div><p class="eyebrow">Flexible Habits</p><h3>Gewohnheiten & Quick Logging</h3></div>
+          <button id="habitFormToggleBtn" class="bubble-add-btn" type="button" aria-label="Habit-Formular öffnen"><span data-icon="plus"></span></button>
         </div>
+        <section id="habitFormPanel" class="panel glass drawer-form-panel hidden">
+          <div class="panel-head"><div><p class="eyebrow">Flexible Habits</p><h3 id="habitFormTitle">Gewohnheit anlegen</h3></div><button id="habitFormCloseBtn" class="icon-btn" type="button" aria-label="Habit-Formular schliessen">×</button></div>
+          <form id="habitForm" class="form-grid">
+            <label><span>Name</span><input name="name" required placeholder="z. B. Gewicht, Wasser, Sport" /></label>
+            <label><span>Typ</span><select name="type"><option value="number">Anzahl / Zahl</option><option value="weight">Gewicht</option><option value="boolean">Ja/Nein</option><option value="duration">Dauer</option></select></label>
+            <label><span>Einheit</span><input name="unit" placeholder="kg, Stück, Minuten" /></label>
+            <label><span>Zielrichtung</span><select name="direction"><option value="increase">mehr ist besser</option><option value="decrease">weniger ist besser</option></select></label>
+            <label><span>Tagesziel</span><input name="target" type="number" step="0.01" placeholder="optional" /></label>
+            <label><span>Icon-Stil</span><input name="icon" value="number" placeholder="number, water, sport" /></label>
+            <div class="form-actions full"><button id="habitSubmitBtn" class="pill primary" type="submit">Habit erstellen</button><button id="cancelHabitEditBtn" class="pill secondary hidden" type="button">Abbrechen</button></div>
+          </form>
+        </section>
+        <section class="panel glass">
+          <div class="panel-head"><div><p class="eyebrow">Heute</p><h3>Quick Logging</h3></div></div>
+          <div id="habitCards" class="habit-card-grid"></div>
+        </section>
       </section>
 
       <section id="screen-tasks" class="screen" data-screen="tasks">
-        <div class="grid two-columns">
-          <section class="panel glass">
-            <div class="panel-head"><div><p class="eyebrow">Tasks</p><h3 id="taskFormTitle">Aufgabe erfassen</h3></div></div>
-            <form id="taskForm" class="form-grid">
-              <label class="full"><span>Titel</span><input name="title" required placeholder="Was willst du erledigen?" /></label>
-              <label><span>Aufwand</span><select name="effort"><option value="1">1 · sehr klein</option><option value="2">2 · klein</option><option value="3" selected>3 · mittel</option><option value="4">4 · gross</option><option value="5">5 · sehr gross</option></select></label>
-              <label><span>Fällig</span><input name="due_at" type="datetime-local" /></label>
-              <label class="full"><span>Notiz</span><textarea name="description" rows="3" placeholder="optional"></textarea></label>
-              <div class="form-actions full"><button id="taskSubmitBtn" class="pill primary" type="submit">Aufgabe speichern</button><button id="cancelTaskEditBtn" class="pill secondary hidden" type="button">Abbrechen</button></div>
-            </form>
-          </section>
-          <section class="panel glass">
-            <div class="panel-head"><div><p class="eyebrow">Kanban</p><h3>Aufgaben-Board</h3></div><span id="taskPointsPreview" class="badge muted">Aufwand × 20 Pkt.</span></div>
-            <div id="tasksList" class="kanban-shell"></div>
-          </section>
+        <div class="section-toolbar glass">
+          <div><p class="eyebrow">Tasks</p><h3>Aufgaben-Board</h3></div>
+          <button id="taskFormToggleBtn" class="bubble-add-btn" type="button" aria-label="Aufgaben-Formular öffnen"><span data-icon="plus"></span></button>
         </div>
+        <section id="taskFormPanel" class="panel glass drawer-form-panel hidden">
+          <div class="panel-head"><div><p class="eyebrow">Tasks</p><h3 id="taskFormTitle">Aufgabe erfassen</h3></div><button id="taskFormCloseBtn" class="icon-btn" type="button" aria-label="Aufgaben-Formular schliessen">×</button></div>
+          <form id="taskForm" class="form-grid">
+            <label class="full"><span>Titel</span><input name="title" required placeholder="Was willst du erledigen?" /></label>
+            <label><span>Aufwand</span><select name="effort"><option value="1">1 · sehr klein</option><option value="2">2 · klein</option><option value="3" selected>3 · mittel</option><option value="4">4 · gross</option><option value="5">5 · sehr gross</option></select></label>
+            <label><span>Priorität</span><select name="priority"><option value="low">Niedrig</option><option value="medium" selected>Normal</option><option value="high">Hoch</option><option value="urgent">Kritisch</option></select></label>
+            <label><span>Fällig</span><input name="due_at" type="datetime-local" /></label>
+            <label class="full"><span>Notiz</span><textarea name="description" rows="3" placeholder="optional"></textarea></label>
+            <div class="form-actions full"><button id="taskSubmitBtn" class="pill primary" type="submit">Aufgabe speichern</button><button id="cancelTaskEditBtn" class="pill secondary hidden" type="button">Abbrechen</button></div>
+          </form>
+        </section>
+        <section class="panel glass">
+          <div class="panel-head"><div><p class="eyebrow">Kanban</p><h3>Aufgaben-Board</h3></div><span id="taskPointsPreview" class="badge muted">Aufwand × 20 Pkt.</span></div>
+          <div id="tasksList" class="kanban-shell"></div>
+        </section>
       </section>
 
       <section id="screen-calendar" class="screen" data-screen="calendar">

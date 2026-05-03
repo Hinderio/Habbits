@@ -59,13 +59,24 @@
     sport: '00000000-0000-4000-8000-000000000103',
     meditation: '00000000-0000-4000-8000-000000000104'
   });
-  const SYNC_TABLES = ['habit_definitions', 'habit_entries', 'cigarette_events', 'alcohol_logs', 'tasks', 'points_ledger'];
+  const SYNC_TABLES = ['habit_definitions', 'habit_entries', 'cigarette_events', 'alcohol_logs', 'alcohol_events', 'tasks', 'points_ledger'];
+  const OPTIONAL_SYNC_TABLES = new Set(['alcohol_events']);
   const BUILT_IN_DEFAULT_HABIT_NAMES = new Set(['gewicht', 'wasser', 'sport', 'meditation']);
   const TASK_COLUMNS = [
-    { status: 'open', title: 'Offen', hint: 'geplant oder noch nicht gestartet' },
+    { status: 'open', title: 'Offen', hint: 'geplant und noch nicht gestartet' },
+    { status: 'in_progress', title: 'In Bearbeitung', hint: 'aktiver Fokus für heute' },
     { status: 'done', title: 'Erledigt', hint: 'abgeschlossen und bepunktet' },
     { status: 'archived', title: 'Archiv', hint: 'aus dem aktiven Fokus' }
   ];
+  const TASK_PRIORITIES = {
+    low: { label: 'Niedrig', short: 'Low', rank: 1, bonus: 0 },
+    medium: { label: 'Normal', short: 'Normal', rank: 2, bonus: 10 },
+    high: { label: 'Hoch', short: 'Hoch', rank: 3, bonus: 25 },
+    urgent: { label: 'Kritisch', short: 'Kritisch', rank: 4, bonus: 40 }
+  };
+  const ALCOHOL_TYPES = {
+    beer: 'Bier', wine: 'Wein', cocktail: 'Drink', shot: 'Shot', other: 'Anderes'
+  };
   const nowIso = () => new Date().toISOString();
   const uid = () => (crypto && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
 
@@ -142,6 +153,10 @@
   let editingHabitId = null;
   let editingTaskId = null;
   let renderQueued = false;
+  let habitFormOpen = false;
+  let taskFormOpen = false;
+  let remoteTaskPrioritySupported = true;
+  let remoteTaskInProgressSupported = true;
 
   const els = {};
 
@@ -200,10 +215,13 @@
       smokePauseLive: $('#smokePauseLive'),
       smokePauseHint: $('#smokePauseHint'),
       alcoholTodayBtn: $('#alcoholTodayBtn'),
+      alcoholTypeSelect: $('#alcoholTypeSelect'),
+      recordAlcoholUnitBtn: $('#recordAlcoholUnitBtn'),
       alcoholDateInput: $('#alcoholDateInput'),
       alcoholNoteInput: $('#alcoholNoteInput'),
       alcoholLogBtn: $('#alcoholLogBtn'),
       alcoholHistory: $('#alcoholHistory'),
+      alcoholUnitHistory: $('#alcoholUnitHistory'),
       smokeHistory: $('#smokeHistory'),
       lastSmokePoints: $('#lastSmokePoints'),
       cravingTipTitle: $('#cravingTipTitle'),
@@ -211,11 +229,17 @@
       cravingTipMeta: $('#cravingTipMeta'),
       meditationTechniqueGrid: $('#meditationTechniqueGrid'),
       meditationHistory: $('#meditationHistory'),
+      habitFormPanel: $('#habitFormPanel'),
+      habitFormToggleBtn: $('#habitFormToggleBtn'),
+      habitFormCloseBtn: $('#habitFormCloseBtn'),
       habitForm: $('#habitForm'),
       habitFormTitle: $('#habitFormTitle'),
       habitSubmitBtn: $('#habitSubmitBtn'),
       cancelHabitEditBtn: $('#cancelHabitEditBtn'),
       habitCards: $('#habitCards'),
+      taskFormPanel: $('#taskFormPanel'),
+      taskFormToggleBtn: $('#taskFormToggleBtn'),
+      taskFormCloseBtn: $('#taskFormCloseBtn'),
       taskForm: $('#taskForm'),
       taskFormTitle: $('#taskFormTitle'),
       taskSubmitBtn: $('#taskSubmitBtn'),
@@ -256,7 +280,7 @@
 
     els.navButtons.forEach(btn => btn.addEventListener('click', () => showScreen(btn.dataset.target)));
     els.heroSmokeBtn.addEventListener('click', () => recordCigarette());
-    els.heroTaskBtn.addEventListener('click', () => showScreen('tasks'));
+    els.heroTaskBtn.addEventListener('click', () => { showScreen('tasks'); openTaskForm(); });
     if (els.heroCoachBtn) els.heroCoachBtn.addEventListener('click', openCoachModal);
     if (els.coachCloseBtn) els.coachCloseBtn.addEventListener('click', closeCoachModal);
     if (els.coachModal) {
@@ -266,17 +290,23 @@
     }
     els.recordSmokeBtn.addEventListener('click', () => recordCigarette());
     els.alcoholTodayBtn.addEventListener('click', () => toggleAlcoholToday());
+    if (els.recordAlcoholUnitBtn) els.recordAlcoholUnitBtn.addEventListener('click', recordAlcoholUnit);
     if (els.alcoholLogBtn) els.alcoholLogBtn.addEventListener('click', saveAlcoholLogForSelectedDate);
     els.trendMetricSelect.addEventListener('change', () => {
       selectedTrendMetric = els.trendMetricSelect.value;
       localStorage.setItem(TREND_METRIC_KEY, selectedTrendMetric);
       renderCharts();
     });
+    if (els.habitFormToggleBtn) els.habitFormToggleBtn.addEventListener('click', () => openHabitForm());
+    if (els.habitFormCloseBtn) els.habitFormCloseBtn.addEventListener('click', () => closeHabitForm({ clearForm: !editingHabitId }));
+    if (els.taskFormToggleBtn) els.taskFormToggleBtn.addEventListener('click', () => openTaskForm());
+    if (els.taskFormCloseBtn) els.taskFormCloseBtn.addEventListener('click', () => closeTaskForm({ clearForm: !editingTaskId }));
     els.habitForm.addEventListener('submit', createHabit);
     els.taskForm.addEventListener('submit', createTask);
     els.taskForm.elements.effort.addEventListener('change', updateTaskPreview);
-    if (els.cancelHabitEditBtn) els.cancelHabitEditBtn.addEventListener('click', resetHabitFormMode);
-    if (els.cancelTaskEditBtn) els.cancelTaskEditBtn.addEventListener('click', resetTaskFormMode);
+    els.taskForm.elements.priority.addEventListener('change', updateTaskPreview);
+    if (els.cancelHabitEditBtn) els.cancelHabitEditBtn.addEventListener('click', () => closeHabitForm({ clearForm: true }));
+    if (els.cancelTaskEditBtn) els.cancelTaskEditBtn.addEventListener('click', () => closeTaskForm({ clearForm: true }));
     els.prevMonthBtn.addEventListener('click', () => moveMonth(-1));
     els.nextMonthBtn.addEventListener('click', () => moveMonth(1));
     els.todayMonthBtn.addEventListener('click', () => {
@@ -318,6 +348,7 @@
       if (action === 'cancel-smoke-edit') cancelSmokeEdit();
       if (action === 'delete-smoke') deleteSmoke(id);
       if (action === 'delete-alcohol') deleteAlcoholLog(id);
+      if (action === 'delete-alcohol-unit') deleteAlcoholUnit(id);
       if (action === 'rotate-craving-tip') rotateSmokingTip();
       if (action === 'log-meditation') logMeditationTechnique(id);
       if (action === 'open-coach') openCoachModal();
@@ -378,6 +409,7 @@
       habitEntries: [],
       cigarettes: [],
       alcoholLogs: [],
+      alcoholUnits: [],
       tasks: [],
       pointsLedger: [],
       deletedRemoteIds: createEmptyDeletedRemoteIds()
@@ -403,7 +435,8 @@
     next.habitEntries = Array.isArray(next.habitEntries) ? next.habitEntries : [];
     next.cigarettes = Array.isArray(next.cigarettes) ? next.cigarettes : [];
     next.alcoholLogs = Array.isArray(next.alcoholLogs) ? next.alcoholLogs : [];
-    next.tasks = Array.isArray(next.tasks) ? next.tasks : [];
+    next.alcoholUnits = Array.isArray(next.alcoholUnits) ? next.alcoholUnits : [];
+    next.tasks = Array.isArray(next.tasks) ? next.tasks.map(normalizeTask) : [];
     next.pointsLedger = Array.isArray(next.pointsLedger) ? next.pointsLedger : [];
     next.deletedRemoteIds = normalizeDeletedRemoteIds(next.deletedRemoteIds);
     dedupeStateCollections(next);
@@ -448,6 +481,47 @@
     });
     return normalized;
   }
+
+  function normalizeTask(task = {}) {
+    return {
+      ...task,
+      status: TASK_COLUMNS.some(column => column.status === task.status) ? task.status : 'open',
+      priority: normalizeTaskPriority(task.priority)
+    };
+  }
+
+  function normalizeTaskPriority(priority) {
+    const key = String(priority || '').trim().toLowerCase();
+    return TASK_PRIORITIES[key] ? key : 'medium';
+  }
+
+  function taskPriorityMeta(taskOrPriority) {
+    const key = typeof taskOrPriority === 'string' ? normalizeTaskPriority(taskOrPriority) : normalizeTaskPriority(taskOrPriority?.priority);
+    return TASK_PRIORITIES[key] || TASK_PRIORITIES.medium;
+  }
+
+  function taskPriorityClass(priority) {
+    return `priority-${normalizeTaskPriority(priority)}`;
+  }
+
+  function isActiveTask(task) {
+    return ['open', 'in_progress'].includes(task?.status || 'open');
+  }
+
+  function taskSortScore(task) {
+    const due = task.due_at ? new Date(task.due_at).getTime() : Number.MAX_SAFE_INTEGER;
+    return [-(taskPriorityMeta(task).rank), due, sortDate(task.created_at || task.updated_at)];
+  }
+
+  function compareTasks(a, b) {
+    const aa = taskSortScore(a);
+    const bb = taskSortScore(b);
+    for (let i = 0; i < aa.length; i += 1) {
+      if (aa[i] !== bb[i]) return aa[i] - bb[i];
+    }
+    return String(a.title || '').localeCompare(String(b.title || ''), 'de-CH');
+  }
+
 
   function markRemoteDeleted(table, id) {
     if (!table || !id) return;
@@ -573,6 +647,45 @@
     }
   }
 
+  function openHabitForm() {
+    habitFormOpen = true;
+    syncHabitFormPanel();
+    requestAnimationFrame(() => els.habitForm?.elements?.name?.focus({ preventScroll: true }));
+  }
+
+  function closeHabitForm({ clearForm = false } = {}) {
+    if (clearForm || editingHabitId) resetHabitFormMode({ clearForm });
+    habitFormOpen = false;
+    syncHabitFormPanel();
+  }
+
+  function syncHabitFormPanel() {
+    if (!els.habitFormPanel) return;
+    els.habitFormPanel.classList.toggle('hidden', !habitFormOpen);
+    els.habitFormToggleBtn?.classList.toggle('is-active', habitFormOpen);
+    els.habitFormToggleBtn?.setAttribute('aria-expanded', String(habitFormOpen));
+  }
+
+  function openTaskForm() {
+    taskFormOpen = true;
+    syncTaskFormPanel();
+    requestAnimationFrame(() => els.taskForm?.elements?.title?.focus({ preventScroll: true }));
+  }
+
+  function closeTaskForm({ clearForm = false } = {}) {
+    if (clearForm || editingTaskId) resetTaskFormMode({ clearForm });
+    taskFormOpen = false;
+    syncTaskFormPanel();
+  }
+
+  function syncTaskFormPanel() {
+    if (!els.taskFormPanel) return;
+    els.taskFormPanel.classList.toggle('hidden', !taskFormOpen);
+    els.taskFormToggleBtn?.classList.toggle('is-active', taskFormOpen);
+    els.taskFormToggleBtn?.setAttribute('aria-expanded', String(taskFormOpen));
+  }
+
+
   function openCoachModal() {
     if (!els.coachModal) return;
     els.coachModal.classList.remove('hidden');
@@ -621,7 +734,7 @@
     const completedToday = state.tasks.filter(t => t.status === 'done' && toDateKey(t.completed_at || t.updated_at || t.created_at) === todayKey).length;
     els.todayCigarettes.textContent = todayCount;
     els.avgPause7.textContent = habitLogsToday;
-    els.openTasksCount.textContent = state.tasks.filter(t => t.status === 'open').length;
+    els.openTasksCount.textContent = state.tasks.filter(isActiveTask).length;
 
     els.dashboardTitle.textContent = 'Dein Fortschritt auf einen Blick.';
     els.dashboardSubtitle.textContent = habitLogsToday || completedToday || todayCount
@@ -639,11 +752,12 @@
     const cigarettes7 = state.cigarettes.filter(c => last7.includes(toDateKey(c.smoked_at))).length;
     const alcoholDays7 = state.alcoholLogs.filter(a => last7.includes(a.log_date) && a.consumed).length;
     const completed7 = state.tasks.filter(t => t.status === 'done' && last7.includes(toDateKey(t.completed_at || t.updated_at || t.created_at))).length;
+    const activeTasks7 = state.tasks.filter(isActiveTask).length;
     const bestPause = bestPauseMinutes();
     const insights = [
       { title: '7-Tage-Konsum', body: `${cigarettes7} Zigaretten in den letzten 7 Tagen. Der Trend wird aussagekräftiger, je konsequenter du trackst.` },
       { title: 'Alkohol-Kontext', body: alcoholDays7 ? `${alcoholDays7} Alkohol-Tag(e) in 7 Tagen. Vergleiche diese Tage bewusst mit Rauch-Peaks.` : 'Keine Alkohol-Tage in den letzten 7 Tagen getrackt.' },
-      { title: 'Task-Momentum', body: `${completed7} Aufgabe(n) diese Woche abgeschlossen. Aufwand zahlt direkt auf Punkte ein.` },
+      { title: 'Task-Momentum', body: `${completed7} Aufgabe(n) diese Woche abgeschlossen, ${activeTasks7} aktiv. Priorität und Kanban-Status helfen beim Fokus.` },
       { title: 'Beste Pause', body: bestPause ? `Längste Pause bisher: ${formatDuration(bestPause)}. Das ist dein aktueller Highscore.` : 'Noch keine Intervall-Daten vorhanden.' }
     ];
     els.insightsGrid.innerHTML = insights.map(item => `<article class="insight-card"><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.body)}</p></article>`).join('');
@@ -716,7 +830,7 @@
         const level = day.logged ? (day.ratio >= 1 ? 'is-full' : day.ratio >= .5 ? 'is-mid' : 'is-low') : 'is-empty';
         return `<span class="heatmap-cell ${level}" title="${escapeHtml(habit.name)} · ${key}: ${escapeHtml(day.label)}"></span>`;
       }).join('');
-      return `<div class="heatmap-row-label"><span>${escapeHtml(habit.icon || '✨')}</span><strong>${escapeHtml(habit.name)}</strong></div>${cells}`;
+      return `<div class="heatmap-row-label"><span class="habit-icon mini">${svgIcon(habitIconKey(habit), 'ui-icon')}</span><strong>${escapeHtml(habit.name)}</strong></div>${cells}`;
     }).join('');
 
     els.habitHeatmap.innerHTML = `<div class="heatmap-scroll"><div class="heatmap-grid" style="--heatmap-days:${keys.length}"><div class="heatmap-corner">Habit</div>${header}${rows}</div></div>`;
@@ -822,6 +936,7 @@
     const last = getLastCigarette();
     els.lastSmokePoints.textContent = `${last?.points || 0} Pkt.`;
     renderSmokingTip(last);
+    renderAlcoholUnitHistory();
     renderAlcoholHistory();
 
     const items = [...state.cigarettes]
@@ -856,6 +971,28 @@
         </div>
       </article>`;
     }).join('');
+  }
+
+
+  function renderAlcoholUnitHistory() {
+    if (!els.alcoholUnitHistory) return;
+    const units = [...state.alcoholUnits]
+      .sort((a, b) => sortDate(b.occurred_at || b.created_at) - sortDate(a.occurred_at || a.created_at))
+      .slice(0, 12);
+    if (!units.length) {
+      els.alcoholUnitHistory.innerHTML = '<div class="empty-state compact">Noch keine Alkohol-Einheit erfasst. Der + Button speichert einzelne Einheiten mit Zeitpunkt.</div>';
+      return;
+    }
+    els.alcoholUnitHistory.innerHTML = units.map(unit => `<article class="list-card compact">
+      <div class="list-card-main">
+        <h4>${escapeHtml(alcoholTypeLabel(unit.drink_type))}</h4>
+        <p class="meta">${formatDateTime(unit.occurred_at)}${unit.note ? ` · ${escapeHtml(unit.note)}` : ''}</p>
+      </div>
+      <div class="list-actions">
+        <span class="badge muted">1 Einheit</span>
+        <button class="mini-btn danger" type="button" data-action="delete-alcohol-unit" data-id="${unit.id}">Löschen</button>
+      </div>
+    </article>`).join('');
   }
 
 
@@ -947,6 +1084,21 @@
     renderCoach();
   }
 
+  function coachTaskBody(task) {
+    if (!task) return 'Keine aktive Aufgabe blockiert gerade deinen Fokus. Nutze die freie Kapazität für einen kleinen Habit-Log.';
+    const priority = taskPriorityMeta(task).label;
+    const dueText = task.due_at ? ` · fällig ${formatDateTime(task.due_at)}` : '';
+    const verb = task.status === 'in_progress' ? 'weiterführen' : 'in Bearbeitung ziehen';
+    return `${priority}: „${task.title}“ ${verb}. Starte nur mit dem kleinsten nächsten Schritt von 5 Minuten${dueText}.`;
+  }
+
+  function coachHabitBody(habit, loggedCount, totalCount) {
+    if (!habit) return totalCount ? `${loggedCount}/${totalCount} Habits sind heute bereits geloggt. Halte den Rhythmus ruhig weiter.` : 'Noch keine aktiven Habits vorhanden. Lege einen kleinen, messbaren Habit an.';
+    const unit = habit.unit || defaultUnit(habit.type);
+    const target = habit.target ? ` Ziel: ${habit.target}${unit ? ` ${unit}` : ''}.` : '';
+    return `Heute fehlt noch „${habit.name}“. Logge eine kleine saubere Einheit statt perfekt zu planen.${target}`;
+  }
+
   function buildCoachInsight() {
     const now = new Date();
     const todayKey = toDateKey(now);
@@ -963,6 +1115,17 @@
     const hour = now.getHours();
     const activeDelay = coachSession.delayUntil && coachSession.delayUntil > Date.now();
     const delayDone = coachSession.delayUntil && coachSession.delayUntil <= Date.now() && Date.now() - coachSession.delayUntil < 90 * 60 * 1000;
+    const alcoholUnitsToday = alcoholUnitsOnDate(todayKey).length;
+    const activeTasks = state.tasks.filter(isActiveTask).sort(compareTasks);
+    const inProgressTasks = activeTasks.filter(task => task.status === 'in_progress');
+    const overdueTasks = activeTasks.filter(task => task.due_at && new Date(task.due_at).getTime() < Date.now());
+    const focusTask = [...activeTasks].sort(compareTasks)[0] || null;
+    const activeHabits = state.habits.filter(habit => !habit.is_archived);
+    const loggedHabitIdsToday = new Set(state.habitEntries.filter(entry => toDateKey(entry.occurred_at) === todayKey).map(entry => entry.habit_id));
+    const missingHabits = activeHabits.filter(habit => !loggedHabitIdsToday.has(habit.id));
+    const focusHabit = missingHabits[0] || null;
+    const habitLoggedCount = activeHabits.length - missingHabits.length;
+    const habitCompletion = activeHabits.length ? habitLoggedCount / activeHabits.length : 1;
 
     let risk = 14 + urge * 13;
     if (pauseMinutes == null) risk -= 6;
@@ -973,6 +1136,10 @@
     if (urge >= 4) risk += 8;
     if (alcoholToday || coachSession.trigger === 'alcohol') risk += 15;
     if (todayCount > Math.max(1, Math.ceil(avgPerDay))) risk += 10;
+    if (overdueTasks.length) risk += Math.min(12, overdueTasks.length * 4);
+    if (focusTask && taskPriorityMeta(focusTask).rank >= 3) risk += 5;
+    if (activeHabits.length && habitCompletion < .5) risk += 4;
+    if (inProgressTasks.length) risk -= 3;
     if (hour >= 21 || hour < 7) risk += 6;
     if (activeDelay) risk -= 10;
     risk = Math.max(8, Math.min(95, Math.round(risk)));
@@ -1004,6 +1171,15 @@
     } else if (urge >= 4) {
       headline = 'Drang ist hoch – Welle reiten.';
       coachLine = 'Ein starkes Craving ist unangenehm, aber nicht automatisch ein Auftrag. Beobachte es ein paar Minuten und verschiebe die Entscheidung.';
+    } else if (overdueTasks.length) {
+      headline = 'Fokus zurückholen: eine überfällige Aufgabe reicht.';
+      coachLine = 'Der Coach sieht nicht nur Konsum, sondern auch Task-Druck. Wähle jetzt eine einzige Karte und ziehe sie durch den nächsten Mini-Schritt.';
+    } else if (focusTask && inProgressTasks.length) {
+      headline = 'Bleib bei der Aufgabe in Bearbeitung.';
+      coachLine = 'Du hast bereits aktiven Fokus markiert. Nicht Kontext wechseln – mach den nächsten kleinsten Schritt sichtbar.';
+    } else if (focusHabit) {
+      headline = 'Ein kleiner Habit-Log stabilisiert den Tag.';
+      coachLine = 'Der Coach nutzt deine Habit-Daten als Gegenpol zum Autopilot. Logge jetzt etwas Kleines, damit der Tag messbar weiterläuft.';
     } else if (todayCount > Math.max(1, Math.ceil(avgPerDay))) {
       headline = 'Heute nicht eskalieren.';
       coachLine = 'Du liegst über deinem aktuellen Muster. Ein einziges Delay kann den Tag wieder stabilisieren.';
@@ -1011,7 +1187,9 @@
 
     const nextGoal = getNextPauseGoalMinutes(pauseMinutes);
     const microGoal = pauseMinutes == null ? 'Erste Pause setzen' : `${formatDuration(pauseMinutes)} → ${formatDuration(nextGoal)}`;
-    const comparison = avgPerDay ? `${todayCount} heute · Ø ${avgPerDay.toFixed(1).replace('.', ',')}/Tag` : `${todayCount} heute · noch wenig Historie`;
+    const comparison = avgPerDay ? `${todayCount} Zig. · Ø ${avgPerDay.toFixed(1).replace('.', ',')}/Tag · ${alcoholUnitsToday} Alk.-Einh.` : `${todayCount} Zig. · ${alcoholUnitsToday} Alk.-Einh. · wenig Historie`;
+    const taskText = focusTask ? `${taskPriorityMeta(focusTask).short} · ${focusTask.title}` : activeTasks.length ? `${activeTasks.length} aktive Aufgaben` : 'keine aktive Aufgabe';
+    const habitText = activeHabits.length ? `${habitLoggedCount}/${activeHabits.length} heute` : 'noch keine Habits';
     const bestText = bestPause ? formatDuration(bestPause) : '–';
     const stage = urge >= 5 ? 'Akutmodus' : pauseMinutes == null ? 'Start' : pauseMinutes < 30 ? 'Akutphase' : pauseMinutes < 120 ? 'Aufbau' : 'Highscore-Jagd';
     const urgency = urge >= 5
@@ -1023,12 +1201,12 @@
           : { delay: activeDelay ? 'Timer fertig laufen lassen. Keine neue Diskussion starten.' : '10-Minuten-Challenge starten und erst danach neu entscheiden.', reset: 'Ein Glas Wasser und mindestens 20 Schritte weg vom Trigger-Ort.' };
 
     const steps = [
-      { icon: 'delay', title: 'Delay', body: urgency.delay },
-      { icon: 'reset', title: 'Reset', body: urgency.reset },
+      focusTask ? { icon: 'tasks', title: 'Task-Fokus', body: coachTaskBody(focusTask) } : { icon: 'delay', title: 'Delay', body: urgency.delay },
+      focusHabit ? { icon: habitIconKey(focusHabit), title: 'Habit-Fokus', body: coachHabitBody(focusHabit, habitLoggedCount, activeHabits.length) } : { icon: 'reset', title: 'Reset', body: urgency.reset },
       { icon: trigger.icon, title: trigger.label, body: trigger.action }
     ];
 
-    return { risk, label, tone, headline, coachLine, microGoal, comparison, bestText, stage, pauseMinutes, todayCount, avgPerDay, alcoholToday, trigger, urge, activeDelay, delayDone, steps };
+    return { risk, label, tone, headline, coachLine, microGoal, comparison, taskText, habitText, bestText, stage, pauseMinutes, todayCount, avgPerDay, alcoholToday, alcoholUnitsToday, trigger, urge, activeDelay, delayDone, activeTasks, overdueTasks, focusTask, focusHabit, habitLoggedCount, activeHabits, steps };
   }
 
   function renderCoach() {
@@ -1053,6 +1231,8 @@
       <div class="coach-tip-grid">
         <article><span>Mini-Ziel</span><strong>${escapeHtml(insight.microGoal)}</strong></article>
         <article><span>Heute</span><strong>${escapeHtml(insight.comparison)}</strong></article>
+        <article><span>Tasks</span><strong>${escapeHtml(insight.taskText)}</strong></article>
+        <article><span>Habits</span><strong>${escapeHtml(insight.habitText)}</strong></article>
         <article><span>Beste Pause</span><strong>${escapeHtml(insight.bestText)}</strong></article>
         <article><span>Kontext</span><strong>${insight.alcoholToday ? 'Alkohol aktiv' : escapeHtml(insight.trigger.label)}</strong></article>
       </div>
@@ -1138,8 +1318,8 @@
   }
 
   function renderTasks() {
-    const tasks = [...state.tasks].sort((a, b) => sortDate(a.due_at || a.created_at) - sortDate(b.due_at || b.created_at));
-    const totalOpen = tasks.filter(t => t.status === 'open').length;
+    const tasks = [...state.tasks].map(normalizeTask).sort(compareTasks);
+    const totalOpen = tasks.filter(isActiveTask).length;
     if (els.openTasksCount) els.openTasksCount.textContent = totalOpen;
     if (!tasks.length) {
       els.tasksList.innerHTML = '<div class="empty-state">Keine Aufgaben vorhanden. Neue Aufgaben erscheinen hier direkt als Kanban-Karte.</div>';
@@ -1164,21 +1344,32 @@
 
   function renderTaskCard(task) {
     const status = task.status || 'open';
-    const nextActions = status === 'done'
-      ? `<button class="mini-btn" type="button" data-action="move-task" data-status="open" data-id="${task.id}">Wieder öffnen</button>`
-      : `<button class="mini-btn primary" type="button" data-action="move-task" data-status="done" data-id="${task.id}">Erledigt</button>`;
+    const priority = normalizeTaskPriority(task.priority);
+    const priorityMeta = taskPriorityMeta(priority);
+    const statusLabel = TASK_COLUMNS.find(column => column.status === status)?.title || 'Offen';
+    const isOverdue = task.due_at && status !== 'done' && new Date(task.due_at).getTime() < Date.now();
+    const primaryAction = status === 'open'
+      ? `<button class="mini-btn primary" type="button" data-action="move-task" data-status="in_progress" data-id="${task.id}">In Bearbeitung</button>`
+      : status === 'in_progress'
+        ? `<button class="mini-btn primary" type="button" data-action="move-task" data-status="done" data-id="${task.id}">Erledigt</button>`
+        : status === 'done'
+          ? `<button class="mini-btn" type="button" data-action="move-task" data-status="in_progress" data-id="${task.id}">Zurück in Arbeit</button>`
+          : `<button class="mini-btn" type="button" data-action="move-task" data-status="open" data-id="${task.id}">Reaktivieren</button>`;
     const archiveAction = status === 'archived'
-      ? `<button class="mini-btn" type="button" data-action="move-task" data-status="open" data-id="${task.id}">Reaktivieren</button>`
+      ? ''
       : `<button class="mini-btn" type="button" data-action="move-task" data-status="archived" data-id="${task.id}">Archiv</button>`;
-    return `<article class="kanban-card ${editingTaskId === task.id ? 'is-editing' : ''}" draggable="true" data-task-card data-id="${task.id}">
+    return `<article class="kanban-card ${editingTaskId === task.id ? 'is-editing' : ''} ${isOverdue ? 'is-overdue' : ''}" draggable="true" data-task-card data-id="${task.id}">
       <div class="kanban-card-top">
         <span class="drag-handle" aria-hidden="true">⋮⋮</span>
-        <span class="badge ${status === 'done' ? '' : 'muted'}">${status === 'done' ? `+${Number(task.points || taskPoints(task))} Pkt.` : `+${taskPoints(task)} Pkt.`}</span>
+        <div class="task-badges">
+          <span class="badge muted ${taskPriorityClass(priority)}">${escapeHtml(priorityMeta.short)}</span>
+          <span class="badge ${status === 'done' ? '' : 'muted'}">${status === 'done' ? `+${Number(task.points || taskPoints(task))} Pkt.` : `+${taskPoints(task)} Pkt.`}</span>
+        </div>
       </div>
       <h4>${escapeHtml(task.title)}</h4>
-      <p class="meta">Aufwand ${task.effort}/5 · ${task.due_at ? `Fällig ${formatDateTime(task.due_at)}` : 'ohne Fälligkeitsdatum'}${task.description ? `<br>${escapeHtml(task.description)}` : ''}</p>
+      <p class="meta">${escapeHtml(statusLabel)} · Aufwand ${task.effort}/5 · Priorität ${escapeHtml(priorityMeta.label)} · ${task.due_at ? `${isOverdue ? 'Überfällig' : 'Fällig'} ${formatDateTime(task.due_at)}` : 'ohne Fälligkeitsdatum'}${task.description ? `<br>${escapeHtml(task.description)}` : ''}</p>
       <div class="list-actions compact-actions">
-        ${nextActions}
+        ${primaryAction}
         <button class="mini-btn" type="button" data-action="edit-task" data-id="${task.id}">Bearbeiten</button>
         ${archiveAction}
         <button class="mini-btn danger" type="button" data-action="delete-task" data-id="${task.id}">Löschen</button>
@@ -1204,11 +1395,13 @@
       const cigarettes = cigarettesOnDate(key).length;
       const tasks = state.tasks.filter(t => toDateKey(t.due_at || t.completed_at || t.created_at) === key);
       const alcohol = alcoholForDate(key)?.consumed;
+      const alcoholUnits = alcoholUnitsOnDate(key).length;
       const points = calendarPointsOnDate(key);
       const chips = [];
       if (cigarettes) chips.push(`<span class="day-chip smoke">${cigarettes} Zig.</span>`);
       if (tasks.length) chips.push(`<span class="day-chip task">${tasks.length} Task</span>`);
-      if (alcohol) chips.push('<span class="day-chip alcohol">Alk.</span>');
+      if (alcoholUnits) chips.push(`<span class="day-chip alcohol">${alcoholUnits} Alk.</span>`);
+      else if (alcohol) chips.push('<span class="day-chip alcohol">Alk.</span>');
       cells.push(`<button class="calendar-day ${date.getMonth() !== month ? 'is-muted' : ''} ${key === toDateKey(new Date()) ? 'is-today' : ''} ${key === selectedCalendarDate ? 'is-selected' : ''}" type="button" data-action="select-day" data-day="${key}">
         <span class="calendar-day-head"><strong>${date.getDate()}</strong>${points ? `<em class="day-points">${points > 0 ? '+' : ''}${points}</em>` : ''}</span>
         <span class="day-chips">${chips.join('')}</span>
@@ -1224,9 +1417,11 @@
     const cigarettes = cigarettesOnDate(key);
     if (cigarettes.length) details.push(`<article class="list-card"><div><h4>Rauchen</h4><p class="meta">${cigarettes.length} Zigarette(n), ${sum(cigarettes.map(c => c.points))} Punkte</p></div></article>`);
     const alcohol = alcoholForDate(key);
-    if (alcohol) details.push(`<article class="list-card"><div><h4>Alkohol</h4><p class="meta">${alcohol.consumed ? 'Ja' : 'Nein'} getrackt</p></div></article>`);
+    const alcoholUnits = alcoholUnitsOnDate(key);
+    if (alcoholUnits.length) details.push(`<article class="list-card"><div><h4>Alkohol</h4><p class="meta">${alcoholUnits.length} Einheit(en): ${escapeHtml(alcoholUnits.map(unit => alcoholTypeLabel(unit.drink_type)).join(', '))}</p></div></article>`);
+    else if (alcohol) details.push(`<article class="list-card"><div><h4>Alkohol</h4><p class="meta">${alcohol.consumed ? 'Ja' : 'Nein'} getrackt</p></div></article>`);
     const tasks = state.tasks.filter(t => toDateKey(t.due_at || t.completed_at || t.created_at) === key);
-    tasks.forEach(t => details.push(`<article class="list-card ${t.status === 'done' ? 'done' : ''}"><div><h4>${escapeHtml(t.title)}</h4><p class="meta">${t.status === 'done' ? 'Erledigt' : 'Offen'} · Aufwand ${t.effort}/5</p></div></article>`));
+    tasks.forEach(t => details.push(`<article class="list-card ${t.status === 'done' ? 'done' : ''}"><div><h4>${escapeHtml(t.title)}</h4><p class="meta">${escapeHtml(TASK_COLUMNS.find(column => column.status === (t.status || 'open'))?.title || 'Offen')} · ${escapeHtml(taskPriorityMeta(t).label)} · Aufwand ${t.effort}/5</p></div></article>`));
     els.dayDetails.innerHTML = details.length ? details.join('') : '<div class="empty-state">Für diesen Tag gibt es noch keine Einträge.</div>';
   }
 
@@ -1350,6 +1545,70 @@
     });
   }
 
+  function alcoholTypeLabel(type) {
+    return ALCOHOL_TYPES[type] || ALCOHOL_TYPES.other;
+  }
+
+  function alcoholUnitsOnDate(key) {
+    return state.alcoholUnits.filter(unit => toDateKey(unit.occurred_at) === key);
+  }
+
+  function ensureAlcoholDayLog(key, note = '') {
+    const existing = alcoholForDate(key);
+    if (existing) {
+      existing.consumed = true;
+      existing.note = existing.note || note || '';
+      existing.updated_at = nowIso();
+      existing.synced = false;
+      return existing;
+    }
+    const created = nowIso();
+    const log = { id: uid(), log_date: key, consumed: true, note, created_at: created, updated_at: created, synced: false };
+    state.alcoholLogs.push(log);
+    return log;
+  }
+
+  function recordAlcoholUnit() {
+    const occurredAt = nowIso();
+    const drinkType = els.alcoholTypeSelect?.value || 'beer';
+    const label = alcoholTypeLabel(drinkType);
+    state.alcoholUnits.push({
+      id: uid(),
+      occurred_at: occurredAt,
+      drink_type: drinkType,
+      note: '',
+      created_at: occurredAt,
+      updated_at: occurredAt,
+      synced: false
+    });
+    ensureAlcoholDayLog(toDateKey(new Date()), label);
+    dedupeAlcoholLogs(state);
+    saveState();
+    toast(`${label} erfasst · 1 Einheit`);
+    syncWithSupabase({ silent: true });
+  }
+
+  async function deleteAlcoholUnit(id) {
+    const unit = state.alcoholUnits.find(a => a.id === id);
+    if (!unit) return;
+    if (!confirm('Alkohol-Einheit wirklich löschen?')) return;
+    state.alcoholUnits = state.alcoholUnits.filter(a => a.id !== id);
+    markRemoteDeleted('alcohol_events', id);
+    const key = toDateKey(unit.occurred_at);
+    const remainingUnitsToday = alcoholUnitsOnDate(key);
+    const dayLog = alcoholForDate(key);
+    if (dayLog && !remainingUnitsToday.length) {
+      dayLog.consumed = false;
+      dayLog.updated_at = nowIso();
+      dayLog.synced = false;
+    }
+    saveState();
+    await deleteRemoteById('alcohol_events', id);
+    toast('Alkohol-Einheit gelöscht');
+    syncWithSupabase({ silent: true, pullFirst: false });
+  }
+
+
   function toggleAlcoholToday() {
     const key = toDateKey(new Date());
     const existing = alcoholForDate(key);
@@ -1358,7 +1617,7 @@
       existing.updated_at = nowIso();
       existing.synced = false;
     } else {
-      state.alcoholLogs.push({ id: uid(), log_date: key, consumed: true, note: '', created_at: nowIso(), updated_at: nowIso(), synced: false });
+      ensureAlcoholDayLog(key);
     }
     dedupeAlcoholLogs(state);
     saveState();
@@ -1427,6 +1686,8 @@
       }
       Object.assign(habit, values, { is_archived: false });
       resetHabitFormMode({ clearForm: true });
+      habitFormOpen = false;
+      syncHabitFormPanel();
       saveState();
       toast('Habit aktualisiert');
       syncWithSupabase({ silent: true });
@@ -1443,6 +1704,8 @@
       updated_at: created
     });
     resetHabitFormMode({ clearForm: true });
+    habitFormOpen = false;
+    syncHabitFormPanel();
     saveState();
     toast('Habit erstellt');
     syncWithSupabase({ silent: true });
@@ -1500,6 +1763,8 @@
     els.habitFormTitle.textContent = 'Gewohnheit bearbeiten';
     els.habitSubmitBtn.textContent = 'Änderungen speichern';
     els.cancelHabitEditBtn.classList.remove('hidden');
+    habitFormOpen = true;
+    syncHabitFormPanel();
     showScreen('habits');
     els.habitForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
     renderHabits();
@@ -1514,6 +1779,7 @@
     els.habitFormTitle.textContent = 'Gewohnheit anlegen';
     els.habitSubmitBtn.textContent = 'Habit erstellen';
     els.cancelHabitEditBtn.classList.add('hidden');
+    syncHabitFormPanel();
     renderHabits();
   }
 
@@ -1551,6 +1817,7 @@
       title: String(data.get('title') || '').trim(),
       description: String(data.get('description') || '').trim(),
       effort: Number(data.get('effort') || 3),
+      priority: normalizeTaskPriority(data.get('priority')),
       due_at: data.get('due_at') ? new Date(data.get('due_at')).toISOString() : null,
       updated_at: nowIso(),
       synced: false
@@ -1570,6 +1837,8 @@
         addPoints('task', task.id, task.points, `Aufgabe abgeschlossen: ${task.title}`, task.completed_at || nowIso());
       }
       resetTaskFormMode({ clearForm: true });
+      taskFormOpen = false;
+      syncTaskFormPanel();
       saveState();
       toast('Aufgabe aktualisiert');
       syncWithSupabase({ silent: true });
@@ -1587,6 +1856,8 @@
       updated_at: created
     });
     resetTaskFormMode({ clearForm: true });
+    taskFormOpen = false;
+    syncTaskFormPanel();
     saveState();
     toast('Aufgabe gespeichert');
     syncWithSupabase({ silent: true });
@@ -1609,11 +1880,12 @@
       task.completed_at = nowIso();
       task.points = taskPoints(task);
       addPoints('task', task.id, task.points, `Aufgabe abgeschlossen: ${task.title}`, task.completed_at);
-    } else if (previousStatus === 'done' && nextStatus === 'open') {
+    } else if (previousStatus === 'done' && nextStatus !== 'archived') {
       task.completed_at = null;
       task.points = 0;
       markRemoteDeletedMany('points_ledger', removeTaskPoints(task.id));
     } else if (nextStatus === 'archived' && previousStatus !== 'done') {
+      task.completed_at = null;
       task.points = 0;
       markRemoteDeletedMany('points_ledger', removeTaskPoints(task.id));
     }
@@ -1640,10 +1912,13 @@
     fields.title.value = task.title || '';
     fields.description.value = task.description || '';
     fields.effort.value = String(task.effort || 3);
+    fields.priority.value = normalizeTaskPriority(task.priority);
     fields.due_at.value = toDateTimeLocalValue(task.due_at);
     els.taskFormTitle.textContent = 'Aufgabe bearbeiten';
     els.taskSubmitBtn.textContent = 'Änderungen speichern';
     els.cancelTaskEditBtn.classList.remove('hidden');
+    taskFormOpen = true;
+    syncTaskFormPanel();
     updateTaskPreview();
     showScreen('tasks');
     els.taskForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1655,10 +1930,12 @@
     if (clearForm) {
       els.taskForm.reset();
       els.taskForm.elements.effort.value = '3';
+      els.taskForm.elements.priority.value = 'medium';
     }
     els.taskFormTitle.textContent = 'Aufgabe erfassen';
     els.taskSubmitBtn.textContent = 'Aufgabe speichern';
     els.cancelTaskEditBtn.classList.add('hidden');
+    syncTaskFormPanel();
     updateTaskPreview();
     renderTasks();
   }
@@ -1688,7 +1965,10 @@
 
   function updateTaskPreview() {
     const effort = Number(els.taskForm.elements.effort.value || 3);
-    els.taskPointsPreview.textContent = `+${effort * 20} Pkt.`;
+    const priority = normalizeTaskPriority(els.taskForm.elements.priority?.value || 'medium');
+    const previewTask = { effort, priority };
+    const bonus = taskPriorityMeta(priority).bonus;
+    els.taskPointsPreview.textContent = bonus ? `+${taskPoints(previewTask)} Pkt. · Prio +${bonus}` : `+${taskPoints(previewTask)} Pkt.`;
   }
 
   function moveMonth(delta) {
@@ -1720,7 +2000,7 @@
 
   function taskPoints(task) {
     const effort = Math.max(1, Math.min(5, Number(task.effort || 3)));
-    let points = effort * 20;
+    let points = effort * 20 + taskPriorityMeta(task).bonus;
     if (task.due_at && new Date(task.completed_at || nowIso()) <= new Date(task.due_at)) points += 10;
     return points;
   }
@@ -1971,10 +2251,12 @@
         created_at: a.created_at, updated_at: a.updated_at || nowIso()
       })));
 
-      await upsertRows('tasks', liveRowsForTable('tasks', state.tasks).map(t => ({
-        id: t.id, title: t.title, description: t.description || null, effort: Number(t.effort || 3), status: t.status,
-        due_at: t.due_at, completed_at: t.completed_at, points: Number(t.points || 0), created_at: t.created_at, updated_at: t.updated_at || nowIso()
+      await upsertRows('alcohol_events', liveRowsForTable('alcohol_events', state.alcoholUnits).map(a => ({
+        id: a.id, occurred_at: a.occurred_at, drink_type: a.drink_type || 'other', note: a.note || null,
+        created_at: a.created_at, updated_at: a.updated_at || nowIso()
       })));
+
+      await upsertTaskRows();
 
       await upsertRows('points_ledger', liveRowsForTable('points_ledger', state.pointsLedger).map(p => ({
         id: p.id, source_type: p.source_type, source_id: p.source_id, points: Number(p.points || 0), reason: p.reason || null,
@@ -1999,7 +2281,66 @@
   async function upsertRows(table, rows) {
     if (!rows.length) return;
     const { error } = await supabaseClient.from(table).upsert(rows, { onConflict: 'id' });
+    if (error && OPTIONAL_SYNC_TABLES.has(table) && isMissingRemoteRelationError(error)) {
+      console.warn(`Optionale Sync-Tabelle ${table} fehlt. App läuft lokal weiter.`, error);
+      return;
+    }
     if (error) throw error;
+  }
+
+  function taskRowsForSync() {
+    return liveRowsForTable('tasks', state.tasks).map(t => {
+      const row = {
+        id: t.id,
+        title: t.title,
+        description: t.description || null,
+        effort: Number(t.effort || 3),
+        status: taskStatusForRemote(t.status || 'open'),
+        due_at: t.due_at,
+        completed_at: t.completed_at,
+        points: Number(t.points || 0),
+        created_at: t.created_at,
+        updated_at: t.updated_at || nowIso()
+      };
+      if (remoteTaskPrioritySupported) row.priority = normalizeTaskPriority(t.priority);
+      return row;
+    });
+  }
+
+  async function upsertTaskRows() {
+    const rows = taskRowsForSync();
+    if (!rows.length) return;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const { error } = await supabaseClient.from('tasks').upsert(taskRowsForSync(), { onConflict: 'id' });
+      if (!error) return;
+      if (remoteTaskPrioritySupported && String(error.message || '').toLowerCase().includes('priority')) {
+        remoteTaskPrioritySupported = false;
+        console.warn('Remote Tasks-Tabelle hat noch keine priority-Spalte. Sync läuft ohne Priorität, bis supabase.sql angewendet ist.', error);
+        continue;
+      }
+      if (remoteTaskInProgressSupported && isTaskStatusConstraintError(error)) {
+        remoteTaskInProgressSupported = false;
+        console.warn('Remote Tasks-Tabelle kennt in_progress noch nicht. Sync mappt diesen Status vorübergehend auf offen.', error);
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  function taskStatusForRemote(status) {
+    const normalized = TASK_COLUMNS.some(column => column.status === status) ? status : 'open';
+    if (!remoteTaskInProgressSupported && normalized === 'in_progress') return 'open';
+    return normalized;
+  }
+
+  function isTaskStatusConstraintError(error) {
+    const message = String(error?.message || error || '').toLowerCase();
+    return message.includes('tasks_status_check') || (message.includes('check constraint') && message.includes('status'));
+  }
+
+  function isMissingRemoteRelationError(error) {
+    const message = String(error?.message || error || '').toLowerCase();
+    return message.includes('does not exist') || message.includes('schema cache') || message.includes('could not find the table');
   }
 
   async function deleteRemoteById(table, id) {
@@ -2067,23 +2408,24 @@
 
   async function pullSupabaseData() {
     if (!supabaseClient) return;
-    const [habits, entries, cigarettes, alcohol, tasks, ledger] = await Promise.all([
-      supabaseClient.from('habit_definitions').select('*'),
-      supabaseClient.from('habit_entries').select('*'),
-      supabaseClient.from('cigarette_events').select('*'),
-      supabaseClient.from('alcohol_logs').select('*'),
-      supabaseClient.from('tasks').select('*'),
-      supabaseClient.from('points_ledger').select('*')
+    const [habits, entries, cigarettes, alcohol, alcoholEvents, tasks, ledger] = await Promise.all([
+      fetchRemoteTable('habit_definitions'),
+      fetchRemoteTable('habit_entries'),
+      fetchRemoteTable('cigarette_events'),
+      fetchRemoteTable('alcohol_logs'),
+      fetchRemoteTable('alcohol_events'),
+      fetchRemoteTable('tasks'),
+      fetchRemoteTable('points_ledger')
     ]);
-    for (const result of [habits, entries, cigarettes, alcohol, tasks, ledger]) if (result.error) throw result.error;
 
     const remoteHabitRows = remoteRows('habit_definitions', habits);
     const remoteEntryRows = remoteRows('habit_entries', entries);
     const remoteCigaretteRows = remoteRows('cigarette_events', cigarettes);
     const remoteAlcoholRows = remoteRows('alcohol_logs', alcohol);
+    const remoteAlcoholEventRows = remoteRows('alcohol_events', alcoholEvents);
     const remoteTaskRows = remoteRows('tasks', tasks);
     const remoteLedgerRows = remoteRows('points_ledger', ledger);
-    const remoteHasData = [remoteHabitRows, remoteEntryRows, remoteCigaretteRows, remoteAlcoholRows, remoteTaskRows, remoteLedgerRows].some(rows => rows.length > 0);
+    const remoteHasData = [remoteHabitRows, remoteEntryRows, remoteCigaretteRows, remoteAlcoholRows, remoteAlcoholEventRows, remoteTaskRows, remoteLedgerRows].some(rows => rows.length > 0);
 
     applyRemoteHabitAuthority(remoteHabitRows);
 
@@ -2092,19 +2434,42 @@
       state.habitEntries = remoteEntryRows.map(mapRemoteEntry);
       state.cigarettes = remoteCigaretteRows.map(mapRemoteCigarette);
       state.alcoholLogs = remoteAlcoholRows.map(mapRemoteAlcohol);
-      state.tasks = remoteTaskRows.map(mapRemoteTask);
+      state.alcoholUnits = remoteAlcoholEventRows.map(mapRemoteAlcoholEvent);
+      state.tasks = remoteTaskRows.map(mapRemoteTask).map(normalizeTask);
       state.pointsLedger = remoteLedgerRows.map(mapRemoteLedger);
       dedupeStateCollections(state);
       return;
     }
 
+    const localTasksBeforePull = new Map(state.tasks.map(task => [task.id, normalizeTask(task)]));
     state.habits = mergeById(state.habits, remoteHabitRows, mapRemoteHabit);
     state.habitEntries = mergeById(state.habitEntries, remoteEntryRows, mapRemoteEntry);
     state.cigarettes = mergeById(state.cigarettes, remoteCigaretteRows, mapRemoteCigarette);
     state.alcoholLogs = mergeById(state.alcoholLogs, remoteAlcoholRows, mapRemoteAlcohol);
-    state.tasks = mergeById(state.tasks, remoteTaskRows, mapRemoteTask);
+    state.alcoholUnits = mergeById(state.alcoholUnits, remoteAlcoholEventRows, mapRemoteAlcoholEvent);
+    state.tasks = mergeById(state.tasks, remoteTaskRows, mapRemoteTask).map(task => preserveLocalTaskFallbacks(normalizeTask(task), localTasksBeforePull.get(task.id)));
     state.pointsLedger = mergeById(state.pointsLedger, remoteLedgerRows, mapRemoteLedger);
     dedupeStateCollections(state);
+  }
+
+  async function fetchRemoteTable(table) {
+    const result = await supabaseClient.from(table).select('*');
+    if (result.error) {
+      if (OPTIONAL_SYNC_TABLES.has(table) && isMissingRemoteRelationError(result.error)) {
+        console.warn(`Optionale Sync-Tabelle ${table} fehlt.`, result.error);
+        return { data: [], error: null };
+      }
+      throw result.error;
+    }
+    return result;
+  }
+
+  function preserveLocalTaskFallbacks(remoteTask, localTask) {
+    if (!localTask) return remoteTask;
+    const next = { ...remoteTask };
+    if (!remoteTaskPrioritySupported) next.priority = localTask.priority || next.priority;
+    if (!remoteTaskInProgressSupported && localTask.status === 'in_progress' && remoteTask.status === 'open') next.status = 'in_progress';
+    return next;
   }
 
   function mergeById(localRows, remoteRows, mapper) {
@@ -2121,7 +2486,7 @@
   function isLocalPristine() {
     const defaultIds = new Set(Object.values(DEFAULT_HABIT_IDS));
     const hasOnlyDefaultHabits = state.habits.every(h => defaultIds.has(h.id) || BUILT_IN_DEFAULT_HABIT_NAMES.has(String(h.name || '').trim().toLowerCase()));
-    return hasOnlyDefaultHabits && !state.habitEntries.length && !state.cigarettes.length && !state.alcoholLogs.length && !state.tasks.length && !state.pointsLedger.length;
+    return hasOnlyDefaultHabits && !state.habitEntries.length && !state.cigarettes.length && !state.alcoholLogs.length && !state.alcoholUnits.length && !state.tasks.length && !state.pointsLedger.length;
   }
 
   function subscribeToRemoteChanges() {
@@ -2146,7 +2511,8 @@
   const mapRemoteEntry = e => ({ id: e.id, habit_id: e.habit_id, value_num: e.value_num, value_bool: e.value_bool, note: e.note, occurred_at: e.occurred_at, created_at: e.created_at, updated_at: e.updated_at, synced: true });
   const mapRemoteCigarette = c => ({ id: c.id, smoked_at: c.smoked_at, interval_minutes: c.interval_minutes, alcohol_context: c.alcohol_context, points: c.points, note: c.note, created_at: c.created_at, updated_at: c.updated_at, synced: true });
   const mapRemoteAlcohol = a => ({ id: a.id, log_date: a.log_date, consumed: a.consumed, note: a.note, created_at: a.created_at, updated_at: a.updated_at, synced: true });
-  const mapRemoteTask = t => ({ id: t.id, title: t.title, description: t.description, effort: t.effort, status: t.status, due_at: t.due_at, completed_at: t.completed_at, points: t.points, created_at: t.created_at, updated_at: t.updated_at, synced: true });
+  const mapRemoteAlcoholEvent = a => ({ id: a.id, occurred_at: a.occurred_at, drink_type: a.drink_type || 'other', note: a.note, created_at: a.created_at, updated_at: a.updated_at, synced: true });
+  const mapRemoteTask = t => ({ id: t.id, title: t.title, description: t.description, effort: t.effort, priority: normalizeTaskPriority(t.priority), status: TASK_COLUMNS.some(column => column.status === t.status) ? t.status : 'open', due_at: t.due_at, completed_at: t.completed_at, points: t.points, created_at: t.created_at, updated_at: t.updated_at, synced: true });
   const mapRemoteLedger = p => ({ id: p.id, source_type: p.source_type, source_id: p.source_id, points: p.points, reason: p.reason, earned_at: p.earned_at, created_at: p.created_at, updated_at: p.created_at, synced: true });
 
   function exportJson() {

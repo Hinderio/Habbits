@@ -57,18 +57,34 @@ create table if not exists public.alcohol_logs (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.alcohol_events (
+  id uuid primary key default gen_random_uuid(),
+  occurred_at timestamptz not null default now(),
+  drink_type text not null default 'other' check (drink_type in ('beer','wine','cocktail','shot','other')),
+  note text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.tasks (
   id uuid primary key default gen_random_uuid(),
   title text not null,
   description text,
   effort smallint not null default 3 check (effort between 1 and 5),
-  status text not null default 'open' check (status in ('open','done','archived')),
+  priority text not null default 'medium' check (priority in ('low','medium','high','urgent')),
+  status text not null default 'open' check (status in ('open','in_progress','done','archived')),
   due_at timestamptz,
   completed_at timestamptz,
   points integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.tasks add column if not exists priority text not null default 'medium';
+alter table public.tasks drop constraint if exists tasks_priority_check;
+alter table public.tasks add constraint tasks_priority_check check (priority in ('low','medium','high','urgent'));
+alter table public.tasks drop constraint if exists tasks_status_check;
+alter table public.tasks add constraint tasks_status_check check (status in ('open','in_progress','done','archived'));
 
 create table if not exists public.points_ledger (
   id uuid primary key default gen_random_uuid(),
@@ -84,7 +100,7 @@ create table if not exists public.points_ledger (
 do $$
 declare tbl text;
 begin
-  foreach tbl in array array['habit_definitions','habit_entries','cigarette_events','alcohol_logs','tasks','points_ledger'] loop
+  foreach tbl in array array['habit_definitions','habit_entries','cigarette_events','alcohol_logs','alcohol_events','tasks','points_ledger'] loop
     if exists (
       select 1
       from information_schema.columns
@@ -99,6 +115,7 @@ create index if not exists idx_habit_entries_time on public.habit_entries(occurr
 create index if not exists idx_habit_entries_habit_time on public.habit_entries(habit_id, occurred_at desc);
 create index if not exists idx_cigarette_events_time on public.cigarette_events(smoked_at desc);
 create index if not exists idx_alcohol_logs_date on public.alcohol_logs(log_date desc);
+create index if not exists idx_alcohol_events_time on public.alcohol_events(occurred_at desc);
 create index if not exists idx_tasks_due on public.tasks(status, due_at);
 create index if not exists idx_points_ledger_time on public.points_ledger(earned_at desc);
 
@@ -114,6 +131,9 @@ create trigger set_cigarette_events_updated_at before update on public.cigarette
 drop trigger if exists set_alcohol_logs_updated_at on public.alcohol_logs;
 create trigger set_alcohol_logs_updated_at before update on public.alcohol_logs for each row execute function public.set_updated_at();
 
+drop trigger if exists set_alcohol_events_updated_at on public.alcohol_events;
+create trigger set_alcohol_events_updated_at before update on public.alcohol_events for each row execute function public.set_updated_at();
+
 drop trigger if exists set_tasks_updated_at on public.tasks;
 create trigger set_tasks_updated_at before update on public.tasks for each row execute function public.set_updated_at();
 
@@ -121,6 +141,7 @@ alter table public.habit_definitions enable row level security;
 alter table public.habit_entries enable row level security;
 alter table public.cigarette_events enable row level security;
 alter table public.alcohol_logs enable row level security;
+alter table public.alcohol_events enable row level security;
 alter table public.tasks enable row level security;
 alter table public.points_ledger enable row level security;
 
@@ -141,6 +162,10 @@ drop policy if exists "alcohol_logs_select_own" on public.alcohol_logs;
 drop policy if exists "alcohol_logs_insert_own" on public.alcohol_logs;
 drop policy if exists "alcohol_logs_update_own" on public.alcohol_logs;
 drop policy if exists "alcohol_logs_delete_own" on public.alcohol_logs;
+drop policy if exists "alcohol_events_select_own" on public.alcohol_events;
+drop policy if exists "alcohol_events_insert_own" on public.alcohol_events;
+drop policy if exists "alcohol_events_update_own" on public.alcohol_events;
+drop policy if exists "alcohol_events_delete_own" on public.alcohol_events;
 drop policy if exists "tasks_select_own" on public.tasks;
 drop policy if exists "tasks_insert_own" on public.tasks;
 drop policy if exists "tasks_update_own" on public.tasks;
@@ -154,6 +179,7 @@ drop policy if exists "habit_definitions_direct_public" on public.habit_definiti
 drop policy if exists "habit_entries_direct_public" on public.habit_entries;
 drop policy if exists "cigarette_events_direct_public" on public.cigarette_events;
 drop policy if exists "alcohol_logs_direct_public" on public.alcohol_logs;
+drop policy if exists "alcohol_events_direct_public" on public.alcohol_events;
 drop policy if exists "tasks_direct_public" on public.tasks;
 drop policy if exists "points_ledger_direct_public" on public.points_ledger;
 
@@ -161,6 +187,7 @@ create policy "habit_definitions_direct_public" on public.habit_definitions for 
 create policy "habit_entries_direct_public" on public.habit_entries for all to anon, authenticated using (true) with check (true);
 create policy "cigarette_events_direct_public" on public.cigarette_events for all to anon, authenticated using (true) with check (true);
 create policy "alcohol_logs_direct_public" on public.alcohol_logs for all to anon, authenticated using (true) with check (true);
+create policy "alcohol_events_direct_public" on public.alcohol_events for all to anon, authenticated using (true) with check (true);
 create policy "tasks_direct_public" on public.tasks for all to anon, authenticated using (true) with check (true);
 create policy "points_ledger_direct_public" on public.points_ledger for all to anon, authenticated using (true) with check (true);
 
@@ -168,7 +195,7 @@ create policy "points_ledger_direct_public" on public.points_ledger for all to a
 do $$
 declare tbl text;
 begin
-  foreach tbl in array array['habit_definitions','habit_entries','cigarette_events','alcohol_logs','tasks','points_ledger'] loop
+  foreach tbl in array array['habit_definitions','habit_entries','cigarette_events','alcohol_logs','alcohol_events','tasks','points_ledger'] loop
     begin
       execute format('alter publication supabase_realtime add table public.%I', tbl);
     exception when others then
