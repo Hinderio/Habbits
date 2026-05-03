@@ -923,7 +923,7 @@
   }
 
   function isSystemMeditationHabit(habit) {
-    return Boolean(habit && (habit.system_key === 'meditation' || habit.id === DEFAULT_HABIT_IDS.meditation || String(habit.name || '').trim().toLowerCase() === 'meditation'));
+    return Boolean(habit && (habit.system_key === 'meditation' || habit.id === DEFAULT_HABIT_IDS.meditation));
   }
 
   function renderSmoking() {
@@ -1690,7 +1690,7 @@
       syncHabitFormPanel();
       saveState();
       toast('Habit aktualisiert');
-      syncWithSupabase({ silent: true });
+      syncWithSupabase({ silent: true, pullFirst: false });
       return;
     }
 
@@ -1708,7 +1708,7 @@
     syncHabitFormPanel();
     saveState();
     toast('Habit erstellt');
-    syncWithSupabase({ silent: true });
+    syncWithSupabase({ silent: true, pullFirst: false });
   }
 
   function logHabit(habitId) {
@@ -1841,7 +1841,7 @@
       syncTaskFormPanel();
       saveState();
       toast('Aufgabe aktualisiert');
-      syncWithSupabase({ silent: true });
+      syncWithSupabase({ silent: true, pullFirst: false });
       return;
     }
 
@@ -2387,8 +2387,8 @@
       .filter(habit => {
         const name = String(habit.name || '').trim().toLowerCase();
         const isSeed = isBuiltInDefaultHabit(habit) || BUILT_IN_DEFAULT_HABIT_NAMES.has(name);
-        const hasUnsyncedLocalEntries = habit.synced === false && state.habitEntries.some(entry => entry.habit_id === habit.id);
-        if (!isSeed || hasUnsyncedLocalEntries) return false;
+        const hasUnsyncedLocalChanges = habit.synced === false || state.habitEntries.some(entry => entry.habit_id === habit.id && entry.synced === false);
+        if (!isSeed || hasUnsyncedLocalChanges) return false;
         if (remoteIds.has(habit.id)) return false;
         return !remoteSeedNames.has(name);
       })

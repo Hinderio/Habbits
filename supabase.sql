@@ -80,6 +80,10 @@ create table if not exists public.tasks (
   updated_at timestamptz not null default now()
 );
 
+
+alter table public.habit_definitions drop constraint if exists habit_definitions_type_check;
+alter table public.habit_definitions add constraint habit_definitions_type_check check (type in ('number','weight','boolean','duration'));
+
 alter table public.tasks add column if not exists priority text not null default 'medium';
 alter table public.tasks drop constraint if exists tasks_priority_check;
 alter table public.tasks add constraint tasks_priority_check check (priority in ('low','medium','high','urgent'));
