@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Clean Coach">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="35%" r="70%">
+      <stop offset="0" stop-color="#8ff0a7" stop-opacity="0.85"/>
+      <stop offset="0.44" stop-color="#4ad7d1" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#08111b" stop-opacity="0.05"/>
+    </radialGradient>
+    <linearGradient id="hood" x1="40" y1="36" x2="220" y2="232" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#66e7ff" stop-opacity="0.92"/>
+      <stop offset="1" stop-color="#8ff0a7" stop-opacity="0.92"/>
+    </linearGradient>
+    <linearGradient id="face" x1="82" y1="58" x2="174" y2="160" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f4fbff"/>
+      <stop offset="1" stop-color="#cfeff1"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="18" stdDeviation="14" flood-color="#04111a" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <circle cx="128" cy="128" r="116" fill="url(#bg)" opacity="0.95"/>
+  <path d="M62 205c5-48 28-79 66-79s61 31 66 79c-17 17-39 27-66 27s-49-10-66-27Z" fill="#0d1827" opacity="0.92" filter="url(#shadow)"/>
+  <path d="M61 197c7-42 29-70 67-70s60 28 67 70c-14 13-35 22-67 22s-53-9-67-22Z" fill="url(#hood)" opacity="0.9"/>
+  <path d="M75 106c0-42 22-73 53-73s53 31 53 73c0 38-20 68-53 68s-53-30-53-68Z" fill="#102132" opacity="0.88"/>
+  <path d="M91 103c0-30 14-51 37-51s37 21 37 51c0 28-14 49-37 49s-37-21-37-49Z" fill="url(#face)"/>
+  <path d="M102 88c8-11 19-17 31-17 13 0 23 6 29 18" fill="none" stroke="#4ad7d1" stroke-width="7" stroke-linecap="round" opacity="0.9"/>
+  <circle cx="113" cy="109" r="5" fill="#0d1827"/>
+  <circle cx="143" cy="109" r="5" fill="#0d1827"/>
+  <path d="M111 132c10 7 24 7 34 0" fill="none" stroke="#0d1827" stroke-width="6" stroke-linecap="round" opacity="0.7"/>
+  <path d="M63 92c-8 4-15 15-17 28M193 92c8 4 15 15 17 28" fill="none" stroke="#8ff0a7" stroke-width="8" stroke-linecap="round" opacity="0.74"/>
+  <path d="M51 167c18 7 34 12 54 15M205 167c-18 7-34 12-54 15" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" opacity="0.22"/>
+  <circle cx="195" cy="58" r="8" fill="#8ff0a7" opacity="0.9"/>
+  <circle cx="55" cy="63" r="5" fill="#66e7ff" opacity="0.85"/>
+</svg>

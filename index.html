@@ -37,6 +37,7 @@
             <div class="hero-actions">
               <button id="heroSmokeBtn" class="pill primary large" type="button">+ Zigarette erfassen</button>
               <button id="heroTaskBtn" class="pill secondary large" type="button">Aufgabe anlegen</button>
+              <button id="heroCoachBtn" class="pill secondary large" type="button">Coach öffnen</button>
             </div>
           </div>
           <div class="level-orb" aria-label="Gamification Level">
@@ -97,6 +98,7 @@
               <div class="craving-actions">
                 <button class="mini-btn primary" type="button" data-action="log-meditation" data-id="urge-surf">Craving-Welle loggen</button>
                 <button class="mini-btn" type="button" data-action="rotate-craving-tip">Neuer Tipp</button>
+                <button class="mini-btn" type="button" data-action="open-coach">Zum Coach</button>
               </div>
             </div>
             <button id="recordSmokeBtn" class="smoke-button" type="button">
@@ -140,6 +142,53 @@
             <article><strong>4–8 Std.</strong><span>+40</span><small>stark</small></article>
             <article><strong>8+ Std.</strong><span>+80</span><small>sehr stark</small></article>
           </div>
+        </section>
+      </section>
+
+      <section id="screen-coach" class="screen" data-screen="coach">
+        <section class="panel glass coach-hero-panel">
+          <div class="coach-hero">
+            <div class="coach-avatar-wrap" aria-hidden="true">
+              <img src="icons/coach-clean.svg" alt="" class="coach-avatar" />
+            </div>
+            <div class="coach-hero-copy">
+              <p class="eyebrow">Clean Coach</p>
+              <h2>Der nächste bessere Entscheid.</h2>
+              <p>Der Coach verbindet deine aktuelle Pause, den heutigen Verlauf, Alkohol-Kontext und deinen Trigger zu einem konkreten Mini-Plan für genau jetzt.</p>
+            </div>
+          </div>
+        </section>
+
+        <div class="grid two-columns coach-layout">
+          <section class="panel glass coach-control-panel">
+            <div class="panel-head">
+              <div><p class="eyebrow">Jetzt</p><h3>Check-in</h3></div>
+              <span id="coachRiskBadge" class="badge muted">Bereit</span>
+            </div>
+            <div class="coach-check-grid">
+              <label><span>Drang</span><select id="coachUrgeLevel" aria-label="Aktuelle Drangstärke"><option value="1">1 · kaum spürbar</option><option value="2">2 · leicht</option><option value="3" selected>3 · mittel</option><option value="4">4 · stark</option><option value="5">5 · sehr stark</option></select></label>
+              <label><span>Trigger</span><select id="coachTrigger" aria-label="Aktueller Trigger"><option value="stress">Stress / Druck</option><option value="coffee">Kaffee / Routine</option><option value="alcohol">Alkohol / Ausgang</option><option value="boredom">Langeweile</option><option value="reward">Belohnung</option><option value="social">Sozialer Moment</option><option value="meal">Nach dem Essen</option></select></label>
+            </div>
+            <div id="coachChallengeCard" class="coach-challenge-card"></div>
+            <div class="coach-actions">
+              <button class="pill primary" type="button" data-action="start-coach-delay">10 Min. halten</button>
+              <button class="pill secondary" type="button" data-action="coach-breath-reset">Atem-Reset loggen</button>
+              <button class="pill danger" type="button" data-action="coach-record-smoke">Trotzdem erfassen</button>
+            </div>
+          </section>
+
+          <section class="panel glass coach-result-panel">
+            <div class="panel-head">
+              <div><p class="eyebrow">Analyse</p><h3>Coach sagt</h3></div>
+              <div id="coachConfidence" class="coach-confidence-score"><strong>0%</strong><span>Risiko</span></div>
+            </div>
+            <div id="coachResult" class="coach-result"></div>
+          </section>
+        </div>
+
+        <section class="panel glass">
+          <div class="panel-head"><div><p class="eyebrow">Plan</p><h3>3-Schritt-Strategie</h3></div><span class="subtle">kurz, konkret, machbar</span></div>
+          <div id="coachPlanGrid" class="coach-plan-grid"></div>
         </section>
       </section>
 
@@ -238,6 +287,7 @@
     <nav class="bottom-nav glass" aria-label="Hauptnavigation">
       <button data-target="dashboard" class="nav-btn active" type="button"><span>◎</span>Dashboard</button>
       <button data-target="smoking" class="nav-btn" type="button"><span>◉</span>Rauchen</button>
+      <button data-target="coach" class="nav-btn" type="button"><span>◆</span>Coach</button>
       <button data-target="habits" class="nav-btn" type="button"><span>✦</span>Habits</button>
       <button data-target="tasks" class="nav-btn" type="button"><span>✓</span>Tasks</button>
       <button data-target="calendar" class="nav-btn" type="button"><span>□</span>Kalender</button>

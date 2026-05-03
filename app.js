@@ -5,6 +5,7 @@
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
+  const COACH_SESSION_KEY = 'habitflow-coach-session-v1';
   const SUPABASE_CONFIG = window.HABITFLOW_SUPABASE_CONFIG || {};
   const MEDITATION_TECHNIQUES = [
     { key: '7-3-11', title: '7-3-11 Atemtechnik', subtitle: 'Runterfahren mit langer Ausatmung', minutes: 6, pattern: '7 ein · 3 halten · 11 aus' },
@@ -41,6 +42,16 @@
       meta: 'Klarheit'
     }
   ];
+
+  const COACH_TRIGGER_META = {
+    stress: { label: 'Stress / Druck', action: 'Schultern senken, 3 lange Ausatmungen, dann die kleinste Aufgabe statt Zigarette wählen.', icon: '⚡' },
+    coffee: { label: 'Kaffee / Routine', action: 'Tasse wegstellen, Wasser nachziehen und den Ort für 2 Minuten wechseln.', icon: '☕' },
+    alcohol: { label: 'Alkohol / Ausgang', action: 'Rauch-Situation verlassen, Glas Wasser bestellen und die nächste Zigarette aktiv um 10 Minuten schieben.', icon: '🍸' },
+    boredom: { label: 'Langeweile', action: 'Hände beschäftigen: kurze Nachricht, Kaugummi, Stift oder 20 Schritte gehen.', icon: '〰️' },
+    reward: { label: 'Belohnung', action: 'Belohnung ersetzen: Tee, Musik, kurze Dusche oder 5 Minuten frische Luft ohne Zigarette.', icon: '🏆' },
+    social: { label: 'Sozialer Moment', action: 'Kurz draussen mitgehen ohne zu rauchen oder bewusst innen bleiben und später neu entscheiden.', icon: '👥' },
+    meal: { label: 'Nach dem Essen', action: 'Direkt Zähne putzen, Tee machen oder Küche verlassen. Die Routine wird zuerst gebrochen.', icon: '🍽️' }
+  };
   const DAY_MS = 24 * 60 * 60 * 1000;
   const DEFAULT_HABIT_IDS = Object.freeze({
     weight: '00000000-0000-4000-8000-000000000101',
@@ -67,6 +78,7 @@
   let charts = { trend: null, points: null };
   let selectedTrendMetric = localStorage.getItem(TREND_METRIC_KEY) || 'points';
   let activeSmokingTipIndex = 0;
+  let coachSession = loadCoachSession();
   let editingSmokeId = null;
   let editingHabitId = null;
   let editingTaskId = null;
@@ -85,7 +97,10 @@
     initOngoingSync();
     registerServiceWorker();
     render();
-    setInterval(renderTimers, 30_000);
+    setInterval(() => {
+      renderTimers();
+      renderCoach();
+    }, 30_000);
   }
 
 
@@ -105,6 +120,7 @@
       dashboardSubtitle: $('#dashboardSubtitle'),
       heroSmokeBtn: $('#heroSmokeBtn'),
       heroTaskBtn: $('#heroTaskBtn'),
+      heroCoachBtn: $('#heroCoachBtn'),
       totalPoints: $('#totalPoints'),
       levelLabel: $('#levelLabel'),
       levelProgress: $('#levelProgress'),
@@ -155,7 +171,14 @@
       importInput: $('#importInput'),
       resetBtn: $('#resetBtn'),
       sqlPreview: $('#sqlPreview'),
-      copySqlBtn: $('#copySqlBtn')
+      copySqlBtn: $('#copySqlBtn'),
+      coachUrgeLevel: $('#coachUrgeLevel'),
+      coachTrigger: $('#coachTrigger'),
+      coachRiskBadge: $('#coachRiskBadge'),
+      coachChallengeCard: $('#coachChallengeCard'),
+      coachResult: $('#coachResult'),
+      coachConfidence: $('#coachConfidence'),
+      coachPlanGrid: $('#coachPlanGrid')
     });
   }
 
@@ -168,6 +191,7 @@
     els.navButtons.forEach(btn => btn.addEventListener('click', () => showScreen(btn.dataset.target)));
     els.heroSmokeBtn.addEventListener('click', () => recordCigarette());
     els.heroTaskBtn.addEventListener('click', () => showScreen('tasks'));
+    if (els.heroCoachBtn) els.heroCoachBtn.addEventListener('click', () => showScreen('coach'));
     els.recordSmokeBtn.addEventListener('click', () => recordCigarette());
     els.alcoholTodayBtn.addEventListener('click', () => toggleAlcoholToday());
     els.trendMetricSelect.addEventListener('change', () => {
@@ -200,6 +224,8 @@
     els.importInput.addEventListener('change', importJson);
     els.resetBtn.addEventListener('click', resetDemo);
     if (els.copySqlBtn) els.copySqlBtn.addEventListener('click', copySql);
+    if (els.coachUrgeLevel) els.coachUrgeLevel.addEventListener('change', updateCoachCheckIn);
+    if (els.coachTrigger) els.coachTrigger.addEventListener('change', updateCoachCheckIn);
 
     document.addEventListener('click', event => {
       const actionEl = event.target.closest('[data-action]');
@@ -219,6 +245,10 @@
       if (action === 'delete-smoke') deleteSmoke(id);
       if (action === 'rotate-craving-tip') rotateSmokingTip();
       if (action === 'log-meditation') logMeditationTechnique(id);
+      if (action === 'open-coach') showScreen('coach');
+      if (action === 'start-coach-delay') startCoachDelay();
+      if (action === 'coach-breath-reset') coachBreathReset();
+      if (action === 'coach-record-smoke') coachRecordSmoke();
       if (action === 'select-day') {
         selectedCalendarDate = actionEl.dataset.day;
         renderCalendar();
@@ -336,6 +366,7 @@
       renderCalendar();
       renderDayDetails();
     }
+    if (screen === 'coach') renderCoach();
   }
 
   function render() {
@@ -345,6 +376,7 @@
     renderMeditation();
     renderHabits();
     renderTasks();
+    renderCoach();
     renderCalendar();
     renderDayDetails();
     renderSyncStatus();
@@ -643,6 +675,175 @@
   function rotateSmokingTip() {
     activeSmokingTipIndex = (activeSmokingTipIndex + 1) % SMOKING_TIPS.length;
     renderSmokingTip();
+  }
+
+
+
+  function loadCoachSession() {
+    try {
+      const raw = localStorage.getItem(COACH_SESSION_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      return {
+        urgeLevel: Math.max(1, Math.min(5, Number(parsed.urgeLevel || 3))),
+        trigger: COACH_TRIGGER_META[parsed.trigger] ? parsed.trigger : 'stress',
+        delayUntil: Number(parsed.delayUntil || 0),
+        delayStartedAt: Number(parsed.delayStartedAt || 0)
+      };
+    } catch {
+      return { urgeLevel: 3, trigger: 'stress', delayUntil: 0, delayStartedAt: 0 };
+    }
+  }
+
+  function saveCoachSession() {
+    localStorage.setItem(COACH_SESSION_KEY, JSON.stringify(coachSession));
+  }
+
+  function updateCoachCheckIn() {
+    coachSession.urgeLevel = Math.max(1, Math.min(5, Number(els.coachUrgeLevel?.value || 3)));
+    coachSession.trigger = COACH_TRIGGER_META[els.coachTrigger?.value] ? els.coachTrigger.value : 'stress';
+    saveCoachSession();
+    renderCoach();
+  }
+
+  function buildCoachInsight() {
+    const now = new Date();
+    const todayKey = toDateKey(now);
+    const last = getLastCigarette();
+    const pauseMinutes = last ? Math.max(0, Math.floor((Date.now() - new Date(last.smoked_at).getTime()) / 60000)) : null;
+    const todayCount = cigarettesOnDate(todayKey).length;
+    const last7Keys = daysBack(7);
+    const cigarettes7 = state.cigarettes.filter(c => last7Keys.includes(toDateKey(c.smoked_at))).length;
+    const avgPerDay = cigarettes7 ? cigarettes7 / 7 : 0;
+    const alcoholToday = Boolean(alcoholForDate(todayKey)?.consumed);
+    const trigger = COACH_TRIGGER_META[coachSession.trigger] || COACH_TRIGGER_META.stress;
+    const urge = Math.max(1, Math.min(5, Number(coachSession.urgeLevel || 3)));
+    const bestPause = bestPauseMinutes();
+    const hour = now.getHours();
+    const activeDelay = coachSession.delayUntil && coachSession.delayUntil > Date.now();
+    const delayDone = coachSession.delayUntil && coachSession.delayUntil <= Date.now() && Date.now() - coachSession.delayUntil < 90 * 60 * 1000;
+
+    let risk = 18 + urge * 11;
+    if (pauseMinutes == null) risk -= 6;
+    else if (pauseMinutes < 10) risk += 20;
+    else if (pauseMinutes < 30) risk += 16;
+    else if (pauseMinutes < 60) risk += 8;
+    else if (pauseMinutes >= 120) risk -= 8;
+    if (alcoholToday || coachSession.trigger === 'alcohol') risk += 15;
+    if (todayCount > Math.max(1, Math.ceil(avgPerDay))) risk += 10;
+    if (hour >= 21 || hour < 7) risk += 6;
+    if (activeDelay) risk -= 10;
+    risk = Math.max(8, Math.min(95, Math.round(risk)));
+
+    let label = 'Stabil';
+    let tone = 'low';
+    if (risk >= 72) { label = 'Akut'; tone = 'high'; }
+    else if (risk >= 48) { label = 'Wachsam'; tone = 'mid'; }
+
+    let headline = 'Baue die nächste Pause aus.';
+    let coachLine = 'Du bist nicht im Autopilot. Du brauchst jetzt keine perfekte Entscheidung, nur den nächsten kleinen besseren Schritt.';
+    if (!last) {
+      headline = 'Starte deinen Referenzpunkt.';
+      coachLine = 'Noch kein Rauchverlauf vorhanden. Tracke ehrlich, dann kann der Coach immer genauer werden.';
+    } else if (activeDelay) {
+      headline = 'Nicht verhandeln – halten.';
+      coachLine = 'Der wichtigste Teil läuft bereits: Du hast eine Pause aktiv verlängert. Bleib bei der Challenge bis der Timer durch ist.';
+    } else if (pauseMinutes < 30) {
+      headline = 'Nicht nachlegen. Erst 10 Minuten Puffer.';
+      coachLine = 'Der Abstand ist noch kurz. Genau hier entstehen Ketten. Ziel ist nicht Verzicht für immer, sondern diese eine Lücke zu vergrössern.';
+    } else if (alcoholToday || coachSession.trigger === 'alcohol') {
+      headline = 'Alkohol-Trigger entschärfen.';
+      coachLine = 'Heute zählt Umgebung stärker als Willenskraft. Verlasse kurz die Rauch-Situation und trink Wasser, bevor du neu entscheidest.';
+    } else if (urge >= 4) {
+      headline = 'Drang ist hoch – Welle reiten.';
+      coachLine = 'Ein starkes Craving ist unangenehm, aber nicht automatisch ein Auftrag. Beobachte es ein paar Minuten und verschiebe die Entscheidung.';
+    } else if (todayCount > Math.max(1, Math.ceil(avgPerDay))) {
+      headline = 'Heute nicht eskalieren.';
+      coachLine = 'Du liegst über deinem aktuellen Muster. Ein einziges Delay kann den Tag wieder stabilisieren.';
+    }
+
+    const nextGoal = getNextPauseGoalMinutes(pauseMinutes);
+    const microGoal = pauseMinutes == null ? 'Erste Pause setzen' : `${formatDuration(pauseMinutes)} → ${formatDuration(nextGoal)}`;
+    const comparison = avgPerDay ? `${todayCount} heute · Ø ${avgPerDay.toFixed(1).replace('.', ',')}/Tag` : `${todayCount} heute · noch wenig Historie`;
+    const bestText = bestPause ? formatDuration(bestPause) : '–';
+    const stage = pauseMinutes == null ? 'Start' : pauseMinutes < 30 ? 'Akutphase' : pauseMinutes < 120 ? 'Aufbau' : 'Highscore-Jagd';
+
+    const steps = [
+      { icon: '⏱️', title: 'Delay', body: activeDelay ? 'Timer fertig laufen lassen. Keine neue Diskussion starten.' : '10-Minuten-Challenge starten und erst danach neu entscheiden.' },
+      { icon: '💧', title: 'Reset', body: 'Ein Glas Wasser und mindestens 20 Schritte weg vom Trigger-Ort.' },
+      { icon: trigger.icon, title: trigger.label, body: trigger.action }
+    ];
+
+    return { risk, label, tone, headline, coachLine, microGoal, comparison, bestText, stage, pauseMinutes, todayCount, avgPerDay, alcoholToday, trigger, urge, activeDelay, delayDone, steps };
+  }
+
+  function renderCoach() {
+    if (!els.coachResult || !els.coachPlanGrid) return;
+    if (els.coachUrgeLevel && String(els.coachUrgeLevel.value) !== String(coachSession.urgeLevel)) els.coachUrgeLevel.value = String(coachSession.urgeLevel);
+    if (els.coachTrigger && els.coachTrigger.value !== coachSession.trigger) els.coachTrigger.value = coachSession.trigger;
+
+    const insight = buildCoachInsight();
+    const badgeClass = insight.tone === 'high' ? 'danger-badge' : insight.tone === 'mid' ? 'warning-badge' : 'muted';
+    if (els.coachRiskBadge) {
+      els.coachRiskBadge.className = `badge ${badgeClass}`;
+      els.coachRiskBadge.textContent = insight.label;
+    }
+    if (els.coachConfidence) {
+      els.coachConfidence.className = `coach-confidence-score is-${insight.tone}`;
+      els.coachConfidence.innerHTML = `<strong>${insight.risk}%</strong><span>Risiko</span>`;
+    }
+
+    els.coachChallengeCard.innerHTML = renderCoachChallenge(insight);
+    els.coachResult.innerHTML = `
+      <div class="coach-result-topline"><small>${escapeHtml(insight.stage)} · Drang ${insight.urge}/5</small><h3>${escapeHtml(insight.headline)}</h3><p>${escapeHtml(insight.coachLine)}</p></div>
+      <div class="coach-tip-grid">
+        <article><span>Mini-Ziel</span><strong>${escapeHtml(insight.microGoal)}</strong></article>
+        <article><span>Heute</span><strong>${escapeHtml(insight.comparison)}</strong></article>
+        <article><span>Beste Pause</span><strong>${escapeHtml(insight.bestText)}</strong></article>
+        <article><span>Kontext</span><strong>${insight.alcoholToday ? 'Alkohol aktiv' : escapeHtml(insight.trigger.label)}</strong></article>
+      </div>
+      <div class="coach-callout"><b>Coach sagt:</b> ${escapeHtml(insight.steps[0].body)} <em>${escapeHtml(insight.microGoal)}</em></div>`;
+    els.coachPlanGrid.innerHTML = insight.steps.map((step, index) => `<article class="coach-plan-card"><span>${step.icon}</span><small>Schritt ${index + 1}</small><strong>${escapeHtml(step.title)}</strong><p>${escapeHtml(step.body)}</p></article>`).join('');
+  }
+
+  function renderCoachChallenge(insight) {
+    const remainingMs = Math.max(0, Number(coachSession.delayUntil || 0) - Date.now());
+    if (remainingMs > 0) {
+      const remainingMinutes = Math.ceil(remainingMs / 60000);
+      return `<div><p class="eyebrow">Challenge läuft</p><h3>${remainingMinutes} Min. halten</h3><span>Bis ${new Date(coachSession.delayUntil).toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' })}. Danach bewusst neu entscheiden – nicht automatisch.</span></div><div class="coach-challenge-meter"><i style="width:${coachChallengeProgress()}%"></i></div>`;
+    }
+    if (insight.delayDone) {
+      return `<div><p class="eyebrow">Geschafft</p><h3>Delay abgeschlossen.</h3><span>Du hast den Autopilot unterbrochen. Jetzt neu wählen: noch 10 Minuten, Atem-Reset oder bewusst loggen.</span></div>`;
+    }
+    return `<div><p class="eyebrow">Mini-Challenge</p><h3>Nur die nächste Lücke zählt.</h3><span>Starte einen 10-Minuten-Puffer. Der Coach merkt sich den Timer auch nach einem Refresh.</span></div>`;
+  }
+
+  function coachChallengeProgress() {
+    const start = Number(coachSession.delayStartedAt || 0);
+    const end = Number(coachSession.delayUntil || 0);
+    if (!start || !end || end <= start) return 0;
+    return Math.max(4, Math.min(100, ((Date.now() - start) / (end - start)) * 100));
+  }
+
+  function startCoachDelay() {
+    const now = Date.now();
+    coachSession.delayStartedAt = now;
+    coachSession.delayUntil = now + 10 * 60 * 1000;
+    saveCoachSession();
+    renderCoach();
+    toast('10-Minuten-Challenge gestartet');
+  }
+
+  function coachBreathReset() {
+    logMeditationTechnique('urge-surf');
+    startCoachDelay();
+  }
+
+  function coachRecordSmoke() {
+    recordCigarette();
+    coachSession.delayUntil = 0;
+    coachSession.delayStartedAt = 0;
+    saveCoachSession();
+    showScreen('smoking');
   }
 
   function renderHabits() {

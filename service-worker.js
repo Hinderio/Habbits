@@ -1,5 +1,5 @@
-const CACHE_NAME = 'habitflow-v6-smoke-edit-polish';
-const ASSETS = ['./', './index.html', './style.css', './app.js', './supabase-config.js', './supabase-schema.js', './manifest.json'];
+const CACHE_NAME = 'habitflow-v7-clean-coach';
+const ASSETS = ['./', './index.html', './style.css', './app.js', './supabase-config.js', './supabase-schema.js', './manifest.json', './icons/coach-clean.svg'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
   self.skipWaiting();
