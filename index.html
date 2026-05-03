@@ -38,6 +38,7 @@
               <button id="heroSmokeBtn" class="pill primary large" type="button">+ Zigarette erfassen</button>
               <button id="heroTaskBtn" class="pill secondary large" type="button">Aufgabe anlegen</button>
               <button id="heroCoachBtn" class="pill secondary large" type="button">Coach öffnen</button>
+              <button id="heroEmergencyBtn" class="pill primary large emergency-pill" type="button">Ich will jetzt rauchen</button>
             </div>
           </div>
           <div class="level-orb" aria-label="Gamification Level">
@@ -53,6 +54,7 @@
           <article class="metric-card glass"><span class="metric-label">Zigaretten heute</span><strong id="todayCigarettes">0</strong><small>kurz erfasst</small></article>
           <article class="metric-card glass"><span class="metric-label">Habits heute</span><strong id="avgPause7">0</strong><small>geloggte Einträge</small></article>
           <article class="metric-card glass"><span class="metric-label">Aufgaben</span><strong id="openTasksCount">0</strong><small>offen</small></article>
+          <article class="metric-card glass daily-score-card"><span class="metric-label">Tages-Score</span><strong id="dailyScore">0</strong><small id="dailyScoreHint">heute</small></article>
         </div>
 
         <div class="grid two-columns">
@@ -77,6 +79,7 @@
         <section class="panel glass">
           <div class="panel-head"><div><p class="eyebrow">Insights</p><h3>Automatisch berechnet</h3></div></div>
           <div id="insightsGrid" class="insights-grid"></div>
+          <div id="weeklyReview" class="weekly-review-card"></div>
         </section>
       </section>
 
@@ -101,10 +104,15 @@
                 <button class="mini-btn" type="button" data-action="open-coach">Zum Coach</button>
               </div>
             </div>
+            <button id="emergencyCravingBtn" class="emergency-craving-button" type="button">
+              <span>Akut</span>
+              Ich will jetzt rauchen
+            </button>
             <button id="recordSmokeBtn" class="smoke-button" type="button">
               <span>+</span>
               Zigarette
             </button>
+            <div id="triggerCaptureCard" class="trigger-capture-card hidden"></div>
             <div class="alcohol-quick-card alcohol-quick-card--simple">
               <div class="alcohol-copy">
                 <p class="eyebrow">Alkohol</p>
@@ -212,7 +220,8 @@
             <label><span>Typ</span><select name="type"><option value="number">Anzahl / Zahl</option><option value="weight">Gewicht</option><option value="boolean">Ja/Nein</option><option value="duration">Dauer</option></select></label>
             <label><span>Einheit</span><input name="unit" placeholder="kg, Stück, Minuten" /></label>
             <label><span>Zielrichtung</span><select name="direction"><option value="increase">mehr ist besser</option><option value="decrease">weniger ist besser</option></select></label>
-            <label><span>Tagesziel</span><input name="target" type="number" step="0.01" placeholder="optional" /></label>
+            <label><span>Zielwert</span><input name="target" type="number" step="0.01" placeholder="optional" /></label>
+            <label><span>Zielperiode</span><select name="target_period"><option value="day">Tagesziel</option><option value="week">Wochenziel</option><option value="month">Monatsziel</option></select></label>
             <label><span>Icon-Stil</span><input name="icon" value="number" placeholder="number, water, sport" /></label>
             <div class="form-actions full"><button id="habitSubmitBtn" class="pill primary" type="submit">Habit erstellen</button><button id="cancelHabitEditBtn" class="pill secondary hidden" type="button">Abbrechen</button></div>
           </form>

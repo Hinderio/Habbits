@@ -19,6 +19,7 @@ create table if not exists public.habit_definitions (
   unit text,
   direction text not null default 'increase' check (direction in ('increase','decrease')),
   target numeric(12,2),
+  target_period text not null default 'day' check (target_period in ('day','week','month')),
   icon text default '✨',
   color text default '#4ad7d1',
   is_archived boolean not null default false,
@@ -80,6 +81,10 @@ create table if not exists public.tasks (
   updated_at timestamptz not null default now()
 );
 
+
+alter table public.habit_definitions add column if not exists target_period text not null default 'day';
+alter table public.habit_definitions drop constraint if exists habit_definitions_target_period_check;
+alter table public.habit_definitions add constraint habit_definitions_target_period_check check (target_period in ('day','week','month'));
 
 alter table public.habit_definitions drop constraint if exists habit_definitions_type_check;
 alter table public.habit_definitions add constraint habit_definitions_type_check check (type in ('number','weight','boolean','duration'));
