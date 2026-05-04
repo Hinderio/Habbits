@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v19-ios-input-stability';
+const CACHE_NAME = 'habitflow-v20-habit-meditation-logs';
 const ASSETS = ['./', './index.html', './style.css', './app.js', './supabase-config.js', './supabase-schema.js', './manifest.json', './icons/coach-clean.svg'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));

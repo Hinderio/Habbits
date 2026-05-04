@@ -177,6 +177,8 @@
   let coachSession = loadCoachSession();
   let editingSmokeId = null;
   let editingHabitId = null;
+  let editingHabitEntryId = null;
+  let expandedMeditationHabitId = null;
   let editingTaskId = null;
   let renderQueued = false;
   let deferredRenderPending = false;
@@ -391,6 +393,11 @@
       if (action === 'delete-habit') deleteHabit(id);
       if (action === 'archive-habit') archiveHabit(id);
       if (action === 'log-habit') logHabit(id);
+      if (action === 'toggle-meditation-techniques') toggleMeditationTechniques(id);
+      if (action === 'edit-habit-entry') editHabitEntry(id);
+      if (action === 'save-habit-entry') saveHabitEntry(id);
+      if (action === 'cancel-habit-entry-edit') cancelHabitEntryEdit();
+      if (action === 'delete-habit-entry') deleteHabitEntry(id);
       if (action === 'edit-smoke') editSmoke(id);
       if (action === 'save-smoke-time') saveSmokeTime(id);
       if (action === 'cancel-smoke-edit') cancelSmokeEdit();
@@ -461,7 +468,7 @@
     const created = nowIso();
     return {
       version: 1,
-      habits: [],
+      habits: [createSystemMeditationHabit(created)],
       habitEntries: [],
       cigarettes: [],
       alcoholLogs: [],
@@ -504,6 +511,7 @@
     next.partyPlans = Array.isArray(next.partyPlans) ? next.partyPlans : [];
     next.recoverySessions = Array.isArray(next.recoverySessions) ? next.recoverySessions : [];
     next.deletedRemoteIds = normalizeDeletedRemoteIds(next.deletedRemoteIds);
+    ensureSystemHabits(next);
     dedupeStateCollections(next);
     return next;
   }
@@ -528,6 +536,17 @@
   }
 
   function ensureSystemHabits(nextState = state) {
+    const meditationHabit = nextState.habits.find(h => h.system_key === 'meditation' || String(h.name || '').trim().toLowerCase() === 'meditation');
+    if (!meditationHabit) {
+      nextState.habits.push(createSystemMeditationHabit());
+      return nextState;
+    }
+    meditationHabit.system_key = 'meditation';
+    meditationHabit.type = meditationHabit.type || 'duration';
+    meditationHabit.unit = meditationHabit.unit || 'Min.';
+    meditationHabit.icon = meditationHabit.icon || '🧘';
+    meditationHabit.target_period = normalizeHabitTargetPeriod(meditationHabit.target_period || 'day');
+    meditationHabit.is_archived = false;
     return nextState;
   }
 
@@ -1375,7 +1394,8 @@
   }
 
   function isSystemMeditationHabit(habit) {
-    return Boolean(habit && (habit.system_key === 'meditation' || habit.id === DEFAULT_HABIT_IDS.meditation));
+    const name = String(habit?.name || '').trim().toLowerCase();
+    return Boolean(habit && (habit.system_key === 'meditation' || habit.id === DEFAULT_HABIT_IDS.meditation || name === 'meditation'));
   }
 
   function renderSmoking() {
@@ -2041,16 +2061,17 @@ function renderSmokingTip(last = getLastCigarette()) {
         : todayEntries.reduce((sum, e) => sum + Number(e.value_num || 0), 0);
       const progress = habit.target ? Math.min(100, Math.abs(Number(periodValue.value || 0) / Number(habit.target)) * 100) : 0;
       const unit = habit.unit || defaultUnit(habit.type);
-      const control = habit.type === 'boolean'
-        ? `<button class="pill primary" type="button" data-action="log-habit" data-id="${habit.id}">${todayValue ? 'Heute erledigt' : 'Heute abhaken'}</button>`
-        : `<div class="habit-log-row"><input id="habit-input-${habit.id}" type="number" step="0.01" placeholder="Wert ${unit ? `(${escapeHtml(unit)})` : ''}" /><button class="pill primary" type="button" data-action="log-habit" data-id="${habit.id}">Loggen</button></div>`;
       const isSystemHabit = isSystemMeditationHabit(habit);
-      const habitActions = `
-        <button class="mini-btn" type="button" data-action="edit-habit" data-id="${habit.id}">Bearbeiten</button>
-        <button class="mini-btn" type="button" data-action="archive-habit" data-id="${habit.id}">Archiv</button>
-        ${isSystemHabit ? '<span class="badge muted">System</span>' : `<button class="mini-btn danger" type="button" data-action="delete-habit" data-id="${habit.id}">Löschen</button>`}`;
+      const control = isSystemHabit
+        ? renderMeditationHabitControl(habit)
+        : habit.type === 'boolean'
+          ? `<button class="pill primary" type="button" data-action="log-habit" data-id="${habit.id}">${todayValue ? 'Heute erledigt' : 'Heute abhaken'}</button>`
+          : `<div class="habit-log-row"><input id="habit-input-${habit.id}" type="number" step="0.01" placeholder="Wert ${unit ? `(${escapeHtml(unit)})` : ''}" /><button class="pill primary" type="button" data-action="log-habit" data-id="${habit.id}">Loggen</button></div>`;
+      const habitActions = isSystemHabit
+        ? `<button class="mini-btn" type="button" data-action="edit-habit" data-id="${habit.id}">Bearbeiten</button><span class="badge muted">System</span>`
+        : `<button class="mini-btn" type="button" data-action="edit-habit" data-id="${habit.id}">Bearbeiten</button><button class="mini-btn" type="button" data-action="archive-habit" data-id="${habit.id}">Archiv</button><button class="mini-btn danger" type="button" data-action="delete-habit" data-id="${habit.id}">Löschen</button>`;
 
-      return `<article class="habit-card ${editingHabitId === habit.id ? 'is-editing' : ''}">
+      return `<article class="habit-card ${isSystemHabit ? 'is-meditation-habit' : ''} ${editingHabitId === habit.id ? 'is-editing' : ''}">
         <div class="habit-card-head">
           <div class="habit-title"><span class="habit-icon">${svgIcon(habitIconKey(habit), 'ui-icon')}</span><div><strong>${escapeHtml(habit.name)}</strong><small>${habit.typeLabel || typeLabel(habit.type)}${unit ? ` · ${escapeHtml(unit)}` : ''} · ${escapeHtml(periodMeta.label)}</small></div></div>
           <div class="list-actions">${habitActions}</div>
@@ -2058,6 +2079,7 @@ function renderSmokingTip(last = getLastCigarette()) {
         ${control}
         <div class="meta" style="margin-top:10px">Heute: <strong>${formatHabitValue(habit, todayValue)}</strong>${habit.target ? ` · ${periodMeta.short}: <strong>${escapeHtml(periodValue.label)}</strong> / Ziel ${habit.target} ${escapeHtml(unit)}` : ''}</div>
         ${habit.target ? `<div class="habit-progress-track"><i style="width:${progress}%"></i></div>` : ''}
+        ${renderHabitEntryList(habit)}
       </article>`;
     }).join('');
 
@@ -2078,361 +2100,160 @@ function renderSmokingTip(last = getLastCigarette()) {
     }
   }
 
+  function renderMeditationHabitControl(habit) {
+    const expanded = expandedMeditationHabitId === habit.id;
+    const sessionsToday = entriesForHabitOnDate(habit.id, toDateKey(new Date()));
+    const minutesToday = sum(sessionsToday.map(entry => Number(entry.value_num || 0)));
+    const latest = state.habitEntries
+      .filter(entry => entry.habit_id === habit.id)
+      .sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at))[0];
+    return `<div class="meditation-habit-control">
+      <div class="meditation-habit-copy">
+        <strong>${minutesToday ? `${minutesToday} Min. heute` : 'Atemtechnik auswählen'}</strong>
+        <span>${latest ? `Zuletzt: ${escapeHtml(latest.note || 'Meditation')} · ${formatDateTime(latest.occurred_at)}` : 'Techniken öffnen und als normalen Habit-Log speichern.'}</span>
+      </div>
+      <button class="pill primary" type="button" data-action="toggle-meditation-techniques" data-id="${habit.id}">${expanded ? 'Techniken ausblenden' : 'Techniken anzeigen'}</button>
+    </div>
+    ${expanded ? renderMeditationTechniqueDrawer() : ''}`;
+  }
 
-  function renderTasks() {
-    const tasks = [...state.tasks].map(normalizeTask).sort(compareTasks);
-    const totalOpen = tasks.filter(isActiveTask).length;
-    if (els.openTasksCount) els.openTasksCount.textContent = totalOpen;
-    if (!tasks.length) {
-      els.tasksList.innerHTML = '<div class="empty-state">Keine Aufgaben vorhanden. Neue Aufgaben erscheinen hier direkt als Kanban-Karte.</div>';
-      return;
-    }
-
-    els.tasksList.innerHTML = `<div class="kanban-board" aria-label="Aufgaben Kanban Board">
-      ${TASK_COLUMNS.map(column => {
-        const columnTasks = tasks.filter(task => (task.status || 'open') === column.status);
-        return `<section class="kanban-column" data-task-drop data-status="${column.status}">
-          <div class="kanban-column-head">
-            <div><strong>${escapeHtml(column.title)}</strong><small>${escapeHtml(column.hint)}</small></div>
-            <span class="badge muted">${columnTasks.length}</span>
-          </div>
-          <div class="kanban-cards">
-            ${columnTasks.length ? columnTasks.map(renderTaskCard).join('') : `<div class="kanban-empty">Hierhin ziehen</div>`}
-          </div>
-        </section>`;
-      }).join('')}
+  function renderMeditationTechniqueDrawer() {
+    return `<div class="meditation-technique-drawer">
+      ${MEDITATION_TECHNIQUES.map(technique => `<article class="meditation-card compact">
+        <div>
+          <strong>${escapeHtml(technique.title)}</strong>
+          <p>${escapeHtml(technique.subtitle)}</p>
+          <small>${escapeHtml(technique.pattern)} · ${technique.minutes} Min.</small>
+        </div>
+        <button class="mini-btn primary" type="button" data-action="log-meditation" data-id="${escapeHtml(technique.key)}">Loggen</button>
+      </article>`).join('')}
     </div>`;
   }
 
-  function renderTaskCard(task) {
-    const status = task.status || 'open';
-    const priority = normalizeTaskPriority(task.priority);
-    const priorityMeta = taskPriorityMeta(priority);
-    const statusLabel = TASK_COLUMNS.find(column => column.status === status)?.title || 'Offen';
-    const isOverdue = task.due_at && status !== 'done' && new Date(task.due_at).getTime() < Date.now();
-    const primaryAction = status === 'open'
-      ? `<button class="mini-btn primary" type="button" data-action="move-task" data-status="in_progress" data-id="${task.id}">In Bearbeitung</button>`
-      : status === 'in_progress'
-        ? `<button class="mini-btn primary" type="button" data-action="move-task" data-status="done" data-id="${task.id}">Erledigt</button>`
-        : status === 'done'
-          ? `<button class="mini-btn" type="button" data-action="move-task" data-status="in_progress" data-id="${task.id}">Zurück in Arbeit</button>`
-          : `<button class="mini-btn" type="button" data-action="move-task" data-status="open" data-id="${task.id}">Reaktivieren</button>`;
-    const archiveAction = status === 'archived'
-      ? ''
-      : `<button class="mini-btn" type="button" data-action="move-task" data-status="archived" data-id="${task.id}">Archiv</button>`;
-    return `<article class="kanban-card ${editingTaskId === task.id ? 'is-editing' : ''} ${isOverdue ? 'is-overdue' : ''}" draggable="true" data-task-card data-id="${task.id}">
-      <div class="kanban-card-top">
-        <span class="drag-handle" aria-hidden="true">⋮⋮</span>
-        <div class="task-badges">
-          <span class="badge muted ${taskPriorityClass(priority)}">${escapeHtml(priorityMeta.short)}</span>
-          <span class="badge ${status === 'done' ? '' : 'muted'}">${status === 'done' ? `+${Number(task.points || taskPoints(task))} Pkt.` : `+${taskPoints(task)} Pkt.`}</span>
-        </div>
+  function renderHabitEntryList(habit) {
+    const entries = state.habitEntries
+      .filter(entry => entry.habit_id === habit.id)
+      .sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at))
+      .slice(0, 5);
+    if (!entries.length) return `<div class="habit-entry-list is-empty"><span>Noch keine Logs für diesen Habit.</span></div>`;
+    return `<div class="habit-entry-list">
+      <div class="habit-entry-list-head"><span>${isSystemMeditationHabit(habit) ? 'Meditationslogs' : 'Letzte Logs'}</span><small>bearbeiten oder löschen</small></div>
+      ${entries.map(entry => renderHabitEntryCard(habit, entry)).join('')}
+    </div>`;
+  }
+
+  function renderHabitEntryCard(habit, entry) {
+    const isEditing = editingHabitEntryId === entry.id;
+    if (isEditing) return renderHabitEntryEditCard(habit, entry);
+    const value = habit.type === 'boolean' ? Boolean(entry.value_bool) : Number(entry.value_num || 0);
+    const title = isSystemMeditationHabit(habit) ? (entry.note || 'Meditation') : formatHabitValue(habit, value);
+    const note = !isSystemMeditationHabit(habit) && entry.note ? ` · ${entry.note}` : '';
+    return `<article class="habit-entry-card">
+      <div class="habit-entry-main">
+        <strong>${escapeHtml(title)}</strong>
+        <span>${formatDateTime(entry.occurred_at)}${escapeHtml(note)}</span>
       </div>
-      <h4>${escapeHtml(task.title)}</h4>
-      <p class="meta">${escapeHtml(statusLabel)} · Aufwand ${task.effort}/5 · Priorität ${escapeHtml(priorityMeta.label)} · ${task.due_at ? `${isOverdue ? 'Überfällig' : 'Fällig'} ${formatDateTime(task.due_at)}` : 'ohne Fälligkeitsdatum'}${task.description ? `<br>${escapeHtml(task.description)}` : ''}</p>
       <div class="list-actions compact-actions">
-        ${primaryAction}
-        <button class="mini-btn" type="button" data-action="edit-task" data-id="${task.id}">Bearbeiten</button>
-        ${archiveAction}
-        <button class="mini-btn danger" type="button" data-action="delete-task" data-id="${task.id}">Löschen</button>
+        <button class="mini-btn" type="button" data-action="edit-habit-entry" data-id="${entry.id}">Bearbeiten</button>
+        <button class="mini-btn danger" type="button" data-action="delete-habit-entry" data-id="${entry.id}">Löschen</button>
       </div>
     </article>`;
   }
 
-  function renderCalendar() {
-    const year = calendarCursor.getFullYear();
-    const month = calendarCursor.getMonth();
-    els.calendarTitle.textContent = calendarCursor.toLocaleDateString('de-CH', { month: 'long', year: 'numeric' });
-
-    const first = new Date(year, month, 1);
-    const start = new Date(first);
-    const day = first.getDay() || 7;
-    start.setDate(first.getDate() - day + 1);
-
-    const cells = [];
-    for (let i = 0; i < 42; i++) {
-      const date = new Date(start);
-      date.setDate(start.getDate() + i);
-      const key = toDateKey(date);
-      const cigarettes = cigarettesOnDate(key).length;
-      const tasks = state.tasks.filter(t => toDateKey(t.due_at || t.completed_at || t.created_at) === key);
-      const alcohol = alcoholForDate(key)?.consumed;
-      const alcoholUnits = alcoholUnitsOnDate(key).length;
-      const points = calendarPointsOnDate(key);
-      const chips = [];
-      if (cigarettes) chips.push(`<span class="day-chip smoke">${cigarettes} Zig.</span>`);
-      if (tasks.length) chips.push(`<span class="day-chip task">${tasks.length} Task</span>`);
-      if (alcoholUnits) chips.push(`<span class="day-chip alcohol">${alcoholUnits} Alk.</span>`);
-      else if (alcohol) chips.push('<span class="day-chip alcohol">Alk.</span>');
-      cells.push(`<button class="calendar-day ${date.getMonth() !== month ? 'is-muted' : ''} ${key === toDateKey(new Date()) ? 'is-today' : ''} ${key === selectedCalendarDate ? 'is-selected' : ''}" type="button" data-action="select-day" data-day="${key}">
-        <span class="calendar-day-head"><strong>${date.getDate()}</strong>${points ? `<em class="day-points">${points > 0 ? '+' : ''}${points}</em>` : ''}</span>
-        <span class="day-chips">${chips.join('')}</span>
-      </button>`);
-    }
-    els.calendarGrid.innerHTML = cells.join('');
+  function renderHabitEntryEditCard(habit, entry) {
+    const [dateValue = '', timeValue = ''] = toDateTimeLocalValue(entry.occurred_at).split('T');
+    const valueInput = habit.type === 'boolean'
+      ? `<label><span>Status</span><select id="habit-entry-bool-${entry.id}"><option value="true" ${entry.value_bool ? 'selected' : ''}>Ja</option><option value="false" ${!entry.value_bool ? 'selected' : ''}>Nein</option></select></label>`
+      : `<label><span>Wert</span><input id="habit-entry-value-${entry.id}" type="number" step="0.01" value="${Number(entry.value_num || 0)}" /></label>`;
+    return `<article class="habit-entry-card is-editing">
+      <div class="habit-entry-edit-grid">
+        <label><span>Datum</span><input id="habit-entry-date-${entry.id}" type="date" value="${dateValue}" /></label>
+        <label><span>Zeit</span><input id="habit-entry-time-${entry.id}" type="time" value="${timeValue}" step="60" /></label>
+        ${valueInput}
+        <label class="habit-entry-note"><span>Notiz</span><input id="habit-entry-note-${entry.id}" type="text" value="${escapeHtml(entry.note || '')}" placeholder="optional" /></label>
+      </div>
+      <div class="habit-entry-edit-actions">
+        <button class="mini-btn primary" type="button" data-action="save-habit-entry" data-id="${entry.id}">Speichern</button>
+        <button class="mini-btn" type="button" data-action="cancel-habit-entry-edit" data-id="${entry.id}">Abbrechen</button>
+      </div>
+    </article>`;
   }
 
-  function renderDayDetails() {
-    const key = selectedCalendarDate;
-    els.selectedDateTitle.textContent = new Date(`${key}T12:00:00`).toLocaleDateString('de-CH', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
-    const details = [];
-    const cigarettes = cigarettesOnDate(key);
-    if (cigarettes.length) details.push(`<article class="list-card"><div><h4>Rauchen</h4><p class="meta">${cigarettes.length} Zigarette(n), ${sum(cigarettes.map(c => c.points))} Punkte</p></div></article>`);
-    const alcohol = alcoholForDate(key);
-    const alcoholUnits = alcoholUnitsOnDate(key);
-    if (alcoholUnits.length) details.push(`<article class="list-card"><div><h4>Alkohol</h4><p class="meta">${alcoholUnits.length} Einheit(en): ${escapeHtml(alcoholUnits.map(unit => alcoholTypeLabel(unit.drink_type)).join(', '))}</p></div></article>`);
-    else if (alcohol) details.push(`<article class="list-card"><div><h4>Alkohol</h4><p class="meta">${alcohol.consumed ? 'Ja' : 'Nein'} getrackt</p></div></article>`);
-    const tasks = state.tasks.filter(t => toDateKey(t.due_at || t.completed_at || t.created_at) === key);
-    tasks.forEach(t => details.push(`<article class="list-card ${t.status === 'done' ? 'done' : ''}"><div><h4>${escapeHtml(t.title)}</h4><p class="meta">${escapeHtml(TASK_COLUMNS.find(column => column.status === (t.status || 'open'))?.title || 'Offen')} · ${escapeHtml(taskPriorityMeta(t).label)} · Aufwand ${t.effort}/5</p></div></article>`));
-    els.dayDetails.innerHTML = details.length ? details.join('') : '<div class="empty-state">Für diesen Tag gibt es noch keine Einträge.</div>';
+  function toggleMeditationTechniques(habitId) {
+    const habit = state.habits.find(h => h.id === habitId);
+    if (!isSystemMeditationHabit(habit)) return;
+    expandedMeditationHabitId = expandedMeditationHabitId === habit.id ? null : habit.id;
+    renderHabits();
   }
 
-  function renderCharts() {
-    if (!window.Chart) return;
-    const keys = daysBack(14);
-    const labels = keys.map(k => new Date(`${k}T12:00:00`).toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' }));
-    const trend = getTrendMetricConfig(keys);
-    const pointsData = keys.map(k => pointsOnDate(k));
-    if (els.trendChartTitle) els.trendChartTitle.textContent = trend.title;
-    charts.trend = drawChart(charts.trend, els.trendChart, labels, trend.data, trend.label, { beginAtZero: trend.beginAtZero });
-    charts.points = drawChart(charts.points, els.pointsChart, labels, pointsData, 'Punkte', { beginAtZero: true });
+  function editHabitEntry(id) {
+    if (!state.habitEntries.some(entry => entry.id === id)) return;
+    editingHabitEntryId = id;
+    renderHabits();
   }
 
-  function drawChart(existing, canvas, labels, data, label, options = {}) {
-    if (!canvas) return existing;
-    if (existing) {
-      existing.data.labels = labels;
-      existing.data.datasets[0].data = data;
-      existing.data.datasets[0].label = label;
-      existing.options.scales.y.beginAtZero = options.beginAtZero !== false;
-      existing.update();
-      return existing;
-    }
-    return new Chart(canvas, {
-      type: 'line',
-      data: { labels, datasets: [{ label, data, tension: .42, fill: true, spanGaps: true, pointRadius: 3 }] },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: {
-          x: { grid: { display: false }, ticks: { color: getComputedStyle(document.documentElement).getPropertyValue('--muted') || '#9db0c3' } },
-          y: { beginAtZero: options.beginAtZero !== false, ticks: { precision: 0, color: getComputedStyle(document.documentElement).getPropertyValue('--muted') || '#9db0c3' }, grid: { color: 'rgba(255,255,255,.07)' } }
-        }
-      }
-    });
+  function cancelHabitEntryEdit() {
+    editingHabitEntryId = null;
+    renderHabits();
   }
 
-  function recordCigarette() {
-    const smokedAt = nowIso();
-    const last = getLastCigarette();
-    const interval = last ? Math.max(0, Math.round((new Date(smokedAt) - new Date(last.smoked_at)) / 60000)) : null;
-    const scoringContext = smokingScoringContext(last, { smoked_at: smokedAt });
-    const points = cigarettePoints(interval, scoringContext);
-    const todayAlcohol = Boolean(alcoholForDate(toDateKey(new Date()))?.consumed || alcoholUnitsOnDate(toDateKey(new Date())).length);
-    const entry = { id: uid(), smoked_at: smokedAt, interval_minutes: interval, alcohol_context: todayAlcohol, points, note: '', created_at: smokedAt, updated_at: smokedAt, synced: false };
-    state.cigarettes.push(entry);
-    pendingTriggerSmokeId = entry.id;
-    addPoints('cigarette', entry.id, points, cigarettePointReason(interval, scoringContext), smokedAt);
-    saveState();
-    toast(points > 0 ? `Zigarette erfasst · +${points} Punkte` : `Zigarette erfasst · ${points} Punkte`);
-    syncWithSupabase({ silent: true });
-  }
-
-  function startEmergencyCravingFlow() {
-    coachSession.urgeLevel = 5;
-    coachSession.trigger = alcoholUnitsOnDate(toDateKey(new Date())).length ? 'alcohol' : 'stress';
-    saveCoachSession();
-    openCoachModal();
-    toast('Akutmodus geöffnet · erst 90 Sekunden Reset, dann neu entscheiden.');
-  }
-
-  function renderTriggerCapture() {
-    if (!els.triggerCaptureCard) return;
-    const cigarette = pendingTriggerSmokeId ? state.cigarettes.find(c => c.id === pendingTriggerSmokeId) : null;
-    if (!cigarette) {
-      els.triggerCaptureCard.classList.add('hidden');
-      els.triggerCaptureCard.innerHTML = '';
-      return;
-    }
-    const options = ['stress', 'coffee', 'alcohol', 'boredom', 'reward', 'social', 'meal', 'tasks', 'habits'];
-    els.triggerCaptureCard.classList.remove('hidden');
-    els.triggerCaptureCard.innerHTML = `<div><p class="eyebrow">Trigger-Analyse</p><h4>Was war gerade der Auslöser?</h4><p class="subtle">Ein Tap reicht. Das verbessert Muster-Erkennung und Coach-Empfehlungen.</p></div><div class="trigger-chip-grid">${options.map(key => `<button class="trigger-chip" type="button" data-action="save-smoke-trigger" data-id="${cigarette.id}" data-trigger="${key}">${svgIcon(COACH_TRIGGER_META[key].icon, 'ui-icon')}<span>${escapeHtml(COACH_TRIGGER_META[key].label)}</span></button>`).join('')}</div><button class="mini-btn" type="button" data-action="dismiss-smoke-trigger">Später</button>`;
-  }
-
-  function saveSmokeTrigger(id, triggerKey) {
-    const cigarette = state.cigarettes.find(c => c.id === id);
-    const meta = COACH_TRIGGER_META[triggerKey];
-    if (!cigarette || !meta) return;
-    cigarette.note = `trigger:${triggerKey}`;
-    cigarette.updated_at = nowIso();
-    cigarette.synced = false;
-    pendingTriggerSmokeId = null;
-    saveState();
-    toast(`Trigger gespeichert: ${meta.label}`);
-    syncWithSupabase({ silent: true, pullFirst: false });
-  }
-
-  function dismissSmokeTrigger() {
-    pendingTriggerSmokeId = null;
-    renderTriggerCapture();
-  }
-
-  function editSmoke(id) {
-    if (!state.cigarettes.some(c => c.id === id)) return;
-    editingSmokeId = id;
-    renderSmoking();
-  }
-
-  function cancelSmokeEdit() {
-    editingSmokeId = null;
-    renderSmoking();
-  }
-
-  function saveSmokeTime(id) {
-    const cigarette = state.cigarettes.find(c => c.id === id);
-    const dateInput = $(`#smoke-date-${cssEscape(id)}`);
-    const timeInput = $(`#smoke-time-${cssEscape(id)}`);
-    const legacyInput = $(`#smoke-input-${cssEscape(id)}`);
-    if (!cigarette || (!legacyInput && (!dateInput || !timeInput))) return;
-
-    const nextDate = legacyInput
-      ? new Date(legacyInput.value)
-      : localDateTimeFromParts(dateInput.value, timeInput.value);
+  function saveHabitEntry(id) {
+    const entry = state.habitEntries.find(item => item.id === id);
+    if (!entry) return;
+    const habit = state.habits.find(item => item.id === entry.habit_id);
+    if (!habit) return;
+    const dateValue = $(`#habit-entry-date-${cssEscape(id)}`)?.value || toDateKey(entry.occurred_at);
+    const timeValue = $(`#habit-entry-time-${cssEscape(id)}`)?.value || (toDateTimeLocalValue(entry.occurred_at).split('T')[1] || '00:00');
+    const nextDate = new Date(`${dateValue}T${timeValue || '00:00'}`);
     if (Number.isNaN(nextDate.getTime())) {
-      toast('Bitte Datum und Zeit vollständig eintragen.');
-      return;
-    }
-    if (nextDate.getTime() > Date.now() + 60_000) {
-      toast('Der Zeitpunkt darf nicht in der Zukunft liegen.');
+      toast('Bitte gültiges Datum und Zeit eintragen.');
       return;
     }
 
-    const nextIso = nextDate.toISOString();
-    cigarette.smoked_at = nextIso;
-    cigarette.updated_at = nowIso();
-    cigarette.synced = false;
-    editingSmokeId = null;
-    recalculateSmokeIntervals({ markUpdated: true });
+    if (habit.type === 'boolean') {
+      entry.value_bool = $(`#habit-entry-bool-${cssEscape(id)}`)?.value !== 'false';
+      entry.value_num = null;
+    } else {
+      const value = Number($(`#habit-entry-value-${cssEscape(id)}`)?.value || 0);
+      if (!Number.isFinite(value) || value === 0) {
+        toast('Bitte einen gültigen Wert eintragen.');
+        return;
+      }
+      entry.value_num = value;
+      entry.value_bool = null;
+    }
+
+    entry.note = String($(`#habit-entry-note-${cssEscape(id)}`)?.value || '').trim();
+    entry.occurred_at = nextDate.toISOString();
+    entry.updated_at = nowIso();
+    entry.synced = false;
+    const points = habitPoints(habit, entry);
+    const reason = isSystemMeditationHabit(habit) && entry.note ? `${entry.note} abgeschlossen` : `${habit.name} geloggt`;
+    addPoints('habit', entry.id, points, reason, entry.occurred_at);
+    editingHabitEntryId = null;
     saveState();
-    toast('Zigaretten-Zeitpunkt aktualisiert');
+    toast('Habit-Log aktualisiert');
     syncWithSupabase({ silent: true, pullFirst: false });
   }
 
-  async function deleteSmoke(id) {
-    const index = state.cigarettes.findIndex(c => c.id === id);
-    if (index === -1) return;
-    const removedLedgerIds = state.pointsLedger.filter(p => p.source_type === 'cigarette' && p.source_id === id).map(p => p.id);
-    state.cigarettes.splice(index, 1);
-    state.pointsLedger = state.pointsLedger.filter(p => !(p.source_type === 'cigarette' && p.source_id === id));
-    markRemoteDeleted('cigarette_events', id);
+  async function deleteHabitEntry(id) {
+    const entry = state.habitEntries.find(item => item.id === id);
+    if (!entry) return;
+    const habit = state.habits.find(item => item.id === entry.habit_id);
+    const label = habit ? habit.name : 'Habit';
+    if (!confirm(`Log für „${label}“ wirklich löschen?`)) return;
+    const removedLedgerIds = state.pointsLedger
+      .filter(point => point.source_type === 'habit' && point.source_id === id)
+      .map(point => point.id);
+    state.habitEntries = state.habitEntries.filter(item => item.id !== id);
+    state.pointsLedger = state.pointsLedger.filter(point => !(point.source_type === 'habit' && point.source_id === id));
+    markRemoteDeleted('habit_entries', id);
     markRemoteDeletedMany('points_ledger', removedLedgerIds);
-    if (editingSmokeId === id) editingSmokeId = null;
-    recalculateSmokeIntervals({ markUpdated: true });
+    if (editingHabitEntryId === id) editingHabitEntryId = null;
     saveState();
-    await deleteRemoteById('cigarette_events', id);
     await deleteRemoteByIds('points_ledger', removedLedgerIds);
-    toast('Zigaretten-Eintrag entfernt');
-    syncWithSupabase({ silent: true, pullFirst: false });
-  }
-
-  function recalculateSmokeIntervals({ markUpdated = false } = {}) {
-    const touchedAt = nowIso();
-    let changed = false;
-    const sorted = [...state.cigarettes].sort((a, b) => new Date(a.smoked_at) - new Date(b.smoked_at));
-    sorted.forEach((c, index) => {
-      const prev = sorted[index - 1] || null;
-      const interval = prev ? Math.max(0, Math.round((new Date(c.smoked_at) - new Date(prev.smoked_at)) / 60000)) : null;
-      const scoringContext = smokingScoringContext(prev, c);
-      const points = cigarettePoints(interval, scoringContext);
-      const hasChanged = c.interval_minutes !== interval || Number(c.points || 0) !== points;
-      if (hasChanged) {
-        c.interval_minutes = interval;
-        c.points = points;
-        changed = true;
-      }
-      if (markUpdated && hasChanged) {
-        c.updated_at = touchedAt;
-        c.synced = false;
-      }
-      if (addPoints('cigarette', c.id, c.points, cigarettePointReason(interval, scoringContext), c.smoked_at)) changed = true;
-    });
-    return changed;
-  }
-
-  function alcoholTypeLabel(type) {
-    return ALCOHOL_TYPES[type] || ALCOHOL_TYPES.other;
-  }
-
-  function alcoholUnitsOnDate(key) {
-    return state.alcoholUnits.filter(unit => toDateKey(unit.occurred_at) === key);
-  }
-
-  function ensureAlcoholDayLog(key, note = '') {
-    const existing = alcoholForDate(key);
-    if (existing) {
-      existing.consumed = true;
-      existing.note = existing.note || note || '';
-      existing.updated_at = nowIso();
-      existing.synced = false;
-      return existing;
-    }
-    const created = nowIso();
-    const log = { id: uid(), log_date: key, consumed: true, note, created_at: created, updated_at: created, synced: false };
-    state.alcoholLogs.push(log);
-    return log;
-  }
-
-  function recordAlcoholUnit() {
-    const occurredAt = nowIso();
-    const drinkType = els.alcoholTypeSelect?.value || 'beer';
-    const label = alcoholTypeLabel(drinkType);
-    state.alcoholUnits.push({
-      id: uid(),
-      occurred_at: occurredAt,
-      drink_type: drinkType,
-      note: '',
-      created_at: occurredAt,
-      updated_at: occurredAt,
-      synced: false
-    });
-    ensureAlcoholDayLog(toDateKey(new Date()));
-    dedupeAlcoholLogs(state);
-    saveState();
-    toast(`${label} erfasst · 1 Einheit`);
-    syncWithSupabase({ silent: true });
-  }
-
-  async function deleteAlcoholUnit(id) {
-    const unit = state.alcoholUnits.find(a => a.id === id);
-    if (!unit) return;
-    if (!confirm('Alkohol-Einheit wirklich löschen?')) return;
-    state.alcoholUnits = state.alcoholUnits.filter(a => a.id !== id);
-    markRemoteDeleted('alcohol_events', id);
-    const key = toDateKey(unit.occurred_at);
-    const remainingUnitsToday = alcoholUnitsOnDate(key);
-    const dayLog = alcoholForDate(key);
-    if (dayLog && !remainingUnitsToday.length) {
-      dayLog.consumed = false;
-      dayLog.updated_at = nowIso();
-      dayLog.synced = false;
-    }
-    saveState();
-    await deleteRemoteById('alcohol_events', id);
-    toast('Alkohol-Einheit gelöscht');
-    syncWithSupabase({ silent: true, pullFirst: false });
-  }
-
-
-async function deleteAlcoholLog(id) {
-    const log = state.alcoholLogs.find(a => a.id === id);
-    if (!log) return;
-    if (!confirm('Alkohol-Eintrag wirklich löschen?')) return;
-    state.alcoholLogs = state.alcoholLogs.filter(a => a.id !== id);
-    markRemoteDeleted('alcohol_logs', id);
-    saveState();
-    await deleteRemoteById('alcohol_logs', id);
-    toast('Alkohol-Eintrag gelöscht');
+    await deleteRemoteById('habit_entries', id);
+    toast('Habit-Log gelöscht');
     syncWithSupabase({ silent: true, pullFirst: false });
   }
 
@@ -2516,6 +2337,10 @@ async function deleteAlcoholLog(id) {
   function archiveHabit(id) {
     const habit = state.habits.find(h => h.id === id);
     if (!habit) return;
+    if (isSystemMeditationHabit(habit)) {
+      toast('Meditation bleibt als System-Habit aktiv.');
+      return;
+    }
     habit.is_archived = true;
     habit.updated_at = nowIso();
     if (editingHabitId === id) resetHabitFormMode({ clearForm: true });
