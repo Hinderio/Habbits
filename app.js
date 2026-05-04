@@ -254,6 +254,10 @@
       recordAlcoholUnitBtn: $('#recordAlcoholUnitBtn'),
       alcoholUnitHistory: $('#alcoholUnitHistory'),
       smokeHistory: $('#smokeHistory'),
+      cigaretteHeatmapVisual: $('#cigaretteHeatmapVisual'),
+      cigaretteHeatmapBadge: $('#cigaretteHeatmapBadge'),
+      smokeIntervalVisual: $('#smokeIntervalVisual'),
+      smokeIntervalQuality: $('#smokeIntervalQuality'),
       lastSmokePoints: $('#lastSmokePoints'),
       cravingTipTitle: $('#cravingTipTitle'),
       cravingTipBody: $('#cravingTipBody'),
@@ -1380,6 +1384,7 @@
     renderSmokingTip(last);
     renderTriggerCapture();
     renderAlcoholUnitHistory();
+    renderSmokingAnalytics();
 
     const items = [...state.cigarettes]
       .sort((a, b) => new Date(b.smoked_at) - new Date(a.smoked_at))
@@ -1481,6 +1486,250 @@ function renderSmokingTip(last = getLastCigarette()) {
   function rotateSmokingTip() {
     activeSmokingTipIndex = (activeSmokingTipIndex + 1) % SMOKING_TIPS.length;
     renderSmokingTip();
+  }
+
+
+  function renderSmokingAnalytics() {
+    renderSmokingHourHeatmap();
+    renderSmokeIntervalVisual();
+  }
+
+  function renderSmokingHourHeatmap(days = 28) {
+    if (!els.cigaretteHeatmapVisual) return;
+    if (els.cigaretteHeatmapBadge) els.cigaretteHeatmapBadge.textContent = `${days} Tage`;
+
+    const keys = new Set(daysBack(days));
+    const rows = [1, 2, 3, 4, 5, 6, 0].map(day => ({ day, total: 0, cells: Array.from({ length: 24 }, () => 0) }));
+    const relevant = state.cigarettes.filter(c => keys.has(toDateKey(c.smoked_at)));
+
+    if (!relevant.length) {
+      els.cigaretteHeatmapVisual.innerHTML = '<div class="empty-state">Noch keine Zigaretten im Analysefenster. Sobald Verlauf vorhanden ist, zeigt diese Heatmap dein Wochenmuster nach Wochentag und Stunde.</div>';
+      return;
+    }
+
+    const dayIndexMap = new Map(rows.map((row, index) => [row.day, index]));
+    const hourTotals = Array.from({ length: 24 }, () => 0);
+
+    relevant.forEach(entry => {
+      const date = new Date(entry.smoked_at);
+      if (Number.isNaN(date.getTime())) return;
+      const dayIndex = dayIndexMap.get(date.getDay());
+      const hour = date.getHours();
+      if (dayIndex == null || hour < 0 || hour > 23) return;
+      rows[dayIndex].cells[hour] += 1;
+      rows[dayIndex].total += 1;
+      hourTotals[hour] += 1;
+    });
+
+    const flatCounts = rows.flatMap(row => row.cells);
+    const maxValue = Math.max(...flatCounts, 1);
+    const peakEntry = rows
+      .flatMap(row => row.cells.map((count, hour) => ({ count, hour, day: row.day })))
+      .sort((a, b) => b.count - a.count)[0] || { count: 0, hour: 0, day: 1 };
+    const dominantDay = [...rows].sort((a, b) => b.total - a.total)[0] || rows[0];
+    const dominantHour = hourTotals
+      .map((count, hour) => ({ count, hour }))
+      .sort((a, b) => b.count - a.count)[0] || { count: 0, hour: 0 };
+    const eveningShare = relevant.length
+      ? Math.round((relevant.filter(entry => {
+          const hour = new Date(entry.smoked_at).getHours();
+          return hour >= 17 && hour < 22;
+        }).length / relevant.length) * 100)
+      : 0;
+    const topCellShare = relevant.length
+      ? Math.round((rows
+          .flatMap(row => row.cells)
+          .filter(Boolean)
+          .sort((a, b) => b - a)
+          .slice(0, 3)
+          .reduce((total, value) => total + value, 0) / relevant.length) * 100)
+      : 0;
+
+    const summary = [
+      {
+        label: 'Peak-Zeitfenster',
+        value: `${smokingWeekdayLabel(peakEntry.day, { short: true })} · ${String(peakEntry.hour).padStart(2, '0')}:00`,
+        detail: `${peakEntry.count} Zigarette${peakEntry.count === 1 ? '' : 'n'} im stärksten Cluster.`
+      },
+      {
+        label: 'Dominanter Tag',
+        value: smokingWeekdayLabel(dominantDay.day),
+        detail: `${dominantDay.total} Einträge im ${days}-Tage-Fenster.`
+      },
+      {
+        label: 'Konzentration',
+        value: `${topCellShare}%`,
+        detail: `Top-3 Fenster bündeln ${topCellShare}% des Konsums.`
+      },
+      {
+        label: 'Abendanteil',
+        value: `${eveningShare}%`,
+        detail: `17–22 Uhr · stärkste Einzelstunde ${String(dominantHour.hour).padStart(2, '0')}:00.`
+      }
+    ];
+
+    const header = Array.from({ length: 24 }, (_, hour) => `<div class="smoke-hour-label ${hour % 3 === 0 ? 'is-major' : ''}"><span>${String(hour).padStart(2, '0')}</span></div>`).join('');
+    const body = rows.map(row => `
+      <div class="smoke-hour-row-label"><strong>${smokingWeekdayLabel(row.day, { short: true })}</strong><small>${row.total}×</small></div>
+      ${row.cells.map((count, hour) => {
+        const level = count ? Math.max(1, Math.ceil((count / maxValue) * 5)) : 0;
+        const title = `${smokingWeekdayLabel(row.day)}, ${String(hour).padStart(2, '0')}:00–${String((hour + 1) % 24).padStart(2, '0')}:00 · ${count} Zigarette${count === 1 ? '' : 'n'}`;
+        return `<span class="smoke-hour-cell level-${level}" title="${escapeHtml(title)}"><em>${count || ''}</em></span>`;
+      }).join('')}
+    `).join('');
+
+    els.cigaretteHeatmapVisual.innerHTML = `
+      <div class="smoking-visual-summary-grid smoking-visual-summary-grid--compact">
+        ${summary.map(item => `<article><small>${escapeHtml(item.label)}</small><strong>${escapeHtml(item.value)}</strong><p>${escapeHtml(item.detail)}</p></article>`).join('')}
+      </div>
+      <div class="smoke-hour-grid-wrap">
+        <div class="smoke-hour-grid" style="--smoke-hour-columns:24">
+          <div class="smoke-hour-corner">Tag</div>
+          ${header}
+          ${body}
+        </div>
+      </div>
+      <div class="smoke-hour-legend"><span>wenig</span>${[1, 2, 3, 4, 5].map(level => `<i class="level-${level}"></i>`).join('')}<span>hoch</span></div>
+      <p class="meta">Pattern Readout: Dein Konsum häuft sich aktuell am stärksten um <strong>${String(dominantHour.hour).padStart(2, '0')}:00 Uhr</strong> und zeigt <strong>${eveningShare}% Abendanteil</strong>. Nutze Peak-Fenster für Coach-Delays oder Mini-Interventionen.</p>
+    `;
+  }
+
+  function renderSmokeIntervalVisual(days = 28) {
+    if (!els.smokeIntervalVisual) return;
+    const keys = new Set(daysBack(days));
+    const snapshots = smokeIntervalSnapshots().filter(item => keys.has(toDateKey(item.cigarette.smoked_at)) && Number.isFinite(Number(item.interval_minutes)));
+
+    if (!snapshots.length) {
+      if (els.smokeIntervalQuality) els.smokeIntervalQuality.textContent = 'lernt noch';
+      els.smokeIntervalVisual.innerHTML = '<div class="empty-state">Für die Intervall-Analyse braucht es mindestens zwei Einträge im Verlauf. Danach zeigt die App Median, Verteilung und den Verlauf deiner Pausen.</div>';
+      return;
+    }
+
+    const durations = snapshots.map(item => Number(item.interval_minutes));
+    const sortedDurations = [...durations].sort((a, b) => a - b);
+    const median = percentile(sortedDurations, 0.5);
+    const p75 = percentile(sortedDurations, 0.75);
+    const recoveryShare = Math.round((durations.filter(value => value >= 120).length / durations.length) * 100);
+    const compressionShare = Math.round((durations.filter(value => value < 60).length / durations.length) * 100);
+    const daytimeBest = snapshots.filter(item => item.isDaytimeInterval).map(item => Number(item.interval_minutes));
+    const bestDaytime = daytimeBest.length ? Math.max(...daytimeBest) : null;
+    const recent = snapshots.slice(-20);
+    const cap = Math.max(240, percentile(sortedDurations, 0.9));
+    const halfIndex = Math.floor(recent.length / 2);
+    const earlierSample = recent.slice(0, halfIndex);
+    const laterSample = recent.slice(halfIndex);
+    const earlyAverage = average(earlierSample.map(item => item.interval_minutes));
+    const lateAverage = average(laterSample.map(item => item.interval_minutes));
+    const delta = earlierSample.length && laterSample.length ? Math.round(lateAverage - earlyAverage) : 0;
+    const bucketConfig = [
+      { label: '<30 Min.', detail: 'sehr dicht', test: value => value < 30, tone: 'is-critical' },
+      { label: '30–59 Min.', detail: 'verdichtet', test: value => value >= 30 && value < 60, tone: 'is-warning' },
+      { label: '1–2 Std.', detail: 'neutral', test: value => value >= 60 && value < 120, tone: 'is-neutral' },
+      { label: '2–4 Std.', detail: 'stark', test: value => value >= 120 && value < 240, tone: 'is-positive' },
+      { label: '4+ Std.', detail: 'Recovery', test: value => value >= 240, tone: 'is-recovery' }
+    ];
+    const qualityLabel = median >= 150 ? 'stark' : recoveryShare >= 40 ? 'stabil' : compressionShare >= 55 ? 'verdichtet' : 'in Bewegung';
+    if (els.smokeIntervalQuality) els.smokeIntervalQuality.textContent = qualityLabel;
+
+    const summary = [
+      {
+        label: 'Median-Pause',
+        value: compactDuration(median),
+        detail: 'Robuster Mittelpunkt deiner Pausen.'
+      },
+      {
+        label: '75. Perzentil',
+        value: compactDuration(p75),
+        detail: 'Diesen Abstand erreichst du in deinem oberen Viertel.'
+      },
+      {
+        label: 'Recovery-Quote',
+        value: `${recoveryShare}%`,
+        detail: 'Intervalle ≥ 2 Stunden im Analysefenster.'
+      },
+      {
+        label: 'Beste Tagespause',
+        value: bestDaytime ? compactDuration(bestDaytime) : '–',
+        detail: bestDaytime ? 'Längste Pause ohne Nacht-Effekt.' : 'Noch keine Tagespause vorhanden.'
+      }
+    ];
+
+    const skyline = recent.map(item => {
+      const minutes = Number(item.interval_minutes);
+      const height = Math.max(14, Math.round((Math.min(minutes, cap) / cap) * 100));
+      return `<div class="interval-skyline-bar ${smokeIntervalTone(minutes)}" title="${escapeHtml(`${formatDateTime(item.cigarette.smoked_at)} · Pause ${formatDuration(minutes)}`)}"><i style="height:${height}%"></i></div>`;
+    }).join('');
+
+    const buckets = bucketConfig.map(bucket => {
+      const count = durations.filter(bucket.test).length;
+      const share = Math.round((count / durations.length) * 100);
+      return `<article class="interval-bucket-card ${bucket.tone}">
+        <div class="interval-bucket-copy"><small>${escapeHtml(bucket.label)}</small><strong>${share}%</strong><p>${count}/${durations.length} Intervalle · ${escapeHtml(bucket.detail)}</p></div>
+        <div class="interval-bucket-track"><i style="width:${Math.max(8, share)}%"></i></div>
+      </article>`;
+    }).join('');
+
+    const trendText = recent.length < 4
+      ? 'Noch wenig Intervallhistorie – sammle ein paar weitere Einträge für belastbare Trend-Aussagen.'
+      : delta >= 10
+        ? `Die neueren Pausen sind im Schnitt ${compactDuration(delta)} länger als die älteren im sichtbaren Verlauf.`
+        : delta <= -10
+          ? `Die neueren Pausen sind im Schnitt ${compactDuration(Math.abs(delta))} kürzer – hier lohnt sich ein gezielter Coach-Einsatz.`
+          : 'Die letzten Pausen liegen stabil nahe am bisherigen Niveau.';
+
+    els.smokeIntervalVisual.innerHTML = `
+      <div class="smoking-visual-summary-grid">
+        ${summary.map(item => `<article><small>${escapeHtml(item.label)}</small><strong>${escapeHtml(item.value)}</strong><p>${escapeHtml(item.detail)}</p></article>`).join('')}
+      </div>
+      <div class="interval-skyline-card">
+        <div class="interval-skyline-head"><strong>Sequenz der letzten ${recent.length} Pausen</strong><small>höher = längerer Abstand</small></div>
+        <div class="interval-skyline">${skyline}</div>
+        <div class="interval-skyline-axis"><span>älter</span><span>neu</span></div>
+      </div>
+      <div class="interval-bucket-grid">${buckets}</div>
+      <div class="coach-callout interval-callout"><b>Signal:</b> ${escapeHtml(trendText)}</div>
+    `;
+  }
+
+  function smokingWeekdayLabel(day, { short = false } = {}) {
+    const labels = {
+      0: { short: 'So', long: 'Sonntag' },
+      1: { short: 'Mo', long: 'Montag' },
+      2: { short: 'Di', long: 'Dienstag' },
+      3: { short: 'Mi', long: 'Mittwoch' },
+      4: { short: 'Do', long: 'Donnerstag' },
+      5: { short: 'Fr', long: 'Freitag' },
+      6: { short: 'Sa', long: 'Samstag' }
+    };
+    const entry = labels[day] || labels[1];
+    return short ? entry.short : entry.long;
+  }
+
+  function percentile(values = [], ratio = 0.5) {
+    if (!values.length) return 0;
+    const index = Math.max(0, Math.min(values.length - 1, (values.length - 1) * ratio));
+    const lower = Math.floor(index);
+    const upper = Math.ceil(index);
+    if (lower === upper) return values[lower];
+    return values[lower] + (values[upper] - values[lower]) * (index - lower);
+  }
+
+  function compactDuration(minutes) {
+    const totalMinutes = Math.max(0, Math.round(Number(minutes) || 0));
+    if (totalMinutes >= 60) {
+      const hours = Math.floor(totalMinutes / 60);
+      const rest = totalMinutes % 60;
+      return rest ? `${hours}h ${rest}m` : `${hours}h`;
+    }
+    return `${totalMinutes}m`;
+  }
+
+  function smokeIntervalTone(minutes) {
+    if (minutes < 30) return 'is-critical';
+    if (minutes < 60) return 'is-warning';
+    if (minutes < 120) return 'is-neutral';
+    if (minutes < 240) return 'is-positive';
+    return 'is-recovery';
   }
 
 
