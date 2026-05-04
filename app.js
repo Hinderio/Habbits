@@ -1144,6 +1144,18 @@
     return { active: Boolean(existing), id: existing?.id, recommended, badge: recommended ? 'empfohlen' : 'bereit', reason: alcoholToday ? 'Alkohol-Kontext erkannt' : weekendEvening ? 'Wochenend-Abendfenster' : 'optional', title: existing ? 'Plan ist aktiv' : recommended ? 'Risikomoment vorher entscheiden' : 'Bereit für Ausgehen, Alkohol oder Wochenende', body: existing ? 'Du hast den Abend bewusst vorgeplant. Ziel ist nicht perfekt sein, sondern Autopilot reduzieren.' : 'Lege vor Alkohol, Ausgang oder sozialem Druck fest, was deine erste kleine Schutzhandlung ist.', steps: ['erste Zigarette verzögern', 'Wasser zwischen Drinks', 'Trigger-Ort kurz verlassen'] };
   }
 
+  function startEmergencyCravingFlow() {
+    const meditationHabit = getMeditationHabit({ createIfMissing: true });
+    if (meditationHabit) expandedMeditationHabitId = meditationHabit.id;
+    showScreen('habits');
+    saveState();
+    requestAnimationFrame(() => {
+      const card = document.querySelector('.habit-card.is-meditation-habit');
+      card?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    });
+    toast('Craving-Welle in Meditation geöffnet');
+  }
+
   function handleNextBestAction(action) {
     if (action === 'emergency') return startEmergencyCravingFlow();
     if (action === 'recovery') return startRecoveryMode();
