@@ -179,6 +179,8 @@
   let editingHabitId = null;
   let editingHabitEntryId = null;
   let expandedMeditationHabitId = null;
+  let historyModalMode = null;
+  let historyModalHabitId = null;
   let editingTaskId = null;
   let renderQueued = false;
   let deferredRenderPending = false;
@@ -256,6 +258,9 @@
       recordAlcoholUnitBtn: $('#recordAlcoholUnitBtn'),
       alcoholUnitHistory: $('#alcoholUnitHistory'),
       smokeHistory: $('#smokeHistory'),
+      historyModal: $('#historyModal'),
+      historyModalCloseBtn: $('#historyModalCloseBtn'),
+      historyModalContent: $('#historyModalContent'),
       cigaretteHeatmapVisual: $('#cigaretteHeatmapVisual'),
       cigaretteHeatmapBadge: $('#cigaretteHeatmapBadge'),
       smokeIntervalVisual: $('#smokeIntervalVisual'),
@@ -331,6 +336,12 @@
     if (els.heroCoachBtn) els.heroCoachBtn.addEventListener('click', openCoachModal);
     if (els.heroEmergencyBtn) els.heroEmergencyBtn.addEventListener('click', startEmergencyCravingFlow);
     if (els.coachCloseBtn) els.coachCloseBtn.addEventListener('click', closeCoachModal);
+    if (els.historyModalCloseBtn) els.historyModalCloseBtn.addEventListener('click', closeHistoryModal);
+    if (els.historyModal) {
+      els.historyModal.addEventListener('click', event => {
+        if (event.target === els.historyModal) closeHistoryModal();
+      });
+    }
     if (els.coachModal) {
       els.coachModal.addEventListener('click', event => {
         if (event.target === els.coachModal) closeCoachModal();
@@ -393,6 +404,9 @@
       if (action === 'delete-habit') deleteHabit(id);
       if (action === 'archive-habit') archiveHabit(id);
       if (action === 'log-habit') logHabit(id);
+      if (action === 'open-smoke-history') openHistoryModal('smoke');
+      if (action === 'open-habit-logs') openHistoryModal('habit', id);
+      if (action === 'close-history-modal') closeHistoryModal();
       if (action === 'toggle-meditation-techniques') toggleMeditationTechniques(id);
       if (action === 'edit-habit-entry') editHabitEntry(id);
       if (action === 'save-habit-entry') saveHabitEntry(id);
@@ -426,7 +440,9 @@
     });
 
     document.addEventListener('keydown', event => {
-      if (event.key === 'Escape' && els.coachModal && !els.coachModal.classList.contains('hidden')) closeCoachModal();
+      if (event.key !== 'Escape') return;
+      if (els.historyModal && !els.historyModal.classList.contains('hidden')) return closeHistoryModal();
+      if (els.coachModal && !els.coachModal.classList.contains('hidden')) closeCoachModal();
     });
 
     document.addEventListener('dragstart', event => {
@@ -735,7 +751,7 @@
     const active = document.activeElement;
     if (!active || active === document.body) return false;
     if (!active.matches?.('input, textarea, select')) return false;
-    return Boolean(active.closest('#habitCards, #habitFormPanel, #taskFormPanel, #smokeHistory, #coachModal'));
+    return Boolean(active.closest('#habitCards, #habitFormPanel, #taskFormPanel, #smokeHistory, #historyModal, #coachModal'));
   }
 
   function flushDeferredRender() {
@@ -849,6 +865,7 @@
     renderCoach();
     renderCalendar();
     renderDayDetails();
+    renderHistoryModal();
     renderSyncStatus();
   }
 
@@ -857,7 +874,7 @@
     const pauseText = last ? formatDuration((Date.now() - new Date(last.smoked_at).getTime()) / 60000) : '–';
     els.currentPause.textContent = pauseText;
     els.smokePauseLive.textContent = pauseText;
-    els.smokePauseHint.textContent = last ? `Letzte Zigarette: ${formatDateTime(last.smoked_at)}` : 'Noch kein Eintrag vorhanden';
+    els.smokePauseHint.textContent = last ? 'Pause läuft seit letzter Erfassung · Verlauf per Button öffnen' : 'Noch kein Eintrag vorhanden';
   }
 
   function renderDashboard() {
@@ -1144,6 +1161,59 @@
     return { active: Boolean(existing), id: existing?.id, recommended, badge: recommended ? 'empfohlen' : 'bereit', reason: alcoholToday ? 'Alkohol-Kontext erkannt' : weekendEvening ? 'Wochenend-Abendfenster' : 'optional', title: existing ? 'Plan ist aktiv' : recommended ? 'Risikomoment vorher entscheiden' : 'Bereit für Ausgehen, Alkohol oder Wochenende', body: existing ? 'Du hast den Abend bewusst vorgeplant. Ziel ist nicht perfekt sein, sondern Autopilot reduzieren.' : 'Lege vor Alkohol, Ausgang oder sozialem Druck fest, was deine erste kleine Schutzhandlung ist.', steps: ['erste Zigarette verzögern', 'Wasser zwischen Drinks', 'Trigger-Ort kurz verlassen'] };
   }
 
+  function openHistoryModal(mode, id = null) {
+    if (!els.historyModal || !els.historyModalContent) return;
+    historyModalMode = mode;
+    historyModalHabitId = mode === 'habit' ? id : null;
+    if (mode !== 'smoke') editingSmokeId = null;
+    if (mode !== 'habit') editingHabitEntryId = null;
+    els.historyModal.classList.remove('hidden');
+    document.body.classList.add('modal-open');
+    renderHistoryModal();
+  }
+
+  function closeHistoryModal() {
+    if (!els.historyModal) return;
+    els.historyModal.classList.add('hidden');
+    historyModalMode = null;
+    historyModalHabitId = null;
+    editingSmokeId = null;
+    editingHabitEntryId = null;
+    document.body.classList.toggle('modal-open', Boolean(els.coachModal && !els.coachModal.classList.contains('hidden')));
+    renderSmoking();
+    renderHabits();
+  }
+
+  function renderHistoryModal() {
+    if (!els.historyModal || !els.historyModalContent || els.historyModal.classList.contains('hidden')) return;
+    if (historyModalMode === 'smoke') {
+      const count = state.cigarettes.length;
+      els.historyModalContent.innerHTML = `<div class="history-modal-head">
+        <p class="eyebrow">Konsum</p>
+        <h2 id="historyModalTitle">Zigarettenverlauf</h2>
+        <p class="subtle">Nur bei Bedarf geöffnet. Hier kannst du Einträge prüfen, bearbeiten oder löschen.</p>
+        <span class="badge muted">${count} Eintrag${count === 1 ? '' : 'e'}</span>
+      </div>
+      ${renderSmokeHistoryList()}`;
+      return;
+    }
+    if (historyModalMode === 'habit') {
+      const habit = state.habits.find(item => item.id === historyModalHabitId);
+      if (!habit) {
+        els.historyModalContent.innerHTML = `<div class="history-modal-head"><p class="eyebrow">Habits</p><h2 id="historyModalTitle">Logs</h2></div><div class="empty-state">Habit nicht gefunden.</div>`;
+        return;
+      }
+      const entries = state.habitEntries.filter(entry => entry.habit_id === habit.id);
+      els.historyModalContent.innerHTML = `<div class="history-modal-head">
+        <p class="eyebrow">Habits</p>
+        <h2 id="historyModalTitle">${escapeHtml(habit.name)} · Logs</h2>
+        <p class="subtle">Logs bleiben im Alltag ausgeblendet und können hier gezielt bearbeitet oder gelöscht werden.</p>
+        <span class="badge muted">${entries.length} Log${entries.length === 1 ? '' : 's'}</span>
+      </div>
+      ${renderHabitEntryModalList(habit)}`;
+    }
+  }
+
   function startEmergencyCravingFlow() {
     const meditationHabit = getMeditationHabit({ createIfMissing: true });
     if (meditationHabit) expandedMeditationHabitId = meditationHabit.id;
@@ -1412,22 +1482,36 @@
 
   function renderSmoking() {
     const last = getLastCigarette();
-    els.lastSmokePoints.textContent = `${last?.points || 0} Pkt.`;
+    const smokeCount = state.cigarettes.length;
+    if (els.lastSmokePoints) els.lastSmokePoints.textContent = `${smokeCount} Eintrag${smokeCount === 1 ? '' : 'e'}`;
     renderSmokingTip(last);
     renderTriggerCapture();
     renderAlcoholUnitHistory();
     renderSmokingAnalytics();
+    renderSmokeHistoryLauncher();
+  }
 
+  function renderSmokeHistoryLauncher() {
+    if (!els.smokeHistory) return;
+    const smokeCount = state.cigarettes.length;
+    const todayCount = cigarettesOnDate(toDateKey(new Date())).length;
+    els.smokeHistory.innerHTML = `<button class="history-open-card" type="button" data-action="open-smoke-history">
+      <span class="history-open-icon">${svgIcon('smoke', 'ui-icon')}</span>
+      <span class="history-open-copy"><strong>Zigarettenverlauf öffnen</strong><small>${smokeCount ? `${smokeCount} Eintrag${smokeCount === 1 ? '' : 'e'} · ${todayCount} heute` : 'Noch keine Einträge · Verlauf erscheint im Pop-up'}</small></span>
+      <span class="history-open-arrow">›</span>
+    </button>`;
+  }
+
+  function renderSmokeHistoryList() {
     const items = [...state.cigarettes]
       .sort((a, b) => new Date(b.smoked_at) - new Date(a.smoked_at))
       .slice(0, 25);
 
     if (!items.length) {
-      els.smokeHistory.innerHTML = '<div class="empty-state">Noch keine Zigarette erfasst. Der Button ist bewusst gross, damit Tracking in 1 Sekunde erledigt ist.</div>';
-      return;
+      return '<div class="empty-state">Noch keine Zigarette erfasst. Neue Einträge erscheinen hier und können später bearbeitet oder gelöscht werden.</div>';
     }
 
-    els.smokeHistory.innerHTML = items.map(c => {
+    return `<div class="stack-list tall smoke-history-modal-list">${items.map(c => {
       const cls = c.points < 0 ? 'danger-text' : c.points >= 40 ? 'positive-text' : '';
       const isEditing = editingSmokeId === c.id;
       const editBlock = isEditing
@@ -1455,69 +1539,7 @@
           <button class="mini-btn danger" type="button" data-action="delete-smoke" data-id="${c.id}">Löschen</button>
         </div>
       </article>`;
-    }).join('');
-  }
-
-
-  function renderAlcoholUnitHistory() {
-    if (!els.alcoholUnitHistory) return;
-    const units = [...state.alcoholUnits]
-      .sort((a, b) => sortDate(b.occurred_at || b.created_at) - sortDate(a.occurred_at || a.created_at))
-      .slice(0, 12);
-    if (!units.length) {
-      els.alcoholUnitHistory.innerHTML = '<div class="empty-state compact">Noch keine Alkohol-Einheit erfasst. Der + Button speichert einzelne Einheiten mit Zeitpunkt.</div>';
-      return;
-    }
-    els.alcoholUnitHistory.innerHTML = units.map(unit => `<article class="list-card compact">
-      <div class="list-card-main">
-        <h4>${escapeHtml(alcoholTypeLabel(unit.drink_type))}</h4>
-        <p class="meta">${formatDateTime(unit.occurred_at)}${unit.note ? ` · ${escapeHtml(unit.note)}` : ''}</p>
-      </div>
-      <div class="list-actions">
-        <span class="badge muted">1 Einheit</span>
-        <button class="mini-btn danger" type="button" data-action="delete-alcohol-unit" data-id="${unit.id}">Löschen</button>
-      </div>
-    </article>`).join('');
-  }
-
-
-function renderSmokingTip(last = getLastCigarette()) {
-    if (!els.cravingTipTitle || !els.cravingTipBody || !els.cravingTipMeta) return;
-    const pauseMinutes = last ? Math.max(0, Math.floor((Date.now() - new Date(last.smoked_at).getTime()) / 60000)) : null;
-    const contextIndex = getContextualSmokingTipIndex(pauseMinutes);
-    const tip = SMOKING_TIPS[(activeSmokingTipIndex || contextIndex) % SMOKING_TIPS.length] || SMOKING_TIPS[contextIndex];
-    const nextGoal = getNextPauseGoalMinutes(pauseMinutes);
-    const goalText = pauseMinutes == null
-      ? 'Erste Pause bewusst starten'
-      : `Mini-Ziel: ${formatDuration(nextGoal)}`;
-
-    els.cravingTipTitle.textContent = tip.title;
-    els.cravingTipBody.innerHTML = `${escapeHtml(tip.body)} <strong>${escapeHtml(goalText)}</strong>`;
-    els.cravingTipMeta.textContent = tip.meta;
-  }
-
-  function getContextualSmokingTipIndex(pauseMinutes) {
-    const alcoholToday = Boolean(alcoholForDate(toDateKey(new Date()))?.consumed);
-    if (alcoholToday) return 4;
-    if (pauseMinutes == null) return 0;
-    if (pauseMinutes < 10) return 2;
-    if (pauseMinutes < 30) return 0;
-    if (pauseMinutes < 90) return 1;
-    return 3;
-  }
-
-  function getNextPauseGoalMinutes(pauseMinutes) {
-    if (pauseMinutes == null) return 10;
-    if (pauseMinutes < 30) return Math.min(30, pauseMinutes + 10);
-    if (pauseMinutes < 60) return 60;
-    if (pauseMinutes < 120) return 120;
-    if (pauseMinutes < 240) return 240;
-    return pauseMinutes + 30;
-  }
-
-  function rotateSmokingTip() {
-    activeSmokingTipIndex = (activeSmokingTipIndex + 1) % SMOKING_TIPS.length;
-    renderSmokingTip();
+    }).join('')}</div>`;
   }
 
 
@@ -2145,14 +2167,29 @@ function renderSmokingTip(last = getLastCigarette()) {
   function renderHabitEntryList(habit) {
     const entries = state.habitEntries
       .filter(entry => entry.habit_id === habit.id)
+      .sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at));
+    const total = entries.length;
+    const todayCount = entries.filter(entry => toDateKey(entry.occurred_at) === toDateKey(new Date())).length;
+    const label = isSystemMeditationHabit(habit) ? 'Meditationslogs' : 'Habit-Logs';
+    return `<button class="habit-log-open-card" type="button" data-action="open-habit-logs" data-id="${habit.id}">
+      <span class="history-open-icon">${svgIcon('calendar', 'ui-icon')}</span>
+      <span class="history-open-copy"><strong>${label} anzeigen</strong><small>${total ? `${total} Log${total === 1 ? '' : 's'} · ${todayCount} heute` : 'Noch keine Logs · später hier öffnen'}</small></span>
+      <span class="history-open-arrow">›</span>
+    </button>`;
+  }
+
+  function renderHabitEntryModalList(habit) {
+    const entries = state.habitEntries
+      .filter(entry => entry.habit_id === habit.id)
       .sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at))
-      .slice(0, 5);
+      .slice(0, 50);
     if (!entries.length) return `<div class="habit-entry-list is-empty"><span>Noch keine Logs für diesen Habit.</span></div>`;
-    return `<div class="habit-entry-list">
+    return `<div class="habit-entry-list is-modal-list">
       <div class="habit-entry-list-head"><span>${isSystemMeditationHabit(habit) ? 'Meditationslogs' : 'Letzte Logs'}</span><small>bearbeiten oder löschen</small></div>
       ${entries.map(entry => renderHabitEntryCard(habit, entry)).join('')}
     </div>`;
   }
+
 
   function renderHabitEntryCard(habit, entry) {
     const isEditing = editingHabitEntryId === entry.id;
@@ -2202,11 +2239,13 @@ function renderSmokingTip(last = getLastCigarette()) {
     if (!state.habitEntries.some(entry => entry.id === id)) return;
     editingHabitEntryId = id;
     renderHabits();
+    renderHistoryModal();
   }
 
   function cancelHabitEntryEdit() {
     editingHabitEntryId = null;
     renderHabits();
+    renderHistoryModal();
   }
 
   function saveHabitEntry(id) {
@@ -2244,6 +2283,8 @@ function renderSmokingTip(last = getLastCigarette()) {
     addPoints('habit', entry.id, points, reason, entry.occurred_at);
     editingHabitEntryId = null;
     saveState();
+    renderHabits();
+    renderHistoryModal();
     toast('Habit-Log aktualisiert');
     syncWithSupabase({ silent: true, pullFirst: false });
   }
@@ -2263,6 +2304,8 @@ function renderSmokingTip(last = getLastCigarette()) {
     markRemoteDeletedMany('points_ledger', removedLedgerIds);
     if (editingHabitEntryId === id) editingHabitEntryId = null;
     saveState();
+    renderHabits();
+    renderHistoryModal();
     await deleteRemoteByIds('points_ledger', removedLedgerIds);
     await deleteRemoteById('habit_entries', id);
     toast('Habit-Log gelöscht');
@@ -2457,11 +2500,13 @@ function renderSmokingTip(last = getLastCigarette()) {
     if (!state.cigarettes.some(c => c.id === id)) return;
     editingSmokeId = id;
     renderSmoking();
+    renderHistoryModal();
   }
 
   function cancelSmokeEdit() {
     editingSmokeId = null;
     renderSmoking();
+    renderHistoryModal();
   }
 
   function saveSmokeTime(id) {
@@ -2490,6 +2535,7 @@ function renderSmokingTip(last = getLastCigarette()) {
     editingSmokeId = null;
     recalculateSmokeIntervals({ markUpdated: true });
     saveState();
+    renderHistoryModal();
     toast('Zigaretten-Zeitpunkt aktualisiert');
     syncWithSupabase({ silent: true, pullFirst: false });
   }
@@ -2505,6 +2551,7 @@ function renderSmokingTip(last = getLastCigarette()) {
     if (editingSmokeId === id) editingSmokeId = null;
     recalculateSmokeIntervals({ markUpdated: true });
     saveState();
+    renderHistoryModal();
     await deleteRemoteById('cigarette_events', id);
     await deleteRemoteByIds('points_ledger', removedLedgerIds);
     toast('Zigaretten-Eintrag entfernt');
@@ -2760,6 +2807,8 @@ async function deleteAlcoholLog(id) {
     markRemoteDeletedMany('points_ledger', removedLedgerIds);
     if (editingHabitId === id) resetHabitFormMode({ clearForm: true });
     saveState();
+    renderHabits();
+    renderHistoryModal();
     await deleteRemoteByIds('points_ledger', removedLedgerIds);
     await deleteRemoteByIds('habit_entries', removedEntryIds);
     await deleteRemoteById('habit_definitions', id);
@@ -2910,6 +2959,8 @@ async function deleteAlcoholLog(id) {
     markRemoteDeletedMany('points_ledger', removedLedgerIds);
     if (editingTaskId === id) resetTaskFormMode({ clearForm: true });
     saveState();
+    renderHabits();
+    renderHistoryModal();
     await deleteRemoteByIds('points_ledger', removedLedgerIds);
     await deleteRemoteById('tasks', id);
     toast('Aufgabe gelöscht');

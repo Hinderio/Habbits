@@ -131,10 +131,6 @@
                 <button class="mini-btn" type="button" data-action="open-coach">Zum Coach</button>
               </div>
             </div>
-            <button id="emergencyCravingBtn" class="emergency-craving-button" type="button">
-              <span>Akut</span>
-              Ich will jetzt rauchen
-            </button>
             <button id="recordSmokeBtn" class="smoke-button" type="button">
               <span>+</span>
               Zigarette
@@ -151,9 +147,9 @@
             </div>
           </section>
 
-          <section class="panel glass">
-            <div class="panel-head"><div><p class="eyebrow">Verlauf</p><h3>Letzte Zigaretten</h3></div><span id="lastSmokePoints" class="badge muted">0 Pkt.</span></div>
-            <div id="smokeHistory" class="stack-list tall"></div>
+          <section class="panel glass consumption-history-panel">
+            <div class="panel-head"><div><p class="eyebrow">Verlauf</p><h3>Konsum-Logs</h3></div><span id="lastSmokePoints" class="badge muted">0 Einträge</span></div>
+            <div id="smokeHistory" class="history-launch-area"></div>
             <div class="panel-head compact alcohol-history-head"><div><p class="eyebrow">Alkohol</p><h3>Einheiten-Verlauf</h3></div></div>
             <div id="alcoholUnitHistory" class="stack-list alcohol-history-list"></div>
 
@@ -190,6 +186,13 @@
           </div>
         </section>
       </section>
+
+      <div id="historyModal" class="coach-modal history-modal hidden" role="dialog" aria-modal="true" aria-labelledby="historyModalTitle">
+        <section class="coach-modal-card history-modal-card">
+          <button id="historyModalCloseBtn" class="icon-btn coach-close-btn" type="button" aria-label="Verlauf schliessen">×</button>
+          <div id="historyModalContent" class="history-modal-content"></div>
+        </section>
+      </div>
 
       <div id="coachModal" class="coach-modal hidden" role="dialog" aria-modal="true" aria-labelledby="coachModalTitle">
         <section id="coachDialog" class="coach-modal-card">
