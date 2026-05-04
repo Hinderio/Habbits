@@ -102,6 +102,12 @@
     water: '<path d="M12 3s6 6.2 6 11a6 6 0 0 1-12 0c0-4.8 6-11 6-11Z"/>',
     sport: '<path d="M7 20 10 11l4 3 3 6"/><path d="m10 11 3-4 4 2"/><path d="M14 4h.01"/><path d="M4 14h4"/>',
     meditation: '<path d="M12 5a2 2 0 1 0 0 .01"/><path d="M8 20c1.5-2 2.7-3 4-3s2.5 1 4 3"/><path d="M5 15c2.5-2 4.8-3 7-3s4.5 1 7 3"/>',
+    standingDesk: '<path d="M5 10h14"/><path d="M7 10v10"/><path d="M17 10v10"/><path d="M9 20h6"/><rect x="8" y="4" width="8" height="5" rx="1.5"/><path d="M12 9v3"/>',
+    pushups: '<path d="M5 9a1.7 1.7 0 1 0 0 .01"/><path d="M7 10h6l4 3"/><path d="M9 14h7"/><path d="M7 11l-2 6"/><path d="M16 13l3 5"/><path d="M4 18h16"/>',
+    bread: '<path d="M5 20V10a7 7 0 0 1 14 0v10H5Z"/><path d="M8 20v-8a4 4 0 0 1 8 0v8"/><path d="M9 15h.01"/><path d="M15 15h.01"/>',
+    jogging: '<path d="M13 4a1.8 1.8 0 1 0 0 .01"/><path d="m11 8 3 2 3-1"/><path d="m14 10-3 4"/><path d="m11 14 4 6"/><path d="M10 14 6 19"/><path d="M4 9h3"/><path d="M3 13h4"/>',
+    hiking: '<path d="m3 20 6-10 4 6 3-5 5 9H3Z"/><path d="M9 10 12 4l4 7"/><path d="M15 20v-7"/><path d="M12 16h6"/>',
+    walking: '<path d="M12 5a1.8 1.8 0 1 0 0 .01"/><path d="M12 8v5"/><path d="m12 11 3 2"/><path d="M12 13 9 20"/><path d="m12 13 5 7"/><path d="M7 21h2"/><path d="M17 21h2"/>',
     number: '<path d="M9 4 7 20"/><path d="M17 4l-2 16"/><path d="M4 9h16"/><path d="M3 15h16"/>',
     duration: '<circle cx="12" cy="12" r="8"/><path d="M12 8v5l3 2"/>',
     boolean: '<path d="m5 13 4 4L19 7"/>',
@@ -132,13 +138,25 @@
     });
   }
 
+  function normalizeIconSearch(value = '') {
+    return String(value || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  }
+
   function habitIconKey(habit = {}) {
-    const raw = String(habit.icon || '').trim().toLowerCase();
-    const name = String(habit.name || '').trim().toLowerCase();
-    if (raw.includes('💧') || name.includes('wasser')) return 'water';
-    if (raw.includes('⚖') || name.includes('gewicht')) return 'weight';
-    if (raw.includes('🏃') || name.includes('sport')) return 'sport';
-    if (raw.includes('🧘') || name.includes('meditation')) return 'meditation';
+    const iconRaw = String(habit.icon || '').trim().toLowerCase();
+    const nameRaw = String(habit.name || '').trim().toLowerCase();
+    const raw = normalizeIconSearch(iconRaw);
+    const name = normalizeIconSearch(nameRaw);
+    if (iconRaw.includes('💧') || name.includes('wasser')) return 'water';
+    if (iconRaw.includes('⚖') || name.includes('gewicht')) return 'weight';
+    if (iconRaw.includes('🧘') || name.includes('meditation')) return 'meditation';
+    if (name.includes('stehpult') || name.includes('standing desk') || name.includes('stehschreibtisch')) return 'standingDesk';
+    if (name.includes('liegestutz') || name.includes('liegestuetz') || name.includes('pushup') || name.includes('push-up')) return 'pushups';
+    if (name.includes('brot') || name.includes('bread')) return 'bread';
+    if (name.includes('joggen') || name.includes('jogging')) return 'jogging';
+    if (name.includes('wandern') || name.includes('hiking')) return 'hiking';
+    if (name.includes('spazieren') || name.includes('spaziergang') || name.includes('walking')) return 'walking';
+    if (iconRaw.includes('🏃') || name.includes('sport')) return 'sport';
     if (ICON_PATHS[raw]) return raw;
     return ICON_PATHS[habit.type] ? habit.type : 'number';
   }
