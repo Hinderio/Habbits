@@ -166,6 +166,7 @@
   let supabaseClient = null;
   let syncSubscription = null;
   let syncInFlight = false;
+  let pendingSyncRequest = null;
   let lastSyncAt = null;
   let remotePullTimer = null;
   let selectedCalendarDate = toDateKey(new Date());
@@ -2691,6 +2692,11 @@ async function deleteAlcoholLog(id) {
       els.syncStatus.className = 'badge danger-badge';
       return;
     }
+    if (mode === 'pending') {
+      els.syncStatus.textContent = 'Sync ausstehend';
+      els.syncStatus.className = 'badge warning-badge';
+      return;
+    }
     els.syncStatus.textContent = lastSyncAt ? 'Sync aktiv' : 'Verbunden';
     els.syncStatus.className = 'badge';
   }
@@ -2709,7 +2715,14 @@ async function deleteAlcoholLog(id) {
       if (!silent) toast(isSupabaseConfigured() ? 'Supabase ist noch nicht bereit.' : 'Supabase ist nicht konfiguriert.');
       return;
     }
-    if (syncInFlight) return;
+    if (syncInFlight) {
+      pendingSyncRequest = {
+        silent: pendingSyncRequest ? (pendingSyncRequest.silent && silent) : silent,
+        pullFirst: pendingSyncRequest ? (pendingSyncRequest.pullFirst || pullFirst) : pullFirst
+      };
+      renderSyncStatus('pending');
+      return;
+    }
     syncInFlight = true;
     renderSyncStatus('syncing');
     try {
@@ -2759,7 +2772,12 @@ async function deleteAlcoholLog(id) {
       renderSyncStatus('error');
     } finally {
       syncInFlight = false;
+      const queuedRequest = pendingSyncRequest;
+      pendingSyncRequest = null;
       renderSyncStatus();
+      if (queuedRequest) {
+        setTimeout(() => syncWithSupabase(queuedRequest), 120);
+      }
     }
   }
 
