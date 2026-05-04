@@ -4844,27 +4844,43 @@ async function deleteAlcoholLog(id) {
 
       await upsertHabitEntryRows();
 
-      await upsertRows('cigarette_events', liveRowsForTable('cigarette_events', state.cigarettes).map(c => ({
+      const cigaretteRows = liveRowsForTable('cigarette_events', state.cigarettes).map(c => ({
         id: c.id, smoked_at: c.smoked_at, interval_minutes: c.interval_minutes, alcohol_context: Boolean(c.alcohol_context),
         points: Number(c.points || 0), note: c.note || null, created_at: c.created_at, updated_at: c.updated_at || nowIso()
-      })));
+      }));
+      if (await upsertRows('cigarette_events', cigaretteRows)) {
+        markRowsSynced('cigarettes', cigaretteRows);
+        saveState({ skipRender: true });
+      }
 
-      await upsertRows('alcohol_logs', liveRowsForTable('alcohol_logs', state.alcoholLogs).map(a => ({
+      const alcoholLogRows = liveRowsForTable('alcohol_logs', state.alcoholLogs).map(a => ({
         id: a.id, log_date: a.log_date, consumed: Boolean(a.consumed), note: a.note || null,
         created_at: a.created_at, updated_at: a.updated_at || nowIso()
-      })));
+      }));
+      if (await upsertRows('alcohol_logs', alcoholLogRows)) {
+        markRowsSynced('alcoholLogs', alcoholLogRows);
+        saveState({ skipRender: true });
+      }
 
-      await upsertRows('alcohol_events', liveRowsForTable('alcohol_events', state.alcoholUnits).map(a => ({
+      const alcoholEventRows = liveRowsForTable('alcohol_events', state.alcoholUnits).map(a => ({
         id: a.id, occurred_at: a.occurred_at, drink_type: a.drink_type || 'other', note: a.note || null,
         created_at: a.created_at, updated_at: a.updated_at || nowIso()
-      })));
+      }));
+      if (await upsertRows('alcohol_events', alcoholEventRows)) {
+        markRowsSynced('alcoholUnits', alcoholEventRows);
+        saveState({ skipRender: true });
+      }
 
       await upsertTaskRows();
 
-      await upsertRows('points_ledger', liveRowsForTable('points_ledger', state.pointsLedger).map(p => ({
+      const ledgerRows = liveRowsForTable('points_ledger', state.pointsLedger).map(p => ({
         id: p.id, source_type: p.source_type, source_id: p.source_id, points: Number(p.points || 0), reason: p.reason || null,
         earned_at: p.earned_at, created_at: p.created_at || nowIso()
-      })));
+      }));
+      if (await upsertRows('points_ledger', ledgerRows)) {
+        markRowsSynced('pointsLedger', ledgerRows);
+        saveState({ skipRender: true });
+      }
 
       await pullSupabaseData();
       saveState({ skipRender: true });
@@ -4887,13 +4903,14 @@ async function deleteAlcoholLog(id) {
   }
 
   async function upsertRows(table, rows) {
-    if (!rows.length) return;
+    if (!rows.length) return true;
     const { error } = await supabaseClient.from(table).upsert(rows, { onConflict: 'id' });
     if (error && OPTIONAL_SYNC_TABLES.has(table) && isMissingRemoteRelationError(error)) {
       console.warn(`Optionale Sync-Tabelle ${table} fehlt. App läuft lokal weiter.`, error);
-      return;
+      return false;
     }
     if (error) throw error;
+    return true;
   }
 
 
@@ -5074,6 +5091,14 @@ async function deleteAlcoholLog(id) {
     return rows.filter(row => row?.id && !isRemoteDeleted(table, row.id));
   }
 
+  function markRowsSynced(localKey, syncedRows = []) {
+    const ids = new Set(syncedRows.map(row => row?.id).filter(Boolean));
+    if (!ids.size || !Array.isArray(state[localKey])) return;
+    state[localKey].forEach(row => {
+      if (ids.has(row?.id)) row.synced = true;
+    });
+  }
+
   async function flushRemoteDeletes() {
     if (!supabaseClient) return;
     state.deletedRemoteIds = normalizeDeletedRemoteIds(state.deletedRemoteIds);
@@ -5091,22 +5116,25 @@ async function deleteAlcoholLog(id) {
     }
   }
 
-  function applyRemoteCollectionAuthority(table, localKey, remoteRowsForTable, { ledgerSourceType = null } = {}) {
+  function applyRemoteCollectionAuthority(table, localKey, remoteRowsForTable, { ledgerSourceType = null, ledgerMatcher = null } = {}) {
     const localRows = Array.isArray(state[localKey]) ? state[localKey] : [];
     if (!localRows.length) return [];
     const remoteIds = new Set(remoteRowsForTable.map(row => row.id).filter(Boolean));
-    const removedIds = localRows
-      .filter(row => row?.id && row.synced === true && !remoteIds.has(row.id) && !isRemoteDeleted(table, row.id))
-      .map(row => row.id);
+    const removedRows = localRows
+      .filter(row => row?.id && row.synced === true && !remoteIds.has(row.id) && !isRemoteDeleted(table, row.id));
 
-    if (!removedIds.length) return [];
+    if (!removedRows.length) return [];
+    const removedIds = removedRows.map(row => row.id);
     const removedSet = new Set(removedIds);
     state[localKey] = localRows.filter(row => !removedSet.has(row.id));
     markRemoteDeletedMany(table, removedIds, { synced: true });
 
-    if (ledgerSourceType) {
+    if (ledgerSourceType || ledgerMatcher) {
+      const matchesLedger = point => ledgerMatcher
+        ? ledgerMatcher(point, removedSet)
+        : point.source_type === ledgerSourceType && removedSet.has(point.source_id);
       const removedLedgerIds = state.pointsLedger
-        .filter(point => point.source_type === ledgerSourceType && removedSet.has(point.source_id))
+        .filter(matchesLedger)
         .map(point => point.id);
       if (removedLedgerIds.length) {
         const removedLedgerSet = new Set(removedLedgerIds);
@@ -5114,19 +5142,40 @@ async function deleteAlcoholLog(id) {
         markRemoteDeletedMany('points_ledger', removedLedgerIds);
       }
     }
-    return removedIds;
+    return removedRows;
   }
 
-  function filterRemoteLedgerRows(remoteLedgerRows, { cigaretteRows = [] } = {}) {
-    const cigaretteIds = new Set(cigaretteRows.map(row => row.id).filter(Boolean));
-    const orphanCigaretteLedgerIds = [];
-    const filtered = remoteLedgerRows.filter(row => {
-      if (row.source_type !== 'cigarette') return true;
-      const keep = row.source_id && cigaretteIds.has(row.source_id) && !isRemoteDeleted('cigarette_events', row.source_id);
-      if (!keep && row.id) orphanCigaretteLedgerIds.push(row.id);
-      return keep;
+  function clearAlcoholLogsWithoutUnits(removedUnits = []) {
+    const touchedKeys = new Set(removedUnits.map(unit => toDateKey(unit.occurred_at || unit.created_at)).filter(Boolean));
+    if (!touchedKeys.size) return;
+    touchedKeys.forEach(key => {
+      if (alcoholUnitsOnDate(key).length) return;
+      const dayLog = alcoholForDate(key);
+      if (!dayLog || !dayLog.consumed) return;
+      dayLog.consumed = false;
+      dayLog.updated_at = nowIso();
+      dayLog.synced = false;
     });
-    if (orphanCigaretteLedgerIds.length) markRemoteDeletedMany('points_ledger', orphanCigaretteLedgerIds);
+  }
+
+  function filterRemoteLedgerRows(remoteLedgerRows, { cigaretteRows = [], alcoholEventRows = [] } = {}) {
+    const cigaretteIds = new Set(cigaretteRows.map(row => row.id).filter(Boolean));
+    const alcoholEventIds = new Set(alcoholEventRows.map(row => row.id).filter(Boolean));
+    const orphanLedgerIds = [];
+    const filtered = remoteLedgerRows.filter(row => {
+      if (row.source_type === 'cigarette') {
+        const keep = row.source_id && cigaretteIds.has(row.source_id) && !isRemoteDeleted('cigarette_events', row.source_id);
+        if (!keep && row.id) orphanLedgerIds.push(row.id);
+        return keep;
+      }
+      if (isAlcoholPointsEntry(row)) {
+        const keep = row.source_id && alcoholEventIds.has(row.source_id) && !isRemoteDeleted('alcohol_events', row.source_id);
+        if (!keep && row.id) orphanLedgerIds.push(row.id);
+        return keep;
+      }
+      return true;
+    });
+    if (orphanLedgerIds.length) markRemoteDeletedMany('points_ledger', orphanLedgerIds);
     return filtered;
   }
 
@@ -5181,7 +5230,11 @@ async function deleteAlcoholLog(id) {
     let remoteLedgerRows = remoteRows('points_ledger', ledger);
 
     applyRemoteCollectionAuthority('cigarette_events', 'cigarettes', remoteCigaretteRows, { ledgerSourceType: 'cigarette' });
-    remoteLedgerRows = filterRemoteLedgerRows(remoteLedgerRows, { cigaretteRows: remoteCigaretteRows });
+    const removedAlcoholUnits = applyRemoteCollectionAuthority('alcohol_events', 'alcoholUnits', remoteAlcoholEventRows, {
+      ledgerMatcher: (point, removedSet) => isAlcoholPointsEntry(point) && removedSet.has(point.source_id)
+    });
+    if (removedAlcoholUnits.length) clearAlcoholLogsWithoutUnits(removedAlcoholUnits);
+    remoteLedgerRows = filterRemoteLedgerRows(remoteLedgerRows, { cigaretteRows: remoteCigaretteRows, alcoholEventRows: remoteAlcoholEventRows });
     const remoteHasData = [remoteHabitRows, remoteEntryRows, remoteCigaretteRows, remoteAlcoholRows, remoteAlcoholEventRows, remoteTaskRows, remoteLedgerRows].some(rows => rows.length > 0);
 
     applyRemoteHabitAuthority(remoteHabitRows);
