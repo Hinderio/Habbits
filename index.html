@@ -111,81 +111,121 @@
       </section>
 
       <section id="screen-smoking" class="screen" data-screen="smoking">
-        <div class="grid two-columns smoking-layout">
-          <section class="panel glass smoke-control-card">
-            <div class="panel-head compact"><div><p class="eyebrow">Konsum & Kontext</p><h3>Schnell erfassen</h3></div></div>
-            <div class="smoke-ring" aria-live="polite">
-              <small>Aktuelle Pause</small>
-              <strong id="smokePauseLive">–</strong>
-              <span id="smokePauseHint">Noch kein Eintrag vorhanden</span>
-            </div>
-            <div class="craving-coach-card" aria-live="polite">
-              <div class="craving-coach-head">
-                <div><p class="eyebrow">Craving-Coach</p><h4 id="cravingTipTitle">Pause verlängern</h4></div>
-                <span id="cravingTipMeta" class="badge muted">Mini-Ziel</span>
-              </div>
-              <p id="cravingTipBody">Ein kurzer Reset hilft dir, die nächste Pause bewusst ein paar Minuten zu verlängern.</p>
-              <div class="craving-actions">
-                <button class="mini-btn primary" type="button" data-action="log-meditation" data-id="urge-surf">Craving-Welle loggen</button>
-                <button class="mini-btn" type="button" data-action="rotate-craving-tip">Neuer Tipp</button>
-                <button class="mini-btn" type="button" data-action="open-coach">Zum Coach</button>
-              </div>
-            </div>
-            <button id="recordSmokeBtn" class="smoke-button" type="button">
-              <span>+</span>
-              Zigarette
-            </button>
-            <div id="triggerCaptureCard" class="trigger-capture-card hidden"></div>
-            <div class="alcohol-quick-card alcohol-quick-card--simple">
-              <div class="alcohol-copy">
-                <p class="eyebrow">Alkohol</p>
-                <h4>Eine Einheit erfassen</h4>
-                <p class="subtle">Art wählen, speichern – der Zeitpunkt wird automatisch gesetzt.</p>
-                <div class="alcohol-visual-cluster" aria-hidden="true">
-                  <span class="alcohol-visual-pill"><span data-icon="beer"></span><small>Bier</small></span>
-                  <span class="alcohol-visual-pill"><span data-icon="wine"></span><small>Wein</small></span>
-                  <span class="alcohol-visual-pill"><span data-icon="cocktail"></span><small>Cocktail</small></span>
-                  <span class="alcohol-visual-pill"><span data-icon="shot"></span><small>Shot</small></span>
-                </div>
-              </div>
-              <label><span>Art</span><select id="alcoholTypeSelect" aria-label="Alkohol-Art"><option value="beer">Bier</option><option value="wine">Wein</option><option value="cocktail">Cocktail</option><option value="shot">Shot</option><option value="other">Anderes</option></select></label>
-              <button id="recordAlcoholUnitBtn" class="alcohol-button" type="button"><span>+</span> Einheit speichern</button>
-            </div>
-          </section>
-
-          <section class="panel glass consumption-history-panel">
-            <div class="panel-head"><div><p class="eyebrow">Verlauf</p><h3>Logs bei Bedarf</h3></div><span id="lastSmokePoints" class="badge muted">0 Einträge</span></div>
-            <div id="smokeHistory" class="history-launch-area"></div>
-            <div class="panel-head compact alcohol-history-head"><div><p class="eyebrow">Alkohol</p><h3>Einheiten-Logs</h3></div></div>
-            <div id="alcoholUnitHistory" class="stack-list alcohol-history-list"></div>
-
-          </section>
+        <div class="consumption-switch glass" role="tablist" aria-label="Konsum-Modus wechseln">
+          <button class="consumption-switch-btn is-active" type="button" role="tab" aria-selected="true" data-action="switch-consumption-mode" data-mode="smoke">
+            <span data-icon="smoke"></span>
+            <strong>Rauchen</strong>
+            <small>Pause, Verlauf & Analyse</small>
+          </button>
+          <button class="consumption-switch-btn" type="button" role="tab" aria-selected="false" data-action="switch-consumption-mode" data-mode="alcohol">
+            <span data-icon="alcohol"></span>
+            <strong>Alkohol</strong>
+            <small>Einheiten, Punkte & Muster</small>
+          </button>
         </div>
 
-        <div class="grid two-columns smoking-intelligence-grid">
-          <section class="panel glass smoking-visual-panel">
-            <div class="panel-head">
-              <div><p class="eyebrow">Deep Smoke Map</p><h3>Zigaretten nach Kalenderwoche & Tag</h3></div>
-              <span id="cigaretteHeatmapBadge" class="subtle">12 KW</span>
-            </div>
-            <div id="cigaretteHeatmapVisual" class="smoking-visual-body"></div>
-          </section>
+        <div class="consumption-pane is-active" data-consumption-pane="smoke">
+          <div class="grid two-columns smoking-layout">
+            <section class="panel glass smoke-control-card">
+              <div class="panel-head compact"><div><p class="eyebrow">Rauchen & Kontext</p><h3>Schnell erfassen</h3></div></div>
+              <div class="smoke-ring" aria-live="polite">
+                <small>Aktuelle Pause</small>
+                <strong id="smokePauseLive">–</strong>
+                <span id="smokePauseHint">Noch kein Eintrag vorhanden</span>
+              </div>
+              <div class="craving-coach-card" aria-live="polite">
+                <div class="craving-coach-head">
+                  <div><p class="eyebrow">Craving-Coach</p><h4 id="cravingTipTitle">Pause verlängern</h4></div>
+                  <span id="cravingTipMeta" class="badge muted">Mini-Ziel</span>
+                </div>
+                <p id="cravingTipBody">Ein kurzer Reset hilft dir, die nächste Pause bewusst ein paar Minuten zu verlängern.</p>
+                <div class="craving-actions">
+                  <button class="mini-btn primary" type="button" data-action="log-meditation" data-id="urge-surf">Craving-Welle loggen</button>
+                  <button class="mini-btn" type="button" data-action="rotate-craving-tip">Neuer Tipp</button>
+                  <button class="mini-btn" type="button" data-action="open-coach">Zum Coach</button>
+                </div>
+              </div>
+              <button id="recordSmokeBtn" class="smoke-button" type="button">
+                <span>+</span>
+                Zigarette
+              </button>
+              <div id="triggerCaptureCard" class="trigger-capture-card hidden"></div>
+            </section>
 
-          <section class="panel glass smoking-visual-panel">
-            <div class="panel-head">
-              <div><p class="eyebrow">Interval Intelligence</p><h3>Qualität der Pausen</h3></div>
-              <span id="smokeIntervalQuality" class="badge muted">lernt</span>
-            </div>
-            <div id="smokeIntervalVisual" class="smoking-visual-body"></div>
-          </section>
+            <section class="panel glass consumption-history-panel">
+              <div class="panel-head"><div><p class="eyebrow">Rauchen</p><h3>Logs bei Bedarf</h3></div><span id="lastSmokePoints" class="badge muted">0 Einträge</span></div>
+              <div id="smokeHistory" class="history-launch-area"></div>
+            </section>
+          </div>
+
+          <div class="grid two-columns smoking-intelligence-grid">
+            <section class="panel glass smoking-visual-panel">
+              <div class="panel-head">
+                <div><p class="eyebrow">Deep Smoke Map</p><h3>Zigaretten nach Kalenderwoche & Tag</h3></div>
+                <span id="cigaretteHeatmapBadge" class="subtle">12 KW</span>
+              </div>
+              <div id="cigaretteHeatmapVisual" class="smoking-visual-body"></div>
+            </section>
+
+            <section class="panel glass smoking-visual-panel">
+              <div class="panel-head">
+                <div><p class="eyebrow">Interval Intelligence</p><h3>Qualität der Pausen</h3></div>
+                <span id="smokeIntervalQuality" class="badge muted">lernt</span>
+              </div>
+              <div id="smokeIntervalVisual" class="smoking-visual-body"></div>
+            </section>
+          </div>
+        </div>
+
+        <div class="consumption-pane" data-consumption-pane="alcohol">
+          <div class="grid two-columns smoking-layout">
+            <section class="panel glass alcohol-control-card">
+              <div class="panel-head compact"><div><p class="eyebrow">Alkohol</p><h3>Einheit per Tap speichern</h3></div></div>
+              <div class="alcohol-ring" aria-live="polite">
+                <small>Heute</small>
+                <strong id="alcoholTodayUnits">0</strong>
+                <span id="alcoholTodayHint">Noch keine Einheit erfasst</span>
+              </div>
+              <div class="alcohol-unit-grid" aria-label="Alkohol-Einheit speichern">
+                <button class="alcohol-unit-btn" type="button" data-action="log-alcohol-unit" data-drink-type="beer"><span data-icon="beer"></span><strong>Bier</strong><small>-20</small></button>
+                <button class="alcohol-unit-btn" type="button" data-action="log-alcohol-unit" data-drink-type="wine"><span data-icon="wine"></span><strong>Wein</strong><small>-20</small></button>
+                <button class="alcohol-unit-btn" type="button" data-action="log-alcohol-unit" data-drink-type="cocktail"><span data-icon="cocktail"></span><strong>Cocktail</strong><small>-30</small></button>
+                <button class="alcohol-unit-btn" type="button" data-action="log-alcohol-unit" data-drink-type="shot"><span data-icon="shot"></span><strong>Shot</strong><small>-25</small></button>
+                <button class="alcohol-unit-btn" type="button" data-action="log-alcohol-unit" data-drink-type="other"><span data-icon="alcohol"></span><strong>Anderes</strong><small>-25</small></button>
+              </div>
+            </section>
+
+            <section class="panel glass consumption-history-panel">
+              <div class="panel-head"><div><p class="eyebrow">Alkohol</p><h3>Einheiten-Logs</h3></div><span id="lastAlcoholPoints" class="badge muted">0 Einheiten</span></div>
+              <div id="alcoholUnitHistory" class="stack-list alcohol-history-list"></div>
+            </section>
+          </div>
+
+          <div class="grid two-columns smoking-intelligence-grid">
+            <section class="panel glass smoking-visual-panel">
+              <div class="panel-head">
+                <div><p class="eyebrow">Deep Alcohol Map</p><h3>Einheiten nach Kalenderwoche & Tag</h3></div>
+                <span id="alcoholHeatmapBadge" class="subtle">12 KW</span>
+              </div>
+              <div id="alcoholHeatmapVisual" class="smoking-visual-body"></div>
+            </section>
+
+            <section class="panel glass smoking-visual-panel">
+              <div class="panel-head">
+                <div><p class="eyebrow">Alcohol Intelligence</p><h3>Qualität der Konsumfolge</h3></div>
+                <span id="alcoholIntervalQuality" class="badge muted">lernt</span>
+              </div>
+              <div id="alcoholIntervalVisual" class="smoking-visual-body"></div>
+            </section>
+          </div>
         </div>
 
         <section class="panel glass">
           <div class="panel-head rules-panel-head">
-            <div><p class="eyebrow">Regelwerk</p><h3>Pause & Alkohol → Punkte</h3></div>
-            <button id="toggleAlcoholRulesBtn" class="mini-btn" type="button" aria-expanded="true">Alkohol-Regeln ausblenden</button>
+            <div><p class="eyebrow">Regelwerk</p><h3>Rauchen & Alkohol → Punkte</h3></div>
+            <button id="toggleRulesBtn" class="mini-btn" type="button" aria-expanded="true">Regelwerk ausblenden</button>
           </div>
-          <div class="rules-stack">
+          <div id="rulesContent" class="rules-stack">
             <div class="rules-block">
               <div class="rules-subhead"><strong>Rauch-Pausen</strong><small>bestehendes Punktesystem</small></div>
               <div class="score-rules-grid">
@@ -197,7 +237,7 @@
                 <article><strong>8+ Std.</strong><span>+80</span><small>nur als Tagespause</small></article>
               </div>
             </div>
-            <div id="alcoholRulesPanel" class="rules-block alcohol-rules-panel">
+            <div class="rules-block alcohol-rules-panel">
               <div class="rules-subhead"><strong>Alkohol</strong><small>automatische Minus-Punkte pro Einheit</small></div>
               <div class="score-rules-grid alcohol-score-grid">
                 <article><strong>Bier</strong><span>-20</span><small>pro Einheit</small></article>

@@ -6,7 +6,8 @@
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
   const COACH_SESSION_KEY = 'habitflow-coach-session-v1';
-  const ALCOHOL_RULES_UI_KEY = 'habitflow-alcohol-rules-open';
+  const RULES_UI_KEY = 'habitflow-rules-open';
+  const CONSUMPTION_MODE_KEY = 'habitflow-consumption-mode';
   const SUPABASE_CONFIG = window.HABITFLOW_SUPABASE_CONFIG || {};
   const MEDITATION_TECHNIQUES = [
     { key: '7-3-11', title: '7-3-11 Atemtechnik', subtitle: 'Runterfahren mit langer Ausatmung', minutes: 6, pattern: '7 ein · 3 halten · 11 aus' },
@@ -196,7 +197,8 @@
   let remoteTaskInProgressSupported = true;
   let remoteHabitTargetPeriodSupported = true;
   let pendingTriggerSmokeId = null;
-  let alcoholRulesExpanded = localStorage.getItem(ALCOHOL_RULES_UI_KEY) !== 'collapsed';
+  let rulesExpanded = localStorage.getItem(RULES_UI_KEY) !== 'collapsed';
+  let activeConsumptionMode = localStorage.getItem(CONSUMPTION_MODE_KEY) === 'alcohol' ? 'alcohol' : 'smoke';
 
   const els = {};
 
@@ -204,7 +206,8 @@
 
   async function init() {
     cacheEls();
-    applyAlcoholRulesVisibility();
+    applyRulesVisibility();
+    applyConsumptionMode();
     applyTheme();
     fillSettingsForm();
     bindEvents();
@@ -265,9 +268,14 @@
       smokePauseHint: $('#smokePauseHint'),
       alcoholTypeSelect: $('#alcoholTypeSelect'),
       recordAlcoholUnitBtn: $('#recordAlcoholUnitBtn'),
-      toggleAlcoholRulesBtn: $('#toggleAlcoholRulesBtn'),
-      alcoholRulesPanel: $('#alcoholRulesPanel'),
+      toggleRulesBtn: $('#toggleRulesBtn'),
+      rulesContent: $('#rulesContent'),
+      consumptionModeButtons: $$('.consumption-switch-btn'),
+      consumptionPanes: $$('.consumption-pane'),
       alcoholUnitHistory: $('#alcoholUnitHistory'),
+      alcoholTodayUnits: $('#alcoholTodayUnits'),
+      alcoholTodayHint: $('#alcoholTodayHint'),
+      lastAlcoholPoints: $('#lastAlcoholPoints'),
       smokeHistory: $('#smokeHistory'),
       historyModal: $('#historyModal'),
       historyModalCloseBtn: $('#historyModalCloseBtn'),
@@ -276,6 +284,10 @@
       cigaretteHeatmapBadge: $('#cigaretteHeatmapBadge'),
       smokeIntervalVisual: $('#smokeIntervalVisual'),
       smokeIntervalQuality: $('#smokeIntervalQuality'),
+      alcoholHeatmapVisual: $('#alcoholHeatmapVisual'),
+      alcoholHeatmapBadge: $('#alcoholHeatmapBadge'),
+      alcoholIntervalVisual: $('#alcoholIntervalVisual'),
+      alcoholIntervalQuality: $('#alcoholIntervalQuality'),
       lastSmokePoints: $('#lastSmokePoints'),
       cravingTipTitle: $('#cravingTipTitle'),
       cravingTipBody: $('#cravingTipBody'),
@@ -360,8 +372,8 @@
     }
     els.recordSmokeBtn.addEventListener('click', () => recordCigarette());
     if (els.emergencyCravingBtn) els.emergencyCravingBtn.addEventListener('click', startEmergencyCravingFlow);
-    if (els.recordAlcoholUnitBtn) els.recordAlcoholUnitBtn.addEventListener('click', recordAlcoholUnit);
-    if (els.toggleAlcoholRulesBtn) els.toggleAlcoholRulesBtn.addEventListener('click', toggleAlcoholRulesVisibility);
+    if (els.recordAlcoholUnitBtn) els.recordAlcoholUnitBtn.addEventListener('click', () => recordAlcoholUnit());
+    if (els.toggleRulesBtn) els.toggleRulesBtn.addEventListener('click', toggleRulesVisibility);
     els.trendMetricSelect.addEventListener('change', () => {
       selectedTrendMetric = els.trendMetricSelect.value;
       localStorage.setItem(TREND_METRIC_KEY, selectedTrendMetric);
@@ -431,6 +443,8 @@
       if (action === 'delete-smoke') deleteSmoke(id);
       if (action === 'delete-alcohol') deleteAlcoholLog(id);
       if (action === 'delete-alcohol-unit') deleteAlcoholUnit(id);
+      if (action === 'log-alcohol-unit') recordAlcoholUnit(actionEl.dataset.drinkType);
+      if (action === 'switch-consumption-mode') switchConsumptionMode(actionEl.dataset.mode);
       if (action === 'rotate-craving-tip') rotateSmokingTip();
       if (action === 'log-meditation') logMeditationTechnique(id);
       if (action === 'open-coach') openCoachModal();
@@ -1520,7 +1534,10 @@
     renderTriggerCapture();
     renderAlcoholUnitHistory();
     renderSmokingAnalytics();
+    renderAlcoholAnalytics();
+    renderAlcoholDashboard();
     renderSmokeHistoryLauncher();
+    applyConsumptionMode();
   }
 
   function renderSmokeHistoryLauncher() {
@@ -1610,6 +1627,209 @@
         </div>
       </article>`;
     }).join('')}</div>`;
+  }
+
+  function renderAlcoholDashboard() {
+    const todayKey = toDateKey(new Date());
+    const todayUnits = alcoholUnitsOnDate(todayKey);
+    const todayPoints = sum(todayUnits.map(unit => alcoholPointsForUnit(unit.id)));
+    const units7 = state.alcoholUnits.filter(unit => daysBack(7).includes(toDateKey(unit.occurred_at || unit.created_at))).length;
+    if (els.alcoholTodayUnits) els.alcoholTodayUnits.textContent = String(todayUnits.length);
+    if (els.alcoholTodayHint) {
+      els.alcoholTodayHint.textContent = todayUnits.length
+        ? `${formatSignedPoints(todayPoints)} Pkt. heute · ${units7} Einheiten in 7 Tagen`
+        : 'Noch keine Einheit erfasst';
+    }
+    if (els.lastAlcoholPoints) {
+      els.lastAlcoholPoints.textContent = `${state.alcoholUnits.length} Einheit${state.alcoholUnits.length === 1 ? '' : 'en'}`;
+    }
+  }
+
+  function renderAlcoholAnalytics() {
+    renderAlcoholWeekHeatmap();
+    renderAlcoholIntervalVisual();
+  }
+
+  function renderAlcoholWeekHeatmap(weeksCount = 12) {
+    if (!els.alcoholHeatmapVisual) return;
+    if (els.alcoholHeatmapBadge) els.alcoholHeatmapBadge.textContent = `${weeksCount} KW`;
+
+    const weeks = calendarWeeksBack(weeksCount);
+    const weekKeys = new Set(weeks.map(week => week.key));
+    const rows = [1, 2, 3, 4, 5, 6, 0].map(day => ({
+      day,
+      total: 0,
+      cells: weeks.map(week => ({ key: week.key, count: 0 }))
+    }));
+    const relevant = state.alcoholUnits.filter(unit => weekKeys.has(isoWeekInfo(unit.occurred_at || unit.created_at).key));
+
+    if (!relevant.length) {
+      els.alcoholHeatmapVisual.innerHTML = '<div class="empty-state">Noch keine Alkohol-Einheiten im Kalenderwochen-Fenster. Sobald Verlauf vorhanden ist, zeigt diese Matrix, an welchen Tagen die Einheiten liegen.</div>';
+      return;
+    }
+
+    const rowByDay = new Map(rows.map(row => [row.day, row]));
+    const weekTotals = new Map(weeks.map(week => [week.key, 0]));
+    relevant.forEach(unit => {
+      const date = new Date(unit.occurred_at || unit.created_at);
+      if (Number.isNaN(date.getTime())) return;
+      const info = isoWeekInfo(date);
+      const row = rowByDay.get(date.getDay());
+      const cell = row?.cells.find(item => item.key === info.key);
+      if (!cell) return;
+      cell.count += 1;
+      row.total += 1;
+      weekTotals.set(info.key, (weekTotals.get(info.key) || 0) + 1);
+    });
+
+    const flatCells = rows.flatMap(row => row.cells.map(cell => ({ ...cell, day: row.day })));
+    const maxValue = Math.max(...flatCells.map(cell => cell.count), 1);
+    const peakEntry = [...flatCells].sort((a, b) => b.count - a.count)[0] || { count: 0, day: 1, key: weeks.at(-1)?.key };
+    const peakWeek = weeks.find(week => week.key === peakEntry.key) || weeks.at(-1);
+    const dominantDay = [...rows].sort((a, b) => b.total - a.total)[0] || rows[0];
+    const dominantWeek = [...weekTotals.entries()]
+      .map(([key, count]) => ({ key, count, week: weeks.find(item => item.key === key) }))
+      .sort((a, b) => b.count - a.count)[0] || { count: 0, week: weeks.at(-1) };
+    const pointsInWindow = sum(relevant.map(unit => alcoholPointsForUnit(unit.id)));
+    const summary = [
+      {
+        label: 'Stärkste Zelle',
+        value: `${peakWeek?.label || 'KW'} · ${smokingWeekdayLabel(peakEntry.day, { short: true })}`,
+        detail: `${peakEntry.count} Einheit${peakEntry.count === 1 ? '' : 'en'} in diesem Wochen-/Tages-Cluster.`
+      },
+      {
+        label: 'Stärkste KW',
+        value: dominantWeek.week?.label || '–',
+        detail: `${dominantWeek.count} Einheiten · ${dominantWeek.week?.rangeLabel || 'Kalenderwoche'}.`
+      },
+      {
+        label: 'Dominanter Tag',
+        value: smokingWeekdayLabel(dominantDay.day),
+        detail: `${dominantDay.total} Einheiten über ${weeksCount} Kalenderwochen.`
+      },
+      {
+        label: 'Punktedruck',
+        value: `${formatSignedPoints(pointsInWindow)} Pkt.`,
+        detail: 'Summe aus Basisabzug und Zusatzregeln im sichtbaren Fenster.'
+      }
+    ];
+
+    const header = weeks.map(week => `<div class="smoke-week-label" title="${escapeHtml(week.rangeLabel)}"><span>${escapeHtml(week.label)}</span><small>${escapeHtml(week.rangeLabel)}</small></div>`).join('');
+    const body = rows.map(row => `
+      <div class="smoke-week-row-label"><strong>${smokingWeekdayLabel(row.day, { short: true })}</strong><small>${row.total}×</small></div>
+      ${row.cells.map((cell, index) => {
+        const week = weeks[index];
+        const level = cell.count ? Math.max(1, Math.ceil((cell.count / maxValue) * 5)) : 0;
+        const title = `${smokingWeekdayLabel(row.day)}, ${week.label} (${week.rangeLabel}) · ${cell.count} Alkohol-Einheit${cell.count === 1 ? '' : 'en'}`;
+        return `<span class="smoke-week-cell level-${level}" title="${escapeHtml(title)}"><em>${cell.count || ''}</em></span>`;
+      }).join('')}
+    `).join('');
+
+    els.alcoholHeatmapVisual.innerHTML = `
+      <div class="smoking-visual-summary-grid smoking-visual-summary-grid--compact">
+        ${summary.map(item => `<article><small>${escapeHtml(item.label)}</small><strong>${escapeHtml(item.value)}</strong><p>${escapeHtml(item.detail)}</p></article>`).join('')}
+      </div>
+      <div class="smoke-week-grid-wrap" aria-label="Alkohol-Heatmap nach Kalenderwoche und Wochentag">
+        <div class="smoke-week-grid" style="--smoke-week-columns:${weeks.length}">
+          <div class="smoke-week-corner">Tag</div>
+          ${header}
+          ${body}
+        </div>
+      </div>
+      <div class="smoke-hour-legend"><span>wenig</span>${[1, 2, 3, 4, 5].map(level => `<i class="level-${level}"></i>`).join('')}<span>hoch</span></div>
+      <p class="meta">Pattern Readout: Die Matrix verdichtet Alkohol-Einheiten zu Kalenderwochen-Clustern. Aktuell ist <strong>${dominantWeek.week?.label || 'eine KW'}</strong> am auffälligsten; der stärkste Wochentag ist <strong>${smokingWeekdayLabel(dominantDay.day)}</strong>.</p>
+    `;
+  }
+
+  function alcoholIntervalSnapshots() {
+    const sorted = [...state.alcoholUnits].sort((a, b) => new Date(a.occurred_at || a.created_at) - new Date(b.occurred_at || b.created_at));
+    return sorted.map((unit, index) => {
+      const prev = sorted[index - 1] || null;
+      const occurredAt = unit.occurred_at || unit.created_at;
+      const previousAt = prev?.occurred_at || prev?.created_at;
+      const interval = prev ? Math.max(0, Math.round((new Date(occurredAt) - new Date(previousAt)) / 60000)) : null;
+      return { unit, previous: prev, interval_minutes: interval };
+    });
+  }
+
+  function alcoholIntervalTone(minutes) {
+    if (minutes == null) return 'is-neutral';
+    if (minutes < 120) return 'is-critical';
+    if (minutes < 360) return 'is-warning';
+    if (minutes < 1440) return 'is-neutral';
+    if (minutes < 2880) return 'is-positive';
+    return 'is-recovery';
+  }
+
+  function renderAlcoholIntervalVisual(days = 28) {
+    if (!els.alcoholIntervalVisual) return;
+    const keys = new Set(daysBack(days));
+    const snapshots = alcoholIntervalSnapshots().filter(item => keys.has(toDateKey(item.unit.occurred_at || item.unit.created_at)) && Number.isFinite(Number(item.interval_minutes)));
+
+    if (!snapshots.length) {
+      if (els.alcoholIntervalQuality) els.alcoholIntervalQuality.textContent = 'lernt noch';
+      els.alcoholIntervalVisual.innerHTML = '<div class="empty-state">Für die Sequenz-Analyse braucht es mindestens zwei Alkohol-Einheiten. Danach zeigt die App Abstände, Verteilung und Konsumdichte.</div>';
+      return;
+    }
+
+    const durations = snapshots.map(item => Number(item.interval_minutes));
+    const sortedDurations = [...durations].sort((a, b) => a - b);
+    const median = percentile(sortedDurations, 0.5);
+    const p75 = percentile(sortedDurations, 0.75);
+    const longBreakShare = Math.round((durations.filter(value => value >= 1440).length / durations.length) * 100);
+    const denseShare = Math.round((durations.filter(value => value < 360).length / durations.length) * 100);
+    const recent = snapshots.slice(-20);
+    const cap = Math.max(2880, percentile(sortedDurations, 0.9));
+    const bucketConfig = [
+      { label: '<2 Std.', detail: 'sehr dicht', test: value => value < 120, tone: 'is-critical' },
+      { label: '2–6 Std.', detail: 'dicht', test: value => value >= 120 && value < 360, tone: 'is-warning' },
+      { label: '6–24 Std.', detail: 'Tagesfenster', test: value => value >= 360 && value < 1440, tone: 'is-neutral' },
+      { label: '1–2 Tage', detail: 'Pause', test: value => value >= 1440 && value < 2880, tone: 'is-positive' },
+      { label: '2+ Tage', detail: 'Recovery', test: value => value >= 2880, tone: 'is-recovery' }
+    ];
+    const qualityLabel = median >= 2880 ? 'stark' : longBreakShare >= 40 ? 'stabil' : denseShare >= 55 ? 'verdichtet' : 'in Bewegung';
+    if (els.alcoholIntervalQuality) els.alcoholIntervalQuality.textContent = qualityLabel;
+
+    const summary = [
+      { label: 'Median-Abstand', value: compactDuration(median), detail: 'Robuster Mittelpunkt zwischen zwei Einheiten.' },
+      { label: '75. Perzentil', value: compactDuration(p75), detail: 'Diesen Abstand erreichst du im oberen Viertel.' },
+      { label: '24h+ Quote', value: `${longBreakShare}%`, detail: 'Abstände von mindestens einem Tag.' },
+      { label: 'Dichte Phasen', value: `${denseShare}%`, detail: 'Abstände unter sechs Stunden im Analysefenster.' }
+    ];
+
+    const skyline = recent.map(item => {
+      const minutes = Number(item.interval_minutes);
+      const height = Math.max(14, Math.round((Math.min(minutes, cap) / cap) * 100));
+      return `<div class="interval-skyline-bar ${alcoholIntervalTone(minutes)}" title="${escapeHtml(`${formatDateTime(item.unit.occurred_at || item.unit.created_at)} · Abstand ${formatDuration(minutes)}`)}"><i style="height:${height}%"></i></div>`;
+    }).join('');
+
+    const buckets = bucketConfig.map(bucket => {
+      const count = durations.filter(bucket.test).length;
+      const share = Math.round((count / durations.length) * 100);
+      return `<article class="interval-bucket-card ${bucket.tone}">
+        <div class="interval-bucket-copy"><small>${escapeHtml(bucket.label)}</small><strong>${share}%</strong><p>${count}/${durations.length} Abstände · ${escapeHtml(bucket.detail)}</p></div>
+        <div class="interval-bucket-track"><i style="width:${Math.max(8, share)}%"></i></div>
+      </article>`;
+    }).join('');
+
+    const signal = denseShare >= 55
+      ? 'Viele Einheiten liegen nah beieinander. Hier greifen die Zusatzabzüge und der Coach sollte den nächsten alkoholfreien Block priorisieren.'
+      : longBreakShare >= 40
+        ? 'Die Abstände enthalten bereits mehrere klare Pausen. Das ist ein gutes Signal für kontrollierbare Konsumfenster.'
+        : 'Die Folge ist gemischt. Beobachte vor allem, ob sich kurze Abstände häufen.';
+
+    els.alcoholIntervalVisual.innerHTML = `
+      <div class="smoking-visual-summary-grid">
+        ${summary.map(item => `<article><small>${escapeHtml(item.label)}</small><strong>${escapeHtml(item.value)}</strong><p>${escapeHtml(item.detail)}</p></article>`).join('')}
+      </div>
+      <div class="interval-skyline-card">
+        <div class="interval-skyline-head"><strong>Sequenz der letzten ${recent.length} Abstände</strong><small>höher = längerer Abstand</small></div>
+        <div class="interval-skyline">${skyline}</div>
+        <div class="interval-skyline-axis"><span>älter</span><span>neu</span></div>
+      </div>
+      <div class="interval-bucket-grid">${buckets}</div>
+      <div class="coach-callout interval-callout"><b>Signal:</b> ${escapeHtml(signal)}</div>
+    `;
   }
 
   function renderSmokingTip(last = getLastCigarette()) {
@@ -2818,9 +3038,9 @@
     return log;
   }
 
-  function recordAlcoholUnit() {
+  function recordAlcoholUnit(drinkTypeOverride) {
     const occurredAt = nowIso();
-    const drinkType = els.alcoholTypeSelect?.value || 'beer';
+    const drinkType = drinkTypeOverride || els.alcoholTypeSelect?.value || 'beer';
     const label = alcoholTypeLabel(drinkType);
     const unit = {
       id: uid(),
@@ -3498,17 +3718,35 @@ async function deleteAlcoholLog(id) {
     window.addEventListener('beforeunload', () => { if (hasPendingSyncWork()) syncWithSupabase({ silent: true, pullFirst: false }); });
   }
 
-  function applyAlcoholRulesVisibility() {
-    if (!els.alcoholRulesPanel || !els.toggleAlcoholRulesBtn) return;
-    els.alcoholRulesPanel.classList.toggle('is-collapsed', !alcoholRulesExpanded);
-    els.toggleAlcoholRulesBtn.setAttribute('aria-expanded', String(alcoholRulesExpanded));
-    els.toggleAlcoholRulesBtn.textContent = alcoholRulesExpanded ? 'Alkohol-Regeln ausblenden' : 'Alkohol-Regeln einblenden';
+  function applyRulesVisibility() {
+    if (!els.rulesContent || !els.toggleRulesBtn) return;
+    els.rulesContent.classList.toggle('is-collapsed', !rulesExpanded);
+    els.toggleRulesBtn.setAttribute('aria-expanded', String(rulesExpanded));
+    els.toggleRulesBtn.textContent = rulesExpanded ? 'Regelwerk ausblenden' : 'Regelwerk einblenden';
   }
 
-  function toggleAlcoholRulesVisibility() {
-    alcoholRulesExpanded = !alcoholRulesExpanded;
-    localStorage.setItem(ALCOHOL_RULES_UI_KEY, alcoholRulesExpanded ? 'expanded' : 'collapsed');
-    applyAlcoholRulesVisibility();
+  function toggleRulesVisibility() {
+    rulesExpanded = !rulesExpanded;
+    localStorage.setItem(RULES_UI_KEY, rulesExpanded ? 'expanded' : 'collapsed');
+    applyRulesVisibility();
+  }
+
+  function applyConsumptionMode() {
+    const mode = activeConsumptionMode === 'alcohol' ? 'alcohol' : 'smoke';
+    els.consumptionPanes?.forEach(pane => pane.classList.toggle('is-active', pane.dataset.consumptionPane === mode));
+    els.consumptionModeButtons?.forEach(button => {
+      const active = button.dataset.mode === mode;
+      button.classList.toggle('is-active', active);
+      button.setAttribute('aria-selected', String(active));
+    });
+  }
+
+  function switchConsumptionMode(mode) {
+    const next = mode === 'alcohol' ? 'alcohol' : 'smoke';
+    if (activeConsumptionMode === next) return;
+    activeConsumptionMode = next;
+    localStorage.setItem(CONSUMPTION_MODE_KEY, next);
+    applyConsumptionMode();
   }
 
   function hasPendingSyncWork() {
