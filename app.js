@@ -252,6 +252,7 @@
     meditation: '00000000-0000-4000-8000-000000000104'
   });
   const SYNC_TABLES = ['habit_definitions', 'habit_entries', 'cigarette_events', 'alcohol_logs', 'alcohol_events', 'tasks', 'points_ledger'];
+  const REMOTE_DELETE_TOMBSTONE_TTL_DAYS = 14;
   const OPTIONAL_SYNC_TABLES = new Set(['alcohol_events']);
   const BUILT_IN_DEFAULT_HABIT_NAMES = new Set(['gewicht', 'wasser', 'sport', 'meditation']);
   const TASK_COLUMNS = [
@@ -841,13 +842,28 @@
 
   function normalizeDeletedRemoteIds(input = {}) {
     const normalized = createEmptyDeletedRemoteIds();
+    const cutoffMs = Date.now() - REMOTE_DELETE_TOMBSTONE_TTL_DAYS * DAY_MS;
+
+    const remember = (table, id, meta = {}) => {
+      if (!id || !normalized[table]) return;
+      const raw = typeof meta === 'string' ? { deleted_at: meta } : (meta && typeof meta === 'object' ? meta : {});
+      const deletedAt = raw.deleted_at || raw.at || raw.timestamp || nowIso();
+      const deletedMs = new Date(deletedAt).getTime();
+      if (Number.isFinite(deletedMs) && deletedMs < cutoffMs) return;
+      normalized[table][id] = {
+        deleted_at: deletedAt,
+        synced_at: raw.synced_at || raw.flushed_at || null
+      };
+    };
+
     Object.keys(normalized).forEach(table => {
       const value = input?.[table];
-      if (Array.isArray(value)) value.forEach(id => { if (id) normalized[table][id] = nowIso(); });
-      else if (value && typeof value === 'object') Object.assign(normalized[table], value);
+      if (Array.isArray(value)) value.forEach(id => remember(table, id));
+      else if (value && typeof value === 'object') Object.entries(value).forEach(([id, meta]) => remember(table, id, meta));
     });
     return normalized;
   }
+
 
   function normalizeTask(task = {}) {
     return {
@@ -957,18 +973,27 @@
   }
 
 
-  function markRemoteDeleted(table, id) {
+  function markRemoteDeleted(table, id, { synced = false } = {}) {
     if (!table || !id) return;
     state.deletedRemoteIds = normalizeDeletedRemoteIds(state.deletedRemoteIds);
-    state.deletedRemoteIds[table][id] = nowIso();
+    if (!state.deletedRemoteIds[table]) state.deletedRemoteIds[table] = {};
+    state.deletedRemoteIds[table][id] = {
+      deleted_at: nowIso(),
+      synced_at: synced ? nowIso() : null
+    };
   }
 
-  function markRemoteDeletedMany(table, ids = []) {
-    ids.filter(Boolean).forEach(id => markRemoteDeleted(table, id));
+  function markRemoteDeletedMany(table, ids = [], options = {}) {
+    ids.filter(Boolean).forEach(id => markRemoteDeleted(table, id, options));
   }
 
   function isRemoteDeleted(table, id) {
     return Boolean(id && state.deletedRemoteIds?.[table]?.[id]);
+  }
+
+  function hasPendingRemoteDeletes() {
+    state.deletedRemoteIds = normalizeDeletedRemoteIds(state.deletedRemoteIds);
+    return SYNC_TABLES.some(table => Object.values(state.deletedRemoteIds?.[table] || {}).some(meta => !meta?.synced_at));
   }
 
   function dedupeStateCollections(nextState = state) {
@@ -1037,6 +1062,7 @@
   }
 
   function saveState({ skipRender = false } = {}) {
+    if (state?.deletedRemoteIds) state.deletedRemoteIds = normalizeDeletedRemoteIds(state.deletedRemoteIds);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     if (!skipRender) queueRender();
   }
@@ -4721,8 +4747,7 @@ async function deleteAlcoholLog(id) {
 
   function hasPendingSyncWork() {
     if (!state) return false;
-    const deletedPending = SYNC_TABLES.some(table => Object.keys(state.deletedRemoteIds?.[table] || {}).length > 0);
-    if (deletedPending) return true;
+    if (hasPendingRemoteDeletes()) return true;
     return ['habits', 'habitEntries', 'cigarettes', 'alcoholLogs', 'alcoholUnits', 'tasks', 'pointsLedger'].some(key => (state[key] || []).some(entry => entry?.synced === false));
   }
 
@@ -5022,11 +5047,56 @@ async function deleteAlcoholLog(id) {
     if (!supabaseClient) return;
     state.deletedRemoteIds = normalizeDeletedRemoteIds(state.deletedRemoteIds);
     for (const table of SYNC_TABLES) {
-      const ids = Object.keys(state.deletedRemoteIds[table] || {});
+      const entries = Object.entries(state.deletedRemoteIds[table] || {});
+      const ids = entries.filter(([, meta]) => !meta?.synced_at).map(([id]) => id);
       if (!ids.length) continue;
       const deleted = await deleteRemoteByIds(table, ids);
-      if (deleted) ids.forEach(id => delete state.deletedRemoteIds[table][id]);
+      if (deleted) {
+        const syncedAt = nowIso();
+        ids.forEach(id => {
+          if (state.deletedRemoteIds[table]?.[id]) state.deletedRemoteIds[table][id].synced_at = syncedAt;
+        });
+      }
     }
+  }
+
+  function applyRemoteCollectionAuthority(table, localKey, remoteRowsForTable, { ledgerSourceType = null } = {}) {
+    const localRows = Array.isArray(state[localKey]) ? state[localKey] : [];
+    if (!localRows.length) return [];
+    const remoteIds = new Set(remoteRowsForTable.map(row => row.id).filter(Boolean));
+    const removedIds = localRows
+      .filter(row => row?.id && row.synced === true && !remoteIds.has(row.id) && !isRemoteDeleted(table, row.id))
+      .map(row => row.id);
+
+    if (!removedIds.length) return [];
+    const removedSet = new Set(removedIds);
+    state[localKey] = localRows.filter(row => !removedSet.has(row.id));
+    markRemoteDeletedMany(table, removedIds, { synced: true });
+
+    if (ledgerSourceType) {
+      const removedLedgerIds = state.pointsLedger
+        .filter(point => point.source_type === ledgerSourceType && removedSet.has(point.source_id))
+        .map(point => point.id);
+      if (removedLedgerIds.length) {
+        const removedLedgerSet = new Set(removedLedgerIds);
+        state.pointsLedger = state.pointsLedger.filter(point => !removedLedgerSet.has(point.id));
+        markRemoteDeletedMany('points_ledger', removedLedgerIds);
+      }
+    }
+    return removedIds;
+  }
+
+  function filterRemoteLedgerRows(remoteLedgerRows, { cigaretteRows = [] } = {}) {
+    const cigaretteIds = new Set(cigaretteRows.map(row => row.id).filter(Boolean));
+    const orphanCigaretteLedgerIds = [];
+    const filtered = remoteLedgerRows.filter(row => {
+      if (row.source_type !== 'cigarette') return true;
+      const keep = row.source_id && cigaretteIds.has(row.source_id) && !isRemoteDeleted('cigarette_events', row.source_id);
+      if (!keep && row.id) orphanCigaretteLedgerIds.push(row.id);
+      return keep;
+    });
+    if (orphanCigaretteLedgerIds.length) markRemoteDeletedMany('points_ledger', orphanCigaretteLedgerIds);
+    return filtered;
   }
 
   function remoteRows(table, result) {
@@ -5077,7 +5147,10 @@ async function deleteAlcoholLog(id) {
     const remoteAlcoholRows = remoteRows('alcohol_logs', alcohol);
     const remoteAlcoholEventRows = remoteRows('alcohol_events', alcoholEvents);
     const remoteTaskRows = remoteRows('tasks', tasks);
-    const remoteLedgerRows = remoteRows('points_ledger', ledger);
+    let remoteLedgerRows = remoteRows('points_ledger', ledger);
+
+    applyRemoteCollectionAuthority('cigarette_events', 'cigarettes', remoteCigaretteRows, { ledgerSourceType: 'cigarette' });
+    remoteLedgerRows = filterRemoteLedgerRows(remoteLedgerRows, { cigaretteRows: remoteCigaretteRows });
     const remoteHasData = [remoteHabitRows, remoteEntryRows, remoteCigaretteRows, remoteAlcoholRows, remoteAlcoholEventRows, remoteTaskRows, remoteLedgerRows].some(rows => rows.length > 0);
 
     applyRemoteHabitAuthority(remoteHabitRows);
