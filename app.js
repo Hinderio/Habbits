@@ -6,6 +6,7 @@
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
   const COACH_SESSION_KEY = 'habitflow-coach-session-v1';
+  const ALCOHOL_RULES_UI_KEY = 'habitflow-alcohol-rules-open';
   const SUPABASE_CONFIG = window.HABITFLOW_SUPABASE_CONFIG || {};
   const MEDITATION_TECHNIQUES = [
     { key: '7-3-11', title: '7-3-11 Atemtechnik', subtitle: 'Runterfahren mit langer Ausatmung', minutes: 6, pattern: '7 ein · 3 halten · 11 aus' },
@@ -77,8 +78,9 @@
     urgent: { label: 'Kritisch', short: 'Kritisch', rank: 4, bonus: 40 }
   };
   const ALCOHOL_TYPES = {
-    beer: 'Bier', wine: 'Wein', cocktail: 'Drink', shot: 'Shot', other: 'Anderes'
+    beer: 'Bier', wine: 'Wein', cocktail: 'Cocktail', shot: 'Shot', other: 'Anderes'
   };
+  const ALCOHOL_POINTS_BY_TYPE = Object.freeze({ beer: -20, shot: -25, cocktail: -30, wine: -20, other: -25 });
   const HABIT_TARGET_PERIODS = {
     day: { label: 'Tagesziel', short: 'Tag', days: 1 },
     week: { label: 'Wochenziel', short: 'Woche', days: 7 },
@@ -117,6 +119,10 @@
     plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
     check: '<path d="m5 13 4 4L19 7"/>',
     alcohol: '<path d="M8 3h8l-1 9a3 3 0 0 1-6 0L8 3Z"/><path d="M12 15v5"/><path d="M9 21h6"/><path d="M9 8h6"/>',
+    beer: '<path d="M8 5h7a2 2 0 0 1 2 2v10a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3V7a2 2 0 0 1 2-2Z"/><path d="M15 8h2a2 2 0 0 1 0 4h-2"/><path d="M9 8h4"/><path d="M9 11h4"/>',
+    wine: '<path d="M8 4h8v2a4 4 0 0 1-8 0V4Z"/><path d="M12 10v7"/><path d="M9 21h6"/><path d="M8 4h8"/>',
+    cocktail: '<path d="M5 5h14l-7 7-7-7Z"/><path d="M12 12v6"/><path d="M9 21h6"/><path d="m15 5 2-2"/><path d="M12 5V3"/>',
+    shot: '<path d="M9 4h6l-1 13a2 2 0 0 1-4 0L9 4Z"/><path d="M9 8h6"/><path d="M10 20h4"/>',
     stress: '<path d="m13 2-8 12h7l-1 8 8-12h-7l1-8Z"/>',
     coffee: '<path d="M5 8h11v5a5 5 0 0 1-5 5H10a5 5 0 0 1-5-5V8Z"/><path d="M16 10h2a2 2 0 0 1 0 4h-2"/><path d="M8 4v2"/><path d="M12 4v2"/>',
     boredom: '<path d="M5 12h14"/><path d="M7 8h.01"/><path d="M17 16h.01"/>',
@@ -190,6 +196,7 @@
   let remoteTaskInProgressSupported = true;
   let remoteHabitTargetPeriodSupported = true;
   let pendingTriggerSmokeId = null;
+  let alcoholRulesExpanded = localStorage.getItem(ALCOHOL_RULES_UI_KEY) !== 'collapsed';
 
   const els = {};
 
@@ -197,11 +204,13 @@
 
   async function init() {
     cacheEls();
+    applyAlcoholRulesVisibility();
     applyTheme();
     fillSettingsForm();
     bindEvents();
     renderStaticIcons();
     migrateCigaretteScoring();
+    migrateAlcoholScoring();
     await initSupabase();
     initOngoingSync();
     registerServiceWorker();
@@ -256,6 +265,8 @@
       smokePauseHint: $('#smokePauseHint'),
       alcoholTypeSelect: $('#alcoholTypeSelect'),
       recordAlcoholUnitBtn: $('#recordAlcoholUnitBtn'),
+      toggleAlcoholRulesBtn: $('#toggleAlcoholRulesBtn'),
+      alcoholRulesPanel: $('#alcoholRulesPanel'),
       alcoholUnitHistory: $('#alcoholUnitHistory'),
       smokeHistory: $('#smokeHistory'),
       historyModal: $('#historyModal'),
@@ -350,6 +361,7 @@
     els.recordSmokeBtn.addEventListener('click', () => recordCigarette());
     if (els.emergencyCravingBtn) els.emergencyCravingBtn.addEventListener('click', startEmergencyCravingFlow);
     if (els.recordAlcoholUnitBtn) els.recordAlcoholUnitBtn.addEventListener('click', recordAlcoholUnit);
+    if (els.toggleAlcoholRulesBtn) els.toggleAlcoholRulesBtn.addEventListener('click', toggleAlcoholRulesVisibility);
     els.trendMetricSelect.addEventListener('change', () => {
       selectedTrendMetric = els.trendMetricSelect.value;
       localStorage.setItem(TREND_METRIC_KEY, selectedTrendMetric);
@@ -1584,16 +1596,20 @@
     if (!units.length) {
       return '<div class="empty-state">Noch keine Alkohol-Einheit erfasst. Neue Einheiten erscheinen hier und können später gelöscht werden.</div>';
     }
-    return `<div class="stack-list tall alcohol-history-modal-list">${units.map(unit => `<article class="list-card compact">
-      <div class="list-card-main">
-        <h4>${escapeHtml(alcoholTypeLabel(unit.drink_type))}</h4>
-        <p class="meta">${formatDateTime(unit.occurred_at || unit.created_at)}${unit.note ? ` · ${escapeHtml(unit.note)}` : ''}</p>
-      </div>
-      <div class="list-actions">
-        <span class="badge muted">1 Einheit</span>
-        <button class="mini-btn danger" type="button" data-action="delete-alcohol-unit" data-id="${unit.id}">Löschen</button>
-      </div>
-    </article>`).join('')}</div>`;
+    return `<div class="stack-list tall alcohol-history-modal-list">${units.map(unit => {
+      const points = alcoholPointsForUnit(unit.id);
+      const pointsLabel = points ? `${formatSignedPoints(points)} Pkt.` : '0 Pkt.';
+      return `<article class="list-card compact">
+        <div class="list-card-main">
+          <h4>${escapeHtml(alcoholTypeLabel(unit.drink_type))}</h4>
+          <p class="meta">${formatDateTime(unit.occurred_at || unit.created_at)}${unit.note ? ` · ${escapeHtml(unit.note)}` : ''}</p>
+        </div>
+        <div class="list-actions">
+          <span class="badge muted">${escapeHtml(pointsLabel)}</span>
+          <button class="mini-btn danger" type="button" data-action="delete-alcohol-unit" data-id="${unit.id}">Löschen</button>
+        </div>
+      </article>`;
+    }).join('')}</div>`;
   }
 
   function renderSmokingTip(last = getLastCigarette()) {
@@ -2679,6 +2695,110 @@
     return ALCOHOL_TYPES[type] || ALCOHOL_TYPES.other;
   }
 
+  function formatSignedPoints(points) {
+    const value = Number(points || 0);
+    return `${value > 0 ? '+' : ''}${value}`;
+  }
+
+  function alcoholBasePoints(drinkType) {
+    return ALCOHOL_POINTS_BY_TYPE[drinkType] ?? ALCOHOL_POINTS_BY_TYPE.other;
+  }
+
+  function alcoholRollingPenalty(count) {
+    if (count >= 12) return -15;
+    if (count >= 8) return -10;
+    if (count >= 5) return -5;
+    return 0;
+  }
+
+  function alcoholConsecutiveDaysThrough(dateKey, dayKeys) {
+    let streak = 0;
+    let cursor = new Date(`${dateKey}T12:00:00`);
+    while (dayKeys.has(toDateKey(cursor))) {
+      streak += 1;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    return streak;
+  }
+
+  function alcoholStreakPenalty(streak) {
+    if (streak >= 5) return -10;
+    if (streak >= 3) return -5;
+    return 0;
+  }
+
+  function alcoholPointsEntryReason(unit, rollingCount, streakDays, totalPoints) {
+    const basePoints = alcoholBasePoints(unit.drink_type);
+    const bits = [`${alcoholTypeLabel(unit.drink_type)} ${formatSignedPoints(basePoints)} Pkt.`];
+    const rolling = alcoholRollingPenalty(rollingCount);
+    const streak = alcoholStreakPenalty(streakDays);
+    if (rolling) bits.push(`7 Tage / ${rollingCount} Einh. ${formatSignedPoints(rolling)} Pkt.`);
+    if (streak) bits.push(`${streakDays} Alkohol-Tage in Folge ${formatSignedPoints(streak)} Pkt.`);
+    bits.push(`Total ${formatSignedPoints(totalPoints)} Pkt.`);
+    return `Alkohol: ${bits.join(' · ')}`;
+  }
+
+  function isAlcoholPointsEntry(entry) {
+    return entry?.source_type === 'bonus' && String(entry?.reason || '').startsWith('Alkohol:');
+  }
+
+  function alcoholPointsForUnit(unitId) {
+    return Number(state.pointsLedger.find(entry => isAlcoholPointsEntry(entry) && entry.source_id === unitId)?.points || 0);
+  }
+
+  function recalculateAlcoholScores({ markUpdated = false } = {}) {
+    if (!state.alcoholUnits.length) {
+      const removedIds = state.pointsLedger.filter(isAlcoholPointsEntry).map(entry => entry.id);
+      if (removedIds.length) {
+        state.pointsLedger = state.pointsLedger.filter(entry => !isAlcoholPointsEntry(entry));
+        markRemoteDeletedMany('points_ledger', removedIds);
+        return true;
+      }
+      return false;
+    }
+
+    const units = [...state.alcoholUnits]
+      .filter(unit => unit?.id)
+      .sort((a, b) => sortDate(a.occurred_at || a.created_at) - sortDate(b.occurred_at || b.created_at));
+    const allDayKeys = new Set(units.map(unit => toDateKey(unit.occurred_at || unit.created_at)));
+    const activeIds = new Set(units.map(unit => unit.id));
+    let changed = false;
+
+    const removedIds = state.pointsLedger
+      .filter(entry => isAlcoholPointsEntry(entry) && !activeIds.has(entry.source_id))
+      .map(entry => entry.id);
+    if (removedIds.length) {
+      state.pointsLedger = state.pointsLedger.filter(entry => !(isAlcoholPointsEntry(entry) && !activeIds.has(entry.source_id)));
+      markRemoteDeletedMany('points_ledger', removedIds);
+      changed = true;
+    }
+
+    units.forEach(unit => {
+      const occurredAt = new Date(unit.occurred_at || unit.created_at || nowIso());
+      const dateKey = toDateKey(occurredAt);
+      const windowStart = occurredAt.getTime() - (6 * DAY_MS);
+      const rollingCount = units.filter(candidate => {
+        const candidateTime = new Date(candidate.occurred_at || candidate.created_at || 0).getTime();
+        return candidateTime >= windowStart && candidateTime <= occurredAt.getTime();
+      }).length;
+      const streakDays = alcoholConsecutiveDaysThrough(dateKey, allDayKeys);
+      const totalPoints = alcoholBasePoints(unit.drink_type) + alcoholRollingPenalty(rollingCount) + alcoholStreakPenalty(streakDays);
+      const reason = alcoholPointsEntryReason(unit, rollingCount, streakDays, totalPoints);
+      if (addPoints('bonus', unit.id, totalPoints, reason, unit.occurred_at || unit.created_at || nowIso())) changed = true;
+      if (markUpdated) {
+        unit.updated_at = nowIso();
+        unit.synced = false;
+      }
+    });
+    return changed;
+  }
+
+  function migrateAlcoholScoring() {
+    const changed = recalculateAlcoholScores({ markUpdated: false });
+    if (changed) saveState({ skipRender: true });
+    return changed;
+  }
+
   function alcoholUnitsOnDate(key) {
     return state.alcoholUnits.filter(unit => toDateKey(unit.occurred_at) === key);
   }
@@ -2702,7 +2822,7 @@
     const occurredAt = nowIso();
     const drinkType = els.alcoholTypeSelect?.value || 'beer';
     const label = alcoholTypeLabel(drinkType);
-    state.alcoholUnits.push({
+    const unit = {
       id: uid(),
       occurred_at: occurredAt,
       drink_type: drinkType,
@@ -2710,11 +2830,13 @@
       created_at: occurredAt,
       updated_at: occurredAt,
       synced: false
-    });
+    };
+    state.alcoholUnits.push(unit);
     ensureAlcoholDayLog(toDateKey(new Date()));
     dedupeAlcoholLogs(state);
+    recalculateAlcoholScores();
     saveState();
-    toast(`${label} erfasst · 1 Einheit`);
+    toast(`${label} erfasst · ${formatSignedPoints(alcoholPointsForUnit(unit.id))} Pkt.`);
     syncWithSupabase({ silent: true });
   }
 
@@ -2722,8 +2844,11 @@
     const unit = state.alcoholUnits.find(a => a.id === id);
     if (!unit) return;
     if (!confirm('Alkohol-Einheit wirklich löschen?')) return;
+    const removedLedgerIds = state.pointsLedger.filter(entry => isAlcoholPointsEntry(entry) && entry.source_id === id).map(entry => entry.id);
     state.alcoholUnits = state.alcoholUnits.filter(a => a.id !== id);
+    state.pointsLedger = state.pointsLedger.filter(entry => !(isAlcoholPointsEntry(entry) && entry.source_id === id));
     markRemoteDeleted('alcohol_events', id);
+    markRemoteDeletedMany('points_ledger', removedLedgerIds);
     const key = toDateKey(unit.occurred_at);
     const remainingUnitsToday = alcoholUnitsOnDate(key);
     const dayLog = alcoholForDate(key);
@@ -2732,7 +2857,10 @@
       dayLog.updated_at = nowIso();
       dayLog.synced = false;
     }
+    recalculateAlcoholScores();
     saveState();
+    renderHistoryModal();
+    await deleteRemoteByIds('points_ledger', removedLedgerIds);
     await deleteRemoteById('alcohol_events', id);
     toast('Alkohol-Einheit gelöscht');
     syncWithSupabase({ silent: true, pullFirst: false });
@@ -3363,8 +3491,31 @@ async function deleteAlcoholLog(id) {
     setInterval(() => syncWithSupabase({ silent: true, pullFirst: true }), 60_000);
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') syncWithSupabase({ silent: true, pullFirst: true });
+      if (document.visibilityState === 'hidden' && hasPendingSyncWork()) syncWithSupabase({ silent: true, pullFirst: false });
     });
     window.addEventListener('online', () => syncWithSupabase({ silent: true, pullFirst: true }));
+    window.addEventListener('pagehide', () => { if (hasPendingSyncWork()) syncWithSupabase({ silent: true, pullFirst: false }); });
+    window.addEventListener('beforeunload', () => { if (hasPendingSyncWork()) syncWithSupabase({ silent: true, pullFirst: false }); });
+  }
+
+  function applyAlcoholRulesVisibility() {
+    if (!els.alcoholRulesPanel || !els.toggleAlcoholRulesBtn) return;
+    els.alcoholRulesPanel.classList.toggle('is-collapsed', !alcoholRulesExpanded);
+    els.toggleAlcoholRulesBtn.setAttribute('aria-expanded', String(alcoholRulesExpanded));
+    els.toggleAlcoholRulesBtn.textContent = alcoholRulesExpanded ? 'Alkohol-Regeln ausblenden' : 'Alkohol-Regeln einblenden';
+  }
+
+  function toggleAlcoholRulesVisibility() {
+    alcoholRulesExpanded = !alcoholRulesExpanded;
+    localStorage.setItem(ALCOHOL_RULES_UI_KEY, alcoholRulesExpanded ? 'expanded' : 'collapsed');
+    applyAlcoholRulesVisibility();
+  }
+
+  function hasPendingSyncWork() {
+    if (!state) return false;
+    const deletedPending = SYNC_TABLES.some(table => Object.keys(state.deletedRemoteIds?.[table] || {}).length > 0);
+    if (deletedPending) return true;
+    return ['habits', 'habitEntries', 'cigarettes', 'alcoholLogs', 'alcoholUnits', 'tasks', 'pointsLedger'].some(key => (state[key] || []).some(entry => entry?.synced === false));
   }
 
   function renderSyncStatus(mode) {
@@ -3422,6 +3573,7 @@ async function deleteAlcoholLog(id) {
       await flushRemoteDeletes();
       dedupeStateCollections(state);
       migrateCigaretteScoring();
+      migrateAlcoholScoring();
       await flushRemoteDeletes();
 
       await upsertHabitRows();
@@ -3625,22 +3777,32 @@ async function deleteAlcoholLog(id) {
   }
 
   async function deleteRemoteById(table, id) {
-    if (!supabaseClient || !id) return;
+    if (!supabaseClient || !id) return false;
     try {
       const { error } = await supabaseClient.from(table).delete().eq('id', id);
-      if (error) console.warn(`Remote-Delete ${table} fehlgeschlagen`, error);
+      if (error) {
+        console.warn(`Remote-Delete ${table} fehlgeschlagen`, error);
+        return false;
+      }
+      return true;
     } catch (error) {
       console.warn(`Remote-Delete ${table} nicht möglich`, error);
+      return false;
     }
   }
 
   async function deleteRemoteByIds(table, ids) {
-    if (!supabaseClient || !ids?.length) return;
+    if (!supabaseClient || !ids?.length) return false;
     try {
       const { error } = await supabaseClient.from(table).delete().in('id', ids);
-      if (error) console.warn(`Remote-Delete ${table} fehlgeschlagen`, error);
+      if (error) {
+        console.warn(`Remote-Delete ${table} fehlgeschlagen`, error);
+        return false;
+      }
+      return true;
     } catch (error) {
       console.warn(`Remote-Delete ${table} nicht möglich`, error);
+      return false;
     }
   }
 
@@ -3653,7 +3815,9 @@ async function deleteAlcoholLog(id) {
     state.deletedRemoteIds = normalizeDeletedRemoteIds(state.deletedRemoteIds);
     for (const table of SYNC_TABLES) {
       const ids = Object.keys(state.deletedRemoteIds[table] || {});
-      if (ids.length) await deleteRemoteByIds(table, ids);
+      if (!ids.length) continue;
+      const deleted = await deleteRemoteByIds(table, ids);
+      if (deleted) ids.forEach(id => delete state.deletedRemoteIds[table][id]);
     }
   }
 
