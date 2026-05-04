@@ -612,3 +612,39 @@ body.light .coach-context-card,body.light .coach-plan-card,body.light .coach-per
 body.light .coach-avatar-wrap{background:rgba(74,215,209,.12);border-color:rgba(13,151,149,.12)}
 @media (max-width:980px){.coach-modal-card{gap:18px}.coach-layout{gap:18px}.coach-plan-panel{margin-top:2px}.coach-context-card{min-height:auto}.coach-plan-card{min-height:auto}}
 @media (max-width:760px){.habit-card-grid{gap:18px}.coach-hero{flex-direction:row;align-items:center}.coach-avatar-wrap{width:62px;height:62px;flex-basis:62px;border-radius:20px;align-self:auto}.coach-avatar{width:44px;height:44px}.coach-hero-copy h2{font-size:1.55rem}.coach-result-panel,.coach-control-panel,.coach-plan-panel{padding:18px}.coach-context-grid,.coach-plan-grid{gap:14px}.coach-callout{padding:16px}.coach-modal-card{gap:16px}}
+
+
+/* --- 15-minute morning routine --- */
+.morning-routine-panel{overflow:hidden;position:relative}
+.morning-routine-card{display:block}
+.morning-routine-shell{display:grid;gap:16px}
+.morning-routine-main{display:flex;justify-content:space-between;align-items:flex-start;gap:18px}
+.morning-routine-copy h3{font-size:clamp(1.35rem,3vw,2.1rem);letter-spacing:-.05em;margin:2px 0 6px}
+.morning-routine-copy p:not(.eyebrow){color:var(--muted);line-height:1.5}
+.morning-routine-meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.morning-routine-meta span{border-radius:999px;padding:8px 11px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.075);color:var(--muted);font-size:.8rem;font-weight:850}
+.morning-routine-score{width:108px;min-height:92px;border-radius:26px;display:grid;place-items:center;text-align:center;background:linear-gradient(135deg,rgba(74,215,209,.16),rgba(143,240,167,.09));border:1px solid rgba(74,215,209,.18);flex:0 0 auto}
+.morning-routine-score strong{font-size:1.55rem;letter-spacing:-.05em}
+.morning-routine-score span{display:block;color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.1em;font-weight:900}
+.morning-routine-progress{height:9px;border-radius:999px;background:rgba(255,255,255,.075);overflow:hidden}
+.morning-routine-progress i{display:block;height:100%;width:0;border-radius:999px;background:linear-gradient(90deg,var(--primary),var(--accent));transition:width .25s ease}
+.morning-routine-focus-card{display:flex;align-items:flex-start;gap:14px;padding:16px;border-radius:24px;background:linear-gradient(135deg,rgba(74,215,209,.11),rgba(255,255,255,.045));border:1px solid rgba(74,215,209,.14)}
+.morning-routine-focus-card small{display:block;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;font-size:.72rem;font-weight:900;margin-bottom:6px}
+.morning-routine-focus-card strong{display:block;font-size:1rem;margin-bottom:5px}
+.morning-routine-focus-card p{color:var(--muted);line-height:1.45;font-size:.92rem}
+.morning-routine-steps{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.morning-routine-steps article{min-height:112px;padding:13px;border-radius:20px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.07);display:flex;flex-direction:column;gap:10px;transition:transform .18s ease,border-color .18s ease,background .18s ease}
+.morning-routine-steps article>span{width:34px;height:34px;border-radius:13px;display:grid;place-items:center;background:rgba(74,215,209,.12);color:var(--primary)}
+.morning-routine-steps small{display:block;color:var(--muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;font-weight:900;margin-bottom:4px}
+.morning-routine-steps strong{display:block;line-height:1.22;font-size:.9rem}
+.morning-routine-steps article.is-current{background:linear-gradient(135deg,rgba(74,215,209,.14),rgba(143,240,167,.08));border-color:rgba(74,215,209,.24);transform:translateY(-1px)}
+.morning-routine-steps article.is-done{opacity:.72}
+.morning-routine-steps article.is-done>span{background:rgba(143,240,167,.13);color:var(--accent)}
+.morning-routine-actions{display:flex;flex-wrap:wrap;gap:10px}
+.morning-routine-actions .pill{justify-content:center}
+body.light .morning-routine-meta span,body.light .morning-routine-focus-card,body.light .morning-routine-steps article{background:rgba(255,255,255,.66);border-color:rgba(17,36,58,.08)}
+body.light .morning-routine-score{background:linear-gradient(135deg,rgba(74,215,209,.18),rgba(143,240,167,.14));border-color:rgba(13,151,149,.12)}
+body.light .morning-routine-steps article.is-current{background:linear-gradient(135deg,rgba(74,215,209,.2),rgba(143,240,167,.14));border-color:rgba(13,151,149,.18)}
+@media (max-width:980px){.morning-routine-steps{grid-template-columns:repeat(2,minmax(0,1fr))}.morning-routine-steps article:last-child{grid-column:1/-1}}
+@media (max-width:760px){.morning-routine-main{flex-direction:column}.morning-routine-score{width:100%;min-height:74px}.morning-routine-steps{grid-template-columns:1fr}.morning-routine-steps article{min-height:auto}.morning-routine-actions .pill{width:100%}}
+

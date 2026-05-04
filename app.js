@@ -6,6 +6,8 @@
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
   const COACH_SESSION_KEY = 'habitflow-coach-session-v1';
+  const MORNING_ROUTINE_SESSION_KEY = 'habitflow-morning-routine-session-v1';
+  const MORNING_ROUTINE_VARIANT_KEY = 'habitflow-morning-routine-variant-offset-v1';
   const RULES_UI_KEY = 'habitflow-rules-open';
   const HABIT_DNA_UI_KEY = 'habitflow-habit-dna-open';
   const CONSUMPTION_MODE_KEY = 'habitflow-consumption-mode';
@@ -17,6 +19,141 @@
     { key: 'urge-surf', title: 'Craving-Welle', subtitle: 'Drang beobachten, ohne sofort zu handeln', minutes: 4, pattern: 'wahrnehmen · warten · wählen' },
     { key: 'gratitude', title: 'Dankbarkeits-Minute', subtitle: 'Kurzer mentaler Reset mit positiver Ankerung', minutes: 3, pattern: '3 Dinge benennen' }
   ];
+
+
+  const MORNING_ROUTINES = [
+    {
+      key: 'energy-start',
+      title: 'Energy Start',
+      subtitle: 'Aktivierender Start mit kurzen Kraftimpulsen',
+      mood: 'aktiv',
+      steps: [
+        { title: 'Wasser & Licht', minutes: 2, icon: 'water', body: 'Trink Wasser, öffne kurz das Fenster und nimm drei lange Atemzüge.' },
+        { title: 'Mobility Flow', minutes: 4, icon: 'walking', body: 'Nacken kreisen, Schultern öffnen, Hüfte mobilisieren und Rücken rund/hohl bewegen.' },
+        { title: '6-Minuten-Kraft', minutes: 6, icon: 'sport', body: '3 Runden: 10 Squats, 6 Push-ups, 20 Sekunden Plank. Ruhig, sauber, ohne Maximaldruck.' },
+        { title: 'Tagesfokus', minutes: 2, icon: 'tasks', body: 'Schreib oder sag: Was ist heute die eine Sache, die wirklich zählt?' },
+        { title: 'Commit', minutes: 1, icon: 'check', body: 'Routine bewusst abschliessen. Kleine Energie zählt.' }
+      ]
+    },
+    {
+      key: 'soft-start',
+      title: 'Soft Start',
+      subtitle: 'Sanft wach werden, ohne Stress ins System zu bringen',
+      mood: 'ruhig',
+      steps: [
+        { title: 'Ankommen', minutes: 2, icon: 'meditation', body: 'Setz dich aufrecht hin, entspanne die Schultern und atme länger aus als ein.' },
+        { title: 'Ganzkörper-Mobility', minutes: 4, icon: 'walking', body: 'Langsame Cat-Cows, Hüftkreise, Fussgelenke und Brustwirbelsäule öffnen.' },
+        { title: 'Low Impact Fitness', minutes: 6, icon: 'standingDesk', body: '2 Runden: 12 Good Mornings, 10 Wall Push-ups, 12 Glute Bridges, 30 Sekunden Dead Bug.' },
+        { title: 'Klarer Satz', minutes: 2, icon: 'edit', body: 'Beende den Satz: Heute wird leichter, wenn ich ____.' },
+        { title: 'Startsignal', minutes: 1, icon: 'check', body: 'Steh auf, richte dich gross auf und starte ohne neues Grübeln.' }
+      ]
+    },
+    {
+      key: 'core-wakeup',
+      title: 'Core Wakeup',
+      subtitle: 'Bauch, Rücken und Haltung stabilisieren',
+      mood: 'stabil',
+      steps: [
+        { title: 'Reset-Atem', minutes: 2, icon: 'reset', body: '4 ruhige Atemzüge, dann Bauchspannung sanft aktivieren.' },
+        { title: 'Rücken öffnen', minutes: 4, icon: 'walking', body: 'Cat-Cow, Child’s Pose, Hüftbeuger-Stretch und Schulterkreisen.' },
+        { title: 'Core Block', minutes: 6, icon: 'pushups', body: '3 Runden: 20 Sekunden Plank, 8 Dead Bugs pro Seite, 10 Bird Dogs.' },
+        { title: 'Fokus-Minute', minutes: 2, icon: 'tasks', body: 'Wähle eine Aufgabe, die nach der Routine nur 5 Minuten bekommt.' },
+        { title: 'Abschluss', minutes: 1, icon: 'check', body: 'Kurz stehen, Rücken lang, Routine als erledigt markieren.' }
+      ]
+    },
+    {
+      key: 'no-excuses-mini',
+      title: 'No Excuses Mini',
+      subtitle: 'Einfach, direkt und fast unmöglich zu überspringen',
+      mood: 'klar',
+      steps: [
+        { title: 'Wasser', minutes: 2, icon: 'water', body: 'Ein Glas Wasser. Kein Handy. Nur starten.' },
+        { title: 'Gelenke wecken', minutes: 4, icon: 'walking', body: 'Je 30 Sekunden: Hals, Schultern, Hüfte, Knie, Fussgelenke, Rücken.' },
+        { title: 'Simple Circuit', minutes: 6, icon: 'sport', body: '6 Minuten im Wechsel: 10 Squats, 10 Incline Push-ups, 20 Sekunden Hollow Hold.' },
+        { title: 'Eine Sache', minutes: 2, icon: 'tasks', body: 'Sag laut: Die eine Sache heute ist ____.' },
+        { title: 'Haken setzen', minutes: 1, icon: 'check', body: 'Fertig. Nicht perfekt, aber durchgeführt.' }
+      ]
+    },
+    {
+      key: 'posture-reset',
+      title: 'Posture Reset',
+      subtitle: 'Rücken, Schultern und Nacken für den Tag öffnen',
+      mood: 'aufrecht',
+      steps: [
+        { title: 'Ausrichten', minutes: 2, icon: 'standingDesk', body: 'Steh aufrecht, Füsse stabil, Schultern tief, Kopf lang.' },
+        { title: 'Schulter-Mobility', minutes: 4, icon: 'walking', body: 'Armkreise, Wall Angels, Brust öffnen und Nacken langsam bewegen.' },
+        { title: 'Haltungs-Kraft', minutes: 6, icon: 'pushups', body: '3 Runden: 12 Reverse Flys ohne Gewicht, 10 Squats, 20 Sekunden Side Plank je Seite.' },
+        { title: 'Arbeit klarziehen', minutes: 2, icon: 'tasks', body: 'Welche Haltung braucht dein Tag: ruhig, schnell oder sauber?' },
+        { title: 'Setzen', minutes: 1, icon: 'check', body: 'Richte deinen Arbeitsplatz oder ersten Ort bewusst ein.' }
+      ]
+    },
+    {
+      key: 'runner-prep',
+      title: 'Runner Prep',
+      subtitle: 'Beine, Hüfte und Kreislauf sanft aktivieren',
+      mood: 'dynamisch',
+      steps: [
+        { title: 'Warm werden', minutes: 2, icon: 'walking', body: 'Leicht marschieren, Arme mitschwingen, Atmung ruhig halten.' },
+        { title: 'Bein-Mobility', minutes: 4, icon: 'jogging', body: 'Leg Swings, Hüftkreise, Wadenfedern und Ausfallschritt-Dehnung.' },
+        { title: 'Bein-Block', minutes: 6, icon: 'sport', body: '3 Runden: 10 Lunges, 12 Calf Raises, 20 Sekunden Mountain Climbers langsam.' },
+        { title: 'Tagesroute', minutes: 2, icon: 'tasks', body: 'Plane einen Mini-Walk oder eine kurze Treppe als Bonus im Tag.' },
+        { title: 'Fertig', minutes: 1, icon: 'check', body: 'Beine wach, Kopf klar, +50 Punkte möglich.' }
+      ]
+    },
+    {
+      key: 'stress-down',
+      title: 'Stress Down',
+      subtitle: 'Atem, Mobility und leichte Aktivierung gegen Morgenstress',
+      mood: 'beruhigend',
+      steps: [
+        { title: 'Lange Ausatmung', minutes: 2, icon: 'meditation', body: 'Atme 4 Sekunden ein und 6–8 Sekunden aus. Sechs ruhige Runden.' },
+        { title: 'Spannung lösen', minutes: 4, icon: 'reset', body: 'Kiefer, Schultern, Hände, Hüfte und Rücken bewusst lockern.' },
+        { title: 'Sanfte Fitness', minutes: 6, icon: 'walking', body: '2 Runden: 12 Squats langsam, 8 Push-ups erhöht, 30 Sekunden Plank auf Knien.' },
+        { title: 'Entlasten', minutes: 2, icon: 'edit', body: 'Schreib eine Sache auf, die heute bewusst kleiner sein darf.' },
+        { title: 'Ruhig starten', minutes: 1, icon: 'check', body: 'Ein kleiner Start ist heute genug.' }
+      ]
+    },
+    {
+      key: 'strength-light',
+      title: 'Strength Light',
+      subtitle: 'Leichte Kraft ohne Überforderung',
+      mood: 'stark',
+      steps: [
+        { title: 'Körpercheck', minutes: 2, icon: 'meditation', body: 'Kurz scannen: Rücken, Beine, Schultern. Nichts erzwingen.' },
+        { title: 'Mobilisieren', minutes: 4, icon: 'walking', body: 'Hüfte, Sprunggelenke, Brustwirbelsäule und Handgelenke vorbereiten.' },
+        { title: 'Kraftzirkel', minutes: 6, icon: 'pushups', body: 'EMOM 6: Minute 1 Squats, Minute 2 Push-ups, Minute 3 Plank – zweimal wiederholen.' },
+        { title: 'Fokus setzen', minutes: 2, icon: 'tasks', body: 'Was erledigst du heute besser langsam als gar nicht?' },
+        { title: 'Abschliessen', minutes: 1, icon: 'check', body: 'Routine speichern und Energie mitnehmen.' }
+      ]
+    },
+    {
+      key: 'weekend-flow',
+      title: 'Weekend Flow',
+      subtitle: 'Spielerisch, locker und trotzdem wirksam',
+      mood: 'locker',
+      steps: [
+        { title: 'Frische Luft', minutes: 2, icon: 'water', body: 'Wasser trinken, Fenster öffnen, kurz lächeln. Kein Druck.' },
+        { title: 'Flow Mobility', minutes: 4, icon: 'walking', body: 'Freier Flow: Rücken, Hüfte, Schultern, was sich heute gut anfühlt.' },
+        { title: 'Fun Fitness', minutes: 6, icon: 'sport', body: '6 Minuten freie Mischung: Squats, Shadow Boxing, Plank, Hampelmänner low impact.' },
+        { title: 'Wochenend-Fokus', minutes: 2, icon: 'reward', body: 'Was macht den Tag heute bewusst schön statt nur voll?' },
+        { title: 'Fertig', minutes: 1, icon: 'check', body: 'Locker abgeschlossen. Genau richtig.' }
+      ]
+    },
+    {
+      key: 'low-energy-rescue',
+      title: 'Low Energy Rescue',
+      subtitle: 'Minimum-Version für müde Tage',
+      mood: 'minimal',
+      steps: [
+        { title: 'Nur starten', minutes: 2, icon: 'water', body: 'Wasser, Licht, einmal tief ausatmen. Mehr muss noch nicht sein.' },
+        { title: 'Mini Mobility', minutes: 4, icon: 'walking', body: 'Langsame Bewegungen im Sitzen oder Stehen: Nacken, Schultern, Rücken, Hüfte.' },
+        { title: 'Mini Fitness', minutes: 6, icon: 'standingDesk', body: '3 Runden leicht: 8 Chair Squats, 8 Wall Push-ups, 20 Sekunden ruhiges Stehen.' },
+        { title: 'Heute klein', minutes: 2, icon: 'edit', body: 'Schreib: Das Minimum, das heute reicht, ist ____.' },
+        { title: 'Erhalten', minutes: 1, icon: 'check', body: 'Du hast das System am Leben gehalten.' }
+      ]
+    }
+  ];
+
 
   const SMOKING_TIPS = [
     {
@@ -271,6 +408,7 @@
   let selectedTrendMetric = localStorage.getItem(TREND_METRIC_KEY) || 'points';
   let activeSmokingTipIndex = 0;
   let coachSession = loadCoachSession();
+  let morningRoutineSession = loadMorningRoutineSession();
   let editingSmokeId = null;
   let editingHabitId = null;
   let editingHabitEntryId = null;
@@ -344,6 +482,7 @@
       openTasksCount: $('#openTasksCount'),
       dailyScore: $('#dailyScore'),
       dailyScoreHint: $('#dailyScoreHint'),
+      morningRoutineCard: $('#morningRoutineCard'),
       insightsGrid: $('#insightsGrid'),
       weeklyReview: $('#weeklyReview'),
       habitHeatmap: $('#habitHeatmap'),
@@ -520,6 +659,11 @@
       if (action === 'archive-habit') archiveHabit(id);
       if (action === 'toggle-habit-dna') toggleHabitDna(id);
       if (action === 'log-habit') logHabit(id);
+      if (action === 'start-morning-routine') startMorningRoutine();
+      if (action === 'next-morning-step') advanceMorningRoutine();
+      if (action === 'finish-morning-routine') finishMorningRoutine();
+      if (action === 'shuffle-morning-routine') shuffleMorningRoutine();
+      if (action === 'reset-morning-routine') resetMorningRoutineSession();
       if (action === 'open-smoke-history') openHistoryModal('smoke');
       if (action === 'open-smoke-costs') openHistoryModal('smoke-costs');
       if (action === 'open-alcohol-history') openHistoryModal('alcohol');
@@ -615,6 +759,7 @@
       experiments: [],
       partyPlans: [],
       recoverySessions: [],
+      morningRoutineLogs: [],
       deletedRemoteIds: createEmptyDeletedRemoteIds()
     };
   }
@@ -646,6 +791,7 @@
     next.experiments = Array.isArray(next.experiments) ? next.experiments : [];
     next.partyPlans = Array.isArray(next.partyPlans) ? next.partyPlans : [];
     next.recoverySessions = Array.isArray(next.recoverySessions) ? next.recoverySessions : [];
+    next.morningRoutineLogs = Array.isArray(next.morningRoutineLogs) ? next.morningRoutineLogs : [];
     next.deletedRemoteIds = normalizeDeletedRemoteIds(next.deletedRemoteIds);
     ensureSystemHabits(next);
     dedupeStateCollections(next);
@@ -1055,6 +1201,210 @@
     els.smokePauseHint.textContent = last ? 'Pause läuft seit letzter Erfassung · Verlauf per Button öffnen' : 'Noch kein Eintrag vorhanden';
   }
 
+
+  function todayMorningRoutineSourceId(key = toDateKey(new Date())) {
+    return `morning-routine-${key}`;
+  }
+
+  function dateHash(value = toDateKey(new Date())) {
+    return String(value || '').split('').reduce((hash, char) => hash + char.charCodeAt(0), 0);
+  }
+
+  function currentMorningRoutineOffset() {
+    return Math.max(0, Number(localStorage.getItem(MORNING_ROUTINE_VARIANT_KEY) || 0));
+  }
+
+  function setMorningRoutineOffset(offset) {
+    localStorage.setItem(MORNING_ROUTINE_VARIANT_KEY, String(Math.max(0, Number(offset || 0))));
+  }
+
+  function getMorningRoutineByKey(key) {
+    return MORNING_ROUTINES.find(routine => routine.key === key) || MORNING_ROUTINES[0];
+  }
+
+  function getMorningRoutineForToday() {
+    const todayKey = toDateKey(new Date());
+    if (morningRoutineSession?.dateKey === todayKey && morningRoutineSession.routineKey) {
+      return getMorningRoutineByKey(morningRoutineSession.routineKey);
+    }
+    const index = (dateHash(todayKey) + currentMorningRoutineOffset()) % MORNING_ROUTINES.length;
+    return MORNING_ROUTINES[index];
+  }
+
+  function loadMorningRoutineSession() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(MORNING_ROUTINE_SESSION_KEY) || '{}');
+      return {
+        dateKey: parsed.dateKey || '',
+        routineKey: parsed.routineKey || '',
+        currentStep: Math.max(0, Math.min(4, Number(parsed.currentStep || 0))),
+        startedAt: parsed.startedAt || null
+      };
+    } catch {
+      return { dateKey: '', routineKey: '', currentStep: 0, startedAt: null };
+    }
+  }
+
+  function saveMorningRoutineSession() {
+    localStorage.setItem(MORNING_ROUTINE_SESSION_KEY, JSON.stringify(morningRoutineSession));
+  }
+
+  function morningRoutineCompletedLog(key = toDateKey(new Date())) {
+    const sourceId = todayMorningRoutineSourceId(key);
+    return state.morningRoutineLogs.find(log => log.date_key === key) ||
+      state.pointsLedger.find(point => point.source_type === 'bonus' && point.source_id === sourceId) ||
+      null;
+  }
+
+  function morningRoutineProgressPercent(routine, currentStep) {
+    const steps = routine?.steps || [];
+    if (!steps.length) return 0;
+    return Math.min(100, Math.round((Math.max(0, currentStep) / steps.length) * 100));
+  }
+
+  function morningRoutineTotalMinutes(routine) {
+    return sum((routine?.steps || []).map(step => Number(step.minutes || 0))) || 15;
+  }
+
+  function renderMorningRoutine() {
+    if (!els.morningRoutineCard) return;
+    const todayKey = toDateKey(new Date());
+    const completed = Boolean(morningRoutineCompletedLog(todayKey));
+    const routine = getMorningRoutineForToday();
+    const active = morningRoutineSession.dateKey === todayKey && morningRoutineSession.startedAt && !completed;
+    const stepIndex = active ? Math.max(0, Math.min(routine.steps.length - 1, Number(morningRoutineSession.currentStep || 0))) : 0;
+    const currentStep = routine.steps[stepIndex] || routine.steps[0];
+    const totalMinutes = morningRoutineTotalMinutes(routine);
+    const completedSteps = active ? stepIndex : completed ? routine.steps.length : 0;
+    const progress = completed ? 100 : morningRoutineProgressPercent(routine, completedSteps);
+    const cta = completed
+      ? `<button class="pill secondary" type="button" data-action="shuffle-morning-routine">Morgen variieren</button>`
+      : active
+        ? `<button class="pill primary" type="button" data-action="${stepIndex >= routine.steps.length - 1 ? 'finish-morning-routine' : 'next-morning-step'}">${stepIndex >= routine.steps.length - 1 ? 'Abschliessen · +50' : 'Nächster Schritt'}</button><button class="pill secondary" type="button" data-action="reset-morning-routine">Neu starten</button>`
+        : `<button class="pill primary" type="button" data-action="start-morning-routine">15 Min. starten</button><button class="pill secondary" type="button" data-action="shuffle-morning-routine">Andere Routine</button>`;
+
+    els.morningRoutineCard.innerHTML = `<div class="morning-routine-shell ${active ? 'is-active' : ''} ${completed ? 'is-complete' : ''}">
+      <div class="morning-routine-main">
+        <div class="morning-routine-copy">
+          <p class="eyebrow">Morgenroutine · 15 Min.</p>
+          <h3>${escapeHtml(routine.title)}</h3>
+          <p>${escapeHtml(routine.subtitle)}</p>
+          <div class="morning-routine-meta">
+            <span>${escapeHtml(routine.mood)}</span>
+            <span>${totalMinutes} Minuten</span>
+            <span>${completed ? '+50 Punkte geholt' : '+50 Punkte bei Abschluss'}</span>
+          </div>
+        </div>
+        <div class="morning-routine-score">
+          <strong>${completed ? '+50' : '15m'}</strong>
+          <span>${completed ? 'erledigt' : 'Routine'}</span>
+        </div>
+      </div>
+
+      <div class="morning-routine-progress" aria-hidden="true"><i style="width:${progress}%"></i></div>
+
+      <div class="morning-routine-focus-card">
+        <span class="history-open-icon">${svgIcon(completed ? 'check' : currentStep.icon, 'ui-icon')}</span>
+        <div>
+          <small>${completed ? 'Heute abgeschlossen' : active ? `Schritt ${stepIndex + 1}/${routine.steps.length} · ${currentStep.minutes} Min.` : 'Bereit zum Start'}</small>
+          <strong>${completed ? 'Starker Start. Körper und Fokus aktiviert.' : active ? escapeHtml(currentStep.title) : 'Eine kurze Routine, die jeden Tag frisch variiert.'}</strong>
+          <p>${completed ? 'Die 50 Punkte sind gespeichert. Morgen kommt automatisch wieder eine andere Variante.' : active ? escapeHtml(currentStep.body) : 'Wasser, Mobility, Mini-Fitness, Fokus und Abschluss – bewusst klein, aber wirksam.'}</p>
+        </div>
+      </div>
+
+      <div class="morning-routine-steps">
+        ${routine.steps.map((step, index) => `<article class="${completed || (active && index < stepIndex) ? 'is-done' : active && index === stepIndex ? 'is-current' : ''}">
+          <span>${svgIcon(step.icon, 'ui-icon')}</span>
+          <div><small>${step.minutes} Min.</small><strong>${escapeHtml(step.title)}</strong></div>
+        </article>`).join('')}
+      </div>
+
+      <div class="morning-routine-actions">${cta}</div>
+    </div>`;
+  }
+
+  function startMorningRoutine() {
+    const todayKey = toDateKey(new Date());
+    if (morningRoutineCompletedLog(todayKey)) {
+      toast('Morgenroutine heute bereits abgeschlossen.');
+      return;
+    }
+    const routine = getMorningRoutineForToday();
+    morningRoutineSession = {
+      dateKey: todayKey,
+      routineKey: routine.key,
+      currentStep: 0,
+      startedAt: nowIso()
+    };
+    saveMorningRoutineSession();
+    renderMorningRoutine();
+    toast(`${routine.title} gestartet`);
+  }
+
+  function advanceMorningRoutine() {
+    const todayKey = toDateKey(new Date());
+    if (morningRoutineCompletedLog(todayKey)) return;
+    if (morningRoutineSession.dateKey !== todayKey || !morningRoutineSession.startedAt) return startMorningRoutine();
+    const routine = getMorningRoutineByKey(morningRoutineSession.routineKey);
+    const nextStep = Math.min(routine.steps.length - 1, Number(morningRoutineSession.currentStep || 0) + 1);
+    morningRoutineSession.currentStep = nextStep;
+    saveMorningRoutineSession();
+    renderMorningRoutine();
+    toast(nextStep >= routine.steps.length - 1 ? 'Letzter Schritt bereit' : 'Nächster Routine-Schritt');
+  }
+
+  function finishMorningRoutine() {
+    const todayKey = toDateKey(new Date());
+    if (morningRoutineCompletedLog(todayKey)) {
+      toast('Morgenroutine heute bereits abgeschlossen.');
+      return;
+    }
+    if (morningRoutineSession.dateKey !== todayKey || !morningRoutineSession.startedAt) return startMorningRoutine();
+    const routine = getMorningRoutineByKey(morningRoutineSession.routineKey);
+    const completedAt = nowIso();
+    state.morningRoutineLogs.push({
+      id: uid(),
+      date_key: todayKey,
+      routine_key: routine.key,
+      completed_at: completedAt,
+      created_at: completedAt,
+      updated_at: completedAt,
+      synced: false
+    });
+    addPoints('bonus', todayMorningRoutineSourceId(todayKey), 50, `Morgenroutine: ${routine.title}`, completedAt);
+    morningRoutineSession.currentStep = routine.steps.length;
+    saveMorningRoutineSession();
+    saveState();
+    toast('Morgenroutine abgeschlossen · +50 Punkte');
+    syncWithSupabase({ silent: true, pullFirst: false });
+  }
+
+  function shuffleMorningRoutine() {
+    const todayKey = toDateKey(new Date());
+    if (morningRoutineSession.dateKey === todayKey && morningRoutineSession.startedAt && !morningRoutineCompletedLog(todayKey)) {
+      toast('Laufende Routine zuerst abschliessen oder neu starten.');
+      return;
+    }
+    const nextOffset = currentMorningRoutineOffset() + 1;
+    setMorningRoutineOffset(nextOffset);
+    const nextRoutine = MORNING_ROUTINES[(dateHash(todayKey) + nextOffset) % MORNING_ROUTINES.length];
+    morningRoutineSession = { dateKey: todayKey, routineKey: nextRoutine.key, currentStep: 0, startedAt: null };
+    saveMorningRoutineSession();
+    renderMorningRoutine();
+    toast('Neue Morgenroutine geladen');
+  }
+
+  function resetMorningRoutineSession() {
+    const todayKey = toDateKey(new Date());
+    if (morningRoutineCompletedLog(todayKey)) return;
+    const routine = getMorningRoutineForToday();
+    morningRoutineSession = { dateKey: todayKey, routineKey: routine.key, currentStep: 0, startedAt: nowIso() };
+    saveMorningRoutineSession();
+    renderMorningRoutine();
+    toast('Morgenroutine neu gestartet');
+  }
+
+
   function renderDashboard() {
     const total = getTotalPoints();
     const level = Math.floor(total / 500) + 1;
@@ -1078,6 +1428,7 @@
       ? `${habitLogsToday} Habit-Log${habitLogsToday === 1 ? '' : 's'}, ${completedToday} erledigte Aufgabe${completedToday === 1 ? '' : 'n'} und ${todayCount} Zigarette${todayCount === 1 ? '' : 'n'} heute.`
       : 'Wähle eine Auswertung, erfasse kleine Schritte und halte deine wichtigsten Muster sichtbar.';
 
+    renderMorningRoutine();
     renderTrendOptions();
     renderInsights();
     renderWeeklyReview();
@@ -1169,6 +1520,11 @@
   function buildWeeklyReview() {
     const keys = daysBack(7);
     const cigs = state.cigarettes.filter(c => keys.includes(toDateKey(c.smoked_at)));
+    const routineLog = state.morningRoutineLogs.find(log => log.date_key === key) || (state.pointsLedger.find(point => point.source_type === 'bonus' && point.source_id === todayMorningRoutineSourceId(key)) ? { routine_key: 'unknown' } : null);
+    if (routineLog) {
+      const routine = MORNING_ROUTINES.find(item => item.key === routineLog.routine_key);
+      details.push(`<article class="list-card done"><div><h4>Morgenroutine</h4><p class="meta">${escapeHtml(routine?.title || '15-Minuten-Routine')} · +50 Punkte</p></div></article>`);
+    }
     const tasks = state.tasks.filter(t => t.status === 'done' && keys.includes(toDateKey(t.completed_at || t.updated_at || t.created_at)));
     const habits = state.habitEntries.filter(e => keys.includes(toDateKey(e.occurred_at)));
     const best = bestPauseMinutes();
@@ -3301,7 +3657,12 @@
       date.setDate(start.getDate() + i);
       const key = toDateKey(date);
       const cigarettes = cigarettesOnDate(key).length;
-      const tasks = state.tasks.filter(t => toDateKey(t.due_at || t.completed_at || t.created_at) === key);
+      const routineLog = state.morningRoutineLogs.find(log => log.date_key === key) || (state.pointsLedger.find(point => point.source_type === 'bonus' && point.source_id === todayMorningRoutineSourceId(key)) ? { routine_key: 'unknown' } : null);
+    if (routineLog) {
+      const routine = MORNING_ROUTINES.find(item => item.key === routineLog.routine_key);
+      details.push(`<article class="list-card done"><div><h4>Morgenroutine</h4><p class="meta">${escapeHtml(routine?.title || '15-Minuten-Routine')} · +50 Punkte</p></div></article>`);
+    }
+    const tasks = state.tasks.filter(t => toDateKey(t.due_at || t.completed_at || t.created_at) === key);
       const alcohol = alcoholForDate(key)?.consumed;
       const alcoholUnits = alcoholUnitsOnDate(key).length;
       const points = calendarPointsOnDate(key);
@@ -3327,6 +3688,11 @@
     const alcoholUnits = alcoholUnitsOnDate(key);
     if (alcoholUnits.length) details.push(`<article class="list-card"><div><h4>Alkohol</h4><p class="meta">${alcoholUnits.length} Einheit(en): ${escapeHtml(alcoholUnits.map(unit => alcoholTypeLabel(unit.drink_type)).join(', '))}</p></div></article>`);
     else if (alcohol) details.push(`<article class="list-card"><div><h4>Alkohol</h4><p class="meta">${alcohol.consumed ? 'Ja' : 'Nein'} getrackt</p></div></article>`);
+    const routineLog = state.morningRoutineLogs.find(log => log.date_key === key) || (state.pointsLedger.find(point => point.source_type === 'bonus' && point.source_id === todayMorningRoutineSourceId(key)) ? { routine_key: 'unknown' } : null);
+    if (routineLog) {
+      const routine = MORNING_ROUTINES.find(item => item.key === routineLog.routine_key);
+      details.push(`<article class="list-card done"><div><h4>Morgenroutine</h4><p class="meta">${escapeHtml(routine?.title || '15-Minuten-Routine')} · +50 Punkte</p></div></article>`);
+    }
     const tasks = state.tasks.filter(t => toDateKey(t.due_at || t.completed_at || t.created_at) === key);
     tasks.forEach(t => details.push(`<article class="list-card ${t.status === 'done' ? 'done' : ''}"><div><h4>${escapeHtml(t.title)}</h4><p class="meta">${escapeHtml(TASK_COLUMNS.find(column => column.status === (t.status || 'open'))?.title || 'Offen')} · ${escapeHtml(taskPriorityMeta(t).label)} · Aufwand ${t.effort}/5</p></div></article>`));
     els.dayDetails.innerHTML = details.length ? details.join('') : '<div class="empty-state">Für diesen Tag gibt es noch keine Einträge.</div>';
@@ -4784,7 +5150,7 @@ async function deleteAlcoholLog(id) {
   function isLocalPristine() {
     const defaultIds = new Set(Object.values(DEFAULT_HABIT_IDS));
     const hasOnlyDefaultHabits = state.habits.every(h => defaultIds.has(h.id) || BUILT_IN_DEFAULT_HABIT_NAMES.has(String(h.name || '').trim().toLowerCase()));
-    return hasOnlyDefaultHabits && !state.habitEntries.length && !state.cigarettes.length && !state.alcoholLogs.length && !state.alcoholUnits.length && !state.tasks.length && !state.pointsLedger.length;
+    return hasOnlyDefaultHabits && !state.habitEntries.length && !state.cigarettes.length && !state.alcoholLogs.length && !state.alcoholUnits.length && !state.tasks.length && !state.morningRoutineLogs?.length && !state.pointsLedger.length;
   }
 
   function subscribeToRemoteChanges() {
