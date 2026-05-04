@@ -50,9 +50,6 @@
           </div>
         </div>
 
-        <section class="panel glass morning-routine-panel">
-          <div id="morningRoutineCard" class="morning-routine-card"></div>
-        </section>
 
         <div class="grid cards-4">
           <article class="metric-card glass"><span class="metric-label">Fokus-Pause</span><strong id="currentPause">–</strong><small>seit letzter Zigarette</small></article>
@@ -265,6 +262,18 @@
         <section class="coach-modal-card history-modal-card">
           <button id="historyModalCloseBtn" class="icon-btn coach-close-btn" type="button" aria-label="Verlauf schliessen">×</button>
           <div id="historyModalContent" class="history-modal-content"></div>
+        </section>
+      </div>
+
+      <div id="morningRoutineModal" class="coach-modal morning-routine-modal hidden" role="dialog" aria-modal="true" aria-labelledby="morningRoutineModalTitle">
+        <section class="coach-modal-card morning-routine-modal-card">
+          <button id="morningRoutineModalCloseBtn" class="icon-btn coach-close-btn" type="button" aria-label="Morgenroutine schliessen">×</button>
+          <div class="morning-routine-modal-head">
+            <p class="eyebrow">Morgenroutine · 15 Min.</p>
+            <h2 id="morningRoutineModalTitle">Dein kurzer Start in den Tag.</h2>
+            <p>Wasser, Mobility, Mini-Fitness, Fokus und Abschluss – als ruhiges Pop-up, ohne das Dashboard zu überladen.</p>
+          </div>
+          <div id="morningRoutineCard" class="morning-routine-card"></div>
         </section>
       </div>
 

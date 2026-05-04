@@ -655,3 +655,13 @@ body.light .morning-routine-steps article.is-current{background:linear-gradient(
 .hero-actions .pill{background:linear-gradient(135deg,var(--primary),#66e7ff);color:#00131c;box-shadow:0 14px 34px rgba(74,215,209,.16)}
 .hero-actions .pill.secondary,.hero-actions .pill.emergency-pill{background:linear-gradient(135deg,var(--primary),#66e7ff);color:#00131c;box-shadow:0 14px 34px rgba(74,215,209,.16)}
 @media (min-width:761px){.hero-actions .pill{min-width:178px;justify-content:center;text-align:center}.hero-actions #heroMorningRoutineBtn{min-width:216px}}
+
+
+/* v28: Morning routine runs in modal, not as default dashboard section */
+.morning-routine-modal-card{width:min(860px,100%);display:flex;flex-direction:column;gap:18px}
+.morning-routine-modal-head{padding:4px 54px 0 2px;display:grid;gap:6px}
+.morning-routine-modal-head h2{font-size:clamp(1.55rem,3.2vw,2.65rem);letter-spacing:-.055em;line-height:1.02}
+.morning-routine-modal-head p:not(.eyebrow){color:var(--muted);line-height:1.5;max-width:720px}
+.morning-routine-modal .morning-routine-card{display:block}
+.morning-routine-modal .morning-routine-shell{padding:0}
+@media (max-width:760px){.morning-routine-modal{align-items:flex-end}.morning-routine-modal-card{max-height:94vh;border-radius:28px 28px 18px 18px;gap:14px}.morning-routine-modal-head{padding-right:0}.morning-routine-modal-head h2{font-size:1.65rem}}
