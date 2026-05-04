@@ -2734,10 +2734,7 @@ async function deleteAlcoholLog(id) {
 
       await upsertHabitRows();
 
-      await upsertRows('habit_entries', liveRowsForTable('habit_entries', state.habitEntries).map(e => ({
-        id: e.id, habit_id: e.habit_id, value_num: e.value_num, value_bool: e.value_bool, note: e.note || null,
-        occurred_at: e.occurred_at, created_at: e.created_at, updated_at: e.updated_at || nowIso()
-      })));
+      await upsertHabitEntryRows();
 
       await upsertRows('cigarette_events', liveRowsForTable('cigarette_events', state.cigarettes).map(c => ({
         id: c.id, smoked_at: c.smoked_at, interval_minutes: c.interval_minutes, alcohol_context: Boolean(c.alcohol_context),
@@ -2789,6 +2786,69 @@ async function deleteAlcoholLog(id) {
       return;
     }
     if (error) throw error;
+  }
+
+
+  function habitEntryRowsForSync() {
+    const habitIds = new Set(state.habits.map(habit => habit.id));
+    return liveRowsForTable('habit_entries', state.habitEntries)
+      .filter(entry => entry.id && entry.habit_id && habitIds.has(entry.habit_id))
+      .map(entry => ({
+        id: entry.id,
+        habit_id: entry.habit_id,
+        value_num: entry.value_num,
+        value_bool: entry.value_bool,
+        note: entry.note || null,
+        occurred_at: entry.occurred_at,
+        created_at: entry.created_at,
+        updated_at: entry.updated_at || nowIso()
+      }));
+  }
+
+  function isForeignKeySyncError(error) {
+    const message = String(error?.message || error?.details || error?.hint || '').toLowerCase();
+    const code = String(error?.code || '').toLowerCase();
+    return code === '23503' || message.includes('foreign key') || message.includes('violates foreign key');
+  }
+
+  async function upsertRowsWithIsolation(table, rows, { beforeRetry } = {}) {
+    if (!rows.length) return { ok: 0, failed: [] };
+    const { error } = await supabaseClient.from(table).upsert(rows, { onConflict: 'id' });
+    if (!error) return { ok: rows.length, failed: [] };
+    if (beforeRetry) await beforeRetry(error);
+    const retry = await supabaseClient.from(table).upsert(rows, { onConflict: 'id' });
+    if (!retry.error) return { ok: rows.length, failed: [] };
+
+    const failed = [];
+    let ok = 0;
+    for (const row of rows) {
+      const single = await supabaseClient.from(table).upsert([row], { onConflict: 'id' });
+      if (single.error) {
+        failed.push({ row, error: single.error });
+      } else {
+        ok += 1;
+      }
+    }
+    if (failed.length) {
+      console.warn(`Sync: ${failed.length} ${table}-Zeile(n) konnten nicht remote gespeichert werden.`, failed);
+      const sample = failed[0]?.error;
+      throw new Error(`${table}: ${failed.length} Eintrag/Einträge konnten nicht synchronisiert werden (${sample?.message || sample || 'unbekannter Fehler'}).`);
+    }
+    return { ok, failed };
+  }
+
+  async function upsertHabitEntryRows() {
+    const rows = habitEntryRowsForSync();
+    if (!rows.length) return;
+    await upsertRowsWithIsolation('habit_entries', rows, {
+      beforeRetry: async (error) => {
+        if (isForeignKeySyncError(error)) {
+          // A freshly created habit and its first log can happen very close together on mobile/desktop.
+          // Re-upsert definitions before retrying entries so duration habits like "Spazieren" do not get stuck locally.
+          await upsertHabitRows();
+        }
+      }
+    });
   }
 
   function habitRowsForSync() {
