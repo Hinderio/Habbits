@@ -469,6 +469,7 @@
       dashboardTitle: $('#dashboardTitle'),
       dashboardSubtitle: $('#dashboardSubtitle'),
       heroSmokeBtn: $('#heroSmokeBtn'),
+      heroMorningRoutineBtn: $('#heroMorningRoutineBtn'),
       heroTaskBtn: $('#heroTaskBtn'),
       heroCoachBtn: $('#heroCoachBtn'),
       heroEmergencyBtn: $('#heroEmergencyBtn'),
@@ -586,6 +587,7 @@
 
     els.navButtons.forEach(btn => btn.addEventListener('click', () => showScreen(btn.dataset.target)));
     els.heroSmokeBtn.addEventListener('click', () => recordCigarette());
+    if (els.heroMorningRoutineBtn) els.heroMorningRoutineBtn.addEventListener('click', openMorningRoutineFromHero);
     els.heroTaskBtn.addEventListener('click', () => { showScreen('tasks'); openTaskForm(); });
     if (els.heroCoachBtn) els.heroCoachBtn.addEventListener('click', openCoachModal);
     if (els.heroEmergencyBtn) els.heroEmergencyBtn.addEventListener('click', startEmergencyCravingFlow);
@@ -1347,6 +1349,23 @@
 
       <div class="morning-routine-actions">${cta}</div>
     </div>`;
+  }
+
+  function openMorningRoutineFromHero() {
+    const todayKey = toDateKey(new Date());
+    const completed = Boolean(morningRoutineCompletedLog(todayKey));
+    const active = morningRoutineSession.dateKey === todayKey && morningRoutineSession.startedAt && !completed;
+    if (!completed && !active) {
+      startMorningRoutine();
+    } else if (completed) {
+      toast('Morgenroutine heute bereits abgeschlossen.');
+    } else {
+      toast('Morgenroutine läuft bereits.');
+    }
+    requestAnimationFrame(() => {
+      const panel = els.morningRoutineCard?.closest('.morning-routine-panel');
+      panel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   }
 
   function startMorningRoutine() {

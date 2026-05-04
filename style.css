@@ -648,3 +648,10 @@ body.light .morning-routine-steps article.is-current{background:linear-gradient(
 @media (max-width:980px){.morning-routine-steps{grid-template-columns:repeat(2,minmax(0,1fr))}.morning-routine-steps article:last-child{grid-column:1/-1}}
 @media (max-width:760px){.morning-routine-main{flex-direction:column}.morning-routine-score{width:100%;min-height:74px}.morning-routine-steps{grid-template-columns:1fr}.morning-routine-steps article{min-height:auto}.morning-routine-actions .pill{width:100%}}
 
+
+
+/* Dashboard hero action refinement: unified action color + morning routine entry */
+.hero-actions{gap:14px}
+.hero-actions .pill{background:linear-gradient(135deg,var(--primary),#66e7ff);color:#00131c;box-shadow:0 14px 34px rgba(74,215,209,.16)}
+.hero-actions .pill.secondary,.hero-actions .pill.emergency-pill{background:linear-gradient(135deg,var(--primary),#66e7ff);color:#00131c;box-shadow:0 14px 34px rgba(74,215,209,.16)}
+@media (min-width:761px){.hero-actions .pill{min-width:178px;justify-content:center;text-align:center}.hero-actions #heroMorningRoutineBtn{min-width:216px}}
