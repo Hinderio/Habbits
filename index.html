@@ -57,6 +57,33 @@
           <article class="metric-card glass daily-score-card"><span class="metric-label">Tages-Score</span><strong id="dailyScore">0</strong><small id="dailyScoreHint">heute</small></article>
         </div>
 
+
+
+        <section class="panel glass intelligence-panel" id="behaviorIntelligencePanel">
+          <div class="panel-head">
+            <div><p class="eyebrow">Personal Risk & Recovery System</p><h3>Dein nächster bester Schritt</h3></div>
+            <span id="urgeForecastBadge" class="badge muted">lernt mit</span>
+          </div>
+          <div id="nextBestActionCard" class="next-action-card"></div>
+          <div class="intelligence-grid">
+            <article id="urgeForecastCard" class="intelligence-card"></article>
+            <article id="keystoneHabitCard" class="intelligence-card"></article>
+            <article id="recoveryModeCard" class="intelligence-card"></article>
+            <article id="experimentModeCard" class="intelligence-card"></article>
+          </div>
+        </section>
+
+        <div class="grid two-columns intelligence-support-grid">
+          <section class="panel glass">
+            <div class="panel-head"><div><p class="eyebrow">Trigger Heatmap</p><h3>Risikofenster</h3></div><span class="subtle">21 Tage</span></div>
+            <div id="triggerHeatmap" class="trigger-heatmap"></div>
+          </section>
+          <section class="panel glass">
+            <div class="panel-head"><div><p class="eyebrow">Plan before Party</p><h3>Abend vorher planen</h3></div><span id="partyPlanBadge" class="badge muted">optional</span></div>
+            <div id="partyPlanCard" class="party-plan-card"></div>
+          </section>
+        </div>
+
         <div class="grid two-columns">
           <section class="panel glass dashboard-chart-panel">
             <div class="panel-head chart-head">

@@ -297,7 +297,17 @@
       coachChallengeCard: $('#coachChallengeCard'),
       coachResult: $('#coachResult'),
       coachConfidence: $('#coachConfidence'),
-      coachPlanGrid: $('#coachPlanGrid')
+      coachPlanGrid: $('#coachPlanGrid'),
+      behaviorIntelligencePanel: $('#behaviorIntelligencePanel'),
+      urgeForecastBadge: $('#urgeForecastBadge'),
+      nextBestActionCard: $('#nextBestActionCard'),
+      urgeForecastCard: $('#urgeForecastCard'),
+      keystoneHabitCard: $('#keystoneHabitCard'),
+      recoveryModeCard: $('#recoveryModeCard'),
+      experimentModeCard: $('#experimentModeCard'),
+      triggerHeatmap: $('#triggerHeatmap'),
+      partyPlanBadge: $('#partyPlanBadge'),
+      partyPlanCard: $('#partyPlanCard')
     });
   }
 
@@ -386,6 +396,12 @@
       if (action === 'coach-record-smoke') coachRecordSmoke();
       if (action === 'save-smoke-trigger') saveSmokeTrigger(id, actionEl.dataset.trigger);
       if (action === 'dismiss-smoke-trigger') dismissSmokeTrigger();
+      if (action === 'start-experiment') startExperiment(actionEl.dataset.experiment);
+      if (action === 'finish-experiment') finishExperiment(id, actionEl.dataset.result);
+      if (action === 'activate-party-plan') activatePartyPlan();
+      if (action === 'complete-party-plan') completePartyPlan(id);
+      if (action === 'start-recovery-mode') startRecoveryMode();
+      if (action === 'next-best-action') handleNextBestAction(actionEl.dataset.nextAction);
       if (action === 'select-day') {
         selectedCalendarDate = actionEl.dataset.day;
         renderCalendar();
@@ -444,6 +460,9 @@
       tasks: [],
       pointsLedger: [],
       coachEvents: [],
+      experiments: [],
+      partyPlans: [],
+      recoverySessions: [],
       deletedRemoteIds: createEmptyDeletedRemoteIds()
     };
   }
@@ -472,6 +491,9 @@
     next.pointsLedger = Array.isArray(next.pointsLedger) ? next.pointsLedger : [];
     next.habits = next.habits.map(normalizeHabit);
     next.coachEvents = Array.isArray(next.coachEvents) ? next.coachEvents : [];
+    next.experiments = Array.isArray(next.experiments) ? next.experiments : [];
+    next.partyPlans = Array.isArray(next.partyPlans) ? next.partyPlans : [];
+    next.recoverySessions = Array.isArray(next.recoverySessions) ? next.recoverySessions : [];
     next.deletedRemoteIds = normalizeDeletedRemoteIds(next.deletedRemoteIds);
     dedupeStateCollections(next);
     return next;
@@ -799,6 +821,7 @@
     renderTrendOptions();
     renderInsights();
     renderWeeklyReview();
+    renderBehaviorIntelligence();
     renderHabitHeatmap();
     renderCharts();
   }
@@ -903,6 +926,247 @@
       ],
       recommendation: pattern
     };
+  }
+
+
+  function renderBehaviorIntelligence() {
+    if (!els.nextBestActionCard) return;
+    const forecast = buildUrgeForecast();
+    const action = buildNextBestAction(forecast);
+    const keystone = buildKeystoneHabitInsight();
+    const recovery = buildRecoveryModeInsight();
+    const experiment = buildExperimentInsight();
+    const partyPlan = buildPartyPlanInsight();
+
+    if (els.urgeForecastBadge) {
+      els.urgeForecastBadge.className = `badge ${forecast.risk >= 72 ? 'danger-badge' : forecast.risk >= 48 ? 'warning-badge' : 'muted'}`;
+      els.urgeForecastBadge.textContent = `${forecast.risk}% Risiko`;
+    }
+
+    els.nextBestActionCard.innerHTML = `<div class="next-action-copy"><p class="eyebrow">Next Best Action</p><h3>${escapeHtml(action.title)}</h3><p>${escapeHtml(action.body)}</p><small>${escapeHtml(action.reason)}</small></div><button class="pill primary" type="button" data-action="next-best-action" data-next-action="${escapeHtml(action.action)}">${escapeHtml(action.cta)}</button>`;
+    els.urgeForecastCard.innerHTML = `<p class="eyebrow">Urge Forecast</p><h4>${escapeHtml(forecast.windowLabel)}</h4><p>${escapeHtml(forecast.body)}</p><div class="risk-meter"><i style="width:${forecast.risk}%"></i></div><small>${escapeHtml(forecast.reason)}</small>`;
+    els.keystoneHabitCard.innerHTML = `<p class="eyebrow">Keystone Habit Finder</p><h4>${escapeHtml(keystone.title)}</h4><p>${escapeHtml(keystone.body)}</p><small>${escapeHtml(keystone.detail)}</small>`;
+    els.recoveryModeCard.innerHTML = `<p class="eyebrow">Recovery Mode</p><h4>${escapeHtml(recovery.title)}</h4><p>${escapeHtml(recovery.body)}</p><div class="card-actions"><button class="mini-btn ${recovery.active ? 'primary' : ''}" type="button" data-action="start-recovery-mode">${escapeHtml(recovery.cta)}</button></div>`;
+    els.experimentModeCard.innerHTML = `<p class="eyebrow">Experiment Mode</p><h4>${escapeHtml(experiment.title)}</h4><p>${escapeHtml(experiment.body)}</p><div class="card-actions">${experiment.active ? `<button class="mini-btn primary" type="button" data-action="finish-experiment" data-id="${experiment.id}" data-result="success">Hat geholfen</button><button class="mini-btn" type="button" data-action="finish-experiment" data-id="${experiment.id}" data-result="neutral">Neutral</button>` : `<button class="mini-btn primary" type="button" data-action="start-experiment" data-experiment="${escapeHtml(experiment.key)}">Experiment starten</button>`}</div>`;
+    renderTriggerHeatmap();
+    if (els.partyPlanBadge) {
+      els.partyPlanBadge.className = `badge ${partyPlan.active ? 'warning-badge' : 'muted'}`;
+      els.partyPlanBadge.textContent = partyPlan.active ? 'aktiv' : partyPlan.badge;
+    }
+    if (els.partyPlanCard) {
+      els.partyPlanCard.innerHTML = `<h4>${escapeHtml(partyPlan.title)}</h4><p>${escapeHtml(partyPlan.body)}</p><div class="party-plan-list">${partyPlan.steps.map(step => `<span>${escapeHtml(step)}</span>`).join('')}</div><div class="card-actions">${partyPlan.active ? `<button class="mini-btn primary" type="button" data-action="complete-party-plan" data-id="${partyPlan.id}">Plan erfüllt</button>` : `<button class="mini-btn primary" type="button" data-action="activate-party-plan">30-Sekunden-Plan aktivieren</button>`}<button class="mini-btn" type="button" data-action="open-coach">Coach öffnen</button></div>`;
+    }
+  }
+
+  function buildUrgeForecast() {
+    const now = new Date();
+    const hour = now.getHours();
+    const keys = daysBack(21);
+    const recentCigs = state.cigarettes.filter(c => keys.includes(toDateKey(c.smoked_at)));
+    const currentBucket = dayPartKey(hour);
+    const currentBucketCount = recentCigs.filter(c => dayPartKey(new Date(c.smoked_at).getHours()) === currentBucket).length;
+    const weekdayCount = recentCigs.filter(c => new Date(c.smoked_at).getDay() === now.getDay()).length;
+    const alcoholToday = alcoholUnitsOnDate(toDateKey(now)).length || alcoholForDate(toDateKey(now))?.consumed;
+    const activeTasks = state.tasks.filter(isActiveTask).length;
+    const last = getLastCigarette();
+    const pauseMinutes = last ? Math.max(0, Math.round((Date.now() - new Date(last.smoked_at).getTime()) / 60000)) : 999;
+    let risk = 24;
+    risk += Math.min(28, currentBucketCount * 4);
+    risk += Math.min(16, weekdayCount * 2);
+    if ([5,6].includes(now.getDay()) && hour >= 17) risk += 12;
+    if (alcoholToday) risk += 18;
+    if (activeTasks >= 3) risk += 8;
+    if (pauseMinutes < 45) risk += 10;
+    else if (pauseMinutes > 180) risk -= 8;
+    risk = Math.max(5, Math.min(95, Math.round(risk)));
+    const windowLabel = `${dayPartLabel(currentBucket)} · ${forecastWindowLabel(hour)}`;
+    const reasonBits = [];
+    if (currentBucketCount) reasonBits.push(`${currentBucketCount} Rauchmoment(e) in diesem Zeitfenster`);
+    if (alcoholToday) reasonBits.push('Alkohol-Kontext aktiv');
+    if (activeTasks >= 3) reasonBits.push(`${activeTasks} offene Aufgaben`);
+    if (!reasonBits.length) reasonBits.push('wenig akute Risikosignale');
+    const body = risk >= 72 ? 'Jetzt aktiv vorbeugen: nicht diskutieren, sondern den kleinsten Reset starten.' : risk >= 48 ? 'Mittleres Risiko: Halte die nächste Lücke bewusst und vermeide Autopilot-Orte.' : 'Ruhiges Fenster: Nutze es, um Schutzfaktoren aufzubauen.';
+    return { risk, windowLabel, body, reason: reasonBits.join(' · '), currentBucket };
+  }
+
+  function buildNextBestAction(forecast = buildUrgeForecast()) {
+    const recovery = buildRecoveryModeInsight();
+    const openTask = state.tasks.filter(isActiveTask).sort(compareTasks)[0];
+    const focusHabit = state.habits.filter(h => !h.is_archived).find(h => !entriesForHabitOnDate(h.id, toDateKey(new Date())).length);
+    const party = buildPartyPlanInsight();
+    if (forecast.risk >= 72) return { title: 'Akut-Reset statt Autopilot', body: 'Starte den Coach, lege 10 Minuten Puffer ein und verlasse kurz den Trigger-Ort.', reason: forecast.reason, cta: 'Akutmodus starten', action: 'emergency' };
+    if (recovery.active) return { title: 'Heute stabilisieren', body: 'Recovery Mode: nur eine kleine saubere Entscheidung. Kein Perfektionsdruck.', reason: recovery.reason, cta: 'Recovery starten', action: 'recovery' };
+    if (!party.active && party.recommended) return { title: 'Abend vorher planen', body: 'Ein kurzer Plan senkt das Risiko stärker als spätere Willenskraft.', reason: party.reason, cta: 'Party-Plan', action: 'party' };
+    if (openTask) return { title: 'Eine Aufgabe schließen', body: `Nächster kleinster Schritt: „${openTask.title}“. Task-Momentum wirkt als Schutzfaktor.`, reason: `${taskPriorityMeta(openTask).label} · Aufwand ${openTask.effort}/5`, cta: 'Tasks öffnen', action: 'tasks' };
+    if (focusHabit) return { title: 'Keystone-Momentum setzen', body: `Logge heute eine kleine Einheit „${focusHabit.name}“.`, reason: 'Habit-Rhythmus stabilisiert den Tages-Score.', cta: 'Habits öffnen', action: 'habits' };
+    return { title: 'Pause bewusst verlängern', body: 'Du hast gerade Spielraum. Setze dir ein Mini-Ziel bis zum nächsten vollen Zeitfenster.', reason: forecast.reason, cta: 'Coach öffnen', action: 'coach' };
+  }
+
+  function buildKeystoneHabitInsight() {
+    const keys = daysBack(21);
+    const candidates = state.habits.filter(h => !h.is_archived).map(habit => {
+      const daysWith = keys.filter(key => state.habitEntries.some(e => e.habit_id === habit.id && toDateKey(e.occurred_at) === key));
+      if (daysWith.length < 2) return null;
+      const daysWithout = keys.filter(key => !daysWith.includes(key));
+      const cigsWith = average(daysWith.map(key => cigarettesOnDate(key).length));
+      const cigsWithout = average(daysWithout.map(key => cigarettesOnDate(key).length));
+      const tasksWith = average(daysWith.map(key => state.tasks.filter(t => t.status === 'done' && toDateKey(t.completed_at || t.updated_at || t.created_at) === key).length));
+      const tasksWithout = average(daysWithout.map(key => state.tasks.filter(t => t.status === 'done' && toDateKey(t.completed_at || t.updated_at || t.created_at) === key).length));
+      const lift = (cigsWithout - cigsWith) + (tasksWith - tasksWithout) * .55;
+      return { habit, lift, cigsWith, cigsWithout, tasksWith, days: daysWith.length };
+    }).filter(Boolean).sort((a,b)=>b.lift-a.lift)[0];
+    if (!candidates || candidates.lift <= 0) return { title: 'Noch kein klarer Keystone', body: 'Die App braucht ein paar geloggte Tage, um deinen stärksten Schutzfaktor fair zu erkennen.', detail: 'Tipp: Meditation, Sport oder Wasser regelmäßig loggen.' };
+    const delta = candidates.cigsWithout - candidates.cigsWith;
+    return { title: candidates.habit.name, body: `An Tagen mit diesem Habit wirkt dein System stabiler. ${delta > .2 ? `Ø ${delta.toFixed(1).replace('.', ',')} weniger Zigaretten.` : 'Vor allem Task- und Score-Momentum steigen.'}`, detail: `${candidates.days} aktive Tage in 21 Tagen · experimentell berechnet.` };
+  }
+
+  function buildRecoveryModeInsight() {
+    const today = toDateKey(new Date());
+    const yesterdayDate = new Date();
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+    const yesterday = toDateKey(yesterdayDate);
+    const yScore = calculateDailyScore(yesterday).score;
+    const todayScore = calculateDailyScore(today).score;
+    const active = yScore < 45 || todayScore < 42 || cigarettesOnDate(yesterday).length >= Math.max(5, averageDailyCigarettes(14) * 1.5);
+    const already = state.recoverySessions.find(s => toDateKey(s.created_at) === today);
+    return { active: Boolean(active || already), title: active || already ? 'Sanft zurück in den Rhythmus' : 'Nicht nötig – System stabil', body: active || already ? 'Heute zählt nicht Optimierung, sondern Rückkehr: Wasser, ein Mini-Habit, eine kleine Aufgabe, keine Eskalation.' : 'Kein Recovery-Signal. Die App hält den Modus bereit, falls ein Tag kippt.', cta: already ? 'Recovery aktiv' : 'Recovery starten', reason: `Gestern ${yScore}% · heute ${todayScore}%` };
+  }
+
+  function buildExperimentInsight() {
+    const active = state.experiments.find(e => e.status === 'active');
+    if (active) return { active: true, id: active.id, key: active.key, title: active.title, body: `${active.rule} Läuft seit ${formatDateTime(active.started_at)}.`, detail: 'Zum Review nach dem nächsten kritischen Moment.', };
+    const trigger = topSmokeTrigger(21);
+    const key = trigger?.key || 'delay_after_meal';
+    const presets = experimentPresets();
+    const preset = presets[key] || presets.delay_after_meal;
+    return { active: false, key, title: preset.title, body: preset.rule, detail: 'Kleines Experiment statt großer Vorsatz.' };
+  }
+
+  function experimentPresets() {
+    return {
+      stress: { title: 'Stress-Delay testen', rule: '3 Tage lang: bei Stress erst 6 lange Ausatmungen, dann 5 Minuten warten.' },
+      coffee: { title: 'Kaffee-Routine entkoppeln', rule: '3 Tage lang: nach Kaffee erst Wasser trinken und 7 Minuten warten.' },
+      alcohol: { title: 'Drink ohne Autopilot', rule: 'Heute Abend: vor der ersten Zigarette 10 Minuten Delay + Glas Wasser.' },
+      boredom: { title: 'Langeweile umlenken', rule: '3 Tage lang: bei Langeweile eine 2-Minuten-Aufgabe statt sofort rauchen.' },
+      meal: { title: 'Nach-dem-Essen-Puffer', rule: '3 Tage lang: nach dem Essen 5 Minuten gehen oder Zähne putzen, dann neu entscheiden.' },
+      tasks: { title: 'Task-Druck senken', rule: '3 Tage lang: vor einer Zigarette eine Aufgabe in den nächsten Mini-Schritt zerlegen.' },
+      delay_after_meal: { title: '5-Minuten-Puffer testen', rule: '3 Tage lang: den ersten Impuls nur um 5 Minuten verschieben. Verzögern zählt als Erfolg.' }
+    };
+  }
+
+  function renderTriggerHeatmap() {
+    if (!els.triggerHeatmap) return;
+    const buckets = ['morning','midday','evening','late'];
+    const labels = ['Mo','Di','Mi','Do','Fr','Sa','So'];
+    const matrix = Array.from({ length: 7 }, () => Object.fromEntries(buckets.map(b => [b, 0])));
+    const keys = daysBack(21);
+    state.cigarettes.filter(c => keys.includes(toDateKey(c.smoked_at))).forEach(c => {
+      const date = new Date(c.smoked_at);
+      const dayIndex = (date.getDay() + 6) % 7;
+      matrix[dayIndex][dayPartKey(date.getHours())] += 1;
+    });
+    const max = Math.max(1, ...matrix.flatMap(row => buckets.map(b => row[b])));
+    els.triggerHeatmap.innerHTML = `<div class="trigger-heatmap-head"><span></span>${buckets.map(b => `<strong>${dayPartShortLabel(b)}</strong>`).join('')}</div>${matrix.map((row, index) => `<div class="trigger-heatmap-row"><strong>${labels[index]}</strong>${buckets.map(b => { const value = row[b]; const level = Math.ceil((value / max) * 4); return `<span class="heat-cell level-${level}" title="${labels[index]} ${dayPartLabel(b)}: ${value}×"><em>${value || ''}</em></span>`; }).join('')}</div>`).join('')}`;
+  }
+
+  function buildPartyPlanInsight() {
+    const today = toDateKey(new Date());
+    const existing = state.partyPlans.find(p => p.status === 'active' && toDateKey(p.created_at) === today);
+    const now = new Date();
+    const weekendEvening = [5,6].includes(now.getDay()) && now.getHours() >= 14;
+    const alcoholToday = Boolean(alcoholUnitsOnDate(today).length || alcoholForDate(today)?.consumed);
+    const recommended = weekendEvening || alcoholToday;
+    return { active: Boolean(existing), id: existing?.id, recommended, badge: recommended ? 'empfohlen' : 'bereit', reason: alcoholToday ? 'Alkohol-Kontext erkannt' : weekendEvening ? 'Wochenend-Abendfenster' : 'optional', title: existing ? 'Plan ist aktiv' : recommended ? 'Risikomoment vorher entscheiden' : 'Bereit für Ausgehen, Alkohol oder Wochenende', body: existing ? 'Du hast den Abend bewusst vorgeplant. Ziel ist nicht perfekt sein, sondern Autopilot reduzieren.' : 'Lege vor Alkohol, Ausgang oder sozialem Druck fest, was deine erste kleine Schutzhandlung ist.', steps: ['erste Zigarette verzögern', 'Wasser zwischen Drinks', 'Trigger-Ort kurz verlassen'] };
+  }
+
+  function handleNextBestAction(action) {
+    if (action === 'emergency') return startEmergencyCravingFlow();
+    if (action === 'recovery') return startRecoveryMode();
+    if (action === 'party') return activatePartyPlan();
+    if (action === 'tasks') { showScreen('tasks'); return; }
+    if (action === 'habits') { showScreen('habits'); return; }
+    openCoachModal();
+  }
+
+  function startExperiment(key) {
+    const presets = experimentPresets();
+    const preset = presets[key] || presets.delay_after_meal;
+    state.experiments.forEach(e => { if (e.status === 'active') e.status = 'paused'; });
+    state.experiments.push({ id: uid(), key, title: preset.title, rule: preset.rule, status: 'active', started_at: nowIso(), updated_at: nowIso(), results: [] });
+    saveState();
+    toast('Experiment gestartet');
+  }
+
+  function finishExperiment(id, result) {
+    const experiment = state.experiments.find(e => e.id === id);
+    if (!experiment) return;
+    experiment.status = 'done';
+    experiment.result = result || 'neutral';
+    experiment.completed_at = nowIso();
+    experiment.updated_at = nowIso();
+    saveState();
+    toast(result === 'success' ? 'Experiment als hilfreich markiert' : 'Experiment abgeschlossen');
+  }
+
+  function activatePartyPlan() {
+    const today = toDateKey(new Date());
+    const existing = state.partyPlans.find(p => p.status === 'active' && toDateKey(p.created_at) === today);
+    if (existing) { toast('Party-Plan ist bereits aktiv'); return; }
+    state.partyPlans.push({ id: uid(), status: 'active', created_at: nowIso(), updated_at: nowIso(), steps_done: [] });
+    saveState();
+    toast('Plan before Party aktiviert');
+  }
+
+  function completePartyPlan(id) {
+    const plan = state.partyPlans.find(p => p.id === id);
+    if (!plan) return;
+    plan.status = 'done';
+    plan.completed_at = nowIso();
+    plan.updated_at = nowIso();
+    saveState();
+    toast('Party-Plan abgeschlossen');
+  }
+
+  function startRecoveryMode() {
+    const today = toDateKey(new Date());
+    const existing = state.recoverySessions.find(s => toDateKey(s.created_at) === today);
+    if (!existing) state.recoverySessions.push({ id: uid(), created_at: nowIso(), updated_at: nowIso(), status: 'active' });
+    coachSession.urgeLevel = Math.max(3, Number(coachSession.urgeLevel || 3));
+    coachSession.trigger = 'stress';
+    saveCoachSession();
+    saveState();
+    toast('Recovery Mode aktiv · heute nur stabilisieren');
+  }
+
+  function dayPartKey(hour) {
+    if (hour < 11) return 'morning';
+    if (hour < 16) return 'midday';
+    if (hour < 21) return 'evening';
+    return 'late';
+  }
+
+  function dayPartLabel(key) {
+    return ({ morning: 'Morgen', midday: 'Mittag', evening: 'Abend', late: 'Spätabend' })[key] || 'Zeitfenster';
+  }
+
+  function dayPartShortLabel(key) {
+    return ({ morning: 'Morg.', midday: 'Mittag', evening: 'Abend', late: 'Spät' })[key] || key;
+  }
+
+  function forecastWindowLabel(hour) {
+    const start = Math.max(0, hour - 1);
+    const end = Math.min(23, hour + 2);
+    return `${String(start).padStart(2, '0')}:00–${String(end).padStart(2, '0')}:00`;
+  }
+
+  function average(values = []) {
+    const nums = values.map(Number).filter(n => Number.isFinite(n));
+    return nums.length ? nums.reduce((a,b)=>a+b,0) / nums.length : 0;
+  }
+
+  function averageDailyCigarettes(days = 14) {
+    const keys = daysBack(days);
+    return average(keys.map(key => cigarettesOnDate(key).length));
   }
 
 
