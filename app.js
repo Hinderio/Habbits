@@ -43,6 +43,56 @@
       title: 'Trigger bewusst benennen',
       body: 'Sag dir kurz: „Das ist gerade ein Craving, kein Befehl.“ Benenne Ort, Gefühl und nächster kleiner Schritt – dann erst entscheiden.',
       meta: 'Klarheit'
+    },
+    {
+      title: 'Mini-Vertrag mit dir',
+      body: 'Schreib innerlich nur einen Satz: „Ich warte bis zur nächsten vollen Viertelstunde.“ Das ist konkret genug, um den Autopilot zu stoppen.',
+      meta: 'Vertrag'
+    },
+    {
+      title: 'Ort wechseln, Entscheidung behalten',
+      body: 'Du musst gerade nichts endgültig entscheiden. Wechsle nur den Ort: Fenster, Küche, kurzer Gang. Danach darfst du neu bewerten.',
+      meta: 'Ort'
+    },
+    {
+      title: 'Craving als Timer sehen',
+      body: 'Behandle den Drang wie eine Welle mit Ablaufzeit. Starte 90 Sekunden ruhiges Atmen und prüfe erst danach, ob er wirklich stärker wurde.',
+      meta: '90 Sek.'
+    },
+    {
+      title: 'Erste Handlung ändern',
+      body: 'Mach nicht die erste typische Bewegung. Nicht Packung nehmen, nicht rausgehen. Erst Wasser, Kaugummi oder Hände waschen.',
+      meta: 'Pattern'
+    },
+    {
+      title: 'Belohnung tauschen',
+      body: 'Wenn Rauchen gerade Belohnung wäre, gib deinem Kopf sofort eine kleine Alternative: Musik an, Tee machen oder 3 Minuten frische Luft ohne Zigarette.',
+      meta: 'Tausch'
+    },
+    {
+      title: 'Nur eine Zigarette weniger',
+      body: 'Heute muss nicht perfekt werden. Eine einzige Zigarette weniger als sonst ist bereits ein echter Eingriff ins Muster.',
+      meta: '-1'
+    },
+    {
+      title: 'Nach dem Essen brechen',
+      body: 'Wenn Essen der Trigger ist: Tisch direkt verlassen, Zähne putzen oder Tee machen. Die Routine wird in den ersten 2 Minuten entschieden.',
+      meta: 'Essen'
+    },
+    {
+      title: 'Stress nicht mit Nikotin lösen',
+      body: 'Frag dich kurz: „Welches Problem ist nach der Zigarette wirklich kleiner?“ Wenn keines, wähle erst den kleinsten praktischen Schritt.',
+      meta: 'Stress'
+    },
+    {
+      title: 'Kosten sichtbar machen',
+      body: 'Eine Zigarette sind 40 Rappen. Nicht als Schuldgefühl, sondern als klares Feedback: Jede verschobene Zigarette ist messbar gespart.',
+      meta: 'CHF'
+    },
+    {
+      title: 'Rückfall ohne Kette',
+      body: 'Falls du doch rauchst: direkt loggen, Trigger wählen und danach wieder Abstand bauen. Ein Log ist kein Scheitern, sondern Kontrolle zurückholen.',
+      meta: 'Reset'
     }
   ];
 
