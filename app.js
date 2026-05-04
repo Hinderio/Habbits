@@ -179,6 +179,7 @@
   let editingHabitId = null;
   let editingTaskId = null;
   let renderQueued = false;
+  let deferredRenderPending = false;
   let habitFormOpen = false;
   let taskFormOpen = false;
   let remoteTaskPrioritySupported = true;
@@ -369,6 +370,9 @@
     if (els.copySqlBtn) els.copySqlBtn.addEventListener('click', copySql);
     if (els.coachUrgeLevel) els.coachUrgeLevel.addEventListener('change', updateCoachCheckIn);
     if (els.coachTrigger) els.coachTrigger.addEventListener('change', updateCoachCheckIn);
+
+    document.addEventListener('focusout', flushDeferredRender);
+    document.addEventListener('change', flushDeferredRender);
 
     document.addEventListener('click', event => {
       const actionEl = event.target.closest('[data-action]');
@@ -683,12 +687,49 @@
   }
 
   function queueRender() {
+    if (shouldDeferInteractiveRender()) {
+      deferredRenderPending = true;
+      return;
+    }
     if (renderQueued) return;
     renderQueued = true;
     requestAnimationFrame(() => {
       renderQueued = false;
-      render();
+      safeRender();
     });
+  }
+
+  function safeRender() {
+    if (shouldDeferInteractiveRender()) {
+      deferredRenderPending = true;
+      renderSyncStatus();
+      return;
+    }
+    render();
+  }
+
+  function shouldDeferInteractiveRender() {
+    const active = document.activeElement;
+    if (!active || active === document.body) return false;
+    if (!active.matches?.('input, textarea, select')) return false;
+    return Boolean(active.closest('#habitCards, #habitFormPanel, #taskFormPanel, #smokeHistory, #coachModal'));
+  }
+
+  function flushDeferredRender() {
+    if (!deferredRenderPending) return;
+    setTimeout(() => {
+      if (shouldDeferInteractiveRender()) return;
+      deferredRenderPending = false;
+      render();
+    }, 180);
+  }
+
+  function collectHabitInputDrafts() {
+    const drafts = new Map();
+    $$('#habitCards input[id^="habit-input-"]').forEach(input => {
+      drafts.set(input.id, input.value);
+    });
+    return drafts;
   }
 
   function loadSettings() {
@@ -1673,6 +1714,10 @@ function renderSmokingTip(last = getLastCigarette()) {
   }
 
   function renderHabits() {
+    const activeInput = document.activeElement?.closest?.('#habitCards input[id^="habit-input-"]') || null;
+    const activeInputId = activeInput?.id || '';
+    const activeInputSelection = activeInput ? { start: activeInput.selectionStart, end: activeInput.selectionEnd } : null;
+    const habitInputDrafts = collectHabitInputDrafts();
     const activeHabits = state.habits.filter(h => !h.is_archived).map(normalizeHabit);
     if (!activeHabits.length) {
       els.habitCards.innerHTML = '<div class="empty-state">Lege deine erste flexible Gewohnheit an. Unterstützt werden Gewicht, Zahlen, Ja/Nein und Dauer.</div>';
@@ -1707,6 +1752,22 @@ function renderSmokingTip(last = getLastCigarette()) {
         ${habit.target ? `<div class="habit-progress-track"><i style="width:${progress}%"></i></div>` : ''}
       </article>`;
     }).join('');
+
+    habitInputDrafts.forEach((value, inputId) => {
+      const input = document.getElementById(inputId);
+      if (input && value) input.value = value;
+    });
+    if (activeInputId) {
+      const restored = document.getElementById(activeInputId);
+      if (restored) {
+        requestAnimationFrame(() => {
+          restored.focus({ preventScroll: true });
+          if (activeInputSelection && typeof restored.setSelectionRange === 'function') {
+            try { restored.setSelectionRange(activeInputSelection.start, activeInputSelection.end); } catch {}
+          }
+        });
+      }
+    }
   }
 
 
@@ -2761,7 +2822,7 @@ async function deleteAlcoholLog(id) {
       await pullSupabaseData();
       saveState({ skipRender: true });
       lastSyncAt = new Date();
-      render();
+      safeRender();
       if (!silent) toast('Sync abgeschlossen');
     } catch (error) {
       console.error(error);
