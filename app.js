@@ -1596,6 +1596,46 @@
     </article>`).join('')}</div>`;
   }
 
+  function renderSmokingTip(last = getLastCigarette()) {
+    if (!els.cravingTipTitle || !els.cravingTipBody || !els.cravingTipMeta) return;
+    const pauseMinutes = last ? Math.max(0, Math.floor((Date.now() - new Date(last.smoked_at).getTime()) / 60000)) : null;
+    const contextIndex = getContextualSmokingTipIndex(pauseMinutes);
+    const tip = SMOKING_TIPS[(activeSmokingTipIndex || contextIndex) % SMOKING_TIPS.length] || SMOKING_TIPS[contextIndex] || SMOKING_TIPS[0];
+    const nextGoal = getNextPauseGoalMinutes(pauseMinutes);
+    const goalText = pauseMinutes == null
+      ? 'Erste Pause bewusst starten'
+      : `Mini-Ziel: ${formatDuration(nextGoal)}`;
+
+    els.cravingTipTitle.textContent = tip.title;
+    els.cravingTipBody.innerHTML = `${escapeHtml(tip.body)} <strong>${escapeHtml(goalText)}</strong>`;
+    els.cravingTipMeta.textContent = tip.meta;
+  }
+
+  function getContextualSmokingTipIndex(pauseMinutes) {
+    const alcoholToday = Boolean(alcoholForDate(toDateKey(new Date()))?.consumed);
+    if (alcoholToday) return 4;
+    if (pauseMinutes == null) return 0;
+    if (pauseMinutes < 10) return 2;
+    if (pauseMinutes < 30) return 0;
+    if (pauseMinutes < 90) return 1;
+    return 3;
+  }
+
+  function getNextPauseGoalMinutes(pauseMinutes) {
+    if (pauseMinutes == null) return 10;
+    if (pauseMinutes < 30) return Math.min(30, pauseMinutes + 10);
+    if (pauseMinutes < 60) return 60;
+    if (pauseMinutes < 120) return 120;
+    if (pauseMinutes < 240) return 240;
+    return pauseMinutes + 30;
+  }
+
+  function rotateSmokingTip() {
+    activeSmokingTipIndex = (activeSmokingTipIndex + 1) % SMOKING_TIPS.length;
+    renderSmokingTip();
+  }
+
+
   function renderSmokingAnalytics() {
     renderSmokingWeekHeatmap();
     renderSmokeIntervalVisual();
