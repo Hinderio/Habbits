@@ -7,6 +7,7 @@
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
   const COACH_SESSION_KEY = 'habitflow-coach-session-v1';
   const RULES_UI_KEY = 'habitflow-rules-open';
+  const HABIT_DNA_UI_KEY = 'habitflow-habit-dna-open';
   const CONSUMPTION_MODE_KEY = 'habitflow-consumption-mode';
   const SUPABASE_CONFIG = window.HABITFLOW_SUPABASE_CONFIG || {};
   const MEDITATION_TECHNIQUES = [
@@ -236,6 +237,7 @@
   let remoteHabitTargetPeriodSupported = true;
   let pendingTriggerSmokeId = null;
   let rulesExpanded = localStorage.getItem(RULES_UI_KEY) !== 'collapsed';
+  let expandedHabitDnaIds = loadExpandedHabitDnaIds();
   let activeConsumptionMode = localStorage.getItem(CONSUMPTION_MODE_KEY) === 'alcohol' ? 'alcohol' : 'smoke';
 
   const els = {};
@@ -466,6 +468,7 @@
       if (action === 'edit-habit') editHabit(id);
       if (action === 'delete-habit') deleteHabit(id);
       if (action === 'archive-habit') archiveHabit(id);
+      if (action === 'toggle-habit-dna') toggleHabitDna(id);
       if (action === 'log-habit') logHabit(id);
       if (action === 'open-smoke-history') openHistoryModal('smoke');
       if (action === 'open-smoke-costs') openHistoryModal('smoke-costs');
@@ -1639,6 +1642,29 @@
     renderAlcoholDashboard();
     renderSmokeHistoryLauncher();
     applyConsumptionMode();
+  }
+
+  function loadExpandedHabitDnaIds() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(HABIT_DNA_UI_KEY) || '[]');
+      return new Set(Array.isArray(raw) ? raw : []);
+    } catch {
+      return new Set();
+    }
+  }
+
+  function persistExpandedHabitDnaIds() {
+    try {
+      localStorage.setItem(HABIT_DNA_UI_KEY, JSON.stringify([...expandedHabitDnaIds]));
+    } catch {}
+  }
+
+  function toggleHabitDna(id) {
+    if (!id) return;
+    if (expandedHabitDnaIds.has(id)) expandedHabitDnaIds.delete(id);
+    else expandedHabitDnaIds.add(id);
+    persistExpandedHabitDnaIds();
+    renderHabits();
   }
 
   function renderSmokeHistoryLauncher() {
@@ -2818,6 +2844,7 @@
 
   function renderHabitDnaVisual(dna) {
     const riskText = dna.riskMeta.label === 'hoch' ? 'hoch' : dna.riskMeta.label === 'mittel' ? 'mittel' : 'niedrig';
+    const expanded = expandedHabitDnaIds.has(dna.habit.id);
     const nodes = [
       { cls: 'difficulty', label: 'Schwierigkeit', value: `${dna.difficulty}/5` },
       { cls: 'energy', label: 'Energie', value: `${dna.energy}/5` },
@@ -2827,17 +2854,27 @@
       { cls: 'reward', label: 'Belohnung', value: dna.rewardLabel },
       { cls: `risk is-${dna.riskMeta.tone}`, label: 'Abbruchrisiko', value: riskText }
     ];
-    return `<section class="habit-dna-card">
-      <div class="habit-dna-head">
-        <div><p class="eyebrow">DNA-Profil</p><h4>${escapeHtml(dna.patternText)}</h4></div>
-        <span class="badge ${dna.riskMeta.tone === 'high' ? 'danger-badge' : dna.riskMeta.tone === 'mid' ? 'warning-badge' : 'muted'}">${Math.round(dna.completionRate * 100)}% Treffer</span>
+    return `<section class="habit-dna-card ${expanded ? 'is-expanded' : 'is-collapsed'}">
+      <button class="habit-dna-toggle" type="button" data-action="toggle-habit-dna" data-id="${dna.habit.id}" aria-expanded="${expanded}">
+        <div class="habit-dna-toggle-copy">
+          <p class="eyebrow">DNA-Profil</p>
+          <strong>${escapeHtml(dna.patternText)}</strong>
+          <small>${expanded ? 'Profil einklappen' : 'Profil anzeigen'}</small>
+        </div>
+        <div class="habit-dna-toggle-meta">
+          <span class="badge ${dna.riskMeta.tone === 'high' ? 'danger-badge' : dna.riskMeta.tone === 'mid' ? 'warning-badge' : 'muted'}">${Math.round(dna.completionRate * 100)}% Treffer</span>
+          <span class="habit-dna-toggle-arrow" aria-hidden="true">${expanded ? '–' : '+'}</span>
+        </div>
+      </button>
+      <div class="habit-dna-body">
+        <div class="habit-dna-map">
+          ${nodes.map(node => `<article class="dna-node ${node.cls}"><small>${escapeHtml(node.label)}</small><strong>${escapeHtml(node.value)}</strong></article>`).join('')}
+        </div>
+        <p class="habit-dna-copy">${escapeHtml(dna.summary)}</p>
       </div>
-      <div class="habit-dna-map">
-        ${nodes.map(node => `<article class="dna-node ${node.cls}"><small>${escapeHtml(node.label)}</small><strong>${escapeHtml(node.value)}</strong></article>`).join('')}
-      </div>
-      <p class="habit-dna-copy">${escapeHtml(dna.summary)}</p>
     </section>`;
   }
+
 
   function riskySmokingWeekday(days = 42) {
     const cutoff = Date.now() - days * DAY_MS;
