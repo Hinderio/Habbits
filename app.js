@@ -87,6 +87,42 @@
     week: { label: 'Wochenziel', short: 'Woche', days: 7 },
     month: { label: 'Monatsziel', short: 'Monat', days: 30 }
   };
+  const HABIT_DNA_TIME_META = {
+    early: { label: 'Früh', adverb: 'früh', range: [5, 7] },
+    morning: { label: 'Morgens', adverb: 'morgens', range: [7, 11] },
+    midday: { label: 'Mittags', adverb: 'mittags', range: [11, 14] },
+    afternoon: { label: 'Nachmittags', adverb: 'nachmittags', range: [14, 18] },
+    evening: { label: 'Abends', adverb: 'abends', range: [18, 22] },
+    late: { label: 'Spät', adverb: 'spät', range: [22, 24] },
+    flexible: { label: 'Flexibel', adverb: 'flexibel', range: null }
+  };
+  const HABIT_DNA_HURDLES = {
+    consistency: 'Dranbleiben',
+    resistance: 'Innerer Widerstand',
+    stress: 'Stress / Druck',
+    perfectionism: 'Perfektionismus',
+    boredom: 'Langeweile',
+    tiredness: 'Müdigkeit'
+  };
+  const HABIT_DNA_TRIGGERS = {
+    routine: 'Routine',
+    wakeup: 'Nach dem Aufstehen',
+    coffee: 'Nach Kaffee',
+    workstart: 'Arbeitsstart',
+    meal: 'Nach dem Essen',
+    afterwork: 'Feierabend',
+    workout: 'Nach Bewegung',
+    bedtime: 'Vor dem Schlafen'
+  };
+  const HABIT_DNA_REWARDS = {
+    progress: 'Fortschritt',
+    pride: 'Stolz',
+    calm: 'Ruhe',
+    clarity: 'Klarheit',
+    energy: 'Energie',
+    relief: 'Erleichterung'
+  };
+  const HABIT_DNA_LOCAL_FIELDS = ['dna_difficulty', 'dna_energy', 'dna_preferred_time', 'dna_emotional_hurdle', 'dna_trigger', 'dna_reward'];
   const nowIso = () => new Date().toISOString();
   const uid = () => (crypto && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
 
@@ -130,6 +166,8 @@
     reward: '<path d="M7 4h10v4a5 5 0 0 1-10 0V4Z"/><path d="M9 18h6"/><path d="M12 13v5"/><path d="M5 6H3a3 3 0 0 0 4 3"/><path d="M19 6h2a3 3 0 0 1-4 3"/>',
     social: '<path d="M8 11a3 3 0 1 0 0-.01"/><path d="M16 11a3 3 0 1 0 0-.01"/><path d="M3 20c1-3 2.8-5 5-5s4 2 5 5"/><path d="M11 20c1-2.6 2.7-4 5-4s4 1.4 5 4"/>',
     meal: '<path d="M7 3v9"/><path d="M5 3v4"/><path d="M9 3v4"/><path d="M7 12v9"/><path d="M16 3v18"/><path d="M14 3h4v8h-4"/>',
+    money: '<path d="M4 7h16v10H4z"/><path d="M4 10h16"/><path d="M12 10v7"/><path d="M8 15h.01"/><path d="M16 15h.01"/>',
+    dna: '<path d="M8 4c4 2 4 4 8 6"/><path d="M8 20c4-2 4-4 8-6"/><path d="M9 7h6"/><path d="M9 12h6"/><path d="M9 17h6"/>',
     delay: '<circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/>',
     reset: '<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/>'
   };
@@ -302,6 +340,7 @@
       habitSubmitBtn: $('#habitSubmitBtn'),
       cancelHabitEditBtn: $('#cancelHabitEditBtn'),
       habitCards: $('#habitCards'),
+      habitDnaOverview: $('#habitDnaOverview'),
       taskFormPanel: $('#taskFormPanel'),
       taskFormToggleBtn: $('#taskFormToggleBtn'),
       taskFormCloseBtn: $('#taskFormCloseBtn'),
@@ -429,6 +468,7 @@
       if (action === 'archive-habit') archiveHabit(id);
       if (action === 'log-habit') logHabit(id);
       if (action === 'open-smoke-history') openHistoryModal('smoke');
+      if (action === 'open-smoke-costs') openHistoryModal('smoke-costs');
       if (action === 'open-alcohol-history') openHistoryModal('alcohol');
       if (action === 'open-habit-logs') openHistoryModal('habit', id);
       if (action === 'close-history-modal') closeHistoryModal();
@@ -619,10 +659,60 @@
   }
 
   function normalizeHabit(habit = {}) {
+    const base = { ...habit };
+    const defaults = defaultHabitDna(base);
     return {
-      ...habit,
-      target_period: normalizeHabitTargetPeriod(habit.target_period || habit.goal_period || habit.period || 'day')
+      ...base,
+      target_period: normalizeHabitTargetPeriod(base.target_period || base.goal_period || base.period || 'day'),
+      dna_difficulty: normalizeScaleValue(base.dna_difficulty ?? base.difficulty, defaults.difficulty),
+      dna_energy: normalizeScaleValue(base.dna_energy ?? base.energy, defaults.energy),
+      dna_preferred_time: normalizeHabitPreferredTime(base.dna_preferred_time || base.preferred_time || defaults.preferred_time),
+      dna_emotional_hurdle: normalizeHabitHurdle(base.dna_emotional_hurdle || base.emotional_hurdle || defaults.emotional_hurdle),
+      dna_trigger: normalizeHabitTrigger(base.dna_trigger || base.trigger || defaults.trigger),
+      dna_reward: normalizeHabitReward(base.dna_reward || base.reward || defaults.reward)
     };
+  }
+
+  function normalizeScaleValue(value, fallback = 3) {
+    const next = Math.round(Number(value || fallback));
+    return Math.max(1, Math.min(5, Number.isFinite(next) ? next : fallback));
+  }
+
+  function isPhysicalHabit(habit = {}) {
+    return ['sport', 'jogging', 'hiking', 'walking', 'pushups', 'standingDesk'].includes(habitIconKey(habit));
+  }
+
+  function defaultHabitDna(habit = {}) {
+    const type = habit.type || 'number';
+    const icon = habitIconKey(habit);
+    return {
+      difficulty: type === 'boolean' ? 1 : type === 'duration' ? 3 : type === 'weight' ? 2 : 2,
+      energy: ['sport', 'jogging', 'hiking', 'walking', 'pushups'].includes(icon) ? 4 : icon === 'meditation' ? 2 : type === 'boolean' ? 2 : 3,
+      preferred_time: icon === 'meditation' ? 'evening' : type === 'weight' ? 'morning' : 'flexible',
+      emotional_hurdle: icon === 'meditation' ? 'resistance' : ['sport', 'jogging', 'hiking', 'walking', 'pushups'].includes(icon) ? 'tiredness' : 'consistency',
+      trigger: icon === 'meditation' ? 'bedtime' : ['sport', 'jogging', 'hiking', 'walking', 'pushups'].includes(icon) ? 'afterwork' : type === 'weight' ? 'wakeup' : 'routine',
+      reward: icon === 'meditation' ? 'calm' : ['sport', 'jogging', 'hiking', 'walking', 'pushups'].includes(icon) ? 'energy' : type === 'weight' ? 'clarity' : 'progress'
+    };
+  }
+
+  function normalizeHabitPreferredTime(value) {
+    const key = String(value || '').trim().toLowerCase();
+    return HABIT_DNA_TIME_META[key] ? key : 'flexible';
+  }
+
+  function normalizeHabitHurdle(value) {
+    const key = String(value || '').trim().toLowerCase();
+    return HABIT_DNA_HURDLES[key] ? key : 'consistency';
+  }
+
+  function normalizeHabitTrigger(value) {
+    const key = String(value || '').trim().toLowerCase();
+    return HABIT_DNA_TRIGGERS[key] ? key : 'routine';
+  }
+
+  function normalizeHabitReward(value) {
+    const key = String(value || '').trim().toLowerCase();
+    return HABIT_DNA_REWARDS[key] ? key : 'progress';
   }
 
   function normalizeHabitTargetPeriod(period) {
@@ -1232,6 +1322,17 @@
       ${renderSmokeHistoryList()}`;
       return;
     }
+    if (historyModalMode === 'smoke-costs') {
+      const totalCost = formatCurrencyChf(smokeCostMetrics().totalCost);
+      els.historyModalContent.innerHTML = `<div class="history-modal-head">
+        <p class="eyebrow">Konsum</p>
+        <h2 id="historyModalTitle">Zigarettenkosten</h2>
+        <p class="subtle">Berechnet mit 40 Rappen pro Zigarette – damit du den finanziellen Effekt direkt siehst.</p>
+        <span class="badge muted">${totalCost}</span>
+      </div>
+      ${renderSmokeCostSummary()}`;
+      return;
+    }
     if (historyModalMode === 'alcohol') {
       const count = state.alcoholUnits.length;
       els.historyModalContent.innerHTML = `<div class="history-modal-head">
@@ -1542,13 +1643,21 @@
 
   function renderSmokeHistoryLauncher() {
     if (!els.smokeHistory) return;
+    const metrics = smokeCostMetrics();
     const smokeCount = state.cigarettes.length;
     const todayCount = cigarettesOnDate(toDateKey(new Date())).length;
-    els.smokeHistory.innerHTML = `<button class="history-open-card" type="button" data-action="open-smoke-history">
-      <span class="history-open-icon">${svgIcon('smoke', 'ui-icon')}</span>
-      <span class="history-open-copy"><strong>Zigarettenverlauf öffnen</strong><small>${smokeCount ? `${smokeCount} Eintrag${smokeCount === 1 ? '' : 'e'} · ${todayCount} heute` : 'Noch keine Einträge · Verlauf erscheint im Pop-up'}</small></span>
-      <span class="history-open-arrow">›</span>
-    </button>`;
+    els.smokeHistory.innerHTML = `<div class="history-launch-grid">
+      <button class="history-open-card" type="button" data-action="open-smoke-history">
+        <span class="history-open-icon">${svgIcon('smoke', 'ui-icon')}</span>
+        <span class="history-open-copy"><strong>Zigarettenverlauf öffnen</strong><small>${smokeCount ? `${smokeCount} Eintrag${smokeCount === 1 ? '' : 'e'} · ${todayCount} heute` : 'Noch keine Einträge · Verlauf erscheint im Pop-up'}</small></span>
+        <span class="history-open-arrow">›</span>
+      </button>
+      <button class="history-open-card is-secondary" type="button" data-action="open-smoke-costs">
+        <span class="history-open-icon is-money">${svgIcon('money', 'ui-icon')}</span>
+        <span class="history-open-copy"><strong>Kosten ansehen</strong><small>${metrics.totalCount ? `${formatCurrencyChf(metrics.totalCost)} gesamt · ${formatCurrencyChf(metrics.todayCost)} heute` : '0,40 CHF pro Zigarette · Einsparung direkt sichtbar'}</small></span>
+        <span class="history-open-arrow">›</span>
+      </button>
+    </div>`;
   }
 
   function renderSmokeHistoryList() {
@@ -2322,13 +2431,26 @@
           ? { delay: activeDelay ? 'Timer fertig laufen lassen und nebenbei etwas Kleines erledigen.' : 'Nutze den niedrigen Drang: verlängere die Pause direkt bis zum nächsten Mini-Ziel.', reset: 'Kurz Wasser trinken und bewusst stolz registrieren, dass gerade Spielraum da ist.' }
           : { delay: activeDelay ? 'Timer fertig laufen lassen. Keine neue Diskussion starten.' : '10-Minuten-Challenge starten und erst danach neu entscheiden.', reset: 'Ein Glas Wasser und mindestens 20 Schritte weg vom Trigger-Ort.' };
 
+    const personality = buildCoachPersonality({ activeHabits, focusHabit, activeTasks, overdueTasks, habitCompletion });
+    if (!activeDelay && urge <= 4 && personality) {
+      if (personality.planningStyle === 'overplanned' && focusHabit) {
+        coachLine = `Dein Muster wirkt gerade eher überplant als unmotiviert. Reduziere „${focusHabit.name}“ auf die Minimum-Version und schliesse genau diese eine Sache sauber ab.`;
+      } else if (personality.strongerTime === 'evening' && focusHabit && hour < 17) {
+        coachLine = `Dein Verlauf zeigt: abends klappt es besser als morgens. Plane „${focusHabit.name}“ bewusst für ${personality.suggestedTimeLabel} und halte es bis dahin klein statt mit Druck.`;
+      } else if (personality.strongerTime === 'morning' && focusHabit && hour >= 18) {
+        coachLine = `Du bist morgens verlässlicher als spät am Tag. Wenn „${focusHabit.name}“ heute noch offen ist, entscheide dich eher für eine Minimum-Version und plane die Hauptsession auf morgen früh.`;
+      } else if (personality.highRiskWeekday?.isToday) {
+        coachLine = `${personality.highRiskWeekday.label} kippen bei dir schneller. Heute zählt ein ruhiger Einstieg mehr als Motivation – Minimum-Version, dann neu bewerten.`;
+      }
+    }
+
     const steps = [
       focusTask ? { icon: 'tasks', title: 'Task-Fokus', body: coachTaskBody(focusTask) } : { icon: 'delay', title: 'Delay', body: urgency.delay },
-      focusHabit ? { icon: habitIconKey(focusHabit), title: 'Habit-Fokus', body: coachHabitBody(focusHabit, habitLoggedCount, activeHabits.length) } : { icon: 'reset', title: 'Reset', body: urgency.reset },
+      focusHabit ? { icon: habitIconKey(focusHabit), title: 'Habit-Fokus', body: personality?.planningStyle === 'overplanned' ? `${coachHabitBody(focusHabit, habitLoggedCount, activeHabits.length)} Minimum-Version reicht heute vollkommen.` : coachHabitBody(focusHabit, habitLoggedCount, activeHabits.length) } : { icon: 'reset', title: 'Reset', body: urgency.reset },
       { icon: trigger.icon, title: trigger.label, body: trigger.action }
     ];
 
-    return { risk, label, tone, headline, coachLine, microGoal, comparison, taskText, habitText, bestText, stage, pauseMinutes, todayCount, avgPerDay, alcoholToday, alcoholUnitsToday, trigger, urge, activeDelay, delayDone, activeTasks, overdueTasks, focusTask, focusHabit, habitLoggedCount, activeHabits, steps };
+    return { risk, label, tone, headline, coachLine, microGoal, comparison, taskText, habitText, bestText, stage, pauseMinutes, todayCount, avgPerDay, alcoholToday, alcoholUnitsToday, trigger, urge, activeDelay, delayDone, activeTasks, overdueTasks, focusTask, focusHabit, habitLoggedCount, activeHabits, steps, personality };
   }
 
   function renderCoach() {
@@ -2350,6 +2472,16 @@
     els.coachChallengeCard.innerHTML = renderCoachChallenge(insight);
     const focusTaskTitle = insight.focusTask ? insight.focusTask.title : 'keine aktive Aufgabe';
     const focusHabitTitle = insight.focusHabit ? insight.focusHabit.name : (insight.activeHabits.length ? 'alle aktiven Habits geloggt' : 'noch keine Habits');
+    const personality = insight.personality || null;
+    const personalityBlock = personality ? `<article class="coach-personality-card">
+      <div class="coach-personality-head">
+        <span>${svgIcon('coach', 'ui-icon')}</span>
+        <div><small>Coach-Persönlichkeit</small><strong>${escapeHtml(personality.title)}</strong><p>${escapeHtml(personality.body)}</p></div>
+      </div>
+      <div class="coach-personality-tags">
+        ${personality.tags.map(tag => `<span>${escapeHtml(tag)}</span>`).join('')}
+      </div>
+    </article>` : '';
     els.coachResult.innerHTML = `
       <div class="coach-result-topline"><small>${escapeHtml(insight.stage)} · Drang ${insight.urge}/5</small><h3>${escapeHtml(insight.headline)}</h3><p>${escapeHtml(insight.coachLine)}</p></div>
       <div class="coach-context-grid">
@@ -2358,6 +2490,7 @@
         <article class="coach-context-card"><span>${svgIcon(insight.focusHabit ? habitIconKey(insight.focusHabit) : 'habits', 'ui-icon')}</span><div><small>Habits</small><strong>${escapeHtml(focusHabitTitle)}</strong><p>${escapeHtml(insight.habitText)}</p></div></article>
         <article class="coach-context-card"><span>${svgIcon(insight.trigger.icon, 'ui-icon')}</span><div><small>Kontext</small><strong>${insight.alcoholToday ? 'Alkohol aktiv' : escapeHtml(insight.trigger.label)}</strong><p>Beste Pause: ${escapeHtml(insight.bestText)}</p></div></article>
       </div>
+      ${personalityBlock}
       <div class="coach-callout"><b>Nächster Schritt:</b> ${escapeHtml(insight.steps[0].body)} <em>${escapeHtml(insight.microGoal)}</em></div>`;
     els.coachPlanGrid.innerHTML = insight.steps.map((step, index) => `<article class="coach-plan-card"><span>${svgIcon(step.icon, 'ui-icon')}</span><small>Schritt ${index + 1}</small><strong>${escapeHtml(step.title)}</strong><p>${escapeHtml(step.body)}</p></article>`).join('');
   }
@@ -2410,6 +2543,7 @@
     const activeInputSelection = activeInput ? { start: activeInput.selectionStart, end: activeInput.selectionEnd } : null;
     const habitInputDrafts = collectHabitInputDrafts();
     const activeHabits = state.habits.filter(h => !h.is_archived).map(normalizeHabit);
+    renderHabitDnaOverview(activeHabits);
     if (!activeHabits.length) {
       els.habitCards.innerHTML = '<div class="empty-state">Lege deine erste flexible Gewohnheit an. Unterstützt werden Gewicht, Zahlen, Ja/Nein und Dauer.</div>';
       return;
@@ -2425,6 +2559,7 @@
       const progress = habit.target ? Math.min(100, Math.abs(Number(periodValue.value || 0) / Number(habit.target)) * 100) : 0;
       const unit = habit.unit || defaultUnit(habit.type);
       const isSystemHabit = isSystemMeditationHabit(habit);
+      const dna = buildHabitDna(habit);
       const control = isSystemHabit
         ? renderMeditationHabitControl(habit)
         : habit.type === 'boolean'
@@ -2442,6 +2577,7 @@
         ${control}
         <div class="meta" style="margin-top:10px">Heute: <strong>${formatHabitValue(habit, todayValue)}</strong>${habit.target ? ` · ${periodMeta.short}: <strong>${escapeHtml(periodValue.label)}</strong> / Ziel ${habit.target} ${escapeHtml(unit)}` : ''}</div>
         ${habit.target ? `<div class="habit-progress-track"><i style="width:${progress}%"></i></div>` : ''}
+        ${renderHabitDnaVisual(dna)}
         ${renderHabitEntryList(habit)}
       </article>`;
     }).join('');
@@ -2461,6 +2597,369 @@
         });
       }
     }
+  }
+
+  function timeBucketForHour(hour) {
+    const h = Math.max(0, Math.min(23, Number(hour || 0)));
+    if (h < 7) return 'early';
+    if (h < 11) return 'morning';
+    if (h < 14) return 'midday';
+    if (h < 18) return 'afternoon';
+    if (h < 22) return 'evening';
+    return 'late';
+  }
+
+  function modeOf(values = [], fallback = '') {
+    if (!values.length) return fallback;
+    const scores = new Map();
+    values.forEach(value => scores.set(value, (scores.get(value) || 0) + 1));
+    return [...scores.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || fallback;
+  }
+
+  function aggregateHabitEntriesValue(habit, entries = []) {
+    if (!entries.length) return 0;
+    if (habit.type === 'boolean') return entries.some(entry => entry.value_bool) ? 1 : 0;
+    if (habit.type === 'weight') return Number(entries.sort((a, b) => new Date(a.occurred_at) - new Date(b.occurred_at)).at(-1)?.value_num || 0);
+    return sum(entries.map(entry => Number(entry.value_num || 0)));
+  }
+
+  function habitPeriodWindows(periodKey, count = 4) {
+    const windows = [];
+    const now = new Date();
+    if (periodKey === 'day') {
+      for (let i = count - 1; i >= 0; i -= 1) {
+        const day = new Date(now);
+        day.setDate(now.getDate() - i);
+        day.setHours(0, 0, 0, 0);
+        const end = new Date(day);
+        end.setHours(23, 59, 59, 999);
+        windows.push({ start: day, end, key: toDateKey(day) });
+      }
+      return windows;
+    }
+    if (periodKey === 'week') {
+      for (let i = count - 1; i >= 0; i -= 1) {
+        const start = startOfIsoWeek(new Date(now.getFullYear(), now.getMonth(), now.getDate() - i * 7));
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(start);
+        end.setDate(start.getDate() + 6);
+        end.setHours(23, 59, 59, 999);
+        windows.push({ start, end, key: isoWeekInfo(start).key });
+      }
+      return windows;
+    }
+    for (let i = count - 1; i >= 0; i -= 1) {
+      const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+      end.setHours(23, 59, 59, 999);
+      windows.push({ start, end, key: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}` });
+    }
+    return windows;
+  }
+
+  function habitCompletionRate(habit) {
+    if (!habit.target) return state.habitEntries.some(entry => entry.habit_id === habit.id) ? 0.72 : 0;
+    const period = normalizeHabitTargetPeriod(habit.target_period);
+    const windows = habitPeriodWindows(period, period === 'month' ? 3 : period === 'week' ? 5 : 10);
+    if (!windows.length) return 0;
+    const successes = windows.filter(window => {
+      const entries = state.habitEntries.filter(entry => entry.habit_id === habit.id && new Date(entry.occurred_at) >= window.start && new Date(entry.occurred_at) <= window.end);
+      return aggregateHabitEntriesValue(habit, entries) >= Number(habit.target || 0);
+    }).length;
+    return successes / windows.length;
+  }
+
+  function habitShapeKey(habit, entries = []) {
+    if (habit.type === 'boolean') return 'short';
+    if (habit.type === 'duration') {
+      const avg = entries.length ? sum(entries.map(entry => Number(entry.value_num || 0))) / entries.length : Number(habit.target || 0);
+      if (avg <= 12) return 'short';
+      if (avg <= 30) return 'medium';
+      return 'long';
+    }
+    if (habit.type === 'number') {
+      const avg = entries.length ? sum(entries.map(entry => Number(entry.value_num || 0))) / entries.length : Number(habit.target || 0);
+      if (avg <= 2) return 'short';
+      if (avg <= 6) return 'medium';
+      return 'long';
+    }
+    return 'medium';
+  }
+
+  function habitBodyKey(habit) {
+    return isPhysicalHabit(habit) ? 'physical' : habitIconKey(habit) === 'meditation' ? 'calming' : 'abstract';
+  }
+
+  function habitRiskMeta(score) {
+    if (score >= 68) return { label: 'hoch', tone: 'high' };
+    if (score >= 40) return { label: 'mittel', tone: 'mid' };
+    return { label: 'niedrig', tone: 'low' };
+  }
+
+  function habitShapeLabel(key) {
+    return { short: 'kurz', medium: 'mittel', long: 'lang' }[key] || 'flexibel';
+  }
+
+  function habitBodyLabel(key) {
+    return { physical: 'körperlich', calming: 'beruhigend', abstract: 'abstrakt' }[key] || 'flexibel';
+  }
+
+  function buildHabitDna(habit) {
+    const entries = state.habitEntries.filter(entry => entry.habit_id === habit.id).sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at));
+    const recent = entries.filter(entry => Date.now() - new Date(entry.occurred_at).getTime() <= 45 * DAY_MS);
+    const lastLoggedAt = entries[0]?.occurred_at || null;
+    const daysSinceLog = lastLoggedAt ? Math.max(0, Math.floor((Date.now() - new Date(lastLoggedAt).getTime()) / DAY_MS)) : 999;
+    const dominantTime = recent.length >= 3
+      ? modeOf(recent.slice(0, 18).map(entry => timeBucketForHour(new Date(entry.occurred_at).getHours())), habit.dna_preferred_time)
+      : habit.dna_preferred_time;
+    const completionRate = habitCompletionRate(habit);
+    let riskScore = Math.round((1 - completionRate) * 52 + daysSinceLog * 3 + Math.max(0, normalizeScaleValue(habit.dna_difficulty) - 3) * 7);
+    if (!entries.length) riskScore += 15;
+    riskScore = Math.max(8, Math.min(92, riskScore));
+    const shapeKey = habitShapeKey(habit, recent.length ? recent : entries);
+    const bodyKey = habitBodyKey(habit);
+    const timeMeta = HABIT_DNA_TIME_META[normalizeHabitPreferredTime(dominantTime)] || HABIT_DNA_TIME_META.flexible;
+    const riskMeta = habitRiskMeta(riskScore);
+    const strengthScore = Math.max(0, Math.min(100, Math.round(100 - riskScore + completionRate * 18)));
+    const patternText = `${habitShapeLabel(shapeKey)}, ${timeMeta.adverb} und ${habitBodyLabel(bodyKey)}`;
+    const summary = completionRate >= 0.7
+      ? `Läuft stabil, wenn du es ${timeMeta.adverb} und klar messbar hältst.`
+      : `Braucht Reibung raus: ${HABIT_DNA_HURDLES[normalizeHabitHurdle(habit.dna_emotional_hurdle)]} ist hier der grösste Hebel.`;
+    return {
+      habit,
+      entries,
+      recent,
+      completionRate,
+      lastLoggedAt,
+      daysSinceLog,
+      difficulty: normalizeScaleValue(habit.dna_difficulty),
+      energy: normalizeScaleValue(habit.dna_energy),
+      timeKey: normalizeHabitPreferredTime(dominantTime),
+      timeMeta,
+      hurdleKey: normalizeHabitHurdle(habit.dna_emotional_hurdle),
+      hurdleLabel: HABIT_DNA_HURDLES[normalizeHabitHurdle(habit.dna_emotional_hurdle)],
+      triggerKey: normalizeHabitTrigger(habit.dna_trigger),
+      triggerLabel: HABIT_DNA_TRIGGERS[normalizeHabitTrigger(habit.dna_trigger)],
+      rewardKey: normalizeHabitReward(habit.dna_reward),
+      rewardLabel: HABIT_DNA_REWARDS[normalizeHabitReward(habit.dna_reward)],
+      riskScore,
+      riskMeta,
+      strengthScore,
+      shapeKey,
+      bodyKey,
+      patternText,
+      summary
+    };
+  }
+
+  function groupPatternSummary(items = []) {
+    if (!items.length) return 'noch ohne klares Muster';
+    const shape = modeOf(items.map(item => item.shapeKey), 'short');
+    const time = modeOf(items.map(item => item.timeKey), 'flexible');
+    const body = modeOf(items.map(item => item.bodyKey), 'abstract');
+    const timeMeta = HABIT_DNA_TIME_META[time] || HABIT_DNA_TIME_META.flexible;
+    return `${habitShapeLabel(shape)}, ${timeMeta.adverb} und ${habitBodyLabel(body)}`;
+  }
+
+  function buildHabitDnaPortfolio(activeHabits = state.habits.filter(habit => !habit.is_archived)) {
+    const profiles = activeHabits.map(habit => buildHabitDna(normalizeHabit(habit)));
+    const dataRich = profiles.filter(profile => profile.entries.length || profile.habit.target);
+    if (!profiles.length) return { profiles: [], headline: 'Noch keine Habit DNA vorhanden.', summary: 'Lege deine erste Gewohnheit an – danach entstehen automatisch Profile und Muster.', stableText: '–', fragileText: '–', coachStyle: 'ruhig starten' };
+    const sortedByStrength = [...profiles].sort((a, b) => b.strengthScore - a.strengthScore);
+    const strongest = sortedByStrength.slice(0, Math.min(2, sortedByStrength.length));
+    const weakest = [...profiles].sort((a, b) => b.riskScore - a.riskScore).slice(0, Math.min(2, profiles.length));
+    const stableText = groupPatternSummary(strongest);
+    const fragileText = groupPatternSummary(weakest);
+    const coachStyle = strongest.every(profile => profile.difficulty <= 3) && weakest.some(profile => profile.difficulty >= 4) ? 'sanfter Druck' : 'klare Challenges';
+    const headline = dataRich.length >= 2
+      ? `Deine stärksten Habits sind ${stableText}.`
+      : 'Noch wenig Daten – die Habit DNA wird mit jedem Log persönlicher.';
+    const summary = dataRich.length >= 2
+      ? `Deine fragilsten Habits sind aktuell ${fragileText}. Genau dort sollte der Coach kleiner und gezielter werden.`
+      : 'Sobald ein paar Logs vorhanden sind, erkennt Habbit ideale Zeiten, Reibung und Abbruchrisiko automatisch.';
+    return { profiles, headline, summary, stableText, fragileText, strongest, weakest, coachStyle };
+  }
+
+  function renderHabitDnaOverview(activeHabits = []) {
+    if (!els.habitDnaOverview) return;
+    if (!activeHabits.length) {
+      els.habitDnaOverview.innerHTML = `<div class="empty-state">Noch keine Habit DNA. Lege einen Habit an, dann erscheinen Schwierigkeit, Energie, ideale Tageszeit und Abbruchrisiko automatisch hier.</div>`;
+      return;
+    }
+    const portfolio = buildHabitDnaPortfolio(activeHabits);
+    const highRisk = portfolio.profiles.filter(profile => profile.riskMeta.tone === 'high').length;
+    els.habitDnaOverview.innerHTML = `<div class="habit-dna-hero">
+      <div>
+        <p class="eyebrow">Habit DNA</p>
+        <h3>${escapeHtml(portfolio.headline)}</h3>
+        <p>${escapeHtml(portfolio.summary)}</p>
+      </div>
+      <span class="badge muted">${portfolio.profiles.length} Profile · ${highRisk} sensibel</span>
+    </div>
+    <div class="habit-dna-insights">
+      <article class="habit-dna-insight-card">
+        <small>Starkes Muster</small>
+        <strong>${escapeHtml(portfolio.stableText)}</strong>
+        <p>${portfolio.strongest.length ? `Top: ${escapeHtml(portfolio.strongest.map(item => item.habit.name).join(' · '))}` : 'Noch kein klares Muster'}</p>
+      </article>
+      <article class="habit-dna-insight-card">
+        <small>Fragiles Muster</small>
+        <strong>${escapeHtml(portfolio.fragileText)}</strong>
+        <p>${portfolio.weakest.length ? `Achte auf: ${escapeHtml(portfolio.weakest.map(item => item.habit.name).join(' · '))}` : 'Noch keine Risikohabits'}</p>
+      </article>
+      <article class="habit-dna-insight-card">
+        <small>Coach-Stil</small>
+        <strong>${escapeHtml(portfolio.coachStyle)}</strong>
+        <p>${portfolio.coachStyle === 'sanfter Druck' ? 'Klein starten, sauber schliessen, dann steigern.' : 'Klare Mini-Challenges und sichtbare Schritte funktionieren gut.'}</p>
+      </article>
+    </div>`;
+  }
+
+  function renderHabitDnaVisual(dna) {
+    const riskText = dna.riskMeta.label === 'hoch' ? 'hoch' : dna.riskMeta.label === 'mittel' ? 'mittel' : 'niedrig';
+    const nodes = [
+      { cls: 'difficulty', label: 'Schwierigkeit', value: `${dna.difficulty}/5` },
+      { cls: 'energy', label: 'Energie', value: `${dna.energy}/5` },
+      { cls: 'time', label: 'Zeit', value: dna.timeMeta.label },
+      { cls: 'hurdle', label: 'Hürde', value: dna.hurdleLabel },
+      { cls: 'trigger', label: 'Auslöser', value: dna.triggerLabel },
+      { cls: 'reward', label: 'Belohnung', value: dna.rewardLabel },
+      { cls: `risk is-${dna.riskMeta.tone}`, label: 'Abbruchrisiko', value: riskText }
+    ];
+    return `<section class="habit-dna-card">
+      <div class="habit-dna-head">
+        <div><p class="eyebrow">DNA-Profil</p><h4>${escapeHtml(dna.patternText)}</h4></div>
+        <span class="badge ${dna.riskMeta.tone === 'high' ? 'danger-badge' : dna.riskMeta.tone === 'mid' ? 'warning-badge' : 'muted'}">${Math.round(dna.completionRate * 100)}% Treffer</span>
+      </div>
+      <div class="habit-dna-map">
+        ${nodes.map(node => `<article class="dna-node ${node.cls}"><small>${escapeHtml(node.label)}</small><strong>${escapeHtml(node.value)}</strong></article>`).join('')}
+      </div>
+      <p class="habit-dna-copy">${escapeHtml(dna.summary)}</p>
+    </section>`;
+  }
+
+  function riskySmokingWeekday(days = 42) {
+    const cutoff = Date.now() - days * DAY_MS;
+    const rows = state.cigarettes.filter(item => new Date(item.smoked_at).getTime() >= cutoff);
+    if (rows.length < 8) return null;
+    const counts = new Map();
+    rows.forEach(item => {
+      const day = new Date(item.smoked_at).getDay();
+      counts.set(day, (counts.get(day) || 0) + 1);
+    });
+    const best = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+    if (!best) return null;
+    const [day] = best;
+    return { key: day, label: smokingWeekdayLabel(day), isToday: day === new Date().getDay() };
+  }
+
+  function dominantHabitTime(activeHabits = []) {
+    const entries = state.habitEntries.filter(entry => activeHabits.some(habit => habit.id === entry.habit_id));
+    if (entries.length < 4) return 'balanced';
+    const buckets = entries.reduce((acc, entry) => {
+      const hour = new Date(entry.occurred_at).getHours();
+      if (hour >= 5 && hour < 11) acc.morning += 1;
+      else if (hour >= 17 && hour < 23) acc.evening += 1;
+      else acc.mid += 1;
+      return acc;
+    }, { morning: 0, evening: 0, mid: 0 });
+    if (buckets.evening >= buckets.morning * 1.3 && buckets.evening >= 3) return 'evening';
+    if (buckets.morning >= buckets.evening * 1.3 && buckets.morning >= 3) return 'morning';
+    return 'balanced';
+  }
+
+  function buildCoachPersonality({ activeHabits = [], activeTasks = [], habitCompletion = 1 } = {}) {
+    const portfolio = buildHabitDnaPortfolio(activeHabits);
+    const strongerTime = dominantHabitTime(activeHabits);
+    const highRiskWeekday = riskySmokingWeekday();
+    const openLoad = activeHabits.length + activeTasks.length;
+    const planningStyle = openLoad >= 8 && habitCompletion < 0.55 ? 'overplanned' : 'balanced';
+    const supportStyle = portfolio.coachStyle === 'sanfter Druck' ? 'gentle' : 'challenge';
+    const title = planningStyle === 'overplanned'
+      ? 'Weniger Plan, mehr Abschluss'
+      : strongerTime === 'evening'
+        ? 'Timing schlägt Motivation'
+        : strongerTime === 'morning'
+          ? 'Frühe Fenster sind stärker'
+          : 'Ruhige, klare Führung';
+    const body = planningStyle === 'overplanned'
+      ? 'Du planst aktuell mehr, als du sauber schliessen kannst. Der Coach reduziert deshalb lieber auf kleine machbare Schritte statt extra Druck zu machen.'
+      : strongerTime === 'evening'
+        ? 'Dein Verlauf zeigt mehr Zug am Abend als am Morgen. Der Coach priorisiert deshalb passende Uhrzeiten und Minimum-Versionen statt stumpfer Gamification.'
+        : strongerTime === 'morning'
+          ? 'Deine verlässlichsten Fenster liegen früher am Tag. Später wird der Coach eher auf Erhalt statt Eskalation setzen.'
+          : `Dein System reagiert gut auf ${supportStyle === 'gentle' ? 'sanften Druck und klare Mini-Schritte' : 'sichtbare Mini-Challenges und klare Struktur'}.`;
+    const tags = [];
+    if (highRiskWeekday) tags.push(`${highRiskWeekday.label} sensibel`);
+    if (strongerTime === 'evening') tags.push('abends stärker');
+    else if (strongerTime === 'morning') tags.push('morgens stärker');
+    if (planningStyle === 'overplanned') tags.push('Überplanung erkannt');
+    tags.push(supportStyle === 'gentle' ? 'sanfter Druck' : 'klare Challenges');
+    return { title, body, tags, strongerTime, planningStyle, supportStyle, highRiskWeekday, suggestedTimeLabel: strongerTime === 'evening' ? '20:30' : '08:00' };
+  }
+
+  function smokeCostMetrics() {
+    const unitCost = 0.4;
+    const todayKey = toDateKey(new Date());
+    const last7 = daysBack(7);
+    const last30 = daysBack(30);
+    const totalCount = state.cigarettes.length;
+    const todayCount = cigarettesOnDate(todayKey).length;
+    const weekCount = state.cigarettes.filter(item => last7.includes(toDateKey(item.smoked_at))).length;
+    const monthCount = state.cigarettes.filter(item => last30.includes(toDateKey(item.smoked_at))).length;
+    const averagePerDay7 = weekCount / 7;
+    return {
+      unitCost,
+      totalCount,
+      todayCount,
+      weekCount,
+      monthCount,
+      totalCost: totalCount * unitCost,
+      todayCost: todayCount * unitCost,
+      weekCost: weekCount * unitCost,
+      monthCost: monthCount * unitCost,
+      averagePerDay7,
+      projectedMonthCost: averagePerDay7 * 30 * unitCost,
+      projectedYearCost: averagePerDay7 * 365 * unitCost,
+      saveTwoLessPerDay: 2 * 30 * unitCost
+    };
+  }
+
+  function formatCurrencyChf(value) {
+    return new Intl.NumberFormat('de-CH', { style: 'currency', currency: 'CHF' }).format(Number(value || 0));
+  }
+
+  function renderSmokeCostSummary() {
+    const metrics = smokeCostMetrics();
+    const breakdown = daysBack(10).reverse().map(key => {
+      const count = cigarettesOnDate(key).length;
+      return { key, count, cost: count * metrics.unitCost };
+    }).filter(item => item.count > 0);
+    return `<section class="smoke-cost-card">
+      <div class="smoke-cost-hero">
+        <div>
+          <p class="eyebrow">40 Rappen pro Zigarette</p>
+          <h3>${formatCurrencyChf(metrics.totalCost)} bisher</h3>
+          <p>Heute ${metrics.todayCount} Zigarette${metrics.todayCount === 1 ? '' : 'n'} · ${formatCurrencyChf(metrics.todayCost)}. Auf Basis der letzten 7 Tage liegt dein aktuelles Monatsniveau bei ${formatCurrencyChf(metrics.projectedMonthCost)}.</p>
+        </div>
+        <span class="history-open-icon is-money">${svgIcon('money', 'ui-icon')}</span>
+      </div>
+      <div class="smoke-cost-grid">
+        <article><small>Heute</small><strong>${formatCurrencyChf(metrics.todayCost)}</strong><span>${metrics.todayCount} Zigaretten</span></article>
+        <article><small>7 Tage</small><strong>${formatCurrencyChf(metrics.weekCost)}</strong><span>${metrics.weekCount} Zigaretten</span></article>
+        <article><small>30 Tage</small><strong>${formatCurrencyChf(metrics.monthCost)}</strong><span>${metrics.monthCount} Zigaretten</span></article>
+        <article><small>Jahresprojektion</small><strong>${formatCurrencyChf(metrics.projectedYearCost)}</strong><span>auf aktuellem 7-Tage-Schnitt</span></article>
+      </div>
+      <div class="smoke-savings-strip">
+        <span>${svgIcon('dna', 'ui-icon')}</span>
+        <div><strong>Schon 2 Zigaretten weniger pro Tag sparen dir rund ${formatCurrencyChf(metrics.saveTwoLessPerDay)} pro Monat.</strong><small>Kleine Reduktionen sind finanziell sofort sichtbar – genau dafür ist dieser zweite Log-Button gedacht.</small></div>
+      </div>
+      <div class="habit-entry-list is-modal-list">
+        <div class="habit-entry-list-head"><span>Letzte Tage</span><small>Kosten pro Tag</small></div>
+        ${breakdown.length ? breakdown.map(item => `<article class="habit-entry-card"><div class="habit-entry-main"><strong>${new Date(item.key).toLocaleDateString('de-CH', { weekday: 'short', day: '2-digit', month: '2-digit' })}</strong><span>${item.count} Zigaretten · ${formatCurrencyChf(item.cost)}</span></div><span class="badge muted">${formatCurrencyChf(item.cost)}</span></article>`).join('') : '<div class="habit-entry-list is-empty"><span>Noch keine Zigaretten erfasst – Kostenübersicht erscheint automatisch.</span></div>'}
+      </div>
+    </section>`;
   }
 
   function renderMeditationHabitControl(habit) {
@@ -3111,6 +3610,12 @@ async function deleteAlcoholLog(id) {
       target: data.get('target') ? Number(data.get('target')) : null,
       target_period: normalizeHabitTargetPeriod(data.get('target_period')),
       icon: String(data.get('icon') || 'number').trim().toLowerCase(),
+      dna_difficulty: normalizeScaleValue(data.get('dna_difficulty'), defaultHabitDna({ type }).difficulty),
+      dna_energy: normalizeScaleValue(data.get('dna_energy'), defaultHabitDna({ type }).energy),
+      dna_preferred_time: normalizeHabitPreferredTime(data.get('dna_preferred_time')),
+      dna_emotional_hurdle: normalizeHabitHurdle(data.get('dna_emotional_hurdle')),
+      dna_trigger: normalizeHabitTrigger(data.get('dna_trigger')),
+      dna_reward: normalizeHabitReward(data.get('dna_reward')),
       updated_at: nowIso(),
       synced: false
     };
@@ -3203,6 +3708,12 @@ async function deleteAlcoholLog(id) {
     fields.direction.value = habit.direction || 'increase';
     fields.target.value = habit.target ?? '';
     if (fields.target_period) fields.target_period.value = normalizeHabitTargetPeriod(habit.target_period);
+    if (fields.dna_difficulty) fields.dna_difficulty.value = String(normalizeScaleValue(habit.dna_difficulty));
+    if (fields.dna_energy) fields.dna_energy.value = String(normalizeScaleValue(habit.dna_energy));
+    if (fields.dna_preferred_time) fields.dna_preferred_time.value = normalizeHabitPreferredTime(habit.dna_preferred_time);
+    if (fields.dna_emotional_hurdle) fields.dna_emotional_hurdle.value = normalizeHabitHurdle(habit.dna_emotional_hurdle);
+    if (fields.dna_trigger) fields.dna_trigger.value = normalizeHabitTrigger(habit.dna_trigger);
+    if (fields.dna_reward) fields.dna_reward.value = normalizeHabitReward(habit.dna_reward);
     fields.icon.value = ICON_PATHS[habit.icon] ? habit.icon : habitIconKey(habit);
     els.habitFormTitle.textContent = 'Gewohnheit bearbeiten';
     els.habitSubmitBtn.textContent = 'Änderungen speichern';
@@ -3220,6 +3731,12 @@ async function deleteAlcoholLog(id) {
       els.habitForm.reset();
       els.habitForm.elements.icon.value = 'number';
       if (els.habitForm.elements.target_period) els.habitForm.elements.target_period.value = 'day';
+      if (els.habitForm.elements.dna_difficulty) els.habitForm.elements.dna_difficulty.value = '2';
+      if (els.habitForm.elements.dna_energy) els.habitForm.elements.dna_energy.value = '3';
+      if (els.habitForm.elements.dna_preferred_time) els.habitForm.elements.dna_preferred_time.value = 'flexible';
+      if (els.habitForm.elements.dna_emotional_hurdle) els.habitForm.elements.dna_emotional_hurdle.value = 'consistency';
+      if (els.habitForm.elements.dna_trigger) els.habitForm.elements.dna_trigger.value = 'routine';
+      if (els.habitForm.elements.dna_reward) els.habitForm.elements.dna_reward.value = 'progress';
     }
     els.habitFormTitle.textContent = 'Gewohnheit anlegen';
     els.habitSubmitBtn.textContent = 'Habit erstellen';
@@ -4152,6 +4669,9 @@ async function deleteAlcoholLog(id) {
     if (!localHabit) return remoteHabit;
     const next = { ...remoteHabit };
     if (!remoteHabitTargetPeriodSupported) next.target_period = localHabit.target_period || next.target_period;
+    HABIT_DNA_LOCAL_FIELDS.forEach(field => {
+      if (localHabit[field] != null) next[field] = localHabit[field];
+    });
     return next;
   }
 

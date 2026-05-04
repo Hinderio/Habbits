@@ -328,8 +328,18 @@
             <label><span>Zielwert</span><input name="target" type="number" step="0.01" placeholder="optional" /></label>
             <label><span>Zielperiode</span><select name="target_period"><option value="day">Tagesziel</option><option value="week">Wochenziel</option><option value="month">Monatsziel</option></select></label>
             <label><span>Icon-Stil</span><input name="icon" value="number" placeholder="number, water, sport, standingDesk, pushups, bread, jogging, hiking, walking" /></label>
+            <label><span>Schwierigkeit</span><select name="dna_difficulty"><option value="1">1 · sehr leicht</option><option value="2" selected>2 · eher leicht</option><option value="3">3 · mittel</option><option value="4">4 · anspruchsvoll</option><option value="5">5 · sehr anspruchsvoll</option></select></label>
+            <label><span>Energielevel</span><select name="dna_energy"><option value="1">1 · sehr niedrig</option><option value="2">2 · niedrig</option><option value="3" selected>3 · mittel</option><option value="4">4 · hoch</option><option value="5">5 · sehr hoch</option></select></label>
+            <label><span>Ideale Tageszeit</span><select name="dna_preferred_time"><option value="flexible" selected>Flexibel</option><option value="early">Früh</option><option value="morning">Morgens</option><option value="midday">Mittags</option><option value="afternoon">Nachmittags</option><option value="evening">Abends</option><option value="late">Spät</option></select></label>
+            <label><span>Emotionale Hürde</span><select name="dna_emotional_hurdle"><option value="consistency" selected>Dranbleiben</option><option value="resistance">Innerer Widerstand</option><option value="stress">Stress / Druck</option><option value="perfectionism">Perfektionismus</option><option value="boredom">Langeweile</option><option value="tiredness">Müdigkeit</option></select></label>
+            <label><span>Auslöser</span><select name="dna_trigger"><option value="routine" selected>Routine</option><option value="wakeup">Nach dem Aufstehen</option><option value="coffee">Nach Kaffee</option><option value="workstart">Arbeitsstart</option><option value="meal">Nach dem Essen</option><option value="afterwork">Feierabend</option><option value="workout">Nach Bewegung</option><option value="bedtime">Vor dem Schlafen</option></select></label>
+            <label><span>Belohnung</span><select name="dna_reward"><option value="progress" selected>Fortschritt</option><option value="pride">Stolz</option><option value="calm">Ruhe</option><option value="clarity">Klarheit</option><option value="energy">Energie</option><option value="relief">Erleichterung</option></select></label>
             <div class="form-actions full"><button id="habitSubmitBtn" class="pill primary" type="submit">Habit erstellen</button><button id="cancelHabitEditBtn" class="pill secondary hidden" type="button">Abbrechen</button></div>
           </form>
+        </section>
+        <section class="panel glass">
+          <div class="panel-head"><div><p class="eyebrow">Habit DNA</p><h3>Muster statt nur Listen</h3></div><span class="subtle">lernt mit jedem Log</span></div>
+          <div id="habitDnaOverview" class="habit-dna-overview"></div>
         </section>
         <section class="panel glass">
           <div class="panel-head"><div><p class="eyebrow">Heute</p><h3>Quick Logging</h3></div></div>
