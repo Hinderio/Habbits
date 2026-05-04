@@ -469,7 +469,6 @@
       dashboardTitle: $('#dashboardTitle'),
       dashboardSubtitle: $('#dashboardSubtitle'),
       heroSmokeBtn: $('#heroSmokeBtn'),
-      heroMorningRoutineBtn: $('#heroMorningRoutineBtn'),
       heroTaskBtn: $('#heroTaskBtn'),
       heroCoachBtn: $('#heroCoachBtn'),
       heroEmergencyBtn: $('#heroEmergencyBtn'),
@@ -587,7 +586,6 @@
 
     els.navButtons.forEach(btn => btn.addEventListener('click', () => showScreen(btn.dataset.target)));
     els.heroSmokeBtn.addEventListener('click', () => recordCigarette());
-    if (els.heroMorningRoutineBtn) els.heroMorningRoutineBtn.addEventListener('click', openMorningRoutineFromHero);
     els.heroTaskBtn.addEventListener('click', () => { showScreen('tasks'); openTaskForm(); });
     if (els.heroCoachBtn) els.heroCoachBtn.addEventListener('click', openCoachModal);
     if (els.heroEmergencyBtn) els.heroEmergencyBtn.addEventListener('click', startEmergencyCravingFlow);
@@ -1351,23 +1349,6 @@
     </div>`;
   }
 
-  function openMorningRoutineFromHero() {
-    const todayKey = toDateKey(new Date());
-    const completed = Boolean(morningRoutineCompletedLog(todayKey));
-    const active = morningRoutineSession.dateKey === todayKey && morningRoutineSession.startedAt && !completed;
-    if (!completed && !active) {
-      startMorningRoutine();
-    } else if (completed) {
-      toast('Morgenroutine heute bereits abgeschlossen.');
-    } else {
-      toast('Morgenroutine läuft bereits.');
-    }
-    requestAnimationFrame(() => {
-      const panel = els.morningRoutineCard?.closest('.morning-routine-panel');
-      panel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-  }
-
   function startMorningRoutine() {
     const todayKey = toDateKey(new Date());
     if (morningRoutineCompletedLog(todayKey)) {
@@ -1565,11 +1546,6 @@
   function buildWeeklyReview() {
     const keys = daysBack(7);
     const cigs = state.cigarettes.filter(c => keys.includes(toDateKey(c.smoked_at)));
-    const routineLog = state.morningRoutineLogs.find(log => log.date_key === key) || (state.pointsLedger.find(point => point.source_type === 'bonus' && point.source_id === todayMorningRoutineSourceId(key)) ? { routine_key: 'unknown' } : null);
-    if (routineLog) {
-      const routine = MORNING_ROUTINES.find(item => item.key === routineLog.routine_key);
-      details.push(`<article class="list-card done"><div><h4>Morgenroutine</h4><p class="meta">${escapeHtml(routine?.title || '15-Minuten-Routine')} · +50 Punkte</p></div></article>`);
-    }
     const tasks = state.tasks.filter(t => t.status === 'done' && keys.includes(toDateKey(t.completed_at || t.updated_at || t.created_at)));
     const habits = state.habitEntries.filter(e => keys.includes(toDateKey(e.occurred_at)));
     const best = bestPauseMinutes();
@@ -3702,11 +3678,6 @@
       date.setDate(start.getDate() + i);
       const key = toDateKey(date);
       const cigarettes = cigarettesOnDate(key).length;
-      const routineLog = state.morningRoutineLogs.find(log => log.date_key === key) || (state.pointsLedger.find(point => point.source_type === 'bonus' && point.source_id === todayMorningRoutineSourceId(key)) ? { routine_key: 'unknown' } : null);
-    if (routineLog) {
-      const routine = MORNING_ROUTINES.find(item => item.key === routineLog.routine_key);
-      details.push(`<article class="list-card done"><div><h4>Morgenroutine</h4><p class="meta">${escapeHtml(routine?.title || '15-Minuten-Routine')} · +50 Punkte</p></div></article>`);
-    }
     const tasks = state.tasks.filter(t => toDateKey(t.due_at || t.completed_at || t.created_at) === key);
       const alcohol = alcoholForDate(key)?.consumed;
       const alcoholUnits = alcoholUnitsOnDate(key).length;
@@ -3716,6 +3687,8 @@
       if (tasks.length) chips.push(`<span class="day-chip task">${tasks.length} Task</span>`);
       if (alcoholUnits) chips.push(`<span class="day-chip alcohol">${alcoholUnits} Alk.</span>`);
       else if (alcohol) chips.push('<span class="day-chip alcohol">Alk.</span>');
+      const routineDone = state.morningRoutineLogs.some(log => log.date_key === key) || state.pointsLedger.some(point => point.source_type === 'bonus' && point.source_id === todayMorningRoutineSourceId(key));
+      if (routineDone) chips.push('<span class="day-chip habit">Routine</span>');
       cells.push(`<button class="calendar-day ${date.getMonth() !== month ? 'is-muted' : ''} ${key === toDateKey(new Date()) ? 'is-today' : ''} ${key === selectedCalendarDate ? 'is-selected' : ''}" type="button" data-action="select-day" data-day="${key}">
         <span class="calendar-day-head"><strong>${date.getDate()}</strong>${points ? `<em class="day-points">${points > 0 ? '+' : ''}${points}</em>` : ''}</span>
         <span class="day-chips">${chips.join('')}</span>
