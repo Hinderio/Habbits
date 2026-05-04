@@ -1490,91 +1490,104 @@ function renderSmokingTip(last = getLastCigarette()) {
 
 
   function renderSmokingAnalytics() {
-    renderSmokingHourHeatmap();
+    renderSmokingWeekHeatmap();
     renderSmokeIntervalVisual();
   }
 
-  function renderSmokingHourHeatmap(days = 28) {
+  function renderSmokingWeekHeatmap(weeksCount = 12) {
     if (!els.cigaretteHeatmapVisual) return;
-    if (els.cigaretteHeatmapBadge) els.cigaretteHeatmapBadge.textContent = `${days} Tage`;
+    if (els.cigaretteHeatmapBadge) els.cigaretteHeatmapBadge.textContent = `${weeksCount} KW`;
 
-    const keys = new Set(daysBack(days));
-    const rows = [1, 2, 3, 4, 5, 6, 0].map(day => ({ day, total: 0, cells: Array.from({ length: 24 }, () => 0) }));
-    const relevant = state.cigarettes.filter(c => keys.has(toDateKey(c.smoked_at)));
+    const weeks = calendarWeeksBack(weeksCount);
+    const weekKeys = new Set(weeks.map(week => week.key));
+    const weekIndex = new Map(weeks.map((week, index) => [week.key, index]));
+    const rows = [1, 2, 3, 4, 5, 6, 0].map(day => ({
+      day,
+      total: 0,
+      cells: weeks.map(week => ({ key: week.key, count: 0 }))
+    }));
+    const relevant = state.cigarettes.filter(c => weekKeys.has(isoWeekInfo(c.smoked_at).key));
 
     if (!relevant.length) {
-      els.cigaretteHeatmapVisual.innerHTML = '<div class="empty-state">Noch keine Zigaretten im Analysefenster. Sobald Verlauf vorhanden ist, zeigt diese Heatmap dein Wochenmuster nach Wochentag und Stunde.</div>';
+      els.cigaretteHeatmapVisual.innerHTML = '<div class="empty-state">Noch keine Zigaretten im Kalenderwochen-Fenster. Sobald Verlauf vorhanden ist, zeigt diese Matrix, an welchen Wochentagen welche Wochen wirklich auffällig waren.</div>';
       return;
     }
 
-    const dayIndexMap = new Map(rows.map((row, index) => [row.day, index]));
-    const hourTotals = Array.from({ length: 24 }, () => 0);
+    const rowByDay = new Map(rows.map(row => [row.day, row]));
+    const weekTotals = new Map(weeks.map(week => [week.key, 0]));
 
     relevant.forEach(entry => {
       const date = new Date(entry.smoked_at);
       if (Number.isNaN(date.getTime())) return;
-      const dayIndex = dayIndexMap.get(date.getDay());
-      const hour = date.getHours();
-      if (dayIndex == null || hour < 0 || hour > 23) return;
-      rows[dayIndex].cells[hour] += 1;
-      rows[dayIndex].total += 1;
-      hourTotals[hour] += 1;
+      const info = isoWeekInfo(date);
+      const columnIndex = weekIndex.get(info.key);
+      const row = rowByDay.get(date.getDay());
+      if (!row || columnIndex == null) return;
+      row.cells[columnIndex].count += 1;
+      row.total += 1;
+      weekTotals.set(info.key, (weekTotals.get(info.key) || 0) + 1);
     });
 
-    const flatCounts = rows.flatMap(row => row.cells);
-    const maxValue = Math.max(...flatCounts, 1);
-    const peakEntry = rows
-      .flatMap(row => row.cells.map((count, hour) => ({ count, hour, day: row.day })))
-      .sort((a, b) => b.count - a.count)[0] || { count: 0, hour: 0, day: 1 };
+    const flatCells = rows.flatMap(row => row.cells.map(cell => ({ ...cell, day: row.day })));
+    const maxValue = Math.max(...flatCells.map(cell => cell.count), 1);
+    const peakEntry = [...flatCells].sort((a, b) => b.count - a.count)[0] || { count: 0, day: 1, key: weeks.at(-1)?.key };
+    const peakWeek = weeks.find(week => week.key === peakEntry.key) || weeks.at(-1);
     const dominantDay = [...rows].sort((a, b) => b.total - a.total)[0] || rows[0];
-    const dominantHour = hourTotals
-      .map((count, hour) => ({ count, hour }))
-      .sort((a, b) => b.count - a.count)[0] || { count: 0, hour: 0 };
-    const eveningShare = relevant.length
-      ? Math.round((relevant.filter(entry => {
-          const hour = new Date(entry.smoked_at).getHours();
-          return hour >= 17 && hour < 22;
-        }).length / relevant.length) * 100)
-      : 0;
+    const dominantWeek = [...weekTotals.entries()]
+      .map(([key, count]) => ({ key, count, week: weeks.find(item => item.key === key) }))
+      .sort((a, b) => b.count - a.count)[0] || { count: 0, week: weeks.at(-1) };
     const topCellShare = relevant.length
-      ? Math.round((rows
-          .flatMap(row => row.cells)
+      ? Math.round((flatCells
+          .map(cell => cell.count)
           .filter(Boolean)
           .sort((a, b) => b - a)
           .slice(0, 3)
           .reduce((total, value) => total + value, 0) / relevant.length) * 100)
       : 0;
+    const weekCounts = weeks.map(week => weekTotals.get(week.key) || 0);
+    const splitIndex = Math.max(1, Math.floor(weekCounts.length / 2));
+    const earlyAverage = average(weekCounts.slice(0, splitIndex));
+    const lateAverage = average(weekCounts.slice(splitIndex));
+    const weekDelta = Math.round((lateAverage - earlyAverage) * 10) / 10;
+    const trendText = weekCounts.length < 4
+      ? 'noch wenig Wochenhistorie'
+      : weekDelta > 0.4
+        ? `+${weekDelta.toLocaleString('de-CH')} / KW`
+        : weekDelta < -0.4
+          ? `${weekDelta.toLocaleString('de-CH')} / KW`
+          : 'stabil';
 
     const summary = [
       {
-        label: 'Peak-Zeitfenster',
-        value: `${smokingWeekdayLabel(peakEntry.day, { short: true })} · ${String(peakEntry.hour).padStart(2, '0')}:00`,
-        detail: `${peakEntry.count} Zigarette${peakEntry.count === 1 ? '' : 'n'} im stärksten Cluster.`
+        label: 'Stärkste Zelle',
+        value: `${peakWeek?.label || 'KW'} · ${smokingWeekdayLabel(peakEntry.day, { short: true })}`,
+        detail: `${peakEntry.count} Zigarette${peakEntry.count === 1 ? '' : 'n'} in diesem Wochen-/Tages-Cluster.`
+      },
+      {
+        label: 'Stärkste KW',
+        value: dominantWeek.week?.label || '–',
+        detail: `${dominantWeek.count} Einträge · ${dominantWeek.week?.rangeLabel || 'Kalenderwoche'}.`
       },
       {
         label: 'Dominanter Tag',
         value: smokingWeekdayLabel(dominantDay.day),
-        detail: `${dominantDay.total} Einträge im ${days}-Tage-Fenster.`
+        detail: `${dominantDay.total} Einträge über ${weeksCount} Kalenderwochen.`
       },
       {
-        label: 'Konzentration',
-        value: `${topCellShare}%`,
-        detail: `Top-3 Fenster bündeln ${topCellShare}% des Konsums.`
-      },
-      {
-        label: 'Abendanteil',
-        value: `${eveningShare}%`,
-        detail: `17–22 Uhr · stärkste Einzelstunde ${String(dominantHour.hour).padStart(2, '0')}:00.`
+        label: 'Trenddruck',
+        value: trendText,
+        detail: `Vergleich neue vs. ältere Wochen · Top-3 Zellen bündeln ${topCellShare}% des Konsums.`
       }
     ];
 
-    const header = Array.from({ length: 24 }, (_, hour) => `<div class="smoke-hour-label ${hour % 3 === 0 ? 'is-major' : ''}"><span>${String(hour).padStart(2, '0')}</span></div>`).join('');
+    const header = weeks.map(week => `<div class="smoke-week-label" title="${escapeHtml(week.rangeLabel)}"><span>${escapeHtml(week.label)}</span><small>${escapeHtml(week.rangeLabel)}</small></div>`).join('');
     const body = rows.map(row => `
-      <div class="smoke-hour-row-label"><strong>${smokingWeekdayLabel(row.day, { short: true })}</strong><small>${row.total}×</small></div>
-      ${row.cells.map((count, hour) => {
-        const level = count ? Math.max(1, Math.ceil((count / maxValue) * 5)) : 0;
-        const title = `${smokingWeekdayLabel(row.day)}, ${String(hour).padStart(2, '0')}:00–${String((hour + 1) % 24).padStart(2, '0')}:00 · ${count} Zigarette${count === 1 ? '' : 'n'}`;
-        return `<span class="smoke-hour-cell level-${level}" title="${escapeHtml(title)}"><em>${count || ''}</em></span>`;
+      <div class="smoke-week-row-label"><strong>${smokingWeekdayLabel(row.day, { short: true })}</strong><small>${row.total}×</small></div>
+      ${row.cells.map((cell, index) => {
+        const week = weeks[index];
+        const level = cell.count ? Math.max(1, Math.ceil((cell.count / maxValue) * 5)) : 0;
+        const title = `${smokingWeekdayLabel(row.day)}, ${week.label} (${week.rangeLabel}) · ${cell.count} Zigarette${cell.count === 1 ? '' : 'n'}`;
+        return `<span class="smoke-week-cell level-${level}" title="${escapeHtml(title)}"><em>${cell.count || ''}</em></span>`;
       }).join('')}
     `).join('');
 
@@ -1582,15 +1595,15 @@ function renderSmokingTip(last = getLastCigarette()) {
       <div class="smoking-visual-summary-grid smoking-visual-summary-grid--compact">
         ${summary.map(item => `<article><small>${escapeHtml(item.label)}</small><strong>${escapeHtml(item.value)}</strong><p>${escapeHtml(item.detail)}</p></article>`).join('')}
       </div>
-      <div class="smoke-hour-grid-wrap">
-        <div class="smoke-hour-grid" style="--smoke-hour-columns:24">
-          <div class="smoke-hour-corner">Tag</div>
+      <div class="smoke-week-grid-wrap" aria-label="Zigaretten-Heatmap nach Kalenderwoche und Wochentag">
+        <div class="smoke-week-grid" style="--smoke-week-columns:${weeks.length}">
+          <div class="smoke-week-corner">Tag</div>
           ${header}
           ${body}
         </div>
       </div>
       <div class="smoke-hour-legend"><span>wenig</span>${[1, 2, 3, 4, 5].map(level => `<i class="level-${level}"></i>`).join('')}<span>hoch</span></div>
-      <p class="meta">Pattern Readout: Dein Konsum häuft sich aktuell am stärksten um <strong>${String(dominantHour.hour).padStart(2, '0')}:00 Uhr</strong> und zeigt <strong>${eveningShare}% Abendanteil</strong>. Nutze Peak-Fenster für Coach-Delays oder Mini-Interventionen.</p>
+      <p class="meta">Pattern Readout: Die Matrix verdichtet einzelne Rauchmomente zu Kalenderwochen-Clustern. Aktuell ist <strong>${dominantWeek.week?.label || 'eine KW'}</strong> am auffälligsten; der stärkste Wochentag ist <strong>${smokingWeekdayLabel(dominantDay.day)}</strong>.</p>
     `;
   }
 
@@ -1689,6 +1702,52 @@ function renderSmokingTip(last = getLastCigarette()) {
       <div class="interval-bucket-grid">${buckets}</div>
       <div class="coach-callout interval-callout"><b>Signal:</b> ${escapeHtml(trendText)}</div>
     `;
+  }
+
+  function calendarWeeksBack(count = 12) {
+    const currentStart = startOfIsoWeek(new Date());
+    const weeks = [];
+    for (let i = count - 1; i >= 0; i--) {
+      const start = new Date(currentStart);
+      start.setDate(currentStart.getDate() - (i * 7));
+      const end = new Date(start);
+      end.setDate(start.getDate() + 6);
+      const info = isoWeekInfo(start);
+      weeks.push({
+        ...info,
+        start,
+        end,
+        label: `KW ${info.week}`,
+        rangeLabel: formatWeekRange(start, end)
+      });
+    }
+    return weeks;
+  }
+
+  function startOfIsoWeek(value) {
+    const date = value instanceof Date ? new Date(value) : new Date(value);
+    if (Number.isNaN(date.getTime())) return new Date();
+    date.setHours(12, 0, 0, 0);
+    const day = date.getDay() || 7;
+    date.setDate(date.getDate() - day + 1);
+    return date;
+  }
+
+  function isoWeekInfo(value) {
+    const raw = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(raw.getTime())) return { year: 0, week: 0, key: '' };
+    const date = new Date(Date.UTC(raw.getFullYear(), raw.getMonth(), raw.getDate()));
+    const day = date.getUTCDay() || 7;
+    date.setUTCDate(date.getUTCDate() + 4 - day);
+    const year = date.getUTCFullYear();
+    const yearStart = new Date(Date.UTC(year, 0, 1));
+    const week = Math.ceil((((date - yearStart) / DAY_MS) + 1) / 7);
+    return { year, week, key: `${year}-W${String(week).padStart(2, '0')}` };
+  }
+
+  function formatWeekRange(start, end) {
+    const format = date => date.toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' });
+    return `${format(start)}–${format(end)}`;
   }
 
   function smokingWeekdayLabel(day, { short = false } = {}) {
