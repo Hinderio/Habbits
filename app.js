@@ -405,6 +405,7 @@
       if (action === 'archive-habit') archiveHabit(id);
       if (action === 'log-habit') logHabit(id);
       if (action === 'open-smoke-history') openHistoryModal('smoke');
+      if (action === 'open-alcohol-history') openHistoryModal('alcohol');
       if (action === 'open-habit-logs') openHistoryModal('habit', id);
       if (action === 'close-history-modal') closeHistoryModal();
       if (action === 'toggle-meditation-techniques') toggleMeditationTechniques(id);
@@ -856,17 +857,25 @@
   }
 
   function render() {
-    renderTimers();
-    renderDashboard();
-    renderSmoking();
-    renderMeditation();
-    renderHabits();
-    renderTasks();
-    renderCoach();
-    renderCalendar();
-    renderDayDetails();
-    renderHistoryModal();
-    renderSyncStatus();
+    renderSection('timers', renderTimers);
+    renderSection('dashboard', renderDashboard);
+    renderSection('smoking', renderSmoking);
+    renderSection('meditation', renderMeditation);
+    renderSection('habits', renderHabits);
+    renderSection('tasks', renderTasks);
+    renderSection('coach', renderCoach);
+    renderSection('calendar', renderCalendar);
+    renderSection('day-details', renderDayDetails);
+    renderSection('history-modal', renderHistoryModal);
+    renderSection('sync-status', renderSyncStatus);
+  }
+
+  function renderSection(name, renderFn) {
+    try {
+      renderFn();
+    } catch (error) {
+      console.error(`Renderfehler in ${name}`, error);
+    }
   }
 
   function renderTimers() {
@@ -1195,6 +1204,17 @@
         <span class="badge muted">${count} Eintrag${count === 1 ? '' : 'e'}</span>
       </div>
       ${renderSmokeHistoryList()}`;
+      return;
+    }
+    if (historyModalMode === 'alcohol') {
+      const count = state.alcoholUnits.length;
+      els.historyModalContent.innerHTML = `<div class="history-modal-head">
+        <p class="eyebrow">Konsum</p>
+        <h2 id="historyModalTitle">Alkoholverlauf</h2>
+        <p class="subtle">Auch Alkohol-Logs bleiben im Alltag ausgeblendet und werden nur bei Bedarf geöffnet.</p>
+        <span class="badge muted">${count} Einheit${count === 1 ? '' : 'en'}</span>
+      </div>
+      ${renderAlcoholUnitHistoryList()}`;
       return;
     }
     if (historyModalMode === 'habit') {
@@ -1542,6 +1562,39 @@
     }).join('')}</div>`;
   }
 
+
+
+
+  function renderAlcoholUnitHistory() {
+    if (!els.alcoholUnitHistory) return;
+    const units = [...state.alcoholUnits]
+      .sort((a, b) => sortDate(b.occurred_at || b.created_at) - sortDate(a.occurred_at || a.created_at));
+    const todayCount = units.filter(unit => toDateKey(unit.occurred_at || unit.created_at) === toDateKey(new Date())).length;
+    els.alcoholUnitHistory.innerHTML = `<button class="history-open-card" type="button" data-action="open-alcohol-history">
+      <span class="history-open-icon">${svgIcon('alcohol', 'ui-icon')}</span>
+      <span class="history-open-copy"><strong>Alkoholverlauf öffnen</strong><small>${units.length ? `${units.length} Einheit${units.length === 1 ? '' : 'en'} · ${todayCount} heute` : 'Noch keine Einheiten · Verlauf erscheint im Pop-up'}</small></span>
+      <span class="history-open-arrow">›</span>
+    </button>`;
+  }
+
+  function renderAlcoholUnitHistoryList() {
+    const units = [...state.alcoholUnits]
+      .sort((a, b) => sortDate(b.occurred_at || b.created_at) - sortDate(a.occurred_at || a.created_at))
+      .slice(0, 50);
+    if (!units.length) {
+      return '<div class="empty-state">Noch keine Alkohol-Einheit erfasst. Neue Einheiten erscheinen hier und können später gelöscht werden.</div>';
+    }
+    return `<div class="stack-list tall alcohol-history-modal-list">${units.map(unit => `<article class="list-card compact">
+      <div class="list-card-main">
+        <h4>${escapeHtml(alcoholTypeLabel(unit.drink_type))}</h4>
+        <p class="meta">${formatDateTime(unit.occurred_at || unit.created_at)}${unit.note ? ` · ${escapeHtml(unit.note)}` : ''}</p>
+      </div>
+      <div class="list-actions">
+        <span class="badge muted">1 Einheit</span>
+        <button class="mini-btn danger" type="button" data-action="delete-alcohol-unit" data-id="${unit.id}">Löschen</button>
+      </div>
+    </article>`).join('')}</div>`;
+  }
 
   function renderSmokingAnalytics() {
     renderSmokingWeekHeatmap();
