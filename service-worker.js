@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v33-deep-smoke-map';
+const CACHE_NAME = 'habitflow-v34-compact-habit-cards';
 const ASSETS = ['./', './index.html', './style.css', './app.js', './supabase-config.js', './supabase-schema.js', './manifest.json', './icons/coach-clean.svg'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));

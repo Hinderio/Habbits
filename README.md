@@ -8,6 +8,7 @@ Premium PWA für schlechte Gewohnheiten reduzieren, Zigarettenkonsum tracken, fl
 - Pausen-basiertes Punktesystem
 - Vereinfachte Alkohol-Einheiten-Erfassung mit automatisch gespeichertem Zeitpunkt
 - Flexible Habits: Gewicht, Anzahl/Zahl, Ja/Nein, Dauer
+- Kompakte Habit-Cards: Details, Logging, DNA und Logs öffnen erst per Tap/Klick
 - Meditation-Schnellerfassung mit 7-3-11, Box Breathing, Body Scan, Craving-Welle und Dankbarkeits-Minute
 - Aufgaben mit Aufwand 1–5 und Punktebelohnung
 - Termine mit Start-/Endzeit, Ort, Typ und Notiz direkt im Kalender

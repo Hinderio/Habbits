@@ -10,6 +10,7 @@
   const MORNING_ROUTINE_VARIANT_KEY = 'habitflow-morning-routine-variant-offset-v1';
   const RULES_UI_KEY = 'habitflow-rules-open';
   const HABIT_DNA_UI_KEY = 'habitflow-habit-dna-open';
+  const HABIT_CARD_UI_KEY = 'habitflow-habit-cards-open';
   const CONSUMPTION_MODE_KEY = 'habitflow-consumption-mode';
   const SUPABASE_CONFIG = window.HABITFLOW_SUPABASE_CONFIG || {};
   const MEDITATION_TECHNIQUES = [
@@ -437,6 +438,7 @@
   let pendingTriggerSmokeId = null;
   let rulesExpanded = localStorage.getItem(RULES_UI_KEY) !== 'collapsed';
   let expandedHabitDnaIds = loadExpandedHabitDnaIds();
+  let expandedHabitCardIds = loadExpandedHabitCardIds();
   let activeConsumptionMode = localStorage.getItem(CONSUMPTION_MODE_KEY) === 'alcohol' ? 'alcohol' : 'smoke';
 
   const els = {};
@@ -692,6 +694,7 @@
       if (action === 'edit-habit') editHabit(id);
       if (action === 'delete-habit') deleteHabit(id);
       if (action === 'archive-habit') archiveHabit(id);
+      if (action === 'toggle-habit-card') toggleHabitCard(id);
       if (action === 'toggle-habit-dna') toggleHabitDna(id);
       if (action === 'log-habit') logHabit(id);
       if (action === 'start-morning-routine') startMorningRoutine();
@@ -2238,6 +2241,42 @@
     applyConsumptionMode();
   }
 
+  function loadExpandedHabitCardIds() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(HABIT_CARD_UI_KEY) || '[]');
+      return new Set(Array.isArray(raw) ? raw : []);
+    } catch {
+      return new Set();
+    }
+  }
+
+  function persistExpandedHabitCardIds() {
+    try {
+      localStorage.setItem(HABIT_CARD_UI_KEY, JSON.stringify([...expandedHabitCardIds]));
+    } catch {}
+  }
+
+  function pruneExpandedHabitCardIds(activeIds = []) {
+    const allowed = new Set(activeIds);
+    const before = expandedHabitCardIds.size;
+    expandedHabitCardIds = new Set([...expandedHabitCardIds].filter(id => allowed.has(id)));
+    if (expandedHabitCardIds.size !== before) persistExpandedHabitCardIds();
+  }
+
+  function setHabitCardExpanded(id, expanded, { renderNow = true } = {}) {
+    if (!id) return;
+    const had = expandedHabitCardIds.has(id);
+    if (expanded) expandedHabitCardIds.add(id);
+    else expandedHabitCardIds.delete(id);
+    if (expandedHabitCardIds.has(id) !== had) persistExpandedHabitCardIds();
+    if (renderNow) renderHabits();
+  }
+
+  function toggleHabitCard(id) {
+    if (!id) return;
+    setHabitCardExpanded(id, !expandedHabitCardIds.has(id));
+  }
+
   function loadExpandedHabitDnaIds() {
     try {
       const raw = JSON.parse(localStorage.getItem(HABIT_DNA_UI_KEY) || '[]');
@@ -3332,6 +3371,7 @@
     const activeInputSelection = activeInput ? { start: activeInput.selectionStart, end: activeInput.selectionEnd } : null;
     const habitInputDrafts = collectHabitInputDrafts();
     const activeHabits = state.habits.filter(h => !h.is_archived).map(normalizeHabit);
+    pruneExpandedHabitCardIds(activeHabits.map(habit => habit.id));
     renderHabitDnaOverview(activeHabits);
     if (!activeHabits.length) {
       els.habitCards.innerHTML = '<div class="empty-state">Lege deine erste flexible Gewohnheit an. Unterstützt werden Gewicht, Zahlen, Ja/Nein und Dauer.</div>';
@@ -3348,6 +3388,7 @@
       const progress = habit.target ? Math.min(100, Math.abs(Number(periodValue.value || 0) / Number(habit.target)) * 100) : 0;
       const unit = habit.unit || defaultUnit(habit.type);
       const isSystemHabit = isSystemMeditationHabit(habit);
+      const isExpanded = expandedHabitCardIds.has(habit.id) || editingHabitId === habit.id || editingHabitEntryId && state.habitEntries.some(entry => entry.id === editingHabitEntryId && entry.habit_id === habit.id);
       const dna = buildHabitDna(habit);
       const control = isSystemHabit
         ? renderMeditationHabitControl(habit)
@@ -3357,17 +3398,33 @@
       const habitActions = isSystemHabit
         ? `<button class="mini-btn" type="button" data-action="edit-habit" data-id="${habit.id}">Bearbeiten</button><span class="badge muted">System</span>`
         : `<button class="mini-btn" type="button" data-action="edit-habit" data-id="${habit.id}">Bearbeiten</button><button class="mini-btn" type="button" data-action="archive-habit" data-id="${habit.id}">Archiv</button><button class="mini-btn danger" type="button" data-action="delete-habit" data-id="${habit.id}">Löschen</button>`;
+      const todayLabel = formatHabitValue(habit, todayValue);
+      const completionLabel = `${Math.round(dna.completionRate * 100)}% Treffer`;
+      const targetLabel = habit.target ? `${periodMeta.short}: ${periodValue.label} / Ziel ${habit.target}${unit ? ` ${unit}` : ''}` : 'ohne Zielwert';
+      const activityLabel = todayEntries.length ? `${todayEntries.length} Log${todayEntries.length === 1 ? '' : 's'} heute` : 'heute offen';
+      const detailsId = `habit-details-${escapeHtml(habit.id)}`;
 
-      return `<article class="habit-card ${isSystemHabit ? 'is-meditation-habit' : ''} ${editingHabitId === habit.id ? 'is-editing' : ''}">
-        <div class="habit-card-head">
-          <div class="habit-title"><span class="habit-icon">${svgIcon(habitIconKey(habit), 'ui-icon')}</span><div><strong>${escapeHtml(habit.name)}</strong><small>${habit.typeLabel || typeLabel(habit.type)}${unit ? ` · ${escapeHtml(unit)}` : ''} · ${escapeHtml(periodMeta.label)}</small></div></div>
-          <div class="list-actions">${habitActions}</div>
+      return `<article class="habit-card ${isSystemHabit ? 'is-meditation-habit' : ''} ${editingHabitId === habit.id ? 'is-editing' : ''} ${isExpanded ? 'is-expanded' : 'is-collapsed'}">
+        <button class="habit-card-summary" type="button" data-action="toggle-habit-card" data-id="${habit.id}" aria-expanded="${isExpanded}" aria-controls="${detailsId}">
+          <span class="habit-title"><span class="habit-icon">${svgIcon(habitIconKey(habit), 'ui-icon')}</span><span><strong>${escapeHtml(habit.name)}</strong><small>${habit.typeLabel || typeLabel(habit.type)}${unit ? ` · ${escapeHtml(unit)}` : ''} · ${escapeHtml(periodMeta.label)}</small></span></span>
+          <span class="habit-card-status">
+            <span class="habit-card-value">Heute: <strong>${escapeHtml(todayLabel)}</strong></span>
+            <span class="habit-expand-indicator" aria-hidden="true">${isExpanded ? '−' : '+'}</span>
+          </span>
+          <span class="habit-card-compact-meta">
+            <span>${escapeHtml(activityLabel)}</span>
+            <span>${escapeHtml(completionLabel)}</span>
+            <span>${escapeHtml(targetLabel)}</span>
+          </span>
+        </button>
+        <div id="${detailsId}" class="habit-card-details">
+          <div class="habit-card-actions-row"><span class="badge ${dna.riskMeta.tone === 'high' ? 'danger-badge' : dna.riskMeta.tone === 'mid' ? 'warning-badge' : 'muted'}">Risiko ${escapeHtml(dna.riskMeta.label)}</span><div class="list-actions">${habitActions}</div></div>
+          ${control}
+          <div class="meta">Heute: <strong>${escapeHtml(todayLabel)}</strong>${habit.target ? ` · ${periodMeta.short}: <strong>${escapeHtml(periodValue.label)}</strong> / Ziel ${habit.target} ${escapeHtml(unit)}` : ''}</div>
+          ${habit.target ? `<div class="habit-progress-track"><i style="width:${progress}%"></i></div>` : ''}
+          ${renderHabitDnaVisual(dna)}
+          ${renderHabitEntryList(habit)}
         </div>
-        ${control}
-        <div class="meta" style="margin-top:10px">Heute: <strong>${formatHabitValue(habit, todayValue)}</strong>${habit.target ? ` · ${periodMeta.short}: <strong>${escapeHtml(periodValue.label)}</strong> / Ziel ${habit.target} ${escapeHtml(unit)}` : ''}</div>
-        ${habit.target ? `<div class="habit-progress-track"><i style="width:${progress}%"></i></div>` : ''}
-        ${renderHabitDnaVisual(dna)}
-        ${renderHabitEntryList(habit)}
       </article>`;
     }).join('');
 
@@ -3865,6 +3922,8 @@
 
   function editHabitEntry(id) {
     if (!state.habitEntries.some(entry => entry.id === id)) return;
+    const entry = state.habitEntries.find(item => item.id === id);
+    if (entry?.habit_id) setHabitCardExpanded(entry.habit_id, true, { renderNow: false });
     editingHabitEntryId = id;
     renderHabits();
     renderHistoryModal();
@@ -4457,6 +4516,8 @@ async function deleteAlcoholLog(id) {
         return;
       }
       Object.assign(habit, values, { is_archived: false });
+      expandedHabitCardIds.add(habit.id);
+      persistExpandedHabitCardIds();
       resetHabitFormMode({ clearForm: true });
       habitFormOpen = false;
       syncHabitFormPanel();
@@ -4467,8 +4528,9 @@ async function deleteAlcoholLog(id) {
     }
 
     const created = nowIso();
+    const habitId = uid();
     state.habits.push({
-      id: uid(),
+      id: habitId,
       ...values,
       color: '#4ad7d1',
       is_archived: false,
@@ -4476,6 +4538,8 @@ async function deleteAlcoholLog(id) {
       updated_at: created
     });
     resetHabitFormMode({ clearForm: true });
+    expandedHabitCardIds.add(habitId);
+    persistExpandedHabitCardIds();
     habitFormOpen = false;
     syncHabitFormPanel();
     saveState();
@@ -4518,6 +4582,10 @@ async function deleteAlcoholLog(id) {
     }
     habit.is_archived = true;
     habit.updated_at = nowIso();
+    expandedHabitCardIds.delete(id);
+    expandedHabitDnaIds.delete(id);
+    persistExpandedHabitCardIds();
+    persistExpandedHabitDnaIds();
     if (editingHabitId === id) resetHabitFormMode({ clearForm: true });
     saveState();
     toast('Habit archiviert');
@@ -4529,6 +4597,8 @@ async function deleteAlcoholLog(id) {
     const habit = state.habits.find(h => h.id === id);
     if (!habit) return;
     editingHabitId = id;
+    expandedHabitCardIds.add(id);
+    persistExpandedHabitCardIds();
     const fields = els.habitForm.elements;
     fields.name.value = habit.name || '';
     fields.type.value = habit.type || 'number';
@@ -4587,6 +4657,10 @@ async function deleteAlcoholLog(id) {
       .map(p => p.id);
     state.habits = state.habits.filter(h => h.id !== id);
     state.habitEntries = state.habitEntries.filter(e => e.habit_id !== id);
+    expandedHabitCardIds.delete(id);
+    expandedHabitDnaIds.delete(id);
+    persistExpandedHabitCardIds();
+    persistExpandedHabitDnaIds();
     state.pointsLedger = state.pointsLedger.filter(p => !(p.source_type === 'habit' && removedEntryIds.includes(p.source_id)));
     markRemoteDeleted('habit_definitions', id);
     markRemoteDeletedMany('habit_entries', removedEntryIds);
