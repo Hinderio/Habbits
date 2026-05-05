@@ -673,3 +673,41 @@ body.light .morning-routine-steps article.is-current{background:linear-gradient(
 .empty-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:12px}
 body.light .appointment-card{background:linear-gradient(135deg,rgba(183,156,255,.15),rgba(255,255,255,.62));border-color:rgba(116,79,208,.1)}
 @media (max-width:760px){#screen-calendar .panel-head .pill{width:100%;justify-content:center}.appointment-card .list-actions{width:100%}.appointment-card .list-actions .mini-btn{flex:1}}
+
+
+/* v32: horizontal violin plot for cigarette interval distribution */
+.interval-violin-card{padding:16px;border-radius:24px;background:linear-gradient(180deg,rgba(183,156,255,.08),rgba(255,255,255,.04));border:1px solid rgba(183,156,255,.12);display:grid;gap:14px;overflow:hidden}
+.interval-violin-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.interval-violin-head strong{display:block;font-size:1rem;letter-spacing:-.02em}
+.interval-violin-head small{display:block;color:var(--muted);margin-top:4px}
+.interval-violin-shell{padding:8px 4px 2px;border-radius:22px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05)}
+.interval-violin-svg{width:100%;height:auto;display:block;overflow:visible}
+.interval-violin-bg{fill:rgba(255,255,255,.03);stroke:rgba(255,255,255,.05);stroke-width:1}
+.interval-violin-axis-line{fill:none;stroke:rgba(255,255,255,.12);stroke-width:2;stroke-linecap:round}
+.interval-violin-area{fill:url(#interval-violin-fill);fill-opacity:.94;stroke:rgba(255,255,255,.32);stroke-width:1.6;filter:drop-shadow(0 10px 22px rgba(74,215,209,.14))}
+.interval-violin-iqr{stroke:rgba(255,255,255,.88);stroke-width:8;stroke-linecap:round;opacity:.7}
+.interval-violin-median{stroke:rgba(13,24,39,.86);stroke-width:3;stroke-linecap:round}
+.interval-violin-peak{fill:#8ff0a7;stroke:rgba(13,24,39,.72);stroke-width:2}
+.interval-violin-tick line{stroke:rgba(255,255,255,.18);stroke-width:1.5}
+.interval-violin-tick text{fill:var(--muted);font-size:13px;font-weight:700}
+.interval-violin-caption{display:grid;gap:10px}
+.interval-violin-caption p{margin:0;color:var(--muted);font-size:.88rem;line-height:1.4}
+.interval-violin-caption b{color:var(--text)}
+.interval-violin-legend{display:flex;flex-wrap:wrap;gap:10px 16px;color:var(--muted);font-size:.8rem}
+.interval-violin-legend span{display:inline-flex;align-items:center;gap:8px}
+.interval-violin-legend i{width:18px;height:10px;border-radius:999px;display:inline-block}
+.interval-violin-legend i.is-fill{background:linear-gradient(90deg,#8ff0a7,#4ad7d1 55%,#b79cff)}
+.interval-violin-legend i.is-iqr{background:rgba(255,255,255,.82)}
+.interval-violin-legend i.is-median{width:3px;height:16px;border-radius:999px;background:rgba(13,24,39,.86)}
+.interval-violin-legend i.is-peak{width:12px;height:12px;border-radius:50%;background:#8ff0a7;border:2px solid rgba(13,24,39,.72)}
+body.light .interval-violin-card{background:rgba(247,244,255,.95);border-color:rgba(116,79,208,.12)}
+body.light .interval-violin-shell{background:rgba(255,255,255,.76);border-color:rgba(17,36,58,.08)}
+body.light .interval-violin-bg{fill:rgba(91,119,148,.05);stroke:rgba(17,36,58,.08)}
+body.light .interval-violin-axis-line{stroke:rgba(17,36,58,.16)}
+body.light .interval-violin-area{stroke:rgba(255,255,255,.7)}
+body.light .interval-violin-iqr{stroke:rgba(17,36,58,.72)}
+body.light .interval-violin-median{stroke:#0d1827}
+body.light .interval-violin-peak{stroke:rgba(13,24,39,.5)}
+body.light .interval-violin-tick line{stroke:rgba(17,36,58,.14)}
+body.light .interval-violin-tick text{fill:#5b7794}
+@media (max-width:760px){.interval-violin-card{padding:14px;border-radius:22px}.interval-violin-head{align-items:flex-start;flex-direction:column}.interval-violin-shell{padding:8px 0 0}.interval-violin-legend{gap:8px 12px}}

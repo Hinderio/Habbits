@@ -2732,6 +2732,7 @@
 
     const durations = snapshots.map(item => Number(item.interval_minutes));
     const sortedDurations = [...durations].sort((a, b) => a - b);
+    const q1 = percentile(sortedDurations, 0.25);
     const median = percentile(sortedDurations, 0.5);
     const p75 = percentile(sortedDurations, 0.75);
     const recoveryShare = Math.round((durations.filter(value => value >= 120).length / durations.length) * 100);
@@ -2740,6 +2741,7 @@
     const bestDaytime = daytimeBest.length ? Math.max(...daytimeBest) : null;
     const recent = snapshots.slice(-20);
     const cap = Math.max(240, percentile(sortedDurations, 0.9));
+    const violinCap = Math.max(cap, sortedDurations[sortedDurations.length - 1] || 0, 120);
     const halfIndex = Math.floor(recent.length / 2);
     const earlierSample = recent.slice(0, halfIndex);
     const laterSample = recent.slice(halfIndex);
@@ -2779,6 +2781,15 @@
       }
     ];
 
+    const violinMarkup = buildHorizontalIntervalViolin(durations, {
+      maxValue: violinCap,
+      median,
+      q1,
+      q3: p75,
+      qualityLabel,
+      subtitle: `Analysefenster ${days} Tage · ${durations.length} Pause${durations.length === 1 ? '' : 'n'}`
+    });
+
     const skyline = recent.map(item => {
       const minutes = Number(item.interval_minutes);
       const height = Math.max(14, Math.round((Math.min(minutes, cap) / cap) * 100));
@@ -2806,6 +2817,7 @@
       <div class="smoking-visual-summary-grid">
         ${summary.map(item => `<article><small>${escapeHtml(item.label)}</small><strong>${escapeHtml(item.value)}</strong><p>${escapeHtml(item.detail)}</p></article>`).join('')}
       </div>
+      ${violinMarkup}
       <div class="interval-skyline-card">
         <div class="interval-skyline-head"><strong>Sequenz der letzten ${recent.length} Pausen</strong><small>höher = längerer Abstand</small></div>
         <div class="interval-skyline">${skyline}</div>
@@ -2901,6 +2913,112 @@
     if (minutes < 120) return 'is-neutral';
     if (minutes < 240) return 'is-positive';
     return 'is-recovery';
+  }
+
+
+
+  function buildHorizontalIntervalViolin(values = [], { maxValue = null, median = null, q1 = null, q3 = null, qualityLabel = '', subtitle = '' } = {}) {
+    const durations = values.map(value => Number(value)).filter(Number.isFinite).sort((a, b) => a - b);
+    if (!durations.length) return '';
+
+    const upperBound = Math.max(Number(maxValue) || 0, durations[durations.length - 1] || 0, 60);
+    const lowerBound = 0;
+    const safeMedian = Number.isFinite(Number(median)) ? Number(median) : percentile(durations, 0.5);
+    const safeQ1 = Number.isFinite(Number(q1)) ? Number(q1) : percentile(durations, 0.25);
+    const safeQ3 = Number.isFinite(Number(q3)) ? Number(q3) : percentile(durations, 0.75);
+    const width = 720;
+    const height = 260;
+    const paddingX = 28;
+    const topPad = 28;
+    const bottomPad = 54;
+    const centerY = 118;
+    const halfHeight = 62;
+    const innerWidth = width - (paddingX * 2);
+    const sampleCount = Math.max(30, Math.min(48, Math.round(durations.length * 1.4)));
+    const bandwidth = Math.max(16, Math.min(120, upperBound / Math.max(6, Math.min(14, Math.round(Math.sqrt(durations.length) + 4)))));
+    const valueToX = value => paddingX + (1 - ((Math.max(lowerBound, Math.min(upperBound, value)) - lowerBound) / (upperBound - lowerBound || 1))) * innerWidth;
+
+    const densityPoints = Array.from({ length: sampleCount }, (_, index) => {
+      const ratio = sampleCount === 1 ? 0 : index / (sampleCount - 1);
+      const value = lowerBound + ((upperBound - lowerBound) * ratio);
+      const density = durations.reduce((sum, current) => {
+        const z = (current - value) / bandwidth;
+        return sum + Math.exp(-0.5 * z * z);
+      }, 0);
+      return { value, density };
+    }).map((point, index, array) => {
+      const neighbours = [array[index - 1], point, array[index + 1]].filter(Boolean);
+      return {
+        ...point,
+        density: average(neighbours.map(entry => entry.density))
+      };
+    });
+
+    const maxDensity = Math.max(...densityPoints.map(point => point.density), 1);
+    const scaledPoints = densityPoints.map(point => ({
+      ...point,
+      radius: (point.density / maxDensity) * halfHeight,
+      x: valueToX(point.value)
+    }));
+
+    const upperPath = scaledPoints.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x.toFixed(2)} ${(centerY - point.radius).toFixed(2)}`).join(' ');
+    const lowerPath = [...scaledPoints].reverse().map(point => `L ${point.x.toFixed(2)} ${(centerY + point.radius).toFixed(2)}`).join(' ');
+    const violinPath = `${upperPath} ${lowerPath} Z`;
+    const centerLine = `M ${paddingX} ${centerY} L ${width - paddingX} ${centerY}`;
+    const q1x = valueToX(safeQ1);
+    const q3x = valueToX(safeQ3);
+    const medianX = valueToX(safeMedian);
+    const peakPoint = scaledPoints.reduce((best, point) => point.density > best.density ? point : best, scaledPoints[0]);
+    const peakValue = peakPoint?.value || safeMedian;
+
+    const tickStep = upperBound <= 90 ? 15 : upperBound <= 180 ? 30 : upperBound <= 360 ? 60 : upperBound <= 720 ? 120 : 240;
+    const tickValues = [];
+    for (let value = 0; value <= upperBound + 0.001; value += tickStep) tickValues.push(value);
+    if (!tickValues.length || tickValues[tickValues.length - 1] < upperBound) tickValues.push(upperBound);
+    const uniqueTicks = [...new Set(tickValues.map(value => Math.max(0, Math.min(upperBound, Math.round(value)))))];
+    const tickMarkup = uniqueTicks.map(value => {
+      const x = valueToX(value);
+      return `<g class="interval-violin-tick"><line x1="${x}" y1="${centerY + halfHeight + 8}" x2="${x}" y2="${centerY + halfHeight + 18}" /><text x="${x}" y="${height - 14}" text-anchor="middle">${escapeHtml(compactDuration(value))}</text></g>`;
+    }).join('');
+
+    return `
+      <section class="interval-violin-card" aria-label="Verteilung der Rauchpausen als horizontaler Violin-Plot">
+        <div class="interval-violin-head">
+          <div>
+            <strong>Verteilung der Rauchpausen</strong>
+            <small>${escapeHtml(subtitle || 'Horizontaler Violin-Plot')}</small>
+          </div>
+          <span class="badge muted">${escapeHtml(qualityLabel || 'Verteilung')}</span>
+        </div>
+        <div class="interval-violin-shell">
+          <svg class="interval-violin-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Links liegen längere Pausen, rechts kürzere Abstände zwischen Zigaretten.">
+            <defs>
+              <linearGradient id="interval-violin-fill" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#8ff0a7" stop-opacity="0.88" />
+                <stop offset="45%" stop-color="#4ad7d1" stop-opacity="0.9" />
+                <stop offset="100%" stop-color="#b79cff" stop-opacity="0.82" />
+              </linearGradient>
+            </defs>
+            <rect class="interval-violin-bg" x="${paddingX}" y="${topPad}" width="${innerWidth}" height="${(halfHeight * 2)}" rx="28" />
+            <path class="interval-violin-axis-line" d="${centerLine}"></path>
+            <line class="interval-violin-iqr" x1="${q3x}" y1="${centerY}" x2="${q1x}" y2="${centerY}"></line>
+            <path class="interval-violin-area" d="${violinPath}"></path>
+            <line class="interval-violin-median" x1="${medianX}" y1="${centerY - halfHeight - 8}" x2="${medianX}" y2="${centerY + halfHeight + 8}"></line>
+            <circle class="interval-violin-peak" cx="${valueToX(peakValue)}" cy="${centerY}" r="5"></circle>
+            ${tickMarkup}
+          </svg>
+        </div>
+        <div class="interval-violin-caption">
+          <p><b>Leserichtung:</b> links = längere Pausen · rechts = dichtere Rauchmomente.</p>
+          <div class="interval-violin-legend">
+            <span><i class="is-fill"></i>Dichteform</span>
+            <span><i class="is-iqr"></i>mittlere 50%</span>
+            <span><i class="is-median"></i>Median</span>
+            <span><i class="is-peak"></i>Dichte-Peak ${escapeHtml(compactDuration(peakValue))}</span>
+          </div>
+        </div>
+      </section>
+    `;
   }
 
 
