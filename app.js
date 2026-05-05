@@ -797,7 +797,7 @@
     next.alcoholLogs = Array.isArray(next.alcoholLogs) ? next.alcoholLogs : [];
     next.alcoholUnits = Array.isArray(next.alcoholUnits) ? next.alcoholUnits : [];
     next.tasks = Array.isArray(next.tasks) ? next.tasks.map(normalizeTask) : [];
-    next.pointsLedger = Array.isArray(next.pointsLedger) ? next.pointsLedger : [];
+    next.pointsLedger = Array.isArray(next.pointsLedger) ? next.pointsLedger.map(normalizeMorningRoutineLedgerPoint) : [];
     next.habits = next.habits.map(normalizeHabit);
     next.coachEvents = Array.isArray(next.coachEvents) ? next.coachEvents : [];
     next.experiments = Array.isArray(next.experiments) ? next.experiments : [];
@@ -1254,8 +1254,42 @@
   }
 
 
-  function todayMorningRoutineSourceId(key = toDateKey(new Date())) {
+  function legacyMorningRoutineSourceId(key = toDateKey(new Date())) {
     return `morning-routine-${key}`;
+  }
+
+  function todayMorningRoutineSourceId(key = toDateKey(new Date())) {
+    const compactDate = String(key || toDateKey(new Date())).replace(/\D/g, '').slice(0, 8).padEnd(8, '0');
+    return `00000000-0000-4000-8000-0000${compactDate}`;
+  }
+
+  function isMorningRoutineReason(reason = '') {
+    return String(reason || '').trim().toLowerCase().startsWith('morgenroutine');
+  }
+
+  function isUuid(value) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ''));
+  }
+
+  function normalizeMorningRoutineLedgerPoint(point = {}) {
+    if (point.source_type !== 'bonus' || !isMorningRoutineReason(point.reason)) return point;
+    const completedKey = toDateKey(point.earned_at || point.created_at || new Date());
+    if (!completedKey) return point;
+    const canonicalId = todayMorningRoutineSourceId(completedKey);
+    if (point.source_id === canonicalId) return point;
+    return { ...point, source_id: canonicalId, synced: false };
+  }
+
+  function isMorningRoutinePoint(point = {}, key = toDateKey(new Date())) {
+    if (point.source_type !== 'bonus') return false;
+    const canonicalId = todayMorningRoutineSourceId(key);
+    const legacyId = legacyMorningRoutineSourceId(key);
+    if (point.source_id === canonicalId || point.source_id === legacyId) return true;
+    return isMorningRoutineReason(point.reason) && toDateKey(point.earned_at || point.created_at) === key;
+  }
+
+  function remoteLedgerSourceId(point = {}) {
+    return isUuid(point.source_id) ? point.source_id : null;
   }
 
   function dateHash(value = toDateKey(new Date())) {
@@ -1302,9 +1336,8 @@
   }
 
   function morningRoutineCompletedLog(key = toDateKey(new Date())) {
-    const sourceId = todayMorningRoutineSourceId(key);
     return state.morningRoutineLogs.find(log => log.date_key === key) ||
-      state.pointsLedger.find(point => point.source_type === 'bonus' && point.source_id === sourceId) ||
+      state.pointsLedger.find(point => isMorningRoutinePoint(point, key)) ||
       null;
   }
 
@@ -1577,11 +1610,7 @@
   function buildWeeklyReview() {
     const keys = daysBack(7);
     const cigs = state.cigarettes.filter(c => keys.includes(toDateKey(c.smoked_at)));
-    const routineLog = state.morningRoutineLogs.find(log => log.date_key === key) || (state.pointsLedger.find(point => point.source_type === 'bonus' && point.source_id === todayMorningRoutineSourceId(key)) ? { routine_key: 'unknown' } : null);
-    if (routineLog) {
-      const routine = MORNING_ROUTINES.find(item => item.key === routineLog.routine_key);
-      details.push(`<article class="list-card done"><div><h4>Morgenroutine</h4><p class="meta">${escapeHtml(routine?.title || '15-Minuten-Routine')} · +50 Punkte</p></div></article>`);
-    }
+    const routineDays = keys.filter(key => Boolean(morningRoutineCompletedLog(key))).length;
     const tasks = state.tasks.filter(t => t.status === 'done' && keys.includes(toDateKey(t.completed_at || t.updated_at || t.created_at)));
     const habits = state.habitEntries.filter(e => keys.includes(toDateKey(e.occurred_at)));
     const best = bestPauseMinutes();
@@ -1595,6 +1624,7 @@
         { label: 'Rauchen', value: `${cigs.length}×`, text: best ? `Beste Pause ${formatDuration(best)}.` : 'Noch kein Pausen-Highscore.' },
         { label: 'Aufgaben', value: `${tasks.length} erledigt`, text: tasks.length ? 'Task-Momentum wirkt als Schutzfaktor.' : 'Eine kleine Aufgabe pro Tag würde den Score stabilisieren.' },
         { label: 'Habits', value: `${habits.length} Logs`, text: 'Zielperioden werden neu pro Tag, Woche oder Monat gewertet.' },
+        { label: 'Routinen', value: `${routineDays}×`, text: routineDays ? 'Morgenroutinen geben stabile Bonuspunkte ohne zusätzliche Aufgabe.' : 'Eine Morgenroutine pro Woche würde den Startanker stärken.' },
         { label: 'Alkohol', value: `${alcoholDays} Tage`, text: alcoholDays ? 'Alkohol bleibt ein wichtiger Risikokontext.' : 'Kein Alkohol-Kontext in der Wochenansicht.' }
       ],
       recommendation: pattern
@@ -3714,17 +3744,14 @@
       date.setDate(start.getDate() + i);
       const key = toDateKey(date);
       const cigarettes = cigarettesOnDate(key).length;
-      const routineLog = state.morningRoutineLogs.find(log => log.date_key === key) || (state.pointsLedger.find(point => point.source_type === 'bonus' && point.source_id === todayMorningRoutineSourceId(key)) ? { routine_key: 'unknown' } : null);
-    if (routineLog) {
-      const routine = MORNING_ROUTINES.find(item => item.key === routineLog.routine_key);
-      details.push(`<article class="list-card done"><div><h4>Morgenroutine</h4><p class="meta">${escapeHtml(routine?.title || '15-Minuten-Routine')} · +50 Punkte</p></div></article>`);
-    }
-    const tasks = state.tasks.filter(t => toDateKey(t.due_at || t.completed_at || t.created_at) === key);
+      const routineLog = morningRoutineCompletedLog(key);
+      const tasks = state.tasks.filter(t => toDateKey(t.due_at || t.completed_at || t.created_at) === key);
       const alcohol = alcoholForDate(key)?.consumed;
       const alcoholUnits = alcoholUnitsOnDate(key).length;
       const points = calendarPointsOnDate(key);
       const chips = [];
       if (cigarettes) chips.push(`<span class="day-chip smoke">${cigarettes} Zig.</span>`);
+      if (routineLog) chips.push('<span class="day-chip habit">Routine</span>');
       if (tasks.length) chips.push(`<span class="day-chip task">${tasks.length} Task</span>`);
       if (alcoholUnits) chips.push(`<span class="day-chip alcohol">${alcoholUnits} Alk.</span>`);
       else if (alcohol) chips.push('<span class="day-chip alcohol">Alk.</span>');
@@ -3745,7 +3772,7 @@
     const alcoholUnits = alcoholUnitsOnDate(key);
     if (alcoholUnits.length) details.push(`<article class="list-card"><div><h4>Alkohol</h4><p class="meta">${alcoholUnits.length} Einheit(en): ${escapeHtml(alcoholUnits.map(unit => alcoholTypeLabel(unit.drink_type)).join(', '))}</p></div></article>`);
     else if (alcohol) details.push(`<article class="list-card"><div><h4>Alkohol</h4><p class="meta">${alcohol.consumed ? 'Ja' : 'Nein'} getrackt</p></div></article>`);
-    const routineLog = state.morningRoutineLogs.find(log => log.date_key === key) || (state.pointsLedger.find(point => point.source_type === 'bonus' && point.source_id === todayMorningRoutineSourceId(key)) ? { routine_key: 'unknown' } : null);
+    const routineLog = morningRoutineCompletedLog(key);
     if (routineLog) {
       const routine = MORNING_ROUTINES.find(item => item.key === routineLog.routine_key);
       details.push(`<article class="list-card done"><div><h4>Morgenroutine</h4><p class="meta">${escapeHtml(routine?.title || '15-Minuten-Routine')} · +50 Punkte</p></div></article>`);
@@ -4874,7 +4901,7 @@ async function deleteAlcoholLog(id) {
       await upsertTaskRows();
 
       const ledgerRows = liveRowsForTable('points_ledger', state.pointsLedger).map(p => ({
-        id: p.id, source_type: p.source_type, source_id: p.source_id, points: Number(p.points || 0), reason: p.reason || null,
+        id: p.id, source_type: p.source_type, source_id: remoteLedgerSourceId(p), points: Number(p.points || 0), reason: p.reason || null,
         earned_at: p.earned_at, created_at: p.created_at || nowIso()
       }));
       if (await upsertRows('points_ledger', ledgerRows)) {
@@ -5334,7 +5361,7 @@ async function deleteAlcoholLog(id) {
   const mapRemoteAlcohol = a => ({ id: a.id, log_date: a.log_date, consumed: a.consumed, note: a.note, created_at: a.created_at, updated_at: a.updated_at, synced: true });
   const mapRemoteAlcoholEvent = a => ({ id: a.id, occurred_at: a.occurred_at, drink_type: a.drink_type || 'other', note: a.note, created_at: a.created_at, updated_at: a.updated_at, synced: true });
   const mapRemoteTask = t => ({ id: t.id, title: t.title, description: t.description, effort: t.effort, priority: normalizeTaskPriority(t.priority), status: TASK_COLUMNS.some(column => column.status === t.status) ? t.status : 'open', due_at: t.due_at, completed_at: t.completed_at, points: t.points, created_at: t.created_at, updated_at: t.updated_at, synced: true });
-  const mapRemoteLedger = p => ({ id: p.id, source_type: p.source_type, source_id: p.source_id, points: p.points, reason: p.reason, earned_at: p.earned_at, created_at: p.created_at, updated_at: p.created_at, synced: true });
+  const mapRemoteLedger = p => normalizeMorningRoutineLedgerPoint({ id: p.id, source_type: p.source_type, source_id: p.source_id, points: p.points, reason: p.reason, earned_at: p.earned_at, created_at: p.created_at, updated_at: p.created_at, synced: true });
 
   function exportJson() {
     const blob = new Blob([JSON.stringify({ state, settings: { email: settings.email || '' } }, null, 2)], { type: 'application/json' });
