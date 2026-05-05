@@ -251,9 +251,9 @@
     sport: '00000000-0000-4000-8000-000000000103',
     meditation: '00000000-0000-4000-8000-000000000104'
   });
-  const SYNC_TABLES = ['habit_definitions', 'habit_entries', 'cigarette_events', 'alcohol_logs', 'alcohol_events', 'tasks', 'points_ledger'];
+  const SYNC_TABLES = ['habit_definitions', 'habit_entries', 'cigarette_events', 'alcohol_logs', 'alcohol_events', 'tasks', 'appointments', 'points_ledger'];
   const REMOTE_DELETE_TOMBSTONE_TTL_DAYS = 14;
-  const OPTIONAL_SYNC_TABLES = new Set(['alcohol_events']);
+  const OPTIONAL_SYNC_TABLES = new Set(['alcohol_events', 'appointments']);
   const BUILT_IN_DEFAULT_HABIT_NAMES = new Set(['gewicht', 'wasser', 'sport', 'meditation']);
   const TASK_COLUMNS = [
     { status: 'open', title: 'Offen', hint: 'geplant und noch nicht gestartet' },
@@ -266,6 +266,14 @@
     medium: { label: 'Normal', short: 'Normal', rank: 2, bonus: 10 },
     high: { label: 'Hoch', short: 'Hoch', rank: 3, bonus: 25 },
     urgent: { label: 'Kritisch', short: 'Kritisch', rank: 4, bonus: 40 }
+  };
+  const APPOINTMENT_TYPES = {
+    personal: { label: 'Privat', short: 'Privat' },
+    work: { label: 'Arbeit', short: 'Arbeit' },
+    health: { label: 'Gesundheit', short: 'Health' },
+    social: { label: 'Sozial', short: 'Sozial' },
+    admin: { label: 'Admin', short: 'Admin' },
+    other: { label: 'Sonstiges', short: 'Termin' }
   };
   const ALCOHOL_TYPES = {
     beer: 'Bier', wine: 'Wein', cocktail: 'Cocktail', shot: 'Shot', other: 'Anderes'
@@ -417,10 +425,12 @@
   let historyModalMode = null;
   let historyModalHabitId = null;
   let editingTaskId = null;
+  let editingAppointmentId = null;
   let renderQueued = false;
   let deferredRenderPending = false;
   let habitFormOpen = false;
   let taskFormOpen = false;
+  let appointmentFormOpen = false;
   let remoteTaskPrioritySupported = true;
   let remoteTaskInProgressSupported = true;
   let remoteHabitTargetPeriodSupported = true;
@@ -545,6 +555,13 @@
       cancelTaskEditBtn: $('#cancelTaskEditBtn'),
       taskPointsPreview: $('#taskPointsPreview'),
       tasksList: $('#tasksList'),
+      appointmentFormPanel: $('#appointmentFormPanel'),
+      appointmentFormToggleBtn: $('#appointmentFormToggleBtn'),
+      appointmentFormCloseBtn: $('#appointmentFormCloseBtn'),
+      appointmentForm: $('#appointmentForm'),
+      appointmentFormTitle: $('#appointmentFormTitle'),
+      appointmentSubmitBtn: $('#appointmentSubmitBtn'),
+      cancelAppointmentEditBtn: $('#cancelAppointmentEditBtn'),
       calendarTitle: $('#calendarTitle'),
       calendarGrid: $('#calendarGrid'),
       selectedDateTitle: $('#selectedDateTitle'),
@@ -624,12 +641,17 @@
     if (els.habitFormCloseBtn) els.habitFormCloseBtn.addEventListener('click', () => closeHabitForm({ clearForm: !editingHabitId }));
     if (els.taskFormToggleBtn) els.taskFormToggleBtn.addEventListener('click', () => openTaskForm());
     if (els.taskFormCloseBtn) els.taskFormCloseBtn.addEventListener('click', () => closeTaskForm({ clearForm: !editingTaskId }));
+    if (els.appointmentFormToggleBtn) els.appointmentFormToggleBtn.addEventListener('click', () => openAppointmentForm({ dateKey: selectedCalendarDate }));
+    if (els.appointmentFormCloseBtn) els.appointmentFormCloseBtn.addEventListener('click', () => closeAppointmentForm({ clearForm: !editingAppointmentId }));
     els.habitForm.addEventListener('submit', createHabit);
     els.taskForm.addEventListener('submit', createTask);
+    if (els.appointmentForm) els.appointmentForm.addEventListener('submit', createAppointment);
     els.taskForm.elements.effort.addEventListener('change', updateTaskPreview);
     els.taskForm.elements.priority.addEventListener('change', updateTaskPreview);
+    if (els.appointmentForm?.elements?.starts_at) els.appointmentForm.elements.starts_at.addEventListener('change', syncAppointmentEndDefault);
     if (els.cancelHabitEditBtn) els.cancelHabitEditBtn.addEventListener('click', () => closeHabitForm({ clearForm: true }));
     if (els.cancelTaskEditBtn) els.cancelTaskEditBtn.addEventListener('click', () => closeTaskForm({ clearForm: true }));
+    if (els.cancelAppointmentEditBtn) els.cancelAppointmentEditBtn.addEventListener('click', () => closeAppointmentForm({ clearForm: true }));
     els.prevMonthBtn.addEventListener('click', () => moveMonth(-1));
     els.nextMonthBtn.addEventListener('click', () => moveMonth(1));
     els.todayMonthBtn.addEventListener('click', () => {
@@ -665,6 +687,8 @@
       if (action === 'edit-task') editTask(id);
       if (action === 'delete-task') deleteTask(id);
       if (action === 'archive-task') archiveTask(id);
+      if (action === 'edit-appointment') editAppointment(id);
+      if (action === 'delete-appointment') deleteAppointment(id);
       if (action === 'edit-habit') editHabit(id);
       if (action === 'delete-habit') deleteHabit(id);
       if (action === 'archive-habit') archiveHabit(id);
@@ -707,6 +731,7 @@
       if (action === 'complete-party-plan') completePartyPlan(id);
       if (action === 'start-recovery-mode') startRecoveryMode();
       if (action === 'next-best-action') handleNextBestAction(actionEl.dataset.nextAction);
+      if (action === 'new-appointment-for-day') openAppointmentForm({ dateKey: selectedCalendarDate, forceNew: true });
       if (action === 'select-day') {
         selectedCalendarDate = actionEl.dataset.day;
         renderCalendar();
@@ -766,6 +791,7 @@
       alcoholLogs: [],
       alcoholUnits: [],
       tasks: [],
+      appointments: [],
       pointsLedger: [],
       coachEvents: [],
       experiments: [],
@@ -797,6 +823,7 @@
     next.alcoholLogs = Array.isArray(next.alcoholLogs) ? next.alcoholLogs : [];
     next.alcoholUnits = Array.isArray(next.alcoholUnits) ? next.alcoholUnits : [];
     next.tasks = Array.isArray(next.tasks) ? next.tasks.map(normalizeTask) : [];
+    next.appointments = Array.isArray(next.appointments) ? next.appointments.map(normalizeAppointment) : [];
     next.pointsLedger = Array.isArray(next.pointsLedger) ? next.pointsLedger.map(normalizeMorningRoutineLedgerPoint) : [];
     next.habits = next.habits.map(normalizeHabit);
     next.coachEvents = Array.isArray(next.coachEvents) ? next.coachEvents : [];
@@ -884,6 +911,34 @@
     };
   }
 
+  function normalizeAppointment(appointment = {}) {
+    const created = appointment.created_at || nowIso();
+    const startsAt = validIsoOrFallback(appointment.starts_at || appointment.start_at || appointment.date || created, created);
+    const rawEnd = validIsoOrNull(appointment.ends_at || appointment.end_at);
+    const endsAt = rawEnd && new Date(rawEnd).getTime() >= new Date(startsAt).getTime() ? rawEnd : null;
+    return {
+      ...appointment,
+      title: String(appointment.title || '').trim() || 'Termin',
+      description: String(appointment.description || appointment.note || '').trim(),
+      location: String(appointment.location || '').trim(),
+      appointment_type: normalizeAppointmentType(appointment.appointment_type || appointment.type || 'other'),
+      starts_at: startsAt,
+      ends_at: endsAt,
+      created_at: created,
+      updated_at: appointment.updated_at || created
+    };
+  }
+
+  function validIsoOrNull(value) {
+    if (!value) return null;
+    const date = value instanceof Date ? value : new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  }
+
+  function validIsoOrFallback(value, fallback = nowIso()) {
+    return validIsoOrNull(value) || validIsoOrNull(fallback) || nowIso();
+  }
+
   function normalizeHabit(habit = {}) {
     const base = { ...habit };
     const defaults = defaultHabitDna(base);
@@ -963,6 +1018,31 @@
 
   function taskPriorityClass(priority) {
     return `priority-${normalizeTaskPriority(priority)}`;
+  }
+
+  function normalizeAppointmentType(type) {
+    const key = String(type || '').trim().toLowerCase();
+    return APPOINTMENT_TYPES[key] ? key : 'other';
+  }
+
+  function appointmentTypeMeta(type) {
+    return APPOINTMENT_TYPES[normalizeAppointmentType(type)] || APPOINTMENT_TYPES.other;
+  }
+
+  function compareAppointments(a, b) {
+    const byStart = new Date(a.starts_at || a.created_at || 0).getTime() - new Date(b.starts_at || b.created_at || 0).getTime();
+    if (byStart) return byStart;
+    return String(a.title || '').localeCompare(String(b.title || ''), 'de-CH');
+  }
+
+  function appointmentOccursOnDate(appointment, key) {
+    const startKey = toDateKey(appointment?.starts_at);
+    const endKey = toDateKey(appointment?.ends_at || appointment?.starts_at);
+    return Boolean(startKey && endKey && startKey <= key && endKey >= key);
+  }
+
+  function appointmentsOnDate(key) {
+    return state.appointments.filter(appointment => appointmentOccursOnDate(appointment, key)).sort(compareAppointments);
   }
 
   function isActiveTask(task) {
@@ -1104,7 +1184,7 @@
     const active = document.activeElement;
     if (!active || active === document.body) return false;
     if (!active.matches?.('input, textarea, select')) return false;
-    return Boolean(active.closest('#habitCards, #habitFormPanel, #taskFormPanel, #smokeHistory, #historyModal, #coachModal'));
+    return Boolean(active.closest('#habitCards, #habitFormPanel, #taskFormPanel, #appointmentFormPanel, #smokeHistory, #historyModal, #coachModal'));
   }
 
   function flushDeferredRender() {
@@ -1191,6 +1271,27 @@
     els.taskFormPanel.classList.toggle('hidden', !taskFormOpen);
     els.taskFormToggleBtn?.classList.toggle('is-active', taskFormOpen);
     els.taskFormToggleBtn?.setAttribute('aria-expanded', String(taskFormOpen));
+  }
+
+  function openAppointmentForm({ dateKey = selectedCalendarDate, forceNew = false } = {}) {
+    appointmentFormOpen = true;
+    if (forceNew || !editingAppointmentId) resetAppointmentFormMode({ clearForm: true, dateKey });
+    syncAppointmentFormPanel();
+    showScreen('calendar');
+    requestAnimationFrame(() => els.appointmentForm?.elements?.title?.focus({ preventScroll: true }));
+  }
+
+  function closeAppointmentForm({ clearForm = true } = {}) {
+    appointmentFormOpen = false;
+    if (clearForm) resetAppointmentFormMode({ clearForm: true });
+    syncAppointmentFormPanel();
+  }
+
+  function syncAppointmentFormPanel() {
+    if (!els.appointmentFormPanel) return;
+    els.appointmentFormPanel.classList.toggle('hidden', !appointmentFormOpen);
+    els.appointmentFormToggleBtn?.classList.toggle('is-active', appointmentFormOpen);
+    els.appointmentFormToggleBtn?.setAttribute('aria-expanded', String(appointmentFormOpen));
   }
 
 
@@ -3746,12 +3847,14 @@
       const cigarettes = cigarettesOnDate(key).length;
       const routineLog = morningRoutineCompletedLog(key);
       const tasks = state.tasks.filter(t => toDateKey(t.due_at || t.completed_at || t.created_at) === key);
+      const appointments = appointmentsOnDate(key);
       const alcohol = alcoholForDate(key)?.consumed;
       const alcoholUnits = alcoholUnitsOnDate(key).length;
       const points = calendarPointsOnDate(key);
       const chips = [];
       if (cigarettes) chips.push(`<span class="day-chip smoke">${cigarettes} Zig.</span>`);
       if (routineLog) chips.push('<span class="day-chip habit">Routine</span>');
+      if (appointments.length) chips.push(`<span class="day-chip appointment">${appointments.length} Termin</span>`);
       if (tasks.length) chips.push(`<span class="day-chip task">${tasks.length} Task</span>`);
       if (alcoholUnits) chips.push(`<span class="day-chip alcohol">${alcoholUnits} Alk.</span>`);
       else if (alcohol) chips.push('<span class="day-chip alcohol">Alk.</span>');
@@ -3777,9 +3880,28 @@
       const routine = MORNING_ROUTINES.find(item => item.key === routineLog.routine_key);
       details.push(`<article class="list-card done"><div><h4>Morgenroutine</h4><p class="meta">${escapeHtml(routine?.title || '15-Minuten-Routine')} · +50 Punkte</p></div></article>`);
     }
+    const appointments = appointmentsOnDate(key);
+    appointments.forEach(appointment => details.push(renderAppointmentDetailCard(appointment)));
     const tasks = state.tasks.filter(t => toDateKey(t.due_at || t.completed_at || t.created_at) === key);
     tasks.forEach(t => details.push(`<article class="list-card ${t.status === 'done' ? 'done' : ''}"><div><h4>${escapeHtml(t.title)}</h4><p class="meta">${escapeHtml(TASK_COLUMNS.find(column => column.status === (t.status || 'open'))?.title || 'Offen')} · ${escapeHtml(taskPriorityMeta(t).label)} · Aufwand ${t.effort}/5</p></div></article>`));
-    els.dayDetails.innerHTML = details.length ? details.join('') : '<div class="empty-state">Für diesen Tag gibt es noch keine Einträge.</div>';
+    const empty = `<div class="empty-state">Für diesen Tag gibt es noch keine Einträge.<div class="empty-actions"><button class="pill secondary" type="button" data-action="new-appointment-for-day">Termin anlegen</button></div></div>`;
+    els.dayDetails.innerHTML = details.length ? details.join('') : empty;
+  }
+
+  function renderAppointmentDetailCard(appointment) {
+    const type = appointmentTypeMeta(appointment.appointment_type);
+    const location = appointment.location ? ` · ${escapeHtml(appointment.location)}` : '';
+    const description = appointment.description ? `<br>${escapeHtml(appointment.description)}` : '';
+    return `<article class="list-card appointment-card ${editingAppointmentId === appointment.id ? 'is-editing' : ''}">
+      <div class="list-card-main">
+        <h4>${escapeHtml(appointment.title)}</h4>
+        <p class="meta">${escapeHtml(formatAppointmentRange(appointment))} · ${escapeHtml(type.label)}${location}${description}</p>
+      </div>
+      <div class="list-actions">
+        <button class="mini-btn" type="button" data-action="edit-appointment" data-id="${appointment.id}">Bearbeiten</button>
+        <button class="mini-btn danger" type="button" data-action="delete-appointment" data-id="${appointment.id}">Löschen</button>
+      </div>
+    </article>`;
   }
   function renderCharts() {
     if (!window.Chart) return;
@@ -4474,6 +4596,142 @@ async function deleteAlcoholLog(id) {
     els.taskPointsPreview.textContent = bonus ? `+${taskPoints(previewTask)} Pkt. · Prio +${bonus}` : `+${taskPoints(previewTask)} Pkt.`;
   }
 
+  function createAppointment(event) {
+    event.preventDefault();
+    if (!els.appointmentForm) return;
+    const data = new FormData(els.appointmentForm);
+    const startsAt = validIsoOrNull(data.get('starts_at'));
+    const endsAt = validIsoOrNull(data.get('ends_at'));
+    const values = {
+      title: String(data.get('title') || '').trim(),
+      description: String(data.get('description') || '').trim(),
+      location: String(data.get('location') || '').trim(),
+      appointment_type: normalizeAppointmentType(data.get('appointment_type')),
+      starts_at: startsAt,
+      ends_at: endsAt,
+      updated_at: nowIso(),
+      synced: false
+    };
+    if (!values.title) return;
+    if (!startsAt) {
+      toast('Bitte Startzeit für den Termin setzen.');
+      return;
+    }
+    if (endsAt && new Date(endsAt).getTime() < new Date(startsAt).getTime()) {
+      toast('Ende darf nicht vor dem Start liegen.');
+      return;
+    }
+
+    if (editingAppointmentId) {
+      const appointment = state.appointments.find(item => item.id === editingAppointmentId);
+      if (!appointment) {
+        resetAppointmentFormMode({ clearForm: true });
+        toast('Termin wurde nicht gefunden.');
+        return;
+      }
+      Object.assign(appointment, values);
+      resetAppointmentFormMode({ clearForm: true, dateKey: toDateKey(values.starts_at) || selectedCalendarDate });
+      appointmentFormOpen = false;
+      syncAppointmentFormPanel();
+      selectedCalendarDate = toDateKey(values.starts_at) || selectedCalendarDate;
+      calendarCursor = new Date(`${selectedCalendarDate}T12:00:00`);
+      saveState();
+      toast('Termin aktualisiert');
+      syncWithSupabase({ silent: true, pullFirst: false });
+      return;
+    }
+
+    const created = nowIso();
+    const appointment = normalizeAppointment({ id: uid(), ...values, created_at: created, updated_at: created });
+    state.appointments.push(appointment);
+    selectedCalendarDate = toDateKey(appointment.starts_at) || selectedCalendarDate;
+    calendarCursor = new Date(`${selectedCalendarDate}T12:00:00`);
+    resetAppointmentFormMode({ clearForm: true, dateKey: selectedCalendarDate });
+    appointmentFormOpen = false;
+    syncAppointmentFormPanel();
+    saveState();
+    toast('Termin gespeichert');
+    syncWithSupabase({ silent: true });
+  }
+
+  function editAppointment(id) {
+    const appointment = state.appointments.find(item => item.id === id);
+    if (!appointment || !els.appointmentForm) return;
+    editingAppointmentId = id;
+    appointmentFormOpen = true;
+    const fields = els.appointmentForm.elements;
+    fields.title.value = appointment.title || '';
+    fields.starts_at.value = toDateTimeLocalValue(appointment.starts_at);
+    fields.ends_at.value = toDateTimeLocalValue(appointment.ends_at);
+    fields.appointment_type.value = normalizeAppointmentType(appointment.appointment_type);
+    fields.location.value = appointment.location || '';
+    fields.description.value = appointment.description || '';
+    els.appointmentFormTitle.textContent = 'Termin bearbeiten';
+    els.appointmentSubmitBtn.textContent = 'Änderungen speichern';
+    els.cancelAppointmentEditBtn.classList.remove('hidden');
+    syncAppointmentFormPanel();
+    showScreen('calendar');
+    els.appointmentForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    renderCalendar();
+    renderDayDetails();
+  }
+
+  function resetAppointmentFormMode({ clearForm = true, dateKey = selectedCalendarDate } = {}) {
+    editingAppointmentId = null;
+    if (clearForm && els.appointmentForm) {
+      els.appointmentForm.reset();
+      const defaults = defaultAppointmentRange(dateKey);
+      els.appointmentForm.elements.starts_at.value = defaults.start;
+      els.appointmentForm.elements.ends_at.value = defaults.end;
+      els.appointmentForm.elements.appointment_type.value = 'personal';
+    }
+    if (els.appointmentFormTitle) els.appointmentFormTitle.textContent = 'Termin erfassen';
+    if (els.appointmentSubmitBtn) els.appointmentSubmitBtn.textContent = 'Termin speichern';
+    els.cancelAppointmentEditBtn?.classList.add('hidden');
+    syncAppointmentFormPanel();
+    renderCalendar();
+    renderDayDetails();
+  }
+
+  async function deleteAppointment(id) {
+    const appointment = state.appointments.find(item => item.id === id);
+    if (!appointment) return;
+    if (!confirm(`Termin „${appointment.title}“ wirklich löschen?`)) return;
+    state.appointments = state.appointments.filter(item => item.id !== id);
+    markRemoteDeleted('appointments', id);
+    if (editingAppointmentId === id) resetAppointmentFormMode({ clearForm: true });
+    saveState();
+    await deleteRemoteById('appointments', id);
+    toast('Termin gelöscht');
+    syncWithSupabase({ silent: true, pullFirst: false });
+  }
+
+  function defaultAppointmentRange(dateKey = selectedCalendarDate) {
+    const now = new Date();
+    let start;
+    if (dateKey === toDateKey(now)) {
+      start = new Date(now);
+      start.setMinutes(now.getMinutes() > 30 ? 0 : 30, 0, 0);
+      if (start.getTime() <= now.getTime()) start.setHours(start.getHours() + 1);
+    } else {
+      start = new Date(`${dateKey || toDateKey(now)}T09:00:00`);
+      if (Number.isNaN(start.getTime())) start = new Date(now);
+    }
+    const end = new Date(start.getTime() + 60 * 60 * 1000);
+    return { start: toDateTimeLocalValue(start.toISOString()), end: toDateTimeLocalValue(end.toISOString()) };
+  }
+
+  function syncAppointmentEndDefault() {
+    if (!els.appointmentForm) return;
+    const fields = els.appointmentForm.elements;
+    const start = new Date(fields.starts_at.value);
+    const end = new Date(fields.ends_at.value);
+    if (Number.isNaN(start.getTime())) return;
+    if (Number.isNaN(end.getTime()) || end.getTime() <= start.getTime()) {
+      fields.ends_at.value = toDateTimeLocalValue(new Date(start.getTime() + 60 * 60 * 1000).toISOString());
+    }
+  }
+
   function moveMonth(delta) {
     calendarCursor = new Date(calendarCursor.getFullYear(), calendarCursor.getMonth() + delta, 1);
     renderCalendar();
@@ -4657,6 +4915,22 @@ async function deleteAlcoholLog(id) {
     return date.toLocaleString('de-CH', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
   }
 
+  function formatTime(value) {
+    if (!value) return '–';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '–';
+    return date.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function formatAppointmentRange(appointment) {
+    if (!appointment?.starts_at) return 'ohne Zeit';
+    const startKey = toDateKey(appointment.starts_at);
+    const endKey = toDateKey(appointment.ends_at || appointment.starts_at);
+    if (appointment.ends_at && startKey !== endKey) return `${formatDateTime(appointment.starts_at)} – ${formatDateTime(appointment.ends_at)}`;
+    if (appointment.ends_at) return `${formatTime(appointment.starts_at)}–${formatTime(appointment.ends_at)}`;
+    return formatTime(appointment.starts_at);
+  }
+
   function toDateTimeLocalValue(value) {
     if (!value) return '';
     const date = new Date(value);
@@ -4806,7 +5080,7 @@ async function deleteAlcoholLog(id) {
   function hasPendingSyncWork() {
     if (!state) return false;
     if (hasPendingRemoteDeletes()) return true;
-    return ['habits', 'habitEntries', 'cigarettes', 'alcoholLogs', 'alcoholUnits', 'tasks', 'pointsLedger'].some(key => (state[key] || []).some(entry => entry?.synced === false));
+    return ['habits', 'habitEntries', 'cigarettes', 'alcoholLogs', 'alcoholUnits', 'tasks', 'appointments', 'pointsLedger'].some(key => (state[key] || []).some(entry => entry?.synced === false));
   }
 
   function renderSyncStatus(mode) {
@@ -4899,6 +5173,16 @@ async function deleteAlcoholLog(id) {
       }
 
       await upsertTaskRows();
+
+      const appointmentRows = liveRowsForTable('appointments', state.appointments).map(a => ({
+        id: a.id, title: a.title, description: a.description || null, location: a.location || null,
+        appointment_type: normalizeAppointmentType(a.appointment_type), starts_at: a.starts_at, ends_at: a.ends_at || null,
+        created_at: a.created_at, updated_at: a.updated_at || nowIso()
+      }));
+      if (await upsertRows('appointments', appointmentRows)) {
+        markRowsSynced('appointments', appointmentRows);
+        saveState({ skipRender: true });
+      }
 
       const ledgerRows = liveRowsForTable('points_ledger', state.pointsLedger).map(p => ({
         id: p.id, source_type: p.source_type, source_id: remoteLedgerSourceId(p), points: Number(p.points || 0), reason: p.reason || null,
@@ -5238,13 +5522,14 @@ async function deleteAlcoholLog(id) {
 
   async function pullSupabaseData() {
     if (!supabaseClient) return;
-    const [habits, entries, cigarettes, alcohol, alcoholEvents, tasks, ledger] = await Promise.all([
+    const [habits, entries, cigarettes, alcohol, alcoholEvents, tasks, appointments, ledger] = await Promise.all([
       fetchRemoteTable('habit_definitions'),
       fetchRemoteTable('habit_entries'),
       fetchRemoteTable('cigarette_events'),
       fetchRemoteTable('alcohol_logs'),
       fetchRemoteTable('alcohol_events'),
       fetchRemoteTable('tasks'),
+      fetchRemoteTable('appointments'),
       fetchRemoteTable('points_ledger')
     ]);
 
@@ -5254,15 +5539,17 @@ async function deleteAlcoholLog(id) {
     const remoteAlcoholRows = remoteRows('alcohol_logs', alcohol);
     const remoteAlcoholEventRows = remoteRows('alcohol_events', alcoholEvents);
     const remoteTaskRows = remoteRows('tasks', tasks);
+    const remoteAppointmentRows = remoteRows('appointments', appointments);
     let remoteLedgerRows = remoteRows('points_ledger', ledger);
 
     applyRemoteCollectionAuthority('cigarette_events', 'cigarettes', remoteCigaretteRows, { ledgerSourceType: 'cigarette' });
+    applyRemoteCollectionAuthority('appointments', 'appointments', remoteAppointmentRows);
     const removedAlcoholUnits = applyRemoteCollectionAuthority('alcohol_events', 'alcoholUnits', remoteAlcoholEventRows, {
       ledgerMatcher: (point, removedSet) => isAlcoholPointsEntry(point) && removedSet.has(point.source_id)
     });
     if (removedAlcoholUnits.length) clearAlcoholLogsWithoutUnits(removedAlcoholUnits);
     remoteLedgerRows = filterRemoteLedgerRows(remoteLedgerRows, { cigaretteRows: remoteCigaretteRows, alcoholEventRows: remoteAlcoholEventRows });
-    const remoteHasData = [remoteHabitRows, remoteEntryRows, remoteCigaretteRows, remoteAlcoholRows, remoteAlcoholEventRows, remoteTaskRows, remoteLedgerRows].some(rows => rows.length > 0);
+    const remoteHasData = [remoteHabitRows, remoteEntryRows, remoteCigaretteRows, remoteAlcoholRows, remoteAlcoholEventRows, remoteTaskRows, remoteAppointmentRows, remoteLedgerRows].some(rows => rows.length > 0);
 
     applyRemoteHabitAuthority(remoteHabitRows);
 
@@ -5273,6 +5560,7 @@ async function deleteAlcoholLog(id) {
       state.alcoholLogs = remoteAlcoholRows.map(mapRemoteAlcohol);
       state.alcoholUnits = remoteAlcoholEventRows.map(mapRemoteAlcoholEvent);
       state.tasks = remoteTaskRows.map(mapRemoteTask).map(normalizeTask);
+      state.appointments = remoteAppointmentRows.map(mapRemoteAppointment).map(normalizeAppointment);
       state.pointsLedger = remoteLedgerRows.map(mapRemoteLedger);
       dedupeStateCollections(state);
       return;
@@ -5286,6 +5574,7 @@ async function deleteAlcoholLog(id) {
     state.alcoholLogs = mergeById(state.alcoholLogs, remoteAlcoholRows, mapRemoteAlcohol);
     state.alcoholUnits = mergeById(state.alcoholUnits, remoteAlcoholEventRows, mapRemoteAlcoholEvent);
     state.tasks = mergeById(state.tasks, remoteTaskRows, mapRemoteTask).map(task => preserveLocalTaskFallbacks(normalizeTask(task), localTasksBeforePull.get(task.id)));
+    state.appointments = mergeById(state.appointments, remoteAppointmentRows, mapRemoteAppointment).map(normalizeAppointment);
     state.pointsLedger = mergeById(state.pointsLedger, remoteLedgerRows, mapRemoteLedger);
     dedupeStateCollections(state);
   }
@@ -5334,7 +5623,7 @@ async function deleteAlcoholLog(id) {
   function isLocalPristine() {
     const defaultIds = new Set(Object.values(DEFAULT_HABIT_IDS));
     const hasOnlyDefaultHabits = state.habits.every(h => defaultIds.has(h.id) || BUILT_IN_DEFAULT_HABIT_NAMES.has(String(h.name || '').trim().toLowerCase()));
-    return hasOnlyDefaultHabits && !state.habitEntries.length && !state.cigarettes.length && !state.alcoholLogs.length && !state.alcoholUnits.length && !state.tasks.length && !state.morningRoutineLogs?.length && !state.pointsLedger.length;
+    return hasOnlyDefaultHabits && !state.habitEntries.length && !state.cigarettes.length && !state.alcoholLogs.length && !state.alcoholUnits.length && !state.tasks.length && !state.appointments.length && !state.morningRoutineLogs?.length && !state.pointsLedger.length;
   }
 
   function subscribeToRemoteChanges() {
@@ -5361,6 +5650,7 @@ async function deleteAlcoholLog(id) {
   const mapRemoteAlcohol = a => ({ id: a.id, log_date: a.log_date, consumed: a.consumed, note: a.note, created_at: a.created_at, updated_at: a.updated_at, synced: true });
   const mapRemoteAlcoholEvent = a => ({ id: a.id, occurred_at: a.occurred_at, drink_type: a.drink_type || 'other', note: a.note, created_at: a.created_at, updated_at: a.updated_at, synced: true });
   const mapRemoteTask = t => ({ id: t.id, title: t.title, description: t.description, effort: t.effort, priority: normalizeTaskPriority(t.priority), status: TASK_COLUMNS.some(column => column.status === t.status) ? t.status : 'open', due_at: t.due_at, completed_at: t.completed_at, points: t.points, created_at: t.created_at, updated_at: t.updated_at, synced: true });
+  const mapRemoteAppointment = a => normalizeAppointment({ id: a.id, title: a.title, description: a.description, location: a.location, appointment_type: a.appointment_type, starts_at: a.starts_at, ends_at: a.ends_at, created_at: a.created_at, updated_at: a.updated_at, synced: true });
   const mapRemoteLedger = p => normalizeMorningRoutineLedgerPoint({ id: p.id, source_type: p.source_type, source_id: p.source_id, points: p.points, reason: p.reason, earned_at: p.earned_at, created_at: p.created_at, updated_at: p.created_at, synced: true });
 
   function exportJson() {

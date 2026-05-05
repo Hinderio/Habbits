@@ -384,6 +384,22 @@
       </section>
 
       <section id="screen-calendar" class="screen" data-screen="calendar">
+        <div class="section-toolbar glass">
+          <div><p class="eyebrow">Kalender</p><h3>Termine & Tagesplanung</h3></div>
+          <button id="appointmentFormToggleBtn" class="bubble-add-btn" type="button" aria-label="Termin-Formular öffnen"><span data-icon="plus"></span></button>
+        </div>
+        <section id="appointmentFormPanel" class="panel glass drawer-form-panel hidden">
+          <div class="panel-head"><div><p class="eyebrow">Termin</p><h3 id="appointmentFormTitle">Termin erfassen</h3></div><button id="appointmentFormCloseBtn" class="icon-btn" type="button" aria-label="Termin-Formular schliessen">×</button></div>
+          <form id="appointmentForm" class="form-grid">
+            <label class="full"><span>Titel</span><input name="title" required placeholder="z. B. Arzttermin, Meeting, Dinner" /></label>
+            <label><span>Start</span><input name="starts_at" type="datetime-local" required /></label>
+            <label><span>Ende</span><input name="ends_at" type="datetime-local" /></label>
+            <label><span>Typ</span><select name="appointment_type"><option value="personal" selected>Privat</option><option value="work">Arbeit</option><option value="health">Gesundheit</option><option value="social">Sozial</option><option value="admin">Admin</option><option value="other">Sonstiges</option></select></label>
+            <label><span>Ort</span><input name="location" placeholder="optional" /></label>
+            <label class="full"><span>Notiz</span><textarea name="description" rows="3" placeholder="optional"></textarea></label>
+            <div class="form-actions full"><button id="appointmentSubmitBtn" class="pill primary" type="submit">Termin speichern</button><button id="cancelAppointmentEditBtn" class="pill secondary hidden" type="button">Abbrechen</button></div>
+          </form>
+        </section>
         <section class="panel glass calendar-panel">
           <div class="panel-head calendar-head">
             <div><p class="eyebrow">Kalender</p><h3 id="calendarTitle">Monat</h3></div>
@@ -397,7 +413,7 @@
           <div id="calendarGrid" class="calendar-grid"></div>
         </section>
         <section class="panel glass">
-          <div class="panel-head"><div><p class="eyebrow">Tagesdetails</p><h3 id="selectedDateTitle">Heute</h3></div></div>
+          <div class="panel-head"><div><p class="eyebrow">Tagesdetails</p><h3 id="selectedDateTitle">Heute</h3></div><button class="pill secondary" type="button" data-action="new-appointment-for-day">Termin anlegen</button></div>
           <div id="dayDetails" class="stack-list"></div>
         </section>
       </section>

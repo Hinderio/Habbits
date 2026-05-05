@@ -81,6 +81,30 @@ create table if not exists public.tasks (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.appointments (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  description text,
+  location text,
+  appointment_type text not null default 'other' check (appointment_type in ('personal','work','health','social','admin','other')),
+  starts_at timestamptz not null default now(),
+  ends_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint appointments_time_check check (ends_at is null or ends_at >= starts_at)
+);
+
+alter table public.appointments add column if not exists description text;
+alter table public.appointments add column if not exists location text;
+alter table public.appointments add column if not exists appointment_type text not null default 'other';
+alter table public.appointments add column if not exists starts_at timestamptz not null default now();
+alter table public.appointments add column if not exists ends_at timestamptz;
+alter table public.appointments add column if not exists created_at timestamptz not null default now();
+alter table public.appointments add column if not exists updated_at timestamptz not null default now();
+alter table public.appointments drop constraint if exists appointments_type_check;
+alter table public.appointments add constraint appointments_type_check check (appointment_type in ('personal','work','health','social','admin','other'));
+alter table public.appointments drop constraint if exists appointments_time_check;
+alter table public.appointments add constraint appointments_time_check check (ends_at is null or ends_at >= starts_at);
 
 alter table public.habit_definitions add column if not exists target_period text not null default 'day';
 alter table public.habit_definitions drop constraint if exists habit_definitions_target_period_check;
@@ -109,7 +133,7 @@ create table if not exists public.points_ledger (
 do $$
 declare tbl text;
 begin
-  foreach tbl in array array['habit_definitions','habit_entries','cigarette_events','alcohol_logs','alcohol_events','tasks','points_ledger'] loop
+  foreach tbl in array array['habit_definitions','habit_entries','cigarette_events','alcohol_logs','alcohol_events','tasks','appointments','points_ledger'] loop
     if exists (
       select 1
       from information_schema.columns
@@ -126,6 +150,8 @@ create index if not exists idx_cigarette_events_time on public.cigarette_events(
 create index if not exists idx_alcohol_logs_date on public.alcohol_logs(log_date desc);
 create index if not exists idx_alcohol_events_time on public.alcohol_events(occurred_at desc);
 create index if not exists idx_tasks_due on public.tasks(status, due_at);
+create index if not exists idx_appointments_starts_at on public.appointments(starts_at desc);
+create index if not exists idx_appointments_type_starts_at on public.appointments(appointment_type, starts_at desc);
 create index if not exists idx_points_ledger_time on public.points_ledger(earned_at desc);
 
 drop trigger if exists set_habit_definitions_updated_at on public.habit_definitions;
@@ -146,12 +172,16 @@ create trigger set_alcohol_events_updated_at before update on public.alcohol_eve
 drop trigger if exists set_tasks_updated_at on public.tasks;
 create trigger set_tasks_updated_at before update on public.tasks for each row execute function public.set_updated_at();
 
+drop trigger if exists set_appointments_updated_at on public.appointments;
+create trigger set_appointments_updated_at before update on public.appointments for each row execute function public.set_updated_at();
+
 alter table public.habit_definitions enable row level security;
 alter table public.habit_entries enable row level security;
 alter table public.cigarette_events enable row level security;
 alter table public.alcohol_logs enable row level security;
 alter table public.alcohol_events enable row level security;
 alter table public.tasks enable row level security;
+alter table public.appointments enable row level security;
 alter table public.points_ledger enable row level security;
 
 -- Remove old private policies if this project previously used Magic-Link auth.
@@ -179,6 +209,10 @@ drop policy if exists "tasks_select_own" on public.tasks;
 drop policy if exists "tasks_insert_own" on public.tasks;
 drop policy if exists "tasks_update_own" on public.tasks;
 drop policy if exists "tasks_delete_own" on public.tasks;
+drop policy if exists "appointments_select_own" on public.appointments;
+drop policy if exists "appointments_insert_own" on public.appointments;
+drop policy if exists "appointments_update_own" on public.appointments;
+drop policy if exists "appointments_delete_own" on public.appointments;
 drop policy if exists "points_ledger_select_own" on public.points_ledger;
 drop policy if exists "points_ledger_insert_own" on public.points_ledger;
 drop policy if exists "points_ledger_update_own" on public.points_ledger;
@@ -190,6 +224,7 @@ drop policy if exists "cigarette_events_direct_public" on public.cigarette_event
 drop policy if exists "alcohol_logs_direct_public" on public.alcohol_logs;
 drop policy if exists "alcohol_events_direct_public" on public.alcohol_events;
 drop policy if exists "tasks_direct_public" on public.tasks;
+drop policy if exists "appointments_direct_public" on public.appointments;
 drop policy if exists "points_ledger_direct_public" on public.points_ledger;
 
 create policy "habit_definitions_direct_public" on public.habit_definitions for all to anon, authenticated using (true) with check (true);
@@ -198,13 +233,14 @@ create policy "cigarette_events_direct_public" on public.cigarette_events for al
 create policy "alcohol_logs_direct_public" on public.alcohol_logs for all to anon, authenticated using (true) with check (true);
 create policy "alcohol_events_direct_public" on public.alcohol_events for all to anon, authenticated using (true) with check (true);
 create policy "tasks_direct_public" on public.tasks for all to anon, authenticated using (true) with check (true);
+create policy "appointments_direct_public" on public.appointments for all to anon, authenticated using (true) with check (true);
 create policy "points_ledger_direct_public" on public.points_ledger for all to anon, authenticated using (true) with check (true);
 
 -- Optional realtime support for the running app. Ignore notices if a table is already part of the publication.
 do $$
 declare tbl text;
 begin
-  foreach tbl in array array['habit_definitions','habit_entries','cigarette_events','alcohol_logs','alcohol_events','tasks','points_ledger'] loop
+  foreach tbl in array array['habit_definitions','habit_entries','cigarette_events','alcohol_logs','alcohol_events','tasks','appointments','points_ledger'] loop
     begin
       execute format('alter publication supabase_realtime add table public.%I', tbl);
     exception when others then

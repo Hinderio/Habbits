@@ -665,3 +665,11 @@ body.light .morning-routine-steps article.is-current{background:linear-gradient(
 .morning-routine-modal .morning-routine-card{display:block}
 .morning-routine-modal .morning-routine-shell{padding:0}
 @media (max-width:760px){.morning-routine-modal{align-items:flex-end}.morning-routine-modal-card{max-height:94vh;border-radius:28px 28px 18px 18px;gap:14px}.morning-routine-modal-head{padding-right:0}.morning-routine-modal-head h2{font-size:1.65rem}}
+
+/* v29: Termine im Kalender, minimal-invasiv neben Tasks */
+.day-chip.appointment{color:#d7c8ff;background:rgba(183,156,255,.14)}
+.appointment-card{border-color:rgba(183,156,255,.13);background:linear-gradient(135deg,rgba(183,156,255,.075),rgba(255,255,255,.04))}
+.appointment-card.is-editing{border-color:rgba(183,156,255,.42);box-shadow:0 0 0 3px rgba(183,156,255,.1)}
+.empty-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:12px}
+body.light .appointment-card{background:linear-gradient(135deg,rgba(183,156,255,.15),rgba(255,255,255,.62));border-color:rgba(116,79,208,.1)}
+@media (max-width:760px){#screen-calendar .panel-head .pill{width:100%;justify-content:center}.appointment-card .list-actions{width:100%}.appointment-card .list-actions .mini-btn{flex:1}}
