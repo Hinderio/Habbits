@@ -42,3 +42,5 @@ Dann `http://localhost:8080` öffnen.
 Die visuelle Richtung orientiert sich am bereitgestellten FishTrack-ZIP: dunkle Premium-PWA, Glass-Cards, Bottom Navigation, KPI-Hero, ruhige Farbpalette, mobile-first Layout und datengetriebene Panels. Die FishTrack-Fachlogik wurde nicht übernommen.
 
 - Raucher-Analytics erweitert: horizontale Violin-Plot-Visualisierung für Zigaretten-Intervalle (rechts→links lesbar, distributionsfokussiert).
+
+- Deep Smoke Map erweitert: zusätzliche Visuals für Wochentag-Signatur und Wochen-Puls als Ergänzung zur KW-Heatmap.

@@ -2703,6 +2703,44 @@
       }).join('')}
     `).join('');
 
+    const weekdaySignature = rows
+      .map(row => ({
+        day: row.day,
+        label: smokingWeekdayLabel(row.day, { short: true }),
+        count: row.total,
+        share: relevant.length ? Math.round((row.total / relevant.length) * 100) : 0
+      }))
+      .sort((a, b) => b.count - a.count);
+    const weekdayPeak = Math.max(...weekdaySignature.map(item => item.count), 1);
+    const weekdaySignatureMarkup = weekdaySignature.map(item => {
+      const width = item.count ? Math.max(10, Math.round((item.count / weekdayPeak) * 100)) : 0;
+      const level = item.count ? Math.max(1, Math.ceil((item.count / weekdayPeak) * 5)) : 0;
+      return `<div class="smoke-signature-row" title="${escapeHtml(`${smokingWeekdayLabel(item.day)} · ${item.count} Zigarette${item.count === 1 ? '' : 'n'} · ${item.share}% Anteil`)}">
+        <strong>${escapeHtml(item.label)}</strong>
+        <div class="smoke-signature-track"><i class="level-${level}" style="width:${width}%"></i></div>
+        <span>${item.count}× · ${item.share}%</span>
+      </div>`;
+    }).join('');
+
+    const weekPulse = weeks.map((week, index) => ({
+      week,
+      count: weekCounts[index] || 0
+    }));
+    const pulseMax = Math.max(...weekPulse.map(item => item.count), 1);
+    const weekPulseMarkup = weekPulse.map(item => {
+      const height = item.count ? Math.max(14, Math.round((item.count / pulseMax) * 100)) : 8;
+      const level = item.count ? Math.max(1, Math.ceil((item.count / pulseMax) * 5)) : 0;
+      return `<div class="smoke-pulse-bar level-${level}" title="${escapeHtml(`${item.week.label} (${item.week.rangeLabel}) · ${item.count} Zigarette${item.count === 1 ? '' : 'n'}`)}"><i style="height:${height}%"></i><small>${escapeHtml(item.week.label.replace('KW ', ''))}</small></div>`;
+    }).join('');
+    const weekendCount = rows.filter(row => [5, 6, 0].includes(row.day)).reduce((total, row) => total + row.total, 0);
+    const weekdayCount = Math.max(0, relevant.length - weekendCount);
+    const weekendShare = relevant.length ? Math.round((weekendCount / relevant.length) * 100) : 0;
+    const cadenceText = weekendShare >= 45
+      ? `Wochenenden bündeln ${weekendShare}% des sichtbaren Konsums – die Map kippt dort klar nach oben.`
+      : weekdayCount > weekendCount
+        ? `Werktage tragen aktuell ${Math.round((weekdayCount / relevant.length) * 100)}% des Musters – die Woche ist der Haupttreiber.`
+        : 'Das Muster verteilt sich aktuell relativ ausgewogen zwischen Woche und Wochenende.';
+
     els.cigaretteHeatmapVisual.innerHTML = `
       <div class="smoking-visual-summary-grid smoking-visual-summary-grid--compact">
         ${summary.map(item => `<article><small>${escapeHtml(item.label)}</small><strong>${escapeHtml(item.value)}</strong><p>${escapeHtml(item.detail)}</p></article>`).join('')}
@@ -2716,6 +2754,19 @@
       </div>
       <div class="smoke-hour-legend"><span>wenig</span>${[1, 2, 3, 4, 5].map(level => `<i class="level-${level}"></i>`).join('')}<span>hoch</span></div>
       <p class="meta">Pattern Readout: Die Matrix verdichtet einzelne Rauchmomente zu Kalenderwochen-Clustern. Aktuell ist <strong>${dominantWeek.week?.label || 'eine KW'}</strong> am auffälligsten; der stärkste Wochentag ist <strong>${smokingWeekdayLabel(dominantDay.day)}</strong>.</p>
+      <div class="smoke-map-support-grid">
+        <article class="smoke-map-support-card">
+          <div class="smoke-map-support-head"><strong>Wochentag-Signatur</strong><small>welche Tage den Kalender dominieren</small></div>
+          <div class="smoke-signature-list">${weekdaySignatureMarkup}</div>
+          <p class="meta">${escapeHtml(cadenceText)}</p>
+        </article>
+        <article class="smoke-map-support-card">
+          <div class="smoke-map-support-head"><strong>Wochen-Puls</strong><small>12 Kalenderwochen im Direktvergleich</small></div>
+          <div class="smoke-pulse-chart" aria-label="Wochenpuls der letzten Kalenderwochen">${weekPulseMarkup}</div>
+          <div class="interval-skyline-axis smoke-pulse-axis"><span>älter</span><span>neu</span></div>
+          <p class="meta">Der Wochen-Puls ergänzt die Heatmap um ein kompaktes Trendbild, ohne mit der Pausen-Analyse zu konkurrieren.</p>
+        </article>
+      </div>
     `;
   }
 
