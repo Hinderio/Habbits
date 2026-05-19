@@ -20,10 +20,13 @@
       <div class="auth-orb"><span data-icon="sync"></span></div>
       <p class="eyebrow">Private HabitFlow</p>
       <h2>Zugriff geschützt.</h2>
-      <p class="auth-copy">Melde dich mit deiner freigegebenen E-Mail-Adresse an. Deine sensiblen Habit-, Konsum-, Task- und Kalenderdaten werden erst nach Login aus Supabase geladen.</p>
+      <p class="auth-copy">Melde dich mit deiner freigegebenen E-Mail-Adresse und deinem Passwort an. Deine sensiblen Habit-, Konsum-, Task- und Kalenderdaten werden erst nach Login aus Supabase geladen.</p>
       <form id="authForm" class="auth-form">
         <label><span>E-Mail</span><input id="authEmailInput" name="email" type="email" autocomplete="email" required placeholder="deine@email.ch" /></label>
-        <button id="authSubmitBtn" class="pill primary" type="submit">Magic-Link senden</button>
+        <label><span id="authPasswordLabel">Passwort</span><input id="authPasswordInput" name="password" type="password" autocomplete="current-password" required placeholder="Dein Passwort" minlength="8" /></label>
+        <label id="authPasswordConfirmField" class="hidden"><span>Passwort bestätigen</span><input id="authPasswordConfirmInput" name="passwordConfirm" type="password" autocomplete="new-password" placeholder="Passwort wiederholen" minlength="8" /></label>
+        <button id="authSubmitBtn" class="pill primary" type="submit">Einloggen</button>
+        <button id="authResetBtn" class="auth-link-btn" type="button">Passwort festlegen oder vergessen?</button>
       </form>
       <p id="authStatusText" class="auth-status">Supabase Auth schützt den Zugriff. Der öffentliche Anon Key bleibt im Browser, die Daten werden über RLS isoliert.</p>
     </div>
@@ -439,7 +442,7 @@
             <form id="settingsForm" class="form-grid">
               <div class="sync-live-card full">
                 <strong>Angemeldet als <span id="authUserEmail">–</span></strong>
-                <span>Die App synchronisiert erst nach Login. Supabase RLS filtert jede Tabelle auf deinen Auth-User.</span>
+                <span>Die App synchronisiert erst nach E-Mail/Passwort-Login. Supabase RLS filtert jede Tabelle auf deinen Auth-User.</span>
               </div>
               <div class="form-actions full">
                 <button id="manualSyncBtn" class="pill primary" type="submit">Jetzt synchronisieren</button>

@@ -20,13 +20,11 @@ Premium PWA für schlechte Gewohnheiten reduzieren, Zigarettenkonsum tracken, fl
 
 ## Supabase Setup
 
-Die Supabase URL und der Anon Key sind in `supabase-config.js` hinterlegt und werden nicht in der App-Oberfläche angezeigt.
+Die Supabase URL und der Anon Key sind in `supabase-config.js` hinterlegt. Der Anon Key ist für Browser-Apps vorgesehen; die eigentliche Zugriffssicherheit entsteht durch Supabase Auth und Row Level Security.
 
-Die App arbeitet bewusst wie FishTrack mit direktem anon-client Sync. Das bedeutet: kein Magic-Link-Login, keine Account-Seite und keine Eingabe von Supabase-Zugangsdaten in der UI.
+Diese Version nutzt einen privaten Login mit E-Mail + Passwort. Die App lädt und synchronisiert Supabase-Daten erst nach erfolgreichem Login. Neue Datensätze werden mit `user_id = auth.uid()` gespeichert und die RLS-Policies in `supabase.sql` erlauben Zugriff nur auf die eigenen Rows.
 
-Falls die HabitFlow-Tabellen im Supabase-Projekt noch nicht existieren oder die neue `appointments`-Tabelle für Termine fehlt, `supabase.sql` einmal im Supabase SQL Editor ausführen. Das Schema aktiviert public anon Policies für diese App-Tabellen.
-
-Wichtig: Dieses Modell erzeugt eine gemeinsame globale Datenbasis für alle, die dieselbe App-URL und denselben Supabase anon key nutzen. Für ein späteres privates Multi-User-Produkt sollte wieder RLS mit Login verwendet werden.
+Für ein neues oder bestehendes Supabase-Projekt zuerst `supabase.sql` vollständig im Supabase SQL Editor ausführen. Danach die Schritte in `SECURITY_SETUP.md` befolgen, insbesondere URL Configuration, Passwort festlegen und vorhandene alte Daten einmalig einem Auth-User zuweisen.
 
 ## Lokal starten
 

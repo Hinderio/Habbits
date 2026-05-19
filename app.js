@@ -410,6 +410,7 @@
   let authSession = null;
   let currentUser = null;
   let authSubscription = null;
+  let passwordRecoveryMode = false;
   let syncSubscription = null;
   let syncInFlight = false;
   let pendingSyncRequest = null;
@@ -480,6 +481,11 @@
       authGate: $('#authGate'),
       authForm: $('#authForm'),
       authEmailInput: $('#authEmailInput'),
+      authPasswordInput: $('#authPasswordInput'),
+      authPasswordConfirmInput: $('#authPasswordConfirmInput'),
+      authPasswordConfirmField: $('#authPasswordConfirmField'),
+      authPasswordLabel: $('#authPasswordLabel'),
+      authResetBtn: $('#authResetBtn'),
       authSubmitBtn: $('#authSubmitBtn'),
       authStatusText: $('#authStatusText'),
       authUserEmail: $('#authUserEmail'),
@@ -615,7 +621,8 @@
       localStorage.setItem(THEME_KEY, document.body.classList.contains('light') ? 'light' : 'dark');
     });
 
-    if (els.authForm) els.authForm.addEventListener('submit', requestAuthMagicLink);
+    if (els.authForm) els.authForm.addEventListener('submit', handleAuthForm);
+    if (els.authResetBtn) els.authResetBtn.addEventListener('click', requestPasswordRecoveryEmail);
 
     els.navButtons.forEach(btn => btn.addEventListener('click', () => showScreen(btn.dataset.target)));
     els.heroSmokeBtn.addEventListener('click', () => recordCigarette());
@@ -5279,10 +5286,11 @@ async function deleteAlcoholLog(id) {
       supabaseClient = window.supabase.createClient(config.url, config.anonKey, {
         auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
       });
+      passwordRecoveryMode = window.location.hash.includes('type=recovery');
+      attachAuthListener();
       const { data, error } = await supabaseClient.auth.getSession();
       if (error) throw error;
       setAuthSession(data?.session || null);
-      attachAuthListener();
       if (!currentUser) {
         renderSyncStatus('auth');
         console.log('HabitFlow wartet auf Supabase Auth Login');
@@ -5315,6 +5323,7 @@ async function deleteAlcoholLog(id) {
     if (!supabaseClient || authSubscription) return;
     const { data } = supabaseClient.auth.onAuthStateChange((event, session) => {
       const wasSignedOut = !currentUser;
+      if (event === 'PASSWORD_RECOVERY') passwordRecoveryMode = true;
       setAuthSession(session || null);
       renderSyncStatus(currentUser ? 'connected' : 'auth');
       if (!currentUser) clearRemoteSubscription();
@@ -5350,10 +5359,22 @@ async function deleteAlcoholLog(id) {
     if (!els.authGate) return;
     const configured = isSupabaseConfigured();
     const signedIn = Boolean(currentUserId());
-    els.authGate.classList.toggle('hidden', !configured || signedIn);
-    document.body.classList.toggle('auth-locked', configured && !signedIn);
+    const showGate = configured && (!signedIn || passwordRecoveryMode);
+    els.authGate.classList.toggle('hidden', !showGate);
+    document.body.classList.toggle('auth-locked', showGate);
     if (els.authEmailInput && currentUser?.email) els.authEmailInput.value = currentUser.email;
     if (els.authEmailInput && !els.authEmailInput.value && settings?.email) els.authEmailInput.value = settings.email;
+    if (els.authEmailInput) els.authEmailInput.disabled = passwordRecoveryMode;
+    if (els.authPasswordInput) {
+      els.authPasswordInput.value = '';
+      els.authPasswordInput.autocomplete = passwordRecoveryMode ? 'new-password' : 'current-password';
+      els.authPasswordInput.placeholder = passwordRecoveryMode ? 'Neues sicheres Passwort' : 'Dein Passwort';
+    }
+    if (els.authPasswordConfirmInput) els.authPasswordConfirmInput.value = '';
+    if (els.authPasswordConfirmField) els.authPasswordConfirmField.classList.toggle('hidden', !passwordRecoveryMode);
+    if (els.authPasswordLabel) els.authPasswordLabel.textContent = passwordRecoveryMode ? 'Neues Passwort' : 'Passwort';
+    if (els.authSubmitBtn) els.authSubmitBtn.textContent = passwordRecoveryMode ? 'Passwort speichern' : 'Einloggen';
+    if (els.authResetBtn) els.authResetBtn.classList.toggle('hidden', passwordRecoveryMode);
     if (els.authUserEmail) els.authUserEmail.textContent = currentUser?.email || 'nicht angemeldet';
     if (!els.authStatusText) return;
     if (!configured) {
@@ -5362,15 +5383,53 @@ async function deleteAlcoholLog(id) {
       els.authStatusText.textContent = 'Supabase ist nicht erreichbar oder nicht konfiguriert. Lokale Daten bleiben auf diesem Gerät.';
     } else if (mode === 'error') {
       els.authStatusText.textContent = 'Auth konnte nicht initialisiert werden. Prüfe Supabase URL, Anon Key und Redirect URL.';
+    } else if (passwordRecoveryMode) {
+      els.authStatusText.textContent = 'Lege jetzt ein neues Passwort fest. Danach öffnet sich deine private, RLS-geschützte App.';
     } else if (signedIn) {
       els.authStatusText.textContent = `Angemeldet als ${currentUser?.email || 'Supabase User'}.`;
     } else {
-      els.authStatusText.textContent = 'Sende dir einen Magic-Link. Danach öffnet die App deine private, RLS-geschützte Datenansicht.';
+      els.authStatusText.textContent = 'Melde dich mit E-Mail und Passwort an. Deine Session bleibt auf diesem Gerät gespeichert.';
     }
   }
 
-  async function requestAuthMagicLink(event) {
+  async function handleAuthForm(event) {
+    if (passwordRecoveryMode) return updateRecoveredPassword(event);
+    return requestPasswordLogin(event);
+  }
+
+  async function requestPasswordLogin(event) {
     if (event) event.preventDefault();
+    if (!supabaseClient) {
+      toast('Supabase ist nicht bereit.');
+      return;
+    }
+    const email = String(els.authEmailInput?.value || '').trim().toLowerCase();
+    const password = String(els.authPasswordInput?.value || '');
+    if (!email || !password) {
+      toast('Bitte E-Mail und Passwort eintragen.');
+      return;
+    }
+    try {
+      if (els.authSubmitBtn) els.authSubmitBtn.disabled = true;
+      settings.email = email;
+      saveSettingsToStorage();
+      const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      if (els.authStatusText) els.authStatusText.textContent = 'Login erfolgreich. Deine private Datenansicht wird geladen.';
+      toast('Eingeloggt');
+    } catch (error) {
+      console.warn('Auth password login error', error);
+      const message = /Invalid login credentials/i.test(error?.message || '')
+        ? 'Login fehlgeschlagen. Prüfe E-Mail und Passwort oder setze dein Passwort neu.'
+        : (error?.message || 'Login fehlgeschlagen.');
+      if (els.authStatusText) els.authStatusText.textContent = message;
+      toast('Login fehlgeschlagen.');
+    } finally {
+      if (els.authSubmitBtn) els.authSubmitBtn.disabled = false;
+    }
+  }
+
+  async function requestPasswordRecoveryEmail() {
     if (!supabaseClient) {
       toast('Supabase ist nicht bereit.');
       return;
@@ -5381,21 +5440,55 @@ async function deleteAlcoholLog(id) {
       return;
     }
     try {
-      if (els.authSubmitBtn) els.authSubmitBtn.disabled = true;
+      if (els.authResetBtn) els.authResetBtn.disabled = true;
       settings.email = email;
       saveSettingsToStorage();
       const redirectTo = window.location.href.split('#')[0];
-      const { error } = await supabaseClient.auth.signInWithOtp({
-        email,
-        options: { emailRedirectTo: redirectTo }
-      });
+      const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
       if (error) throw error;
-      if (els.authStatusText) els.authStatusText.textContent = 'Magic-Link wurde gesendet. Öffne den Link in deinem E-Mail-Postfach auf diesem Gerät.';
-      toast('Magic-Link gesendet');
+      if (els.authStatusText) els.authStatusText.textContent = 'Passwort-Link wurde gesendet. Öffne den Link einmalig, um dein Passwort festzulegen.';
+      toast('Passwort-Link gesendet');
     } catch (error) {
-      console.warn('Auth magic link error', error);
-      if (els.authStatusText) els.authStatusText.textContent = error?.message || 'Magic-Link konnte nicht gesendet werden.';
-      toast('Login-Link konnte nicht gesendet werden.');
+      console.warn('Auth password recovery error', error);
+      if (els.authStatusText) els.authStatusText.textContent = error?.message || 'Passwort-Link konnte nicht gesendet werden.';
+      toast('Passwort-Link konnte nicht gesendet werden.');
+    } finally {
+      if (els.authResetBtn) els.authResetBtn.disabled = false;
+    }
+  }
+
+  async function updateRecoveredPassword(event) {
+    if (event) event.preventDefault();
+    if (!supabaseClient || !currentUserId()) {
+      toast('Passwort-Link ist nicht aktiv.');
+      return;
+    }
+    const password = String(els.authPasswordInput?.value || '');
+    const confirmation = String(els.authPasswordConfirmInput?.value || '');
+    if (password.length < 8) {
+      toast('Passwort braucht mindestens 8 Zeichen.');
+      return;
+    }
+    if (password !== confirmation) {
+      toast('Passwörter stimmen nicht überein.');
+      return;
+    }
+    try {
+      if (els.authSubmitBtn) els.authSubmitBtn.disabled = true;
+      const { error } = await supabaseClient.auth.updateUser({ password });
+      if (error) throw error;
+      passwordRecoveryMode = false;
+      if (window.history?.replaceState) window.history.replaceState(null, document.title, window.location.href.split('#')[0]);
+      renderAuthUi();
+      renderSyncStatus('syncing');
+      await syncWithSupabase({ silent: true, pullFirst: true });
+      subscribeToRemoteChanges();
+      renderSyncStatus('connected');
+      toast('Passwort gespeichert');
+    } catch (error) {
+      console.warn('Auth update password error', error);
+      if (els.authStatusText) els.authStatusText.textContent = error?.message || 'Passwort konnte nicht gespeichert werden.';
+      toast('Passwort konnte nicht gespeichert werden.');
     } finally {
       if (els.authSubmitBtn) els.authSubmitBtn.disabled = false;
     }
@@ -5494,6 +5587,7 @@ async function deleteAlcoholLog(id) {
       clearRemoteSubscription();
       const { error } = await supabaseClient.auth.signOut();
       if (error) throw error;
+      passwordRecoveryMode = false;
       setAuthSession(null);
       renderSyncStatus('auth');
       toast('Abgemeldet');
