@@ -407,6 +407,9 @@
   var state = loadState();
   let settings = loadSettings();
   let supabaseClient = null;
+  let authSession = null;
+  let currentUser = null;
+  let authSubscription = null;
   let syncSubscription = null;
   let syncInFlight = false;
   let pendingSyncRequest = null;
@@ -474,6 +477,12 @@
   function cacheEls() {
     Object.assign(els, {
       toast: $('#toast'),
+      authGate: $('#authGate'),
+      authForm: $('#authForm'),
+      authEmailInput: $('#authEmailInput'),
+      authSubmitBtn: $('#authSubmitBtn'),
+      authStatusText: $('#authStatusText'),
+      authUserEmail: $('#authUserEmail'),
       themeToggle: $('#themeToggle'),
       syncNowBtn: $('#syncNowBtn'),
       navButtons: $$('.nav-btn'),
@@ -606,6 +615,8 @@
       localStorage.setItem(THEME_KEY, document.body.classList.contains('light') ? 'light' : 'dark');
     });
 
+    if (els.authForm) els.authForm.addEventListener('submit', requestAuthMagicLink);
+
     els.navButtons.forEach(btn => btn.addEventListener('click', () => showScreen(btn.dataset.target)));
     els.heroSmokeBtn.addEventListener('click', () => recordCigarette());
     if (els.heroMorningRoutineBtn) els.heroMorningRoutineBtn.addEventListener('click', openMorningRoutineFromHero);
@@ -668,7 +679,7 @@
         syncWithSupabase({ silent: false, pullFirst: true });
       });
     }
-    if (els.logoutBtn) els.logoutBtn.addEventListener('click', () => syncWithSupabase({ silent: false, pullFirst: true }));
+    if (els.logoutBtn) els.logoutBtn.addEventListener('click', logout);
     els.syncNowBtn.addEventListener('click', () => syncWithSupabase({ silent: false, pullFirst: true }));
     els.exportBtn.addEventListener('click', exportJson);
     els.importInput.addEventListener('change', importJson);
@@ -5260,20 +5271,133 @@ async function deleteAlcoholLog(id) {
   async function initSupabase() {
     const config = getSupabaseConfig();
     if (!config.url || !config.anonKey || !window.supabase) {
+      renderAuthUi('offline');
       renderSyncStatus('offline');
       return;
     }
     try {
-      supabaseClient = window.supabase.createClient(config.url, config.anonKey);
+      supabaseClient = window.supabase.createClient(config.url, config.anonKey, {
+        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+      });
+      const { data, error } = await supabaseClient.auth.getSession();
+      if (error) throw error;
+      setAuthSession(data?.session || null);
+      attachAuthListener();
+      if (!currentUser) {
+        renderSyncStatus('auth');
+        console.log('HabitFlow wartet auf Supabase Auth Login');
+        return;
+      }
       renderSyncStatus('syncing');
       await syncWithSupabase({ silent: true, pullFirst: true });
       subscribeToRemoteChanges();
       renderSyncStatus('connected');
-      console.log('HabitFlow Supabase direkt verbunden');
+      console.log('HabitFlow Supabase Auth verbunden');
     } catch (error) {
       console.warn('Supabase init error', error);
+      renderAuthUi('error');
       renderSyncStatus('error');
       toast('Supabase konnte nicht initialisiert werden. App läuft lokal weiter.');
+    }
+  }
+
+  function setAuthSession(session) {
+    authSession = session || null;
+    currentUser = authSession?.user || null;
+    if (settings && currentUser?.email) {
+      settings.email = currentUser.email;
+      saveSettingsToStorage();
+    }
+    renderAuthUi();
+  }
+
+  function attachAuthListener() {
+    if (!supabaseClient || authSubscription) return;
+    const { data } = supabaseClient.auth.onAuthStateChange((event, session) => {
+      const wasSignedOut = !currentUser;
+      setAuthSession(session || null);
+      renderSyncStatus(currentUser ? 'connected' : 'auth');
+      if (!currentUser) clearRemoteSubscription();
+      if (currentUser && (wasSignedOut || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
+        subscribeToRemoteChanges();
+        syncWithSupabase({ silent: true, pullFirst: true });
+      }
+    });
+    authSubscription = data?.subscription || null;
+  }
+
+  function currentUserId() {
+    return currentUser?.id || authSession?.user?.id || null;
+  }
+
+  function isAuthenticated() {
+    return Boolean(supabaseClient && currentUserId());
+  }
+
+  function requireAuthenticatedUserId() {
+    const userId = currentUserId();
+    if (!userId) throw new Error('Bitte zuerst anmelden.');
+    return userId;
+  }
+
+  function rowsForCurrentUser(rows = []) {
+    if (!rows.length) return [];
+    const userId = requireAuthenticatedUserId();
+    return rows.map(row => ({ ...row, user_id: userId }));
+  }
+
+  function renderAuthUi(mode) {
+    if (!els.authGate) return;
+    const configured = isSupabaseConfigured();
+    const signedIn = Boolean(currentUserId());
+    els.authGate.classList.toggle('hidden', !configured || signedIn);
+    document.body.classList.toggle('auth-locked', configured && !signedIn);
+    if (els.authEmailInput && currentUser?.email) els.authEmailInput.value = currentUser.email;
+    if (els.authEmailInput && !els.authEmailInput.value && settings?.email) els.authEmailInput.value = settings.email;
+    if (els.authUserEmail) els.authUserEmail.textContent = currentUser?.email || 'nicht angemeldet';
+    if (!els.authStatusText) return;
+    if (!configured) {
+      els.authStatusText.textContent = 'Supabase ist nicht konfiguriert. Die App läuft lokal ohne Remote-Schutz.';
+    } else if (mode === 'offline') {
+      els.authStatusText.textContent = 'Supabase ist nicht erreichbar oder nicht konfiguriert. Lokale Daten bleiben auf diesem Gerät.';
+    } else if (mode === 'error') {
+      els.authStatusText.textContent = 'Auth konnte nicht initialisiert werden. Prüfe Supabase URL, Anon Key und Redirect URL.';
+    } else if (signedIn) {
+      els.authStatusText.textContent = `Angemeldet als ${currentUser?.email || 'Supabase User'}.`;
+    } else {
+      els.authStatusText.textContent = 'Sende dir einen Magic-Link. Danach öffnet die App deine private, RLS-geschützte Datenansicht.';
+    }
+  }
+
+  async function requestAuthMagicLink(event) {
+    if (event) event.preventDefault();
+    if (!supabaseClient) {
+      toast('Supabase ist nicht bereit.');
+      return;
+    }
+    const email = String(els.authEmailInput?.value || '').trim().toLowerCase();
+    if (!email) {
+      toast('Bitte E-Mail eintragen.');
+      return;
+    }
+    try {
+      if (els.authSubmitBtn) els.authSubmitBtn.disabled = true;
+      settings.email = email;
+      saveSettingsToStorage();
+      const redirectTo = window.location.href.split('#')[0];
+      const { error } = await supabaseClient.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: redirectTo }
+      });
+      if (error) throw error;
+      if (els.authStatusText) els.authStatusText.textContent = 'Magic-Link wurde gesendet. Öffne den Link in deinem E-Mail-Postfach auf diesem Gerät.';
+      toast('Magic-Link gesendet');
+    } catch (error) {
+      console.warn('Auth magic link error', error);
+      if (els.authStatusText) els.authStatusText.textContent = error?.message || 'Magic-Link konnte nicht gesendet werden.';
+      toast('Login-Link konnte nicht gesendet werden.');
+    } finally {
+      if (els.authSubmitBtn) els.authSubmitBtn.disabled = false;
     }
   }
 
@@ -5328,9 +5452,15 @@ async function deleteAlcoholLog(id) {
 
   function renderSyncStatus(mode) {
     if (!els.syncStatus) return;
+    renderAuthUi();
     if (!isSupabaseConfigured()) {
       els.syncStatus.textContent = 'Lokal';
       els.syncStatus.className = 'badge muted';
+      return;
+    }
+    if (!isAuthenticated()) {
+      els.syncStatus.textContent = 'Login nötig';
+      els.syncStatus.className = 'badge warning-badge';
       return;
     }
     if (mode === 'syncing' || syncInFlight) {
@@ -5348,7 +5478,7 @@ async function deleteAlcoholLog(id) {
       els.syncStatus.className = 'badge warning-badge';
       return;
     }
-    els.syncStatus.textContent = lastSyncAt ? 'Sync aktiv' : 'Verbunden';
+    els.syncStatus.textContent = lastSyncAt ? 'Privat sync aktiv' : 'Verbunden';
     els.syncStatus.className = 'badge';
   }
 
@@ -5358,12 +5488,29 @@ async function deleteAlcoholLog(id) {
   }
 
   async function logout() {
-    await syncWithSupabase({ silent: false, pullFirst: true });
+    if (!supabaseClient) return;
+    try {
+      if (hasPendingSyncWork()) await syncWithSupabase({ silent: false, pullFirst: false });
+      clearRemoteSubscription();
+      const { error } = await supabaseClient.auth.signOut();
+      if (error) throw error;
+      setAuthSession(null);
+      renderSyncStatus('auth');
+      toast('Abgemeldet');
+    } catch (error) {
+      console.warn('Logout fehlgeschlagen', error);
+      toast(`Abmelden fehlgeschlagen: ${error.message || error}`);
+    }
   }
 
   async function syncWithSupabase({ silent = false, pullFirst = true } = {}) {
     if (!supabaseClient) {
       if (!silent) toast(isSupabaseConfigured() ? 'Supabase ist noch nicht bereit.' : 'Supabase ist nicht konfiguriert.');
+      return;
+    }
+    if (!isAuthenticated()) {
+      renderSyncStatus('auth');
+      if (!silent) toast('Bitte zuerst anmelden.');
       return;
     }
     if (syncInFlight) {
@@ -5458,7 +5605,8 @@ async function deleteAlcoholLog(id) {
 
   async function upsertRows(table, rows) {
     if (!rows.length) return true;
-    const { error } = await supabaseClient.from(table).upsert(rows, { onConflict: 'id' });
+    const scopedRows = rowsForCurrentUser(rows);
+    const { error } = await supabaseClient.from(table).upsert(scopedRows, { onConflict: 'id' });
     if (error && OPTIONAL_SYNC_TABLES.has(table) && isMissingRemoteRelationError(error)) {
       console.warn(`Optionale Sync-Tabelle ${table} fehlt. App läuft lokal weiter.`, error);
       return false;
@@ -5492,15 +5640,16 @@ async function deleteAlcoholLog(id) {
 
   async function upsertRowsWithIsolation(table, rows, { beforeRetry } = {}) {
     if (!rows.length) return { ok: 0, failed: [] };
-    const { error } = await supabaseClient.from(table).upsert(rows, { onConflict: 'id' });
-    if (!error) return { ok: rows.length, failed: [] };
+    const scopedRows = rowsForCurrentUser(rows);
+    const { error } = await supabaseClient.from(table).upsert(scopedRows, { onConflict: 'id' });
+    if (!error) return { ok: scopedRows.length, failed: [] };
     if (beforeRetry) await beforeRetry(error);
-    const retry = await supabaseClient.from(table).upsert(rows, { onConflict: 'id' });
+    const retry = await supabaseClient.from(table).upsert(scopedRows, { onConflict: 'id' });
     if (!retry.error) return { ok: rows.length, failed: [] };
 
     const failed = [];
     let ok = 0;
-    for (const row of rows) {
+    for (const row of scopedRows) {
       const single = await supabaseClient.from(table).upsert([row], { onConflict: 'id' });
       if (single.error) {
         failed.push({ row, error: single.error });
@@ -5545,7 +5694,7 @@ async function deleteAlcoholLog(id) {
     const rows = habitRowsForSync();
     if (!rows.length) return;
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      const { error } = await supabaseClient.from('habit_definitions').upsert(habitRowsForSync(), { onConflict: 'id' });
+      const { error } = await supabaseClient.from('habit_definitions').upsert(rowsForCurrentUser(habitRowsForSync()), { onConflict: 'id' });
       if (!error) return;
       if (remoteHabitTargetPeriodSupported && String(error.message || '').toLowerCase().includes('target_period')) {
         remoteHabitTargetPeriodSupported = false;
@@ -5579,7 +5728,7 @@ async function deleteAlcoholLog(id) {
     const rows = taskRowsForSync();
     if (!rows.length) return;
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      const { error } = await supabaseClient.from('tasks').upsert(taskRowsForSync(), { onConflict: 'id' });
+      const { error } = await supabaseClient.from('tasks').upsert(rowsForCurrentUser(taskRowsForSync()), { onConflict: 'id' });
       if (!error) return;
       if (remoteTaskPrioritySupported && String(error.message || '').toLowerCase().includes('priority')) {
         remoteTaskPrioritySupported = false;
@@ -5612,9 +5761,10 @@ async function deleteAlcoholLog(id) {
   }
 
   async function deleteRemoteById(table, id) {
-    if (!supabaseClient || !id) return false;
+    const userId = currentUserId();
+    if (!supabaseClient || !userId || !id) return false;
     try {
-      const { error } = await supabaseClient.from(table).delete().eq('id', id);
+      const { error } = await supabaseClient.from(table).delete().eq('user_id', userId).eq('id', id);
       if (error) {
         console.warn(`Remote-Delete ${table} fehlgeschlagen`, error);
         return false;
@@ -5627,9 +5777,10 @@ async function deleteAlcoholLog(id) {
   }
 
   async function deleteRemoteByIds(table, ids) {
-    if (!supabaseClient || !ids?.length) return false;
+    const userId = currentUserId();
+    if (!supabaseClient || !userId || !ids?.length) return false;
     try {
-      const { error } = await supabaseClient.from(table).delete().in('id', ids);
+      const { error } = await supabaseClient.from(table).delete().eq('user_id', userId).in('id', ids);
       if (error) {
         console.warn(`Remote-Delete ${table} fehlgeschlagen`, error);
         return false;
@@ -5654,7 +5805,7 @@ async function deleteAlcoholLog(id) {
   }
 
   async function flushRemoteDeletes() {
-    if (!supabaseClient) return;
+    if (!supabaseClient || !isAuthenticated()) return;
     state.deletedRemoteIds = normalizeDeletedRemoteIds(state.deletedRemoteIds);
     for (const table of SYNC_TABLES) {
       const entries = Object.entries(state.deletedRemoteIds[table] || {});
@@ -5823,7 +5974,9 @@ async function deleteAlcoholLog(id) {
   }
 
   async function fetchRemoteTable(table) {
-    const result = await supabaseClient.from(table).select('*');
+    const userId = currentUserId();
+    if (!userId) return { data: [], error: null };
+    const result = await supabaseClient.from(table).select('*').eq('user_id', userId);
     if (result.error) {
       if (OPTIONAL_SYNC_TABLES.has(table) && isMissingRemoteRelationError(result.error)) {
         console.warn(`Optionale Sync-Tabelle ${table} fehlt.`, result.error);
@@ -5870,15 +6023,27 @@ async function deleteAlcoholLog(id) {
   }
 
   function subscribeToRemoteChanges() {
-    if (!supabaseClient || syncSubscription || !supabaseClient.channel) return;
+    const userId = currentUserId();
+    if (!supabaseClient || !userId || syncSubscription || !supabaseClient.channel) return;
     try {
-      const channel = supabaseClient.channel('habitflow-direct-sync');
+      const channel = supabaseClient.channel(`habitflow-private-sync-${userId.slice(0, 8)}`);
       SYNC_TABLES.forEach(table => {
-        channel.on('postgres_changes', { event: '*', schema: 'public', table }, scheduleRemotePull);
+        channel.on('postgres_changes', { event: '*', schema: 'public', table, filter: `user_id=eq.${userId}` }, scheduleRemotePull);
       });
       syncSubscription = channel.subscribe();
     } catch (error) {
       console.warn('Realtime Sync konnte nicht aktiviert werden.', error);
+    }
+  }
+
+  function clearRemoteSubscription() {
+    if (!supabaseClient || !syncSubscription) return;
+    try {
+      if (supabaseClient.removeChannel) supabaseClient.removeChannel(syncSubscription);
+    } catch (error) {
+      console.warn('Realtime Sync konnte nicht sauber getrennt werden.', error);
+    } finally {
+      syncSubscription = null;
     }
   }
 

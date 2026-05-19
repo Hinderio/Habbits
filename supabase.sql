@@ -1,6 +1,6 @@
--- HabitFlow direct Supabase schema
--- Same operating model as FishTrack: the frontend uses the public anon client directly.
--- Important: This creates a shared/global dataset for everyone using this project URL/key.
+-- HabitFlow private Supabase schema
+-- Security model: browser app uses the public anon key, but all sensitive rows require Supabase Auth + RLS.
+-- Recommended for this personal app: create/invite your own Auth user and disable public signups in Supabase Auth settings.
 
 create extension if not exists pgcrypto;
 
@@ -14,6 +14,7 @@ $$ language plpgsql;
 
 create table if not exists public.habit_definitions (
   id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   name text not null,
   type text not null check (type in ('number','weight','boolean','duration')),
   unit text,
@@ -29,6 +30,7 @@ create table if not exists public.habit_definitions (
 
 create table if not exists public.habit_entries (
   id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   habit_id uuid references public.habit_definitions(id) on delete set null,
   value_num numeric(12,2),
   value_bool boolean,
@@ -40,6 +42,7 @@ create table if not exists public.habit_entries (
 
 create table if not exists public.cigarette_events (
   id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   smoked_at timestamptz not null default now(),
   interval_minutes integer,
   alcohol_context boolean not null default false,
@@ -51,6 +54,7 @@ create table if not exists public.cigarette_events (
 
 create table if not exists public.alcohol_logs (
   id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   log_date date not null,
   consumed boolean not null default false,
   note text,
@@ -60,6 +64,7 @@ create table if not exists public.alcohol_logs (
 
 create table if not exists public.alcohol_events (
   id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   occurred_at timestamptz not null default now(),
   drink_type text not null default 'other' check (drink_type in ('beer','wine','cocktail','shot','other')),
   note text,
@@ -69,6 +74,7 @@ create table if not exists public.alcohol_events (
 
 create table if not exists public.tasks (
   id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   title text not null,
   description text,
   effort smallint not null default 3 check (effort between 1 and 5),
@@ -83,6 +89,7 @@ create table if not exists public.tasks (
 
 create table if not exists public.appointments (
   id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   title text not null,
   description text,
   location text,
@@ -93,6 +100,36 @@ create table if not exists public.appointments (
   updated_at timestamptz not null default now(),
   constraint appointments_time_check check (ends_at is null or ends_at >= starts_at)
 );
+
+create table if not exists public.points_ledger (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  source_type text not null check (source_type in ('cigarette','task','habit','bonus','manual')),
+  source_id uuid,
+  points integer not null,
+  reason text,
+  earned_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
+-- Compatible upgrades for existing HabitFlow installs.
+alter table public.habit_definitions add column if not exists user_id uuid references auth.users(id) on delete cascade;
+alter table public.habit_entries add column if not exists user_id uuid references auth.users(id) on delete cascade;
+alter table public.cigarette_events add column if not exists user_id uuid references auth.users(id) on delete cascade;
+alter table public.alcohol_logs add column if not exists user_id uuid references auth.users(id) on delete cascade;
+alter table public.alcohol_events add column if not exists user_id uuid references auth.users(id) on delete cascade;
+alter table public.tasks add column if not exists user_id uuid references auth.users(id) on delete cascade;
+alter table public.appointments add column if not exists user_id uuid references auth.users(id) on delete cascade;
+alter table public.points_ledger add column if not exists user_id uuid references auth.users(id) on delete cascade;
+
+alter table public.habit_definitions alter column user_id set default auth.uid();
+alter table public.habit_entries alter column user_id set default auth.uid();
+alter table public.cigarette_events alter column user_id set default auth.uid();
+alter table public.alcohol_logs alter column user_id set default auth.uid();
+alter table public.alcohol_events alter column user_id set default auth.uid();
+alter table public.tasks alter column user_id set default auth.uid();
+alter table public.appointments alter column user_id set default auth.uid();
+alter table public.points_ledger alter column user_id set default auth.uid();
 
 alter table public.appointments add column if not exists description text;
 alter table public.appointments add column if not exists location text;
@@ -109,7 +146,6 @@ alter table public.appointments add constraint appointments_time_check check (en
 alter table public.habit_definitions add column if not exists target_period text not null default 'day';
 alter table public.habit_definitions drop constraint if exists habit_definitions_target_period_check;
 alter table public.habit_definitions add constraint habit_definitions_target_period_check check (target_period in ('day','week','month'));
-
 alter table public.habit_definitions drop constraint if exists habit_definitions_type_check;
 alter table public.habit_definitions add constraint habit_definitions_type_check check (type in ('number','weight','boolean','duration'));
 
@@ -119,40 +155,26 @@ alter table public.tasks add constraint tasks_priority_check check (priority in 
 alter table public.tasks drop constraint if exists tasks_status_check;
 alter table public.tasks add constraint tasks_status_check check (status in ('open','in_progress','done','archived'));
 
-create table if not exists public.points_ledger (
-  id uuid primary key default gen_random_uuid(),
-  source_type text not null check (source_type in ('cigarette','task','habit','bonus','manual')),
-  source_id uuid,
-  points integer not null,
-  reason text,
-  earned_at timestamptz not null default now(),
-  created_at timestamptz not null default now()
-);
+-- If you already have rows from the old unrestricted setup, run this once after creating your Auth user:
+-- update public.habit_definitions set user_id = '<YOUR_AUTH_USER_ID>' where user_id is null;
+-- update public.habit_entries set user_id = '<YOUR_AUTH_USER_ID>' where user_id is null;
+-- update public.cigarette_events set user_id = '<YOUR_AUTH_USER_ID>' where user_id is null;
+-- update public.alcohol_logs set user_id = '<YOUR_AUTH_USER_ID>' where user_id is null;
+-- update public.alcohol_events set user_id = '<YOUR_AUTH_USER_ID>' where user_id is null;
+-- update public.tasks set user_id = '<YOUR_AUTH_USER_ID>' where user_id is null;
+-- update public.appointments set user_id = '<YOUR_AUTH_USER_ID>' where user_id is null;
+-- update public.points_ledger set user_id = '<YOUR_AUTH_USER_ID>' where user_id is null;
 
--- Compatibility with the older private/RLS schema: allow direct anon writes by making user_id nullable if those columns already exist.
-do $$
-declare tbl text;
-begin
-  foreach tbl in array array['habit_definitions','habit_entries','cigarette_events','alcohol_logs','alcohol_events','tasks','appointments','points_ledger'] loop
-    if exists (
-      select 1
-      from information_schema.columns
-      where table_schema = 'public' and table_name = tbl and column_name = 'user_id'
-    ) then
-      execute format('alter table public.%I alter column user_id drop not null', tbl);
-    end if;
-  end loop;
-end $$;
-
-create index if not exists idx_habit_entries_time on public.habit_entries(occurred_at desc);
+create index if not exists idx_habit_definitions_user on public.habit_definitions(user_id, updated_at desc);
+create index if not exists idx_habit_entries_user_time on public.habit_entries(user_id, occurred_at desc);
 create index if not exists idx_habit_entries_habit_time on public.habit_entries(habit_id, occurred_at desc);
-create index if not exists idx_cigarette_events_time on public.cigarette_events(smoked_at desc);
-create index if not exists idx_alcohol_logs_date on public.alcohol_logs(log_date desc);
-create index if not exists idx_alcohol_events_time on public.alcohol_events(occurred_at desc);
-create index if not exists idx_tasks_due on public.tasks(status, due_at);
-create index if not exists idx_appointments_starts_at on public.appointments(starts_at desc);
-create index if not exists idx_appointments_type_starts_at on public.appointments(appointment_type, starts_at desc);
-create index if not exists idx_points_ledger_time on public.points_ledger(earned_at desc);
+create index if not exists idx_cigarette_events_user_time on public.cigarette_events(user_id, smoked_at desc);
+create index if not exists idx_alcohol_logs_user_date on public.alcohol_logs(user_id, log_date desc);
+create index if not exists idx_alcohol_events_user_time on public.alcohol_events(user_id, occurred_at desc);
+create index if not exists idx_tasks_user_due on public.tasks(user_id, status, due_at);
+create index if not exists idx_appointments_user_starts_at on public.appointments(user_id, starts_at desc);
+create index if not exists idx_appointments_type_starts_at on public.appointments(user_id, appointment_type, starts_at desc);
+create index if not exists idx_points_ledger_user_time on public.points_ledger(user_id, earned_at desc);
 
 drop trigger if exists set_habit_definitions_updated_at on public.habit_definitions;
 create trigger set_habit_definitions_updated_at before update on public.habit_definitions for each row execute function public.set_updated_at();
@@ -175,68 +197,86 @@ create trigger set_tasks_updated_at before update on public.tasks for each row e
 drop trigger if exists set_appointments_updated_at on public.appointments;
 create trigger set_appointments_updated_at before update on public.appointments for each row execute function public.set_updated_at();
 
-alter table public.habit_definitions enable row level security;
-alter table public.habit_entries enable row level security;
-alter table public.cigarette_events enable row level security;
-alter table public.alcohol_logs enable row level security;
-alter table public.alcohol_events enable row level security;
-alter table public.tasks enable row level security;
-alter table public.appointments enable row level security;
-alter table public.points_ledger enable row level security;
+-- Remove all old public/unrestricted policies and create strict owner policies.
+do $$
+declare
+  tbl text;
+  pol record;
+begin
+  foreach tbl in array array[
+    'habit_definitions','habit_entries','cigarette_events','alcohol_logs','alcohol_events','tasks','appointments','points_ledger',
+    'participants','catches','duels','duel_events','duel_participants','duel_tracks','tournaments'
+  ] loop
+    if to_regclass(format('public.%I', tbl)) is null then
+      continue;
+    end if;
 
--- Remove old private policies if this project previously used Magic-Link auth.
-drop policy if exists "habit_definitions_select_own" on public.habit_definitions;
-drop policy if exists "habit_definitions_insert_own" on public.habit_definitions;
-drop policy if exists "habit_definitions_update_own" on public.habit_definitions;
-drop policy if exists "habit_definitions_delete_own" on public.habit_definitions;
-drop policy if exists "habit_entries_select_own" on public.habit_entries;
-drop policy if exists "habit_entries_insert_own" on public.habit_entries;
-drop policy if exists "habit_entries_update_own" on public.habit_entries;
-drop policy if exists "habit_entries_delete_own" on public.habit_entries;
-drop policy if exists "cigarette_events_select_own" on public.cigarette_events;
-drop policy if exists "cigarette_events_insert_own" on public.cigarette_events;
-drop policy if exists "cigarette_events_update_own" on public.cigarette_events;
-drop policy if exists "cigarette_events_delete_own" on public.cigarette_events;
-drop policy if exists "alcohol_logs_select_own" on public.alcohol_logs;
-drop policy if exists "alcohol_logs_insert_own" on public.alcohol_logs;
-drop policy if exists "alcohol_logs_update_own" on public.alcohol_logs;
-drop policy if exists "alcohol_logs_delete_own" on public.alcohol_logs;
-drop policy if exists "alcohol_events_select_own" on public.alcohol_events;
-drop policy if exists "alcohol_events_insert_own" on public.alcohol_events;
-drop policy if exists "alcohol_events_update_own" on public.alcohol_events;
-drop policy if exists "alcohol_events_delete_own" on public.alcohol_events;
-drop policy if exists "tasks_select_own" on public.tasks;
-drop policy if exists "tasks_insert_own" on public.tasks;
-drop policy if exists "tasks_update_own" on public.tasks;
-drop policy if exists "tasks_delete_own" on public.tasks;
-drop policy if exists "appointments_select_own" on public.appointments;
-drop policy if exists "appointments_insert_own" on public.appointments;
-drop policy if exists "appointments_update_own" on public.appointments;
-drop policy if exists "appointments_delete_own" on public.appointments;
-drop policy if exists "points_ledger_select_own" on public.points_ledger;
-drop policy if exists "points_ledger_insert_own" on public.points_ledger;
-drop policy if exists "points_ledger_update_own" on public.points_ledger;
-drop policy if exists "points_ledger_delete_own" on public.points_ledger;
+    if not exists (
+      select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = tbl and column_name = 'user_id'
+    ) then
+      execute format('alter table public.%I add column user_id uuid references auth.users(id) on delete cascade', tbl);
+    end if;
 
-drop policy if exists "habit_definitions_direct_public" on public.habit_definitions;
-drop policy if exists "habit_entries_direct_public" on public.habit_entries;
-drop policy if exists "cigarette_events_direct_public" on public.cigarette_events;
-drop policy if exists "alcohol_logs_direct_public" on public.alcohol_logs;
-drop policy if exists "alcohol_events_direct_public" on public.alcohol_events;
-drop policy if exists "tasks_direct_public" on public.tasks;
-drop policy if exists "appointments_direct_public" on public.appointments;
-drop policy if exists "points_ledger_direct_public" on public.points_ledger;
+    execute format('alter table public.%I alter column user_id set default auth.uid()', tbl);
+    execute format('alter table public.%I enable row level security', tbl);
+    execute format('alter table public.%I force row level security', tbl);
 
-create policy "habit_definitions_direct_public" on public.habit_definitions for all to anon, authenticated using (true) with check (true);
-create policy "habit_entries_direct_public" on public.habit_entries for all to anon, authenticated using (true) with check (true);
-create policy "cigarette_events_direct_public" on public.cigarette_events for all to anon, authenticated using (true) with check (true);
-create policy "alcohol_logs_direct_public" on public.alcohol_logs for all to anon, authenticated using (true) with check (true);
-create policy "alcohol_events_direct_public" on public.alcohol_events for all to anon, authenticated using (true) with check (true);
-create policy "tasks_direct_public" on public.tasks for all to anon, authenticated using (true) with check (true);
-create policy "appointments_direct_public" on public.appointments for all to anon, authenticated using (true) with check (true);
-create policy "points_ledger_direct_public" on public.points_ledger for all to anon, authenticated using (true) with check (true);
+    for pol in select policyname from pg_policies where schemaname = 'public' and tablename = tbl loop
+      execute format('drop policy if exists %I on public.%I', pol.policyname, tbl);
+    end loop;
 
--- Optional realtime support for the running app. Ignore notices if a table is already part of the publication.
+    execute format('create policy %I on public.%I for select to authenticated using (user_id = (select auth.uid()))', tbl || '_select_own', tbl);
+    execute format('create policy %I on public.%I for insert to authenticated with check (user_id = (select auth.uid()))', tbl || '_insert_own', tbl);
+    execute format('create policy %I on public.%I for update to authenticated using (user_id = (select auth.uid()) or user_id is null) with check (user_id = (select auth.uid()))', tbl || '_update_own', tbl);
+    execute format('create policy %I on public.%I for delete to authenticated using (user_id = (select auth.uid()))', tbl || '_delete_own', tbl);
+  end loop;
+end $$;
+
+-- Profiles often use id = auth.uid(); support that shape without forcing a migration.
+do $$
+declare pol record;
+begin
+  if to_regclass('public.profiles') is not null then
+    if not exists (
+      select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'profiles' and column_name = 'user_id'
+    ) then
+      alter table public.profiles add column user_id uuid references auth.users(id) on delete cascade;
+    end if;
+
+    alter table public.profiles enable row level security;
+    alter table public.profiles force row level security;
+
+    for pol in select policyname from pg_policies where schemaname = 'public' and tablename = 'profiles' loop
+      execute format('drop policy if exists %I on public.profiles', pol.policyname);
+    end loop;
+
+    create policy profiles_select_own on public.profiles
+      for select to authenticated
+      using (id = (select auth.uid()) or user_id = (select auth.uid()));
+
+    create policy profiles_insert_own on public.profiles
+      for insert to authenticated
+      with check (id = (select auth.uid()) or user_id = (select auth.uid()));
+
+    create policy profiles_update_own on public.profiles
+      for update to authenticated
+      using (id = (select auth.uid()) or user_id = (select auth.uid()))
+      with check (id = (select auth.uid()) or user_id = (select auth.uid()));
+
+    create policy profiles_delete_own on public.profiles
+      for delete to authenticated
+      using (id = (select auth.uid()) or user_id = (select auth.uid()));
+  end if;
+end $$;
+
+-- Minimize accidental API exposure for anonymous table access. Auth endpoints continue to work.
+revoke all on all tables in schema public from anon;
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on all tables in schema public to authenticated;
+
+-- Optional realtime support; app subscriptions are additionally filtered by user_id.
 do $$
 declare tbl text;
 begin
@@ -247,4 +287,16 @@ begin
       null;
     end;
   end loop;
+end $$;
+
+-- If the analytics view exists, make it respect caller permissions where supported.
+do $$
+begin
+  if to_regclass('public.habitflow_daily_kpis') is not null then
+    begin
+      execute 'alter view public.habitflow_daily_kpis set (security_invoker = true)';
+    exception when others then
+      null;
+    end;
+  end if;
 end $$;

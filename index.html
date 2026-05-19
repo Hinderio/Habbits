@@ -15,6 +15,20 @@
 <body>
   <div id="toast" class="save-toast hidden" role="status" aria-live="polite"></div>
 
+  <section id="authGate" class="auth-gate hidden" aria-live="polite">
+    <div class="auth-card glass">
+      <div class="auth-orb"><span data-icon="sync"></span></div>
+      <p class="eyebrow">Private HabitFlow</p>
+      <h2>Zugriff geschützt.</h2>
+      <p class="auth-copy">Melde dich mit deiner freigegebenen E-Mail-Adresse an. Deine sensiblen Habit-, Konsum-, Task- und Kalenderdaten werden erst nach Login aus Supabase geladen.</p>
+      <form id="authForm" class="auth-form">
+        <label><span>E-Mail</span><input id="authEmailInput" name="email" type="email" autocomplete="email" required placeholder="deine@email.ch" /></label>
+        <button id="authSubmitBtn" class="pill primary" type="submit">Magic-Link senden</button>
+      </form>
+      <p id="authStatusText" class="auth-status">Supabase Auth schützt den Zugriff. Der öffentliche Anon Key bleibt im Browser, die Daten werden über RLS isoliert.</p>
+    </div>
+  </section>
+
   <div class="app-shell">
     <header class="topbar glass">
       <div>
@@ -421,21 +435,22 @@
       <section id="screen-settings" class="screen" data-screen="settings">
         <div class="grid two-columns">
           <section class="panel glass">
-            <div class="panel-head"><div><p class="eyebrow">Supabase</p><h3>Direkter Sync</h3></div><span id="syncStatus" class="badge muted">Verbinde…</span></div>
+            <div class="panel-head"><div><p class="eyebrow">Supabase Auth</p><h3>Privater Sync</h3></div><span id="syncStatus" class="badge muted">Verbinde…</span></div>
             <form id="settingsForm" class="form-grid">
               <div class="sync-live-card full">
-                <strong>Automatisch verbunden</strong>
-                <span>Die App nutzt dieselbe direkte Supabase-Verbindung wie FishTrack: öffnen, erfassen, speichern – ohne Login-Schritt.</span>
+                <strong>Angemeldet als <span id="authUserEmail">–</span></strong>
+                <span>Die App synchronisiert erst nach Login. Supabase RLS filtert jede Tabelle auf deinen Auth-User.</span>
               </div>
               <div class="form-actions full">
                 <button id="manualSyncBtn" class="pill primary" type="submit">Jetzt synchronisieren</button>
+                <button id="logoutBtn" class="pill secondary" type="button">Abmelden</button>
               </div>
             </form>
             <div class="sync-info-grid">
-              <article><strong>Laufender Abgleich</strong><span>Beim Start, nach Aktionen, beim Zurückkehren in die App und zusätzlich periodisch wird synchronisiert.</span></article>
-              <article><strong>Offline zuerst</strong><span>Die App speichert lokal weiter und gleicht später wieder mit Supabase ab.</span></article>
+              <article><strong>Private Rows</strong><span>Neue Daten werden mit deiner User-ID gespeichert und sind für andere Logins unsichtbar.</span></article>
+              <article><strong>Offline zuerst</strong><span>Lokale Eingaben bleiben möglich und werden nach Login und Verbindung abgeglichen.</span></article>
             </div>
-            <p class="settings-note">Keine Supabase-Zugangsdaten und kein SQL-Setup werden in der Oberfläche angezeigt.</p>
+            <p class="settings-note">Für echte Sicherheit muss das neue supabase.sql angewendet und die alten public Policies entfernt sein.</p>
           </section>
 
           <section class="panel glass">
