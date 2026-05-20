@@ -744,6 +744,7 @@
       if (action === 'record-cigarette') { recordCigarette(); closeMobileQuickAdd(); }
       if (action === 'open-morning-routine') { openMorningRoutineFromHero(); closeMobileQuickAdd(); }
       if (action === 'open-task-form') { showScreen('tasks'); openTaskForm(); closeMobileQuickAdd(); }
+      if (action === 'open-appointment-form') { showScreen('calendar'); openAppointmentForm({ dateKey: selectedCalendarDate, forceNew: true }); closeMobileQuickAdd(); }
       if (action === 'start-emergency-craving') { startEmergencyCravingFlow(); closeMobileQuickAdd(); }
       if (action === 'open-coach') { openCoachModal(); closeMobileQuickAdd(); }
       if (action === 'start-coach-delay') startCoachDelay();
@@ -1255,10 +1256,22 @@
   function showScreen(screen) {
     closeMobileQuickAdd();
     els.navButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.target === screen));
-    els.screens.forEach(view => view.classList.toggle('active', view.dataset.screen === screen));
+    els.screens.forEach(view => {
+      const isActive = view.dataset.screen === screen;
+      view.classList.toggle('active', isActive);
+      view.hidden = !isActive;
+      view.setAttribute('aria-hidden', String(!isActive));
+    });
+    document.body.dataset.activeScreen = screen;
     if (screen === 'calendar') {
       renderCalendar();
       renderDayDetails();
+    }
+    if (screen === 'dashboard') {
+      requestAnimationFrame(() => {
+        window.dispatchEvent(new Event('resize'));
+        renderCharts();
+      });
     }
   }
 
@@ -1622,6 +1635,18 @@
     toast('Morgenroutine neu gestartet');
   }
 
+  function arrangeDashboardKpis(isMobile = window.matchMedia('(max-width: 760px)').matches) {
+    const strip = document.querySelector('#screen-dashboard .dashboard-kpi-strip');
+    const heroCopy = document.querySelector('#screen-dashboard .hero-copy');
+    const heroCard = document.querySelector('#screen-dashboard .hero-card--premium');
+    if (!strip || !heroCopy || !heroCard) return;
+    if (isMobile) {
+      if (strip.parentElement !== heroCopy) heroCopy.appendChild(strip);
+      return;
+    }
+    if (strip.parentElement === heroCopy) heroCard.insertAdjacentElement('afterend', strip);
+  }
+
   function closeMobileQuickAdd() {
     const quickAdd = document.getElementById('mobileQuickAdd');
     if (quickAdd) quickAdd.open = false;
@@ -1631,16 +1656,19 @@
     const sections = [...document.querySelectorAll('#screen-dashboard .mobile-dashboard-section')];
     if (!sections.length) return;
     const apply = () => {
-      if (window.matchMedia('(max-width: 760px)').matches) {
-        sections.forEach(section => {
+      const isMobile = window.matchMedia('(max-width: 760px)').matches;
+      arrangeDashboardKpis(isMobile);
+      sections.forEach(section => {
+        if (isMobile) {
           if (!section.dataset.mobilePrepared) {
             section.open = false;
             section.dataset.mobilePrepared = 'true';
           }
-        });
-      } else {
-        sections.forEach(section => { section.open = true; });
-      }
+        } else {
+          section.open = true;
+          delete section.dataset.mobilePrepared;
+        }
+      });
     };
     apply();
     window.addEventListener('resize', apply, { passive: true });

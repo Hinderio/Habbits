@@ -840,3 +840,40 @@ body.light .auth-status{background:rgba(255,255,255,.72);border-color:rgba(17,36
   body.light .mobile-quick-sheet button{background:rgba(17,36,58,.055)}
   body.light .mobile-quick-sheet button.is-danger{color:#9f2727;background:rgba(255,112,112,.12)}
 }
+
+/* v40: regression-safe mobile dashboard polish */
+.screen[hidden], .content > .screen[hidden]{display:none!important}
+@media (max-width:760px){
+  .content > .screen:not(.active),
+  .content > .screen[hidden]{display:none!important;visibility:hidden!important;pointer-events:none!important;height:0!important;min-height:0!important;overflow:hidden!important;margin:0!important;padding:0!important}
+  .content > .screen.active:not([hidden]){display:flex!important;flex-direction:column;visibility:visible!important;height:auto!important;overflow:visible!important}
+
+  #screen-dashboard .hero-card--premium{background:var(--card);border-color:var(--card-border);box-shadow:var(--shadow)}
+  #screen-dashboard .hero-card--premium:before{display:none!important}
+  #screen-dashboard .hero-copy{gap:10px}
+  #screen-dashboard .hero-actions{display:none!important}
+  #screen-dashboard .level-orb{background:rgba(255,255,255,.055);border-color:rgba(255,255,255,.075)}
+
+  #screen-dashboard .dashboard-kpi-strip{margin:-2px 0 0;padding:12px;border-radius:28px;background:var(--card);border:1px solid var(--card-border);box-shadow:var(--shadow)}
+  #screen-dashboard .dashboard-kpi-strip .metric-card{background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.065)}
+  #screen-dashboard .dashboard-kpi-strip .daily-score-card{background:rgba(255,255,255,.055);border-color:rgba(255,255,255,.065)}
+
+  #behaviorIntelligencePanel{background:var(--card);border-color:var(--card-border);box-shadow:var(--shadow)}
+  #behaviorIntelligencePanel:before{display:none!important}
+  #behaviorIntelligencePanel .next-action-card{background:rgba(255,255,255,.055);border-color:rgba(255,255,255,.075)}
+  .mobile-dashboard-section>summary{background:var(--card);border-color:var(--card-border);box-shadow:0 10px 28px rgba(0,0,0,.16)}
+  .mobile-dashboard-section[open]>summary{background:var(--card);border-color:rgba(74,215,209,.18)}
+
+  body.light #screen-dashboard .hero-card--premium,
+  body.light #screen-dashboard .dashboard-kpi-strip,
+  body.light #behaviorIntelligencePanel,
+  body.light .mobile-dashboard-section>summary{background:rgba(255,255,255,.86);border-color:rgba(17,36,58,.08)}
+  body.light #screen-dashboard .level-orb,
+  body.light #screen-dashboard .dashboard-kpi-strip .metric-card,
+  body.light #screen-dashboard .dashboard-kpi-strip .daily-score-card,
+  body.light #behaviorIntelligencePanel .next-action-card{background:rgba(255,255,255,.72);border-color:rgba(17,36,58,.075)}
+}
+@media (max-width:760px){
+  #screen-dashboard .hero-card--premium .dashboard-kpi-strip{margin:2px 0 0;padding:10px;border-radius:24px;background:rgba(255,255,255,.045);box-shadow:none;border:1px solid rgba(255,255,255,.06)}
+  body.light #screen-dashboard .hero-card--premium .dashboard-kpi-strip{background:rgba(255,255,255,.62);border-color:rgba(17,36,58,.07)}
+}
