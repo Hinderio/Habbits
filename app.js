@@ -438,6 +438,7 @@
   let habitFormOpen = false;
   let taskFormOpen = false;
   let taskBacklogOpen = false;
+  let taskArchiveOpen = false;
   let taskTimelineOpen = false;
   let taskTimelineScrollLeft = null;
   let taskTimelineDragState = null;
@@ -445,6 +446,7 @@
   let remoteTaskPrioritySupported = true;
   let remoteTaskInProgressSupported = true;
   let remoteTaskBacklogRankSupported = true;
+  let remoteTaskDoneArchiveSupported = true;
   let remoteHabitTargetPeriodSupported = true;
   let pendingTriggerSmokeId = null;
   let rulesExpanded = localStorage.getItem(RULES_UI_KEY) !== 'collapsed';
@@ -581,10 +583,14 @@
       taskPointsPreview: $('#taskPointsPreview'),
       tasksList: $('#tasksList'),
       taskBacklogToggleBtn: $('#taskBacklogToggleBtn'),
+      taskArchiveToggleBtn: $('#taskArchiveToggleBtn'),
       taskTimelineToggleBtn: $('#taskTimelineToggleBtn'),
       taskBacklogCount: $('#taskBacklogCount'),
+      taskArchiveCount: $('#taskArchiveCount'),
       taskBacklogPanel: $('#taskBacklogPanel'),
       taskBacklogList: $('#taskBacklogList'),
+      taskArchivePanel: $('#taskArchivePanel'),
+      taskArchiveList: $('#taskArchiveList'),
       taskTimelinePanel: $('#taskTimelinePanel'),
       taskTimeline: $('#taskTimeline'),
       appointmentFormPanel: $('#appointmentFormPanel'),
@@ -676,6 +682,7 @@
     if (els.habitFormCloseBtn) els.habitFormCloseBtn.addEventListener('click', () => closeHabitForm({ clearForm: !editingHabitId }));
     if (els.taskFormToggleBtn) els.taskFormToggleBtn.addEventListener('click', toggleTaskForm);
     if (els.taskBacklogToggleBtn) els.taskBacklogToggleBtn.addEventListener('click', toggleTaskBacklog);
+    if (els.taskArchiveToggleBtn) els.taskArchiveToggleBtn.addEventListener('click', toggleTaskArchive);
     if (els.taskTimelineToggleBtn) els.taskTimelineToggleBtn.addEventListener('click', toggleTaskTimeline);
     if (els.taskFormCloseBtn) els.taskFormCloseBtn.addEventListener('click', () => closeTaskForm({ clearForm: !editingTaskId }));
     if (els.appointmentFormToggleBtn) els.appointmentFormToggleBtn.addEventListener('click', () => openAppointmentForm({ dateKey: selectedCalendarDate }));
@@ -727,6 +734,10 @@
       if (action === 'move-backlog-task') moveTaskToStatus(id, actionEl.dataset.status || 'open');
       if (action === 'backlog-rank-up') shiftBacklogTask(id, -1);
       if (action === 'backlog-rank-down') shiftBacklogTask(id, 1);
+      if (action === 'archive-done-task') archiveDoneTask(id);
+      if (action === 'restore-archived-task') restoreArchivedDoneTask(id);
+      if (action === 'done-archive-rank-up') shiftArchivedDoneTask(id, -1);
+      if (action === 'done-archive-rank-down') shiftArchivedDoneTask(id, 1);
       if (action === 'edit-task') editTask(id);
       if (action === 'delete-task') deleteTask(id);
       if (action === 'archive-task') archiveTask(id);
@@ -804,6 +815,12 @@
     });
 
     document.addEventListener('dragover', event => {
+      const archiveDrop = event.target.closest('[data-task-archive-drop]');
+      if (archiveDrop) {
+        event.preventDefault();
+        archiveDrop.classList.add('is-over');
+        return;
+      }
       const backlogDrop = event.target.closest('[data-backlog-drop]');
       if (backlogDrop) {
         event.preventDefault();
@@ -817,6 +834,8 @@
     });
 
     document.addEventListener('dragleave', event => {
+      const archiveDrop = event.target.closest('[data-task-archive-drop]');
+      if (archiveDrop && !archiveDrop.contains(event.relatedTarget)) archiveDrop.classList.remove('is-over');
       const backlogDrop = event.target.closest('[data-backlog-drop]');
       if (backlogDrop && !backlogDrop.contains(event.relatedTarget)) backlogDrop.classList.remove('is-over');
       const column = event.target.closest('[data-task-drop]');
@@ -824,6 +843,20 @@
     });
 
     document.addEventListener('drop', event => {
+      const archiveDrop = event.target.closest('[data-task-archive-drop]');
+      if (archiveDrop) {
+        event.preventDefault();
+        archiveDrop.classList.remove('is-over');
+        const taskId = event.dataTransfer.getData('text/plain');
+        const targetCard = event.target.closest('[data-archive-card]');
+        let insertAfter = false;
+        if (targetCard) {
+          const rect = targetCard.getBoundingClientRect();
+          insertAfter = event.clientY > rect.top + rect.height / 2;
+        }
+        archiveDoneTask(taskId, targetCard?.dataset.id || null, { insertAfter });
+        return;
+      }
       const backlogDrop = event.target.closest('[data-backlog-drop]');
       if (backlogDrop) {
         event.preventDefault();
@@ -850,6 +883,7 @@
       $$('[data-task-card].is-dragging').forEach(card => card.classList.remove('is-dragging'));
       $$('[data-task-drop].is-over').forEach(column => column.classList.remove('is-over'));
       $$('[data-backlog-drop].is-over').forEach(zone => zone.classList.remove('is-over'));
+      $$('[data-task-archive-drop].is-over').forEach(zone => zone.classList.remove('is-over'));
     });
   }
 
@@ -976,10 +1010,15 @@
 
 
   function normalizeTask(task = {}) {
+    const status = TASK_COLUMNS.some(column => column.status === task.status) ? task.status : 'open';
+    const doneArchivedAt = status === 'done' ? validIsoOrNull(task.done_archived_at || task.doneArchivedAt) : null;
+    const doneArchiveRank = Number.isFinite(Number(task.done_archive_rank)) ? Number(task.done_archive_rank) : null;
     return {
       ...task,
-      status: TASK_COLUMNS.some(column => column.status === task.status) ? task.status : 'open',
-      priority: normalizeTaskPriority(task.priority)
+      status,
+      priority: normalizeTaskPriority(task.priority),
+      done_archived_at: doneArchivedAt,
+      done_archive_rank: doneArchivedAt ? doneArchiveRank : null
     };
   }
 
@@ -1380,6 +1419,12 @@
     if (taskBacklogOpen) requestAnimationFrame(() => els.taskBacklogPanel?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   }
 
+  function toggleTaskArchive() {
+    taskArchiveOpen = !taskArchiveOpen;
+    syncTaskUtilityPanels();
+    if (taskArchiveOpen) requestAnimationFrame(() => els.taskArchivePanel?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }
+
   function toggleTaskTimeline() {
     taskTimelineOpen = !taskTimelineOpen;
     syncTaskUtilityPanels();
@@ -1390,6 +1435,9 @@
     els.taskBacklogPanel?.classList.toggle('hidden', !taskBacklogOpen);
     els.taskBacklogToggleBtn?.classList.toggle('is-active', taskBacklogOpen);
     els.taskBacklogToggleBtn?.setAttribute('aria-expanded', String(taskBacklogOpen));
+    els.taskArchivePanel?.classList.toggle('hidden', !taskArchiveOpen);
+    els.taskArchiveToggleBtn?.classList.toggle('is-active', taskArchiveOpen);
+    els.taskArchiveToggleBtn?.setAttribute('aria-expanded', String(taskArchiveOpen));
     els.taskTimelinePanel?.classList.toggle('hidden', !taskTimelineOpen);
     els.taskTimelineToggleBtn?.classList.toggle('is-active', taskTimelineOpen);
     els.taskTimelineToggleBtn?.setAttribute('aria-expanded', String(taskTimelineOpen));
@@ -4259,14 +4307,51 @@
     return ranks.length ? Math.max(...ranks) + 1 : 1;
   }
 
+  function isDoneArchivedTask(task) {
+    return (task?.status || 'open') === 'done' && Boolean(task.done_archived_at);
+  }
+
+  function archivedDoneTasks() {
+    return state.tasks
+      .map(normalizeTask)
+      .filter(isDoneArchivedTask)
+      .sort(compareArchivedDoneTasks);
+  }
+
+  function compareArchivedDoneTasks(a, b) {
+    const ar = Number.isFinite(Number(a.done_archive_rank)) ? Number(a.done_archive_rank) : Number.MAX_SAFE_INTEGER;
+    const br = Number.isFinite(Number(b.done_archive_rank)) ? Number(b.done_archive_rank) : Number.MAX_SAFE_INTEGER;
+    if (ar !== br) return ar - br;
+    return new Date(b.done_archived_at || b.completed_at || b.updated_at || 0).getTime() - new Date(a.done_archived_at || a.completed_at || a.updated_at || 0).getTime();
+  }
+
+  function compactDoneArchiveRanks() {
+    archivedDoneTasks().forEach((task, index) => {
+      const source = state.tasks.find(item => item.id === task.id);
+      if (source) source.done_archive_rank = index + 1;
+    });
+  }
+
+  function nextDoneArchiveRank() {
+    const ranks = state.tasks
+      .filter(isDoneArchivedTask)
+      .map(task => Number(task.done_archive_rank))
+      .filter(Number.isFinite);
+    return ranks.length ? Math.max(...ranks) + 1 : 1;
+  }
+
   function renderTasks() {
     const tasks = [...state.tasks].map(normalizeTask).sort(compareTasks);
+    const boardTasks = tasks.filter(task => !isDoneArchivedTask(task));
     const totalOpen = tasks.filter(isActiveTask).length;
     const backlog = backlogTasks();
+    const archive = archivedDoneTasks();
     if (els.openTasksCount) els.openTasksCount.textContent = totalOpen;
     if (els.taskBacklogCount) els.taskBacklogCount.textContent = backlog.length;
+    if (els.taskArchiveCount) els.taskArchiveCount.textContent = archive.length;
     syncTaskUtilityPanels();
     renderTaskBacklog(backlog);
+    renderTaskArchive(archive);
     renderTaskTimeline();
     if (!tasks.length) {
       els.tasksList.innerHTML = '<div class="empty-state">Keine Aufgaben vorhanden. Neue Aufgaben erscheinen hier direkt als Kanban-Karte.</div>';
@@ -4275,7 +4360,7 @@
 
     els.tasksList.innerHTML = `<div class="kanban-board" aria-label="Aufgaben Kanban Board">
       ${TASK_BOARD_COLUMNS.map(column => {
-        const columnTasks = tasks.filter(task => (task.status || 'open') === column.status);
+        const columnTasks = boardTasks.filter(task => (task.status || 'open') === column.status);
         return `<section class="kanban-column" data-task-drop data-status="${column.status}">
           <div class="kanban-column-head">
             <div><strong>${escapeHtml(column.title)}</strong><small>${escapeHtml(column.hint)}</small></div>
@@ -4324,6 +4409,42 @@
     </article>`;
   }
 
+  function renderTaskArchive(archive = archivedDoneTasks()) {
+    if (!els.taskArchiveList) return;
+    if (!archive.length) {
+      els.taskArchiveList.innerHTML = '<div class="empty-state">Noch keine archivierten erledigten Aufgaben. Sobald eine Aufgabe erledigt ist, kannst du sie aus der Erledigt-Spalte hierhin archivieren.</div>';
+      return;
+    }
+    els.taskArchiveList.innerHTML = archive.map((task, index) => renderArchivedDoneTaskCard(task, index, archive.length)).join('');
+  }
+
+  function renderArchivedDoneTaskCard(task, index, total) {
+    const priority = normalizeTaskPriority(task.priority);
+    const priorityMeta = taskPriorityMeta(priority);
+    const archivedAt = task.done_archived_at || task.completed_at || task.updated_at || task.created_at;
+    const completedLabel = task.completed_at ? `Erledigt ${formatDateTime(task.completed_at)}` : 'erledigt';
+    const archivedLabel = archivedAt ? `archiviert ${formatDateTime(archivedAt)}` : 'archiviert';
+    return `<article class="kanban-card backlog-card archive-card ${editingTaskId === task.id ? 'is-editing' : ''}" draggable="true" data-task-card data-archive-card data-id="${task.id}">
+      <div class="kanban-card-top">
+        <span class="drag-handle" aria-hidden="true">⋮⋮</span>
+        <div class="task-badges">
+          <span class="badge muted ${taskPriorityClass(priority)}">${escapeHtml(priorityMeta.short)}</span>
+          <span class="badge">+${Number(task.points || taskPoints(task))} Pkt.</span>
+          <span class="badge muted">#${index + 1}</span>
+        </div>
+      </div>
+      <h4>${escapeHtml(task.title)}</h4>
+      <p class="meta">Archiv · ${escapeHtml(completedLabel)} · ${escapeHtml(archivedLabel)} · Aufwand ${task.effort}/5 · Priorität ${escapeHtml(priorityMeta.label)}${task.description ? `<br>${escapeHtml(task.description)}` : ''}</p>
+      <div class="list-actions compact-actions backlog-actions">
+        <button class="mini-btn primary" type="button" data-action="restore-archived-task" data-id="${task.id}">Zurück zu Erledigt</button>
+        <button class="mini-btn" type="button" data-action="edit-task" data-id="${task.id}">Bearbeiten</button>
+        <button class="mini-btn" type="button" data-action="done-archive-rank-up" data-id="${task.id}" ${index === 0 ? 'disabled' : ''}>↑</button>
+        <button class="mini-btn" type="button" data-action="done-archive-rank-down" data-id="${task.id}" ${index === total - 1 ? 'disabled' : ''}>↓</button>
+        <button class="mini-btn danger" type="button" data-action="delete-task" data-id="${task.id}">Löschen</button>
+      </div>
+    </article>`;
+  }
+
   function renderTaskCard(task) {
     const status = task.status || 'open';
     const priority = normalizeTaskPriority(task.priority);
@@ -4338,9 +4459,11 @@
         : status === 'done'
           ? `<button class="mini-btn" type="button" data-action="move-task" data-status="in_progress" data-id="${task.id}">Zurück in Arbeit</button>`
           : `<button class="mini-btn" type="button" data-action="move-task" data-status="open" data-id="${task.id}">Reaktivieren</button>`;
-    const archiveAction = status === TASK_BACKLOG_STATUS
-      ? ''
-      : `<button class="mini-btn" type="button" data-action="move-task-to-backlog" data-id="${task.id}">Backlog</button>`;
+    const archiveAction = status === 'done'
+      ? `<button class="mini-btn" type="button" data-action="archive-done-task" data-id="${task.id}">Archivieren</button>`
+      : status === TASK_BACKLOG_STATUS
+        ? ''
+        : `<button class="mini-btn" type="button" data-action="move-task-to-backlog" data-id="${task.id}">Backlog</button>`;
     return `<article class="kanban-card ${editingTaskId === task.id ? 'is-editing' : ''} ${isOverdue ? 'is-overdue' : ''}" draggable="true" data-task-card data-id="${task.id}">
       <div class="kanban-card-top">
         <span class="drag-handle" aria-hidden="true">⋮⋮</span>
@@ -5096,6 +5219,8 @@ async function deleteAlcoholLog(id) {
       ...values,
       status: 'open',
       completed_at: null,
+      done_archived_at: null,
+      done_archive_rank: null,
       points: 0,
       created_at: created,
       updated_at: created
@@ -5117,12 +5242,19 @@ async function deleteAlcoholLog(id) {
     const task = state.tasks.find(t => t.id === id);
     if (!task || task.status === nextStatus) return;
     const previousStatus = task.status || 'open';
+    const wasDoneArchived = isDoneArchivedTask(task);
     task.status = nextStatus;
+    if (nextStatus !== 'done') {
+      task.done_archived_at = null;
+      task.done_archive_rank = null;
+    }
     if (nextStatus === TASK_BACKLOG_STATUS && !Number.isFinite(Number(task.backlog_rank))) task.backlog_rank = nextBacklogRank();
     task.updated_at = nowIso();
     task.synced = false;
 
     if (nextStatus === 'done') {
+      task.done_archived_at = null;
+      task.done_archive_rank = null;
       task.completed_at = nowIso();
       task.points = taskPoints(task);
       addPoints('task', task.id, task.points, `Aufgabe abgeschlossen: ${task.title}`, task.completed_at);
@@ -5138,6 +5270,7 @@ async function deleteAlcoholLog(id) {
 
     if (editingTaskId === id && nextStatus === TASK_BACKLOG_STATUS) resetTaskFormMode({ clearForm: true });
     if (previousStatus === TASK_BACKLOG_STATUS || nextStatus === TASK_BACKLOG_STATUS) compactBacklogRanks();
+    if (wasDoneArchived || nextStatus !== 'done') compactDoneArchiveRanks();
     saveState();
     const label = TASK_COLUMNS.find(column => column.status === nextStatus)?.title || 'verschoben';
     toast(`Aufgabe: ${label}`);
@@ -5152,6 +5285,8 @@ async function deleteAlcoholLog(id) {
     const wasBacklog = (task.status || 'open') === TASK_BACKLOG_STATUS;
     task.status = TASK_BACKLOG_STATUS;
     task.completed_at = null;
+    task.done_archived_at = null;
+    task.done_archive_rank = null;
     task.points = 0;
     task.updated_at = nowIso();
     task.synced = false;
@@ -5192,6 +5327,77 @@ async function deleteAlcoholLog(id) {
     });
     saveState();
     toast('Backlog priorisiert');
+    syncWithSupabase({ silent: true });
+  }
+
+  function archiveDoneTask(id, targetId = null, { insertAfter = false } = {}) {
+    const task = state.tasks.find(t => t.id === id);
+    if (!task) return;
+    if ((task.status || 'open') !== 'done') {
+      toast('Nur erledigte Aufgaben können archiviert werden.');
+      return;
+    }
+    if (targetId === id && isDoneArchivedTask(task)) return;
+    const ordered = archivedDoneTasks().filter(item => item.id !== id);
+    const wasArchived = isDoneArchivedTask(task);
+    if (!task.completed_at) task.completed_at = nowIso();
+    if (!task.points) task.points = taskPoints(task);
+    task.done_archived_at = task.done_archived_at || nowIso();
+    task.done_archive_rank = Number.isFinite(Number(task.done_archive_rank)) ? Number(task.done_archive_rank) : nextDoneArchiveRank();
+    task.updated_at = nowIso();
+    task.synced = false;
+
+    let insertIndex = ordered.length;
+    if (targetId) {
+      const targetIndex = ordered.findIndex(item => item.id === targetId);
+      if (targetIndex >= 0) insertIndex = targetIndex + (insertAfter ? 1 : 0);
+    }
+    ordered.splice(insertIndex, 0, task);
+    ordered.forEach((item, index) => {
+      const source = state.tasks.find(t => t.id === item.id);
+      if (source) {
+        source.done_archive_rank = index + 1;
+        source.updated_at = nowIso();
+        source.synced = false;
+      }
+    });
+    taskArchiveOpen = true;
+    saveState();
+    toast(wasArchived ? 'Archiv neu sortiert' : 'Erledigte Aufgabe archiviert');
+    syncWithSupabase({ silent: true });
+  }
+
+  function restoreArchivedDoneTask(id) {
+    const task = state.tasks.find(t => t.id === id);
+    if (!task || !isDoneArchivedTask(task)) return;
+    task.done_archived_at = null;
+    task.done_archive_rank = null;
+    task.updated_at = nowIso();
+    task.synced = false;
+    compactDoneArchiveRanks();
+    saveState();
+    toast('Aufgabe wieder in Erledigt');
+    syncWithSupabase({ silent: true });
+  }
+
+  function shiftArchivedDoneTask(id, delta) {
+    const ordered = archivedDoneTasks();
+    const index = ordered.findIndex(task => task.id === id);
+    if (index < 0) return;
+    const nextIndex = Math.max(0, Math.min(ordered.length - 1, index + delta));
+    if (nextIndex === index) return;
+    const [item] = ordered.splice(index, 1);
+    ordered.splice(nextIndex, 0, item);
+    ordered.forEach((task, orderIndex) => {
+      const source = state.tasks.find(t => t.id === task.id);
+      if (source) {
+        source.done_archive_rank = orderIndex + 1;
+        source.updated_at = nowIso();
+        source.synced = false;
+      }
+    });
+    saveState();
+    toast('Archiv sortiert');
     syncWithSupabase({ silent: true });
   }
 
@@ -6229,6 +6435,10 @@ async function deleteAlcoholLog(id) {
       };
       if (remoteTaskPrioritySupported) row.priority = normalizeTaskPriority(t.priority);
       if (remoteTaskBacklogRankSupported && t.backlog_rank != null) row.backlog_rank = Number(t.backlog_rank) || null;
+      if (remoteTaskDoneArchiveSupported) {
+        row.done_archived_at = t.done_archived_at || null;
+        row.done_archive_rank = t.done_archive_rank != null ? Number(t.done_archive_rank) || null : null;
+      }
       return row;
     });
   }
@@ -6252,6 +6462,11 @@ async function deleteAlcoholLog(id) {
       if (remoteTaskBacklogRankSupported && isMissingRemoteColumnError(error, 'backlog_rank')) {
         remoteTaskBacklogRankSupported = false;
         console.warn('Remote Tasks-Tabelle hat noch keine backlog_rank-Spalte. Backlog-Reihenfolge bleibt lokal, bis supabase.sql angewendet ist.', error);
+        continue;
+      }
+      if (remoteTaskDoneArchiveSupported && (isMissingRemoteColumnError(error, 'done_archived_at') || isMissingRemoteColumnError(error, 'done_archive_rank'))) {
+        remoteTaskDoneArchiveSupported = false;
+        console.warn('Remote Tasks-Tabelle hat noch keine Archiv-Spalten für erledigte Aufgaben. Das Archiv bleibt lokal, bis supabase.sql angewendet ist.', error);
         continue;
       }
       throw error;
@@ -6523,6 +6738,10 @@ async function deleteAlcoholLog(id) {
     if (!remoteTaskPrioritySupported) next.priority = localTask.priority || next.priority;
     if (!remoteTaskInProgressSupported && localTask.status === 'in_progress' && remoteTask.status === 'open') next.status = 'in_progress';
     if (!remoteTaskBacklogRankSupported && localTask.backlog_rank != null) next.backlog_rank = localTask.backlog_rank;
+    if (!remoteTaskDoneArchiveSupported) {
+      next.done_archived_at = localTask.done_archived_at || next.done_archived_at || null;
+      next.done_archive_rank = localTask.done_archive_rank ?? next.done_archive_rank ?? null;
+    }
     return next;
   }
 
@@ -6578,7 +6797,7 @@ async function deleteAlcoholLog(id) {
   const mapRemoteCigarette = c => ({ id: c.id, smoked_at: c.smoked_at, interval_minutes: c.interval_minutes, alcohol_context: c.alcohol_context, points: c.points, note: c.note, created_at: c.created_at, updated_at: c.updated_at, synced: true });
   const mapRemoteAlcohol = a => ({ id: a.id, log_date: a.log_date, consumed: a.consumed, note: a.note, created_at: a.created_at, updated_at: a.updated_at, synced: true });
   const mapRemoteAlcoholEvent = a => ({ id: a.id, occurred_at: a.occurred_at, drink_type: a.drink_type || 'other', note: a.note, created_at: a.created_at, updated_at: a.updated_at, synced: true });
-  const mapRemoteTask = t => ({ id: t.id, title: t.title, description: t.description, effort: t.effort, priority: normalizeTaskPriority(t.priority), status: TASK_COLUMNS.some(column => column.status === t.status) ? t.status : 'open', due_at: t.due_at, completed_at: t.completed_at, points: t.points, backlog_rank: t.backlog_rank, created_at: t.created_at, updated_at: t.updated_at, synced: true });
+  const mapRemoteTask = t => ({ id: t.id, title: t.title, description: t.description, effort: t.effort, priority: normalizeTaskPriority(t.priority), status: TASK_COLUMNS.some(column => column.status === t.status) ? t.status : 'open', due_at: t.due_at, completed_at: t.completed_at, points: t.points, backlog_rank: t.backlog_rank, done_archived_at: t.done_archived_at, done_archive_rank: t.done_archive_rank, created_at: t.created_at, updated_at: t.updated_at, synced: true });
   const mapRemoteAppointment = a => normalizeAppointment({ id: a.id, title: a.title, description: a.description, location: a.location, appointment_type: a.appointment_type, starts_at: a.starts_at, ends_at: a.ends_at, created_at: a.created_at, updated_at: a.updated_at, synced: true });
   const mapRemoteLedger = p => normalizeMorningRoutineLedgerPoint({ id: p.id, source_type: p.source_type, source_id: p.source_id, points: p.points, reason: p.reason, earned_at: p.earned_at, created_at: p.created_at, updated_at: p.created_at, synced: true });
 

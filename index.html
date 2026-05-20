@@ -408,6 +408,7 @@
           <div><p class="eyebrow">Tasks</p><h3>Aufgaben-Board</h3></div>
           <div class="task-toolbar-actions" aria-label="Task-Aktionen">
             <button id="taskBacklogToggleBtn" class="pill secondary" type="button" aria-expanded="false">Backlog <span id="taskBacklogCount" class="inline-count">0</span></button>
+            <button id="taskArchiveToggleBtn" class="pill secondary" type="button" aria-expanded="false">Archiv <span id="taskArchiveCount" class="inline-count">0</span></button>
             <button id="taskTimelineToggleBtn" class="pill secondary" type="button" aria-expanded="false">Task-Kalender</button>
             <button id="taskFormToggleBtn" class="bubble-add-btn" type="button" aria-label="Aufgaben-Formular öffnen"><span data-icon="plus"></span></button>
           </div>
@@ -429,6 +430,13 @@
             <span class="subtle">Karten ziehen oder mobil mit ↑ / ↓ sortieren</span>
           </div>
           <div id="taskBacklogList" class="task-backlog-list" data-backlog-drop></div>
+        </section>
+        <section id="taskArchivePanel" class="panel glass task-archive-panel hidden">
+          <div class="panel-head">
+            <div><p class="eyebrow">Archiv</p><h3>Erledigte Aufgaben später ansehen</h3></div>
+            <span class="subtle">abgeschlossen, aus dem Board entfernt</span>
+          </div>
+          <div id="taskArchiveList" class="task-archive-list" data-task-archive-drop></div>
         </section>
         <section id="taskTimelinePanel" class="panel glass task-timeline-panel hidden">
           <div class="panel-head">

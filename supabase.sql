@@ -84,6 +84,8 @@ create table if not exists public.tasks (
   completed_at timestamptz,
   points integer not null default 0,
   backlog_rank numeric(12,4),
+  done_archived_at timestamptz,
+  done_archive_rank numeric(12,4),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -152,6 +154,8 @@ alter table public.habit_definitions add constraint habit_definitions_type_check
 
 alter table public.tasks add column if not exists priority text not null default 'medium';
 alter table public.tasks add column if not exists backlog_rank numeric(12,4);
+alter table public.tasks add column if not exists done_archived_at timestamptz;
+alter table public.tasks add column if not exists done_archive_rank numeric(12,4);
 alter table public.tasks drop constraint if exists tasks_priority_check;
 alter table public.tasks add constraint tasks_priority_check check (priority in ('low','medium','high','urgent'));
 alter table public.tasks drop constraint if exists tasks_status_check;
@@ -174,6 +178,7 @@ create index if not exists idx_cigarette_events_user_time on public.cigarette_ev
 create index if not exists idx_alcohol_logs_user_date on public.alcohol_logs(user_id, log_date desc);
 create index if not exists idx_alcohol_events_user_time on public.alcohol_events(user_id, occurred_at desc);
 create index if not exists idx_tasks_user_due on public.tasks(user_id, status, due_at);
+create index if not exists idx_tasks_user_done_archive on public.tasks(user_id, done_archived_at desc, done_archive_rank);
 create index if not exists idx_appointments_user_starts_at on public.appointments(user_id, starts_at desc);
 create index if not exists idx_appointments_type_starts_at on public.appointments(user_id, appointment_type, starts_at desc);
 create index if not exists idx_points_ledger_user_time on public.points_ledger(user_id, earned_at desc);
