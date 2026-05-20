@@ -783,7 +783,9 @@ body.light .auth-status{background:rgba(255,255,255,.72);border-color:rgba(17,36
 .mobile-dashboard-section>summary,.mobile-quick-add>summary{display:none}
 
 @media (max-width:760px){
-  #screen-dashboard{display:flex;flex-direction:column;gap:14px}
+  #screen-dashboard{flex-direction:column;gap:14px}
+  #screen-dashboard.active{display:flex}
+  #screen-dashboard:not(.active){display:none!important}
   #screen-dashboard .hero-card--premium{padding:18px;border-radius:30px;gap:16px;overflow:hidden;position:relative;background:linear-gradient(145deg,rgba(74,215,209,.16),rgba(255,255,255,.055) 48%,rgba(143,240,167,.08));border:1px solid rgba(74,215,209,.18)}
   #screen-dashboard .hero-card--premium:before{content:"";position:absolute;right:-76px;top:-96px;width:220px;height:220px;border-radius:999px;background:radial-gradient(circle,rgba(74,215,209,.24),transparent 68%);pointer-events:none}
   #screen-dashboard .hero-copy{position:relative;z-index:1;display:grid;gap:12px;width:100%}

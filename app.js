@@ -1253,6 +1253,7 @@
   }
 
   function showScreen(screen) {
+    closeMobileQuickAdd();
     els.navButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.target === screen));
     els.screens.forEach(view => view.classList.toggle('active', view.dataset.screen === screen));
     if (screen === 'calendar') {
