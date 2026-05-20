@@ -547,6 +547,10 @@
       alcoholTodayHint: $('#alcoholTodayHint'),
       lastAlcoholPoints: $('#lastAlcoholPoints'),
       smokeHistory: $('#smokeHistory'),
+      smokeMobileInsight: $('#smokeMobileInsight'),
+      smokeMobileKpis: $('#smokeMobileKpis'),
+      alcoholMobileInsight: $('#alcoholMobileInsight'),
+      alcoholMobileKpis: $('#alcoholMobileKpis'),
       historyModal: $('#historyModal'),
       historyModalCloseBtn: $('#historyModalCloseBtn'),
       historyModalContent: $('#historyModalContent'),
@@ -721,7 +725,7 @@
 
     document.addEventListener('focusout', flushDeferredRender);
     document.addEventListener('change', flushDeferredRender);
-    setupMobileDashboardSections();
+    setupMobileResponsiveSections();
     setupTaskTimelineScroller();
 
     document.addEventListener('click', event => {
@@ -1782,8 +1786,10 @@
     if (quickAdd) quickAdd.open = false;
   }
 
-  function setupMobileDashboardSections() {
-    const sections = [...document.querySelectorAll('#screen-dashboard .mobile-dashboard-section')];
+  function setupMobileResponsiveSections() {
+    const dashboardSections = [...document.querySelectorAll('#screen-dashboard .mobile-dashboard-section')];
+    const consumptionSections = [...document.querySelectorAll('#screen-smoking .mobile-consumption-section')];
+    const sections = [...dashboardSections, ...consumptionSections];
     if (!sections.length) return;
     const apply = () => {
       const isMobile = window.matchMedia('(max-width: 760px)').matches;
@@ -1791,7 +1797,7 @@
       sections.forEach(section => {
         if (isMobile) {
           if (!section.dataset.mobilePrepared) {
-            section.open = false;
+            section.open = section.hasAttribute('data-mobile-open');
             section.dataset.mobilePrepared = 'true';
           }
         } else {
@@ -2494,6 +2500,7 @@
     renderSmokingAnalytics();
     renderAlcoholAnalytics();
     renderAlcoholDashboard();
+    renderConsumptionMobileOverview(last);
     renderSmokeHistoryLauncher();
     applyConsumptionMode();
   }
@@ -2667,6 +2674,75 @@
     }
     if (els.lastAlcoholPoints) {
       els.lastAlcoholPoints.textContent = `${state.alcoholUnits.length} Einheit${state.alcoholUnits.length === 1 ? '' : 'en'}`;
+    }
+  }
+
+  function renderConsumptionMobileOverview(last = getLastCigarette()) {
+    renderSmokeMobileOverview(last);
+    renderAlcoholMobileOverview();
+  }
+
+  function renderSmokeMobileOverview(last = getLastCigarette()) {
+    const todayKey = toDateKey(new Date());
+    const cigarettesToday = cigarettesOnDate(todayKey).length;
+    const cigarettes7 = state.cigarettes.filter(c => daysBack(7).includes(toDateKey(c.smoked_at))).length;
+    const pauseMinutes = last ? Math.max(0, Math.floor((Date.now() - new Date(last.smoked_at).getTime()) / 60000)) : null;
+    const nextGoal = getNextPauseGoalMinutes(pauseMinutes);
+    const trigger = topSmokeTrigger(14);
+    const bestPause = bestPauseMinutes();
+    const avgPause = averagePauseText(7);
+    const goalText = pauseMinutes == null
+      ? 'erste Pause bewusst starten'
+      : pauseMinutes >= nextGoal
+        ? 'starke Pause halten'
+        : `${formatDuration(nextGoal)} als nächstes Ziel`;
+
+    if (els.smokeMobileInsight) {
+      const title = cigarettesToday ? `${cigarettesToday} heute · ${goalText}` : 'Noch keine Zigarette heute';
+      const body = trigger
+        ? `${trigger.label} ist dein häufigster Trigger der letzten 14 Tage. Nutze den Coach, bevor der Autopilot greift.`
+        : 'Der nächste Log fragt ruhig nach dem Auslöser. So wird aus Verlauf ein konkretes Muster.';
+      els.smokeMobileInsight.innerHTML = `<strong>${escapeHtml(title)}</strong><span>${escapeHtml(body)}</span>`;
+    }
+
+    if (els.smokeMobileKpis) {
+      const cards = [
+        { label: 'Heute', value: `${cigarettesToday}×`, detail: cigarettesToday ? 'erfasst' : 'clean start' },
+        { label: '7 Tage', value: `${cigarettes7}×`, detail: 'sichtbares Fenster' },
+        { label: 'Ø Pause', value: avgPause, detail: 'letzte 7 Tage' },
+        { label: 'Beste Pause', value: bestPause == null ? '–' : formatDuration(bestPause), detail: 'bisher gemessen' }
+      ];
+      els.smokeMobileKpis.innerHTML = cards.map(card => `<article><small>${escapeHtml(card.label)}</small><strong>${escapeHtml(card.value)}</strong><span>${escapeHtml(card.detail)}</span></article>`).join('');
+    }
+  }
+
+  function renderAlcoholMobileOverview() {
+    const todayKey = toDateKey(new Date());
+    const todayUnits = alcoholUnitsOnDate(todayKey);
+    const units7 = state.alcoholUnits.filter(unit => daysBack(7).includes(toDateKey(unit.occurred_at || unit.created_at))).length;
+    const todayPoints = sum(todayUnits.map(unit => alcoholPointsForUnit(unit.id)));
+    const sortedUnits = [...state.alcoholUnits].sort((a, b) => sortDate(b.occurred_at || b.created_at) - sortDate(a.occurred_at || a.created_at));
+    const lastUnit = sortedUnits[0] || null;
+    const lastMinutes = lastUnit ? Math.max(0, Math.floor((Date.now() - sortDate(lastUnit.occurred_at || lastUnit.created_at)) / 60000)) : null;
+    const activeDays7 = new Set(state.alcoholUnits.filter(unit => daysBack(7).includes(toDateKey(unit.occurred_at || unit.created_at))).map(unit => toDateKey(unit.occurred_at || unit.created_at))).size;
+    const densityLabel = units7 >= 8 ? 'Dichte senken' : units7 >= 4 ? 'kontrollieren' : 'ruhig halten';
+
+    if (els.alcoholMobileInsight) {
+      const title = todayUnits.length ? `${todayUnits.length} Einheit${todayUnits.length === 1 ? '' : 'en'} heute · ${formatSignedPoints(todayPoints)} Pkt.` : 'Heute noch keine Alkohol-Einheit';
+      const body = units7
+        ? `${units7} Einheiten in 7 Tagen. Fokus: ${densityLabel}, Wasser-Puffer und klare Konsumfenster.`
+        : 'Guter Startpunkt: Erfasse nur per Tap, die Muster entstehen automatisch im Hintergrund.';
+      els.alcoholMobileInsight.innerHTML = `<strong>${escapeHtml(title)}</strong><span>${escapeHtml(body)}</span>`;
+    }
+
+    if (els.alcoholMobileKpis) {
+      const cards = [
+        { label: 'Heute', value: `${todayUnits.length}×`, detail: todayUnits.length ? 'Einheiten' : 'keine Einheit' },
+        { label: '7 Tage', value: `${units7}×`, detail: `${activeDays7} aktive Tage` },
+        { label: 'Punkte', value: `${formatSignedPoints(todayPoints)}`, detail: 'heute' },
+        { label: 'Letzter Log', value: lastMinutes == null ? '–' : compactDuration(lastMinutes), detail: lastUnit ? alcoholTypeLabel(lastUnit.drink_type) : 'noch keiner' }
+      ];
+      els.alcoholMobileKpis.innerHTML = cards.map(card => `<article><small>${escapeHtml(card.label)}</small><strong>${escapeHtml(card.value)}</strong><span>${escapeHtml(card.detail)}</span></article>`).join('');
     }
   }
 

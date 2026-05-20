@@ -155,6 +155,14 @@
       </section>
 
       <section id="screen-smoking" class="screen" data-screen="smoking" hidden aria-hidden="true">
+        <section class="consumption-mobile-head glass" aria-label="Konsum Überblick">
+          <div>
+            <p class="eyebrow">Konsum</p>
+            <h2>Ruhig steuern statt reagieren</h2>
+            <p>Rauchen und Alkohol bleiben getrennt, schnell erfassbar und mobil als klares Command Center lesbar.</p>
+          </div>
+        </section>
+
         <div class="consumption-switch glass" role="tablist" aria-label="Konsum-Modus wechseln">
           <button class="consumption-switch-btn is-active" type="button" role="tab" aria-selected="true" data-action="switch-consumption-mode" data-mode="smoke">
             <span data-icon="smoke"></span>
@@ -177,6 +185,8 @@
                 <strong id="smokePauseLive">–</strong>
                 <span id="smokePauseHint">Noch kein Eintrag vorhanden</span>
               </div>
+              <div id="smokeMobileInsight" class="consumption-command-insight" aria-live="polite"></div>
+              <div id="smokeMobileKpis" class="mobile-consumption-kpis" aria-label="Rauch-Kennzahlen"></div>
               <div class="craving-coach-card" aria-live="polite">
                 <div class="craving-coach-head">
                   <div><p class="eyebrow">Craving-Coach</p><h4 id="cravingTipTitle">Pause verlängern</h4></div>
@@ -196,28 +206,37 @@
               <div id="triggerCaptureCard" class="trigger-capture-card hidden"></div>
             </section>
 
-            <section class="panel glass consumption-history-panel">
-              <div class="panel-head"><div><p class="eyebrow">Rauchen</p><h3>Logs bei Bedarf</h3></div><span id="lastSmokePoints" class="badge muted">0 Einträge</span></div>
-              <div id="smokeHistory" class="history-launch-area"></div>
-            </section>
+            <details class="mobile-consumption-section" data-mobile-open="true">
+              <summary><span>Verlauf & Kosten</span><small>bei Bedarf öffnen</small></summary>
+              <section class="panel glass consumption-history-panel">
+                <div class="panel-head"><div><p class="eyebrow">Rauchen</p><h3>Logs bei Bedarf</h3></div><span id="lastSmokePoints" class="badge muted">0 Einträge</span></div>
+                <div id="smokeHistory" class="history-launch-area"></div>
+              </section>
+            </details>
           </div>
 
           <div class="grid two-columns smoking-intelligence-grid">
-            <section class="panel glass smoking-visual-panel">
-              <div class="panel-head">
-                <div><p class="eyebrow">Deep Smoke Map</p><h3>Zigaretten nach Kalenderwoche & Tag</h3></div>
-                <span id="cigaretteHeatmapBadge" class="subtle">12 KW</span>
-              </div>
-              <div id="cigaretteHeatmapVisual" class="smoking-visual-body"></div>
-            </section>
+            <details class="mobile-consumption-section" data-mobile-open="true">
+              <summary><span>Deep Smoke Map</span><small>Wochen & Tage</small></summary>
+              <section class="panel glass smoking-visual-panel">
+                <div class="panel-head">
+                  <div><p class="eyebrow">Deep Smoke Map</p><h3>Zigaretten nach Kalenderwoche & Tag</h3></div>
+                  <span id="cigaretteHeatmapBadge" class="subtle">12 KW</span>
+                </div>
+                <div id="cigaretteHeatmapVisual" class="smoking-visual-body"></div>
+              </section>
+            </details>
 
-            <section class="panel glass smoking-visual-panel">
-              <div class="panel-head">
-                <div><p class="eyebrow">Interval Intelligence</p><h3>Qualität der Pausen</h3></div>
-                <span id="smokeIntervalQuality" class="badge muted">lernt</span>
-              </div>
-              <div id="smokeIntervalVisual" class="smoking-visual-body"></div>
-            </section>
+            <details class="mobile-consumption-section">
+              <summary><span>Interval Intelligence</span><small>Pausenqualität</small></summary>
+              <section class="panel glass smoking-visual-panel">
+                <div class="panel-head">
+                  <div><p class="eyebrow">Interval Intelligence</p><h3>Qualität der Pausen</h3></div>
+                  <span id="smokeIntervalQuality" class="badge muted">lernt</span>
+                </div>
+                <div id="smokeIntervalVisual" class="smoking-visual-body"></div>
+              </section>
+            </details>
           </div>
         </div>
 
@@ -230,6 +249,8 @@
                 <strong id="alcoholTodayUnits">0</strong>
                 <span id="alcoholTodayHint">Noch keine Einheit erfasst</span>
               </div>
+              <div id="alcoholMobileInsight" class="consumption-command-insight" aria-live="polite"></div>
+              <div id="alcoholMobileKpis" class="mobile-consumption-kpis" aria-label="Alkohol-Kennzahlen"></div>
               <div class="alcohol-unit-grid" aria-label="Alkohol-Einheit speichern">
                 <button class="alcohol-unit-btn" type="button" data-action="log-alcohol-unit" data-drink-type="beer"><span data-icon="beer"></span><strong>Bier</strong><small>-20</small></button>
                 <button class="alcohol-unit-btn" type="button" data-action="log-alcohol-unit" data-drink-type="wine"><span data-icon="wine"></span><strong>Wein</strong><small>-20</small></button>
@@ -239,33 +260,44 @@
               </div>
             </section>
 
-            <section class="panel glass consumption-history-panel">
-              <div class="panel-head"><div><p class="eyebrow">Alkohol</p><h3>Einheiten-Logs</h3></div><span id="lastAlcoholPoints" class="badge muted">0 Einheiten</span></div>
-              <div id="alcoholUnitHistory" class="stack-list alcohol-history-list"></div>
-            </section>
+            <details class="mobile-consumption-section" data-mobile-open="true">
+              <summary><span>Einheiten-Logs</span><small>bei Bedarf öffnen</small></summary>
+              <section class="panel glass consumption-history-panel">
+                <div class="panel-head"><div><p class="eyebrow">Alkohol</p><h3>Einheiten-Logs</h3></div><span id="lastAlcoholPoints" class="badge muted">0 Einheiten</span></div>
+                <div id="alcoholUnitHistory" class="stack-list alcohol-history-list"></div>
+              </section>
+            </details>
           </div>
 
           <div class="grid two-columns smoking-intelligence-grid">
-            <section class="panel glass smoking-visual-panel">
-              <div class="panel-head">
-                <div><p class="eyebrow">Deep Alcohol Map</p><h3>Einheiten nach Kalenderwoche & Tag</h3></div>
-                <span id="alcoholHeatmapBadge" class="subtle">12 KW</span>
-              </div>
-              <div id="alcoholHeatmapVisual" class="smoking-visual-body"></div>
-            </section>
+            <details class="mobile-consumption-section" data-mobile-open="true">
+              <summary><span>Deep Alcohol Map</span><small>Wochen & Tage</small></summary>
+              <section class="panel glass smoking-visual-panel">
+                <div class="panel-head">
+                  <div><p class="eyebrow">Deep Alcohol Map</p><h3>Einheiten nach Kalenderwoche & Tag</h3></div>
+                  <span id="alcoholHeatmapBadge" class="subtle">12 KW</span>
+                </div>
+                <div id="alcoholHeatmapVisual" class="smoking-visual-body"></div>
+              </section>
+            </details>
 
-            <section class="panel glass smoking-visual-panel">
-              <div class="panel-head">
-                <div><p class="eyebrow">Alcohol Intelligence</p><h3>Qualität der Konsumfolge</h3></div>
-                <span id="alcoholIntervalQuality" class="badge muted">lernt</span>
-              </div>
-              <div id="alcoholIntervalVisual" class="smoking-visual-body"></div>
-            </section>
+            <details class="mobile-consumption-section">
+              <summary><span>Alcohol Intelligence</span><small>Konsumfolge</small></summary>
+              <section class="panel glass smoking-visual-panel">
+                <div class="panel-head">
+                  <div><p class="eyebrow">Alcohol Intelligence</p><h3>Qualität der Konsumfolge</h3></div>
+                  <span id="alcoholIntervalQuality" class="badge muted">lernt</span>
+                </div>
+                <div id="alcoholIntervalVisual" class="smoking-visual-body"></div>
+              </section>
+            </details>
           </div>
         </div>
 
-        <section class="panel glass">
-          <div class="panel-head rules-panel-head">
+        <details class="mobile-consumption-section consumption-rules-section">
+          <summary><span>Regelwerk</span><small>Punkte-Logik</small></summary>
+          <section class="panel glass">
+            <div class="panel-head rules-panel-head">
             <div><p class="eyebrow">Regelwerk</p><h3>Rauchen & Alkohol → Punkte</h3></div>
             <button id="toggleRulesBtn" class="mini-btn" type="button" aria-expanded="true">Regelwerk ausblenden</button>
           </div>
@@ -297,7 +329,8 @@
               </div>
             </div>
           </div>
-        </section>
+          </section>
+        </details>
       </section>
 
       <div id="historyModal" class="coach-modal history-modal hidden" role="dialog" aria-modal="true" aria-labelledby="historyModalTitle">

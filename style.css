@@ -1102,3 +1102,116 @@ body.light .task-time-label{background:rgba(255,255,255,.9);color:#0d1827;border
     margin-left:172px;
   }
 }
+
+/* v47: mobile-first Konsum Command Center, desktop-safe */
+.consumption-mobile-head,
+.consumption-command-insight,
+.mobile-consumption-kpis{display:none}
+.mobile-consumption-section{display:contents}
+.mobile-consumption-section>summary{display:none}
+
+@media (max-width:760px){
+  #screen-smoking{gap:14px}
+  .consumption-mobile-head{display:block;border-radius:30px;padding:18px;background:var(--card);border-color:var(--card-border);box-shadow:var(--shadow)}
+  .consumption-mobile-head h2{font-size:clamp(1.9rem,10vw,2.85rem);line-height:.96;letter-spacing:-.075em;max-width:11ch}
+  .consumption-mobile-head p:not(.eyebrow){margin-top:10px;color:var(--muted);font-size:.94rem;line-height:1.48;max-width:34ch}
+
+  #screen-smoking .consumption-switch{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0;padding:8px;border-radius:28px;background:var(--card);border:1px solid var(--card-border);box-shadow:var(--shadow);position:relative;z-index:2}
+  #screen-smoking .consumption-switch-btn{min-width:0;border-radius:22px;padding:12px 10px;grid-template-columns:1fr;place-items:center;text-align:center;gap:7px;background:rgba(255,255,255,.045);box-shadow:none}
+  #screen-smoking .consumption-switch-btn>span{grid-row:auto;width:38px;height:38px;border-radius:16px}
+  #screen-smoking .consumption-switch-btn strong{font-size:.94rem;line-height:1.1}
+  #screen-smoking .consumption-switch-btn small{display:none}
+  #screen-smoking .consumption-switch-btn.is-active{background:rgba(74,215,209,.12);border-color:rgba(74,215,209,.22)}
+
+  #screen-smoking .consumption-pane.is-active{display:grid;gap:14px}
+  #screen-smoking .smoking-layout,
+  #screen-smoking .smoking-intelligence-grid{grid-template-columns:1fr;gap:14px;margin-top:0}
+  #screen-smoking .panel{border-radius:26px}
+  #screen-smoking .panel-head{margin-bottom:13px}
+  #screen-smoking .panel-head h3{font-size:1.12rem;line-height:1.18}
+
+  #screen-smoking .smoke-control-card,
+  #screen-smoking .alcohol-control-card{padding:17px;border-radius:30px;background:var(--card);border-color:var(--card-border);box-shadow:var(--shadow);gap:14px;overflow:hidden;position:relative}
+  #screen-smoking .smoke-control-card:before,
+  #screen-smoking .alcohol-control-card:before{content:"";position:absolute;right:-72px;top:-96px;width:190px;height:190px;border-radius:999px;background:radial-gradient(circle,rgba(74,215,209,.16),transparent 68%);pointer-events:none}
+  #screen-smoking .smoke-control-card>* ,
+  #screen-smoking .alcohol-control-card>*{position:relative;z-index:1}
+
+  #screen-smoking .smoke-ring,
+  #screen-smoking .alcohol-ring{min-height:156px;border-radius:28px;padding:18px;background:rgba(255,255,255,.045);border-color:rgba(255,255,255,.07);box-shadow:inset 0 1px 0 rgba(255,255,255,.055)}
+  #screen-smoking .smoke-ring strong,
+  #screen-smoking .alcohol-ring strong{font-size:clamp(2.25rem,13vw,3.6rem);letter-spacing:-.09em}
+  #screen-smoking .smoke-ring span,
+  #screen-smoking .alcohol-ring span{font-size:.9rem;line-height:1.35;max-width:28ch}
+
+  .consumption-command-insight{display:grid;gap:5px;padding:14px 15px;border-radius:22px;background:rgba(74,215,209,.09);border:1px solid rgba(74,215,209,.14)}
+  .consumption-command-insight strong{font-size:.98rem;line-height:1.25;letter-spacing:-.02em}
+  .consumption-command-insight span{color:var(--muted);font-size:.88rem;line-height:1.4}
+
+  .mobile-consumption-kpis{display:flex;gap:10px;overflow-x:auto;margin:0 -17px;padding:0 17px 2px;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .mobile-consumption-kpis::-webkit-scrollbar{display:none}
+  .mobile-consumption-kpis article{flex:0 0 132px;scroll-snap-align:start;padding:13px;border-radius:22px;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.07);display:grid;gap:4px;min-height:104px}
+  .mobile-consumption-kpis small{color:var(--muted);text-transform:uppercase;letter-spacing:.1em;font-size:.68rem;font-weight:900}
+  .mobile-consumption-kpis strong{font-size:1.2rem;letter-spacing:-.045em;line-height:1.05}
+  .mobile-consumption-kpis span{color:var(--muted);font-size:.78rem;line-height:1.32;font-weight:760}
+
+  #screen-smoking .craving-coach-card{padding:14px;border-radius:24px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.07)}
+  #screen-smoking .craving-coach-head{align-items:flex-start;gap:10px}
+  #screen-smoking .craving-actions{display:grid;grid-template-columns:1fr;gap:8px}
+  #screen-smoking .craving-actions .mini-btn{min-height:43px;justify-content:center}
+  #screen-smoking .smoke-button{min-height:58px;border-radius:24px;padding:16px;font-size:1.08rem;box-shadow:0 14px 30px rgba(255,112,112,.14)}
+  #screen-smoking .smoke-button span{width:32px;height:32px}
+
+  #screen-smoking .alcohol-unit-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+  #screen-smoking .alcohol-unit-btn{min-height:96px;border-radius:22px;padding:12px 10px;background:rgba(255,255,255,.052)}
+  #screen-smoking .alcohol-unit-btn>span{width:34px;height:34px;border-radius:14px}
+
+  .mobile-consumption-section{display:block}
+  .mobile-consumption-section>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;list-style:none;cursor:pointer;margin:0;padding:15px 16px;border-radius:22px;background:var(--card);border:1px solid var(--card-border);box-shadow:0 10px 28px rgba(0,0,0,.16);font-weight:950;color:var(--text)}
+  .mobile-consumption-section>summary::-webkit-details-marker{display:none}
+  .mobile-consumption-section>summary span{font-size:.98rem;letter-spacing:-.02em}
+  .mobile-consumption-section>summary small{color:var(--muted);font-size:.72rem;font-weight:850;text-transform:uppercase;letter-spacing:.08em;text-align:right}
+  .mobile-consumption-section>summary:after{content:"+";width:28px;height:28px;border-radius:999px;display:grid;place-items:center;background:rgba(74,215,209,.13);color:var(--primary);font-size:1.12rem;flex:0 0 auto}
+  .mobile-consumption-section[open]>summary{margin-bottom:12px;border-color:rgba(74,215,209,.18)}
+  .mobile-consumption-section[open]>summary:after{content:"–"}
+  .mobile-consumption-section:not([open])>*:not(summary){display:none!important}
+  .mobile-consumption-section .panel{padding:15px;border-radius:24px;box-shadow:var(--shadow)}
+  .mobile-consumption-section .panel-head{align-items:flex-start}
+  .mobile-consumption-section .panel-head .badge,
+  .mobile-consumption-section .panel-head .subtle{white-space:nowrap}
+
+  #screen-smoking .consumption-history-panel .history-launch-grid{grid-template-columns:1fr;gap:10px}
+  #screen-smoking .history-open-card{border-radius:22px;padding:14px;background:rgba(255,255,255,.045)}
+  #screen-smoking .history-open-icon{width:38px;height:38px;flex-basis:38px;border-radius:15px}
+
+  #screen-smoking .smoking-visual-summary-grid,
+  #screen-smoking .smoking-visual-summary-grid--compact{display:flex;gap:10px;overflow-x:auto;margin:0 -15px;padding:0 15px 2px;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  #screen-smoking .smoking-visual-summary-grid::-webkit-scrollbar,
+  #screen-smoking .smoking-visual-summary-grid--compact::-webkit-scrollbar{display:none}
+  #screen-smoking .smoking-visual-summary-grid article,
+  #screen-smoking .smoking-visual-summary-grid--compact article{flex:0 0 164px;min-height:112px;scroll-snap-align:start;border-radius:20px;padding:13px}
+  #screen-smoking .smoke-week-grid-wrap{overflow-x:auto;margin:0 -15px;padding:0 15px 4px;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+  #screen-smoking .smoke-week-grid{min-width:760px}
+  #screen-smoking .smoke-map-support-grid{grid-template-columns:1fr;gap:10px}
+  #screen-smoking .smoke-map-support-card,
+  #screen-smoking .interval-skyline-card,
+  #screen-smoking .interval-bucket-card{border-radius:22px;padding:14px}
+  #screen-smoking .interval-bucket-grid{grid-template-columns:1fr}
+  #screen-smoking .interval-skyline{height:142px}
+  #screen-smoking .rules-panel-head{align-items:flex-start;flex-direction:column}
+  #screen-smoking .rules-panel-head .mini-btn{width:100%;min-height:42px}
+  #screen-smoking .score-rules-grid{grid-template-columns:1fr}
+
+  body.light .consumption-mobile-head,
+  body.light #screen-smoking .consumption-switch,
+  body.light #screen-smoking .smoke-control-card,
+  body.light #screen-smoking .alcohol-control-card,
+  body.light .mobile-consumption-section>summary{background:rgba(255,255,255,.86);border-color:rgba(17,36,58,.08)}
+  body.light #screen-smoking .consumption-switch-btn,
+  body.light #screen-smoking .smoke-ring,
+  body.light #screen-smoking .alcohol-ring,
+  body.light #screen-smoking .craving-coach-card,
+  body.light .mobile-consumption-kpis article,
+  body.light #screen-smoking .history-open-card{background:rgba(255,255,255,.72);border-color:rgba(17,36,58,.075)}
+  body.light .consumption-command-insight{background:rgba(232,249,249,.86);border-color:rgba(13,151,149,.14)}
+}
