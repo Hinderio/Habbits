@@ -1874,7 +1874,7 @@
     if (els.dailyScore) els.dailyScore.textContent = `${score.score}%`;
     if (els.dailyScoreHint) els.dailyScoreHint.textContent = score.label;
 
-    els.dashboardTitle.textContent = window.matchMedia('(max-width: 760px)').matches ? 'Dein Tag. Ein klarer nächster Schritt.' : 'Dein Fortschritt auf einen Blick.';
+    els.dashboardTitle.textContent = 'Dein Fortschritt auf einen Blick';
     els.dashboardSubtitle.textContent = habitLogsToday || completedToday || todayCount
       ? `${habitLogsToday} Habit-Log${habitLogsToday === 1 ? '' : 's'}, ${completedToday} erledigte Aufgabe${completedToday === 1 ? '' : 'n'} und ${todayCount} Zigarette${todayCount === 1 ? '' : 'n'} heute.`
       : 'Wähle eine Auswertung, erfasse kleine Schritte und halte deine wichtigsten Muster sichtbar.';
@@ -2061,7 +2061,7 @@
     if (forecast.risk >= 72) return { title: 'Akut-Reset statt Autopilot', body: 'Starte den Coach, lege 10 Minuten Puffer ein und verlasse kurz den Trigger-Ort.', reason: forecast.reason, cta: 'Akutmodus starten', action: 'emergency' };
     if (recovery.active) return { title: 'Heute stabilisieren', body: 'Recovery Mode: nur eine kleine saubere Entscheidung. Kein Perfektionsdruck.', reason: recovery.reason, cta: 'Recovery starten', action: 'recovery' };
     if (!party.active && party.recommended) return { title: 'Abend vorher planen', body: 'Ein kurzer Plan senkt das Risiko stärker als spätere Willenskraft.', reason: party.reason, cta: 'Party-Plan', action: 'party' };
-    if (openTask) return { title: 'Eine Aufgabe schließen', body: `Nächster kleinster Schritt: „${openTask.title}“. Task-Momentum wirkt als Schutzfaktor.`, reason: `${taskPriorityMeta(openTask).label} · Aufwand ${openTask.effort}/5`, cta: 'Tasks öffnen', action: 'tasks' };
+    if (openTask) return { title: 'Eine Aufgabe schliessen', body: `Nächster kleinster Schritt: „${openTask.title}“. Task-Momentum wirkt als Schutzfaktor.`, reason: `${taskPriorityMeta(openTask).label} · Aufwand ${openTask.effort}/5`, cta: 'Tasks öffnen', action: 'tasks' };
     if (focusHabit) return { title: 'Keystone-Momentum setzen', body: `Logge heute eine kleine Einheit „${focusHabit.name}“.`, reason: 'Habit-Rhythmus stabilisiert den Tages-Score.', cta: 'Habits öffnen', action: 'habits' };
     return { title: 'Pause bewusst verlängern', body: 'Du hast gerade Spielraum. Setze dir ein Mini-Ziel bis zum nächsten vollen Zeitfenster.', reason: forecast.reason, cta: 'Coach öffnen', action: 'coach' };
   }
@@ -2079,7 +2079,7 @@
       const lift = (cigsWithout - cigsWith) + (tasksWith - tasksWithout) * .55;
       return { habit, lift, cigsWith, cigsWithout, tasksWith, days: daysWith.length };
     }).filter(Boolean).sort((a,b)=>b.lift-a.lift)[0];
-    if (!candidates || candidates.lift <= 0) return { title: 'Noch kein klarer Keystone', body: 'Die App braucht ein paar geloggte Tage, um deinen stärksten Schutzfaktor fair zu erkennen.', detail: 'Tipp: Meditation, Sport oder Wasser regelmäßig loggen.' };
+    if (!candidates || candidates.lift <= 0) return { title: 'Noch kein klarer Keystone', body: 'Die App braucht ein paar geloggte Tage, um deinen stärksten Schutzfaktor fair zu erkennen.', detail: 'Tipp: Meditation, Sport oder Wasser regelmässig loggen.' };
     const delta = candidates.cigsWithout - candidates.cigsWith;
     return { title: candidates.habit.name, body: `An Tagen mit diesem Habit wirkt dein System stabiler. ${delta > .2 ? `Ø ${delta.toFixed(1).replace('.', ',')} weniger Zigaretten.` : 'Vor allem Task- und Score-Momentum steigen.'}`, detail: `${candidates.days} aktive Tage in 21 Tagen · experimentell berechnet.` };
   }
@@ -2103,7 +2103,7 @@
     const key = trigger?.key || 'delay_after_meal';
     const presets = experimentPresets();
     const preset = presets[key] || presets.delay_after_meal;
-    return { active: false, key, title: preset.title, body: preset.rule, detail: 'Kleines Experiment statt großer Vorsatz.' };
+    return { active: false, key, title: preset.title, body: preset.rule, detail: 'Kleines Experiment statt grosser Vorsatz.' };
   }
 
   function experimentPresets() {
