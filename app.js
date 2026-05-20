@@ -456,6 +456,7 @@
     applyTheme();
     fillSettingsForm();
     bindEvents();
+    showScreen(document.querySelector('.nav-btn.active')?.dataset.target || 'dashboard', { refresh: false });
     renderStaticIcons();
     migrateCigaretteScoring();
     migrateAlcoholScoring();
@@ -1253,21 +1254,27 @@
     if (els.sqlPreview) els.sqlPreview.textContent = window.HABITFLOW_SUPABASE_SQL || 'supabase.sql konnte nicht geladen werden.';
   }
 
-  function showScreen(screen) {
+  function showScreen(screen, options = {}) {
+    const targetScreen = screen || 'dashboard';
+    const shouldRefresh = options.refresh !== false;
     closeMobileQuickAdd();
-    els.navButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.target === screen));
+    els.navButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.target === targetScreen));
     els.screens.forEach(view => {
-      const isActive = view.dataset.screen === screen;
+      const isActive = view.dataset.screen === targetScreen;
       view.classList.toggle('active', isActive);
       view.hidden = !isActive;
+      view.style.display = isActive ? '' : 'none';
       view.setAttribute('aria-hidden', String(!isActive));
+      if ('inert' in view) view.inert = !isActive;
     });
-    document.body.dataset.activeScreen = screen;
-    if (screen === 'calendar') {
+    document.body.dataset.activeScreen = targetScreen;
+    document.documentElement.dataset.activeScreen = targetScreen;
+    if (!shouldRefresh) return;
+    if (targetScreen === 'calendar') {
       renderCalendar();
       renderDayDetails();
     }
-    if (screen === 'dashboard') {
+    if (targetScreen === 'dashboard') {
       requestAnimationFrame(() => {
         window.dispatchEvent(new Event('resize'));
         renderCharts();
