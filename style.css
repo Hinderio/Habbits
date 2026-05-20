@@ -1034,3 +1034,65 @@ body.light .task-time-label{background:rgba(255,255,255,.9);color:#0d1827;border
   .task-timeline-axis{margin-left:180px}
   .task-timeline-meta strong{white-space:normal;line-height:1.25}
 }
+
+/* v43: Task mobile polish — same plus toggles form, stable timeline scroll */
+.task-timeline{
+  overflow-x:auto;
+  overflow-y:hidden;
+  overscroll-behavior-x:contain;
+  -webkit-overflow-scrolling:touch;
+  scroll-behavior:auto;
+  cursor:grab;
+  touch-action:pan-x pinch-zoom;
+  scrollbar-width:thin;
+}
+.task-timeline.is-dragging{
+  cursor:grabbing;
+  user-select:none;
+}
+.task-timeline-scroll{
+  min-width:860px;
+  overflow:visible;
+}
+@media (max-width:760px){
+  #screen-tasks .task-toolbar{
+    flex-direction:column;
+    align-items:stretch;
+    gap:14px;
+  }
+  .task-toolbar-actions{
+    width:100%;
+    display:grid;
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr) 48px;
+    gap:8px;
+    align-items:center;
+  }
+  .task-toolbar-actions .pill{
+    min-width:0;
+    width:100%;
+    justify-content:center;
+    padding:11px 10px;
+    font-size:.84rem;
+  }
+  .task-toolbar-actions .bubble-add-btn{
+    width:48px;
+    height:48px;
+    justify-self:end;
+  }
+  #taskFormCloseBtn{
+    display:none;
+  }
+  .task-timeline{
+    margin:0 -15px;
+    padding:0 15px 6px;
+  }
+  .task-timeline-scroll{
+    min-width:800px;
+  }
+  .task-timeline-row{
+    grid-template-columns:172px 1fr;
+  }
+  .task-timeline-axis{
+    margin-left:172px;
+  }
+}

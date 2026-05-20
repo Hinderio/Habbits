@@ -439,6 +439,8 @@
   let taskFormOpen = false;
   let taskBacklogOpen = false;
   let taskTimelineOpen = false;
+  let taskTimelineScrollLeft = null;
+  let taskTimelineDragState = null;
   let appointmentFormOpen = false;
   let remoteTaskPrioritySupported = true;
   let remoteTaskInProgressSupported = true;
@@ -672,7 +674,7 @@
     });
     if (els.habitFormToggleBtn) els.habitFormToggleBtn.addEventListener('click', () => openHabitForm());
     if (els.habitFormCloseBtn) els.habitFormCloseBtn.addEventListener('click', () => closeHabitForm({ clearForm: !editingHabitId }));
-    if (els.taskFormToggleBtn) els.taskFormToggleBtn.addEventListener('click', () => openTaskForm());
+    if (els.taskFormToggleBtn) els.taskFormToggleBtn.addEventListener('click', toggleTaskForm);
     if (els.taskBacklogToggleBtn) els.taskBacklogToggleBtn.addEventListener('click', toggleTaskBacklog);
     if (els.taskTimelineToggleBtn) els.taskTimelineToggleBtn.addEventListener('click', toggleTaskTimeline);
     if (els.taskFormCloseBtn) els.taskFormCloseBtn.addEventListener('click', () => closeTaskForm({ clearForm: !editingTaskId }));
@@ -713,6 +715,7 @@
     document.addEventListener('focusout', flushDeferredRender);
     document.addEventListener('change', flushDeferredRender);
     setupMobileDashboardSections();
+    setupTaskTimelineScroller();
 
     document.addEventListener('click', event => {
       const actionEl = event.target.closest('[data-action]');
@@ -1354,11 +1357,21 @@
     syncTaskFormPanel();
   }
 
+  function toggleTaskForm() {
+    if (taskFormOpen) {
+      closeTaskForm({ clearForm: !editingTaskId });
+      return;
+    }
+    openTaskForm();
+  }
+
   function syncTaskFormPanel() {
     if (!els.taskFormPanel) return;
     els.taskFormPanel.classList.toggle('hidden', !taskFormOpen);
     els.taskFormToggleBtn?.classList.toggle('is-active', taskFormOpen);
     els.taskFormToggleBtn?.setAttribute('aria-expanded', String(taskFormOpen));
+    els.taskFormToggleBtn?.setAttribute('aria-label', taskFormOpen ? 'Aufgaben-Formular schliessen' : 'Aufgaben-Formular öffnen');
+    els.taskFormToggleBtn?.setAttribute('title', taskFormOpen ? 'Aufgaben-Formular schliessen' : 'Aufgabe anlegen');
   }
 
   function toggleTaskBacklog() {
@@ -1749,6 +1762,49 @@
         });
       });
     });
+  }
+
+
+  function setupTaskTimelineScroller() {
+    if (!els.taskTimeline) return;
+    els.taskTimeline.addEventListener('scroll', () => {
+      taskTimelineScrollLeft = els.taskTimeline.scrollLeft;
+    }, { passive: true });
+
+    els.taskTimeline.addEventListener('pointerdown', event => {
+      if (event.button && event.button !== 0) return;
+      if (!els.taskTimeline || els.taskTimeline.scrollWidth <= els.taskTimeline.clientWidth) return;
+      taskTimelineDragState = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        startScrollLeft: els.taskTimeline.scrollLeft,
+        active: false
+      };
+      els.taskTimeline.classList.add('is-grab-ready');
+    });
+
+    window.addEventListener('pointermove', event => {
+      if (!taskTimelineDragState || !els.taskTimeline) return;
+      const dx = event.clientX - taskTimelineDragState.startX;
+      const dy = event.clientY - taskTimelineDragState.startY;
+      if (!taskTimelineDragState.active && Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) {
+        taskTimelineDragState.active = true;
+        els.taskTimeline.classList.add('is-dragging');
+      }
+      if (!taskTimelineDragState.active) return;
+      event.preventDefault();
+      els.taskTimeline.scrollLeft = taskTimelineDragState.startScrollLeft - dx;
+    }, { passive: false });
+
+    const endDrag = () => {
+      if (!taskTimelineDragState) return;
+      taskTimelineScrollLeft = els.taskTimeline?.scrollLeft ?? taskTimelineScrollLeft;
+      taskTimelineDragState = null;
+      els.taskTimeline?.classList.remove('is-grab-ready', 'is-dragging');
+    };
+    window.addEventListener('pointerup', endDrag);
+    window.addEventListener('pointercancel', endDrag);
   }
 
 
@@ -4327,10 +4383,30 @@
       return `<span style="left:${pos(time).toFixed(2)}%">${escapeHtml(new Date(time).toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' }))}</span>`;
     }).join('');
     const rows = active.map(task => renderTaskTimelineRow(task, minTime, range, todayLeft)).join('');
+    const preferredScrollLeft = Number.isFinite(Number(taskTimelineScrollLeft)) ? Number(taskTimelineScrollLeft) : null;
     els.taskTimeline.innerHTML = `<div class="task-timeline-scroll">
       <div class="task-timeline-axis"><span class="timeline-today-label" style="left:${todayLeft.toFixed(2)}%">Heute</span>${ticks}</div>
       <div class="task-timeline-rows">${rows}</div>
     </div>`;
+    restoreTaskTimelineScroll(todayLeft, preferredScrollLeft);
+  }
+
+  function restoreTaskTimelineScroll(todayLeft = 0, preferredScrollLeft = null) {
+    if (!els.taskTimeline) return;
+    requestAnimationFrame(() => {
+      const scroller = els.taskTimeline;
+      const maxScroll = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+      if (!maxScroll) {
+        taskTimelineScrollLeft = 0;
+        return;
+      }
+      const todayTarget = Math.max(0, Math.min(maxScroll, (todayLeft / 100) * scroller.scrollWidth - scroller.clientWidth * 0.52));
+      const target = Number.isFinite(Number(preferredScrollLeft))
+        ? Math.max(0, Math.min(maxScroll, Number(preferredScrollLeft)))
+        : todayTarget;
+      scroller.scrollLeft = target;
+      taskTimelineScrollLeft = scroller.scrollLeft;
+    });
   }
 
   function renderTaskTimelineRow(task, minTime, range, todayLeft) {
