@@ -971,3 +971,66 @@ html[data-active-screen]:not([data-active-screen="dashboard"]) #screen-dashboard
     border-color:rgba(17,36,58,.075);
   }
 }
+
+/* v42: Tasks backlog + task calendar planner */
+#screen-tasks .task-toolbar{align-items:center;gap:16px}
+.task-toolbar-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap}
+.task-toolbar-actions .pill{min-height:46px;display:inline-flex;align-items:center;gap:8px}
+.task-toolbar-actions .pill.is-active{background:rgba(74,215,209,.14);border:1px solid rgba(74,215,209,.22);color:var(--primary)}
+.inline-count{min-width:24px;height:24px;border-radius:999px;display:inline-grid;place-items:center;padding:0 7px;background:rgba(255,255,255,.09);color:inherit;font-size:.78rem;font-weight:950}
+.task-toolbar-actions .bubble-add-btn{flex:0 0 auto}
+#screen-tasks .kanban-board{grid-template-columns:repeat(3,minmax(0,1fr))}
+.task-backlog-panel,.task-timeline-panel{overflow:hidden}
+.task-backlog-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;min-height:128px;border-radius:24px;transition:.18s border-color ease,.18s background ease}
+.task-backlog-list.is-over{background:rgba(74,215,209,.07);outline:1px dashed rgba(74,215,209,.42);outline-offset:4px}
+.backlog-card{background:linear-gradient(145deg,rgba(255,255,255,.06),rgba(74,215,209,.045));border-color:rgba(74,215,209,.11)}
+.backlog-card .drag-handle{cursor:grab}
+.backlog-actions .mini-btn[disabled]{opacity:.35;cursor:not-allowed;transform:none}
+.task-overdue-dots{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:12px 0 2px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06)}
+.task-overdue-dots>div{display:flex;align-items:center;gap:4px;min-width:0}
+.task-overdue-dots span{width:7px;height:7px;border-radius:999px;background:var(--warning);box-shadow:0 0 0 3px rgba(255,184,77,.08)}
+.task-overdue-dots span.is-late{background:var(--danger);box-shadow:0 0 0 3px rgba(255,112,112,.09)}
+.task-overdue-dots em{font-style:normal;color:var(--danger);font-size:.74rem;font-weight:950;margin-left:2px}
+.task-overdue-dots small{color:var(--warning);font-size:.76rem;font-weight:900;white-space:nowrap}
+.task-overdue-dots.is-compact{margin:6px 0 0;padding-top:0;border-top:0;justify-content:flex-start}
+.task-overdue-dots.is-compact span{width:6px;height:6px}.task-overdue-dots.is-compact small{font-size:.72rem}
+.task-timeline{overflow:hidden}
+.task-timeline-scroll{min-width:760px;display:grid;gap:14px;padding:4px 0 2px;overflow-x:auto}
+.task-timeline-axis{position:relative;height:42px;border-bottom:1px solid rgba(255,255,255,.08);margin-left:220px}
+.task-timeline-axis span{position:absolute;bottom:8px;transform:translateX(-50%);color:var(--muted);font-size:.72rem;font-weight:850;white-space:nowrap}
+.task-timeline-axis .timeline-today-label{top:0;bottom:auto;color:var(--primary);font-weight:950}
+.task-timeline-rows{display:grid;gap:10px}
+.task-timeline-row{display:grid;grid-template-columns:220px 1fr;align-items:center;gap:14px;min-height:82px;padding:10px;border-radius:22px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.065)}
+.task-timeline-row.is-overdue{border-color:rgba(255,184,77,.2);background:linear-gradient(135deg,rgba(255,184,77,.08),rgba(255,255,255,.045))}
+.task-timeline-meta{display:grid;gap:5px;min-width:0}.task-timeline-meta strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.task-timeline-meta small{color:var(--muted);font-weight:800;line-height:1.35}
+.task-timeline-meta .badge{justify-self:start}
+.task-timeline-track{position:relative;height:44px;border-radius:16px;background:repeating-linear-gradient(90deg,rgba(255,255,255,.06) 0,rgba(255,255,255,.06) 1px,transparent 1px,transparent 8.33%);overflow:hidden;border:1px solid rgba(255,255,255,.05)}
+.task-today-line{position:absolute;top:0;bottom:0;width:2px;background:var(--primary);opacity:.75;z-index:2}
+.task-timebar{position:absolute;top:19px;height:6px;border-radius:999px;background:linear-gradient(90deg,rgba(74,215,209,.72),rgba(143,240,167,.72));min-width:10px}
+.task-timeline-row.is-overdue .task-timebar{background:linear-gradient(90deg,var(--warning),var(--danger))}
+.task-timeline-row.is-future .task-timebar{height:2px;top:21px;background:linear-gradient(90deg,rgba(74,215,209,.28),rgba(74,215,209,.8));border-radius:0}
+.task-due-marker{position:absolute;top:12px;width:12px;height:20px;border-radius:999px;background:var(--primary);box-shadow:0 0 0 4px rgba(74,215,209,.1);transform:translateX(-50%);z-index:3}
+.task-timeline-row.is-overdue .task-due-marker{background:var(--warning);box-shadow:0 0 0 4px rgba(255,184,77,.12)}
+.task-time-label{position:absolute;top:4px;transform:translateX(-50%);max-width:170px;padding:3px 7px;border-radius:999px;background:rgba(0,0,0,.2);color:var(--text);font-size:.68rem;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;z-index:4}
+body.light .task-toolbar-actions .pill.is-active{background:rgba(232,249,249,.96);border-color:rgba(13,151,149,.18)}
+body.light .inline-count{background:rgba(17,36,58,.06)}
+body.light .backlog-card,body.light .task-timeline-row{background:rgba(255,255,255,.72);border-color:rgba(17,36,58,.08)}
+body.light .task-overdue-dots{border-color:rgba(17,36,58,.08)}
+body.light .task-timeline-axis{border-color:rgba(17,36,58,.1)}
+body.light .task-timeline-track{background:repeating-linear-gradient(90deg,rgba(17,36,58,.07) 0,rgba(17,36,58,.07) 1px,transparent 1px,transparent 8.33%);border-color:rgba(17,36,58,.07)}
+body.light .task-time-label{background:rgba(255,255,255,.9);color:#0d1827;border:1px solid rgba(17,36,58,.08)}
+@media (max-width:1100px){#screen-tasks .kanban-board{grid-template-columns:repeat(2,minmax(0,1fr))}.task-backlog-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){
+  #screen-tasks .task-toolbar{align-items:flex-start}
+  .task-toolbar-actions{width:100%;display:grid;grid-template-columns:1fr 1fr auto;gap:8px}
+  .task-toolbar-actions .pill{width:100%;justify-content:center;padding:11px 12px;font-size:.86rem}
+  .task-toolbar-actions .bubble-add-btn{width:46px;height:46px}
+  #screen-tasks .kanban-board,.task-backlog-list{grid-template-columns:1fr}
+  .task-backlog-list{gap:10px}
+  .task-overdue-dots{align-items:flex-start;flex-direction:column;gap:7px}
+  .task-timeline{overflow-x:auto;margin:0 -15px;padding:0 15px 4px;-webkit-overflow-scrolling:touch}
+  .task-timeline-scroll{min-width:680px}
+  .task-timeline-row{grid-template-columns:180px 1fr;min-height:90px}
+  .task-timeline-axis{margin-left:180px}
+  .task-timeline-meta strong{white-space:normal;line-height:1.25}
+}

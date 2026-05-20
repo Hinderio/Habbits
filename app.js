@@ -260,8 +260,10 @@
     { status: 'open', title: 'Offen', hint: 'geplant und noch nicht gestartet' },
     { status: 'in_progress', title: 'In Bearbeitung', hint: 'aktiver Fokus für heute' },
     { status: 'done', title: 'Erledigt', hint: 'abgeschlossen und bepunktet' },
-    { status: 'archived', title: 'Archiv', hint: 'aus dem aktiven Fokus' }
+    { status: 'archived', title: 'Backlog', hint: 'später priorisieren, noch nicht aktiv' }
   ];
+  const TASK_BOARD_COLUMNS = TASK_COLUMNS.filter(column => column.status !== 'archived');
+  const TASK_BACKLOG_STATUS = 'archived';
   const TASK_PRIORITIES = {
     low: { label: 'Niedrig', short: 'Low', rank: 1, bonus: 0 },
     medium: { label: 'Normal', short: 'Normal', rank: 2, bonus: 10 },
@@ -435,9 +437,12 @@
   let deferredRenderPending = false;
   let habitFormOpen = false;
   let taskFormOpen = false;
+  let taskBacklogOpen = false;
+  let taskTimelineOpen = false;
   let appointmentFormOpen = false;
   let remoteTaskPrioritySupported = true;
   let remoteTaskInProgressSupported = true;
+  let remoteTaskBacklogRankSupported = true;
   let remoteHabitTargetPeriodSupported = true;
   let pendingTriggerSmokeId = null;
   let rulesExpanded = localStorage.getItem(RULES_UI_KEY) !== 'collapsed';
@@ -573,6 +578,13 @@
       cancelTaskEditBtn: $('#cancelTaskEditBtn'),
       taskPointsPreview: $('#taskPointsPreview'),
       tasksList: $('#tasksList'),
+      taskBacklogToggleBtn: $('#taskBacklogToggleBtn'),
+      taskTimelineToggleBtn: $('#taskTimelineToggleBtn'),
+      taskBacklogCount: $('#taskBacklogCount'),
+      taskBacklogPanel: $('#taskBacklogPanel'),
+      taskBacklogList: $('#taskBacklogList'),
+      taskTimelinePanel: $('#taskTimelinePanel'),
+      taskTimeline: $('#taskTimeline'),
       appointmentFormPanel: $('#appointmentFormPanel'),
       appointmentFormToggleBtn: $('#appointmentFormToggleBtn'),
       appointmentFormCloseBtn: $('#appointmentFormCloseBtn'),
@@ -661,6 +673,8 @@
     if (els.habitFormToggleBtn) els.habitFormToggleBtn.addEventListener('click', () => openHabitForm());
     if (els.habitFormCloseBtn) els.habitFormCloseBtn.addEventListener('click', () => closeHabitForm({ clearForm: !editingHabitId }));
     if (els.taskFormToggleBtn) els.taskFormToggleBtn.addEventListener('click', () => openTaskForm());
+    if (els.taskBacklogToggleBtn) els.taskBacklogToggleBtn.addEventListener('click', toggleTaskBacklog);
+    if (els.taskTimelineToggleBtn) els.taskTimelineToggleBtn.addEventListener('click', toggleTaskTimeline);
     if (els.taskFormCloseBtn) els.taskFormCloseBtn.addEventListener('click', () => closeTaskForm({ clearForm: !editingTaskId }));
     if (els.appointmentFormToggleBtn) els.appointmentFormToggleBtn.addEventListener('click', () => openAppointmentForm({ dateKey: selectedCalendarDate }));
     if (els.appointmentFormCloseBtn) els.appointmentFormCloseBtn.addEventListener('click', () => closeAppointmentForm({ clearForm: !editingAppointmentId }));
@@ -706,6 +720,10 @@
       const { action, id } = actionEl.dataset;
       if (action === 'complete-task') completeTask(id);
       if (action === 'move-task') moveTaskToStatus(id, actionEl.dataset.status);
+      if (action === 'move-task-to-backlog') moveTaskToBacklog(id);
+      if (action === 'move-backlog-task') moveTaskToStatus(id, actionEl.dataset.status || 'open');
+      if (action === 'backlog-rank-up') shiftBacklogTask(id, -1);
+      if (action === 'backlog-rank-down') shiftBacklogTask(id, 1);
       if (action === 'edit-task') editTask(id);
       if (action === 'delete-task') deleteTask(id);
       if (action === 'archive-task') archiveTask(id);
@@ -783,6 +801,12 @@
     });
 
     document.addEventListener('dragover', event => {
+      const backlogDrop = event.target.closest('[data-backlog-drop]');
+      if (backlogDrop) {
+        event.preventDefault();
+        backlogDrop.classList.add('is-over');
+        return;
+      }
       const column = event.target.closest('[data-task-drop]');
       if (!column) return;
       event.preventDefault();
@@ -790,11 +814,27 @@
     });
 
     document.addEventListener('dragleave', event => {
+      const backlogDrop = event.target.closest('[data-backlog-drop]');
+      if (backlogDrop && !backlogDrop.contains(event.relatedTarget)) backlogDrop.classList.remove('is-over');
       const column = event.target.closest('[data-task-drop]');
       if (column && !column.contains(event.relatedTarget)) column.classList.remove('is-over');
     });
 
     document.addEventListener('drop', event => {
+      const backlogDrop = event.target.closest('[data-backlog-drop]');
+      if (backlogDrop) {
+        event.preventDefault();
+        backlogDrop.classList.remove('is-over');
+        const taskId = event.dataTransfer.getData('text/plain');
+        const targetCard = event.target.closest('[data-backlog-card]');
+        let insertAfter = false;
+        if (targetCard) {
+          const rect = targetCard.getBoundingClientRect();
+          insertAfter = event.clientY > rect.top + rect.height / 2;
+        }
+        moveTaskToBacklog(taskId, targetCard?.dataset.id || null, { insertAfter });
+        return;
+      }
       const column = event.target.closest('[data-task-drop]');
       if (!column) return;
       event.preventDefault();
@@ -806,6 +846,7 @@
     document.addEventListener('dragend', () => {
       $$('[data-task-card].is-dragging').forEach(card => card.classList.remove('is-dragging'));
       $$('[data-task-drop].is-over').forEach(column => column.classList.remove('is-over'));
+      $$('[data-backlog-drop].is-over').forEach(zone => zone.classList.remove('is-over'));
     });
   }
 
@@ -1318,6 +1359,27 @@
     els.taskFormPanel.classList.toggle('hidden', !taskFormOpen);
     els.taskFormToggleBtn?.classList.toggle('is-active', taskFormOpen);
     els.taskFormToggleBtn?.setAttribute('aria-expanded', String(taskFormOpen));
+  }
+
+  function toggleTaskBacklog() {
+    taskBacklogOpen = !taskBacklogOpen;
+    syncTaskUtilityPanels();
+    if (taskBacklogOpen) requestAnimationFrame(() => els.taskBacklogPanel?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }
+
+  function toggleTaskTimeline() {
+    taskTimelineOpen = !taskTimelineOpen;
+    syncTaskUtilityPanels();
+    if (taskTimelineOpen) requestAnimationFrame(() => els.taskTimelinePanel?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }
+
+  function syncTaskUtilityPanels() {
+    els.taskBacklogPanel?.classList.toggle('hidden', !taskBacklogOpen);
+    els.taskBacklogToggleBtn?.classList.toggle('is-active', taskBacklogOpen);
+    els.taskBacklogToggleBtn?.setAttribute('aria-expanded', String(taskBacklogOpen));
+    els.taskTimelinePanel?.classList.toggle('hidden', !taskTimelineOpen);
+    els.taskTimelineToggleBtn?.classList.toggle('is-active', taskTimelineOpen);
+    els.taskTimelineToggleBtn?.setAttribute('aria-expanded', String(taskTimelineOpen));
   }
 
   function openAppointmentForm({ dateKey = selectedCalendarDate, forceNew = false } = {}) {
@@ -4090,17 +4152,73 @@
     syncWithSupabase({ silent: true, pullFirst: false });
   }
 
+  function taskOverdueDays(task) {
+    if (!task?.due_at || (task.status || 'open') === 'done') return 0;
+    const dueMs = new Date(task.due_at).getTime();
+    if (!Number.isFinite(dueMs) || dueMs >= Date.now()) return 0;
+    return Math.max(1, Math.ceil((Date.now() - dueMs) / DAY_MS));
+  }
+
+  function taskDueState(task) {
+    const days = taskOverdueDays(task);
+    if (days > 0) return { overdue: true, days, label: days === 1 ? '1 Tag überfällig' : `${days} Tage überfällig` };
+    if (!task?.due_at) return { overdue: false, days: 0, label: 'ohne Fälligkeitsdatum' };
+    return { overdue: false, days: 0, label: `Fällig ${formatDateTime(task.due_at)}` };
+  }
+
+  function renderOverdueDots(task, { compact = false } = {}) {
+    const dueState = taskDueState(task);
+    if (!dueState.overdue) return '';
+    const dots = Array.from({ length: Math.min(dueState.days, 7) }, (_, index) => `<span aria-hidden="true" class="${index > 3 ? 'is-late' : ''}"></span>`).join('');
+    const more = dueState.days > 7 ? '<em aria-hidden="true">+</em>' : '';
+    return `<div class="task-overdue-dots ${compact ? 'is-compact' : ''}" title="${escapeHtml(dueState.label)}" aria-label="${escapeHtml(dueState.label)}"><div>${dots}${more}</div><small>${escapeHtml(dueState.label)}</small></div>`;
+  }
+
+  function backlogTasks() {
+    return state.tasks
+      .map(normalizeTask)
+      .filter(task => (task.status || 'open') === TASK_BACKLOG_STATUS)
+      .sort(compareBacklogTasks);
+  }
+
+  function compareBacklogTasks(a, b) {
+    const ar = Number.isFinite(Number(a.backlog_rank)) ? Number(a.backlog_rank) : Number.MAX_SAFE_INTEGER;
+    const br = Number.isFinite(Number(b.backlog_rank)) ? Number(b.backlog_rank) : Number.MAX_SAFE_INTEGER;
+    if (ar !== br) return ar - br;
+    return compareTasks(a, b);
+  }
+
+  function compactBacklogRanks() {
+    backlogTasks().forEach((task, index) => {
+      const source = state.tasks.find(item => item.id === task.id);
+      if (source) source.backlog_rank = index + 1;
+    });
+  }
+
+  function nextBacklogRank() {
+    const ranks = state.tasks
+      .filter(task => (task.status || 'open') === TASK_BACKLOG_STATUS)
+      .map(task => Number(task.backlog_rank))
+      .filter(Number.isFinite);
+    return ranks.length ? Math.max(...ranks) + 1 : 1;
+  }
+
   function renderTasks() {
     const tasks = [...state.tasks].map(normalizeTask).sort(compareTasks);
     const totalOpen = tasks.filter(isActiveTask).length;
+    const backlog = backlogTasks();
     if (els.openTasksCount) els.openTasksCount.textContent = totalOpen;
+    if (els.taskBacklogCount) els.taskBacklogCount.textContent = backlog.length;
+    syncTaskUtilityPanels();
+    renderTaskBacklog(backlog);
+    renderTaskTimeline();
     if (!tasks.length) {
       els.tasksList.innerHTML = '<div class="empty-state">Keine Aufgaben vorhanden. Neue Aufgaben erscheinen hier direkt als Kanban-Karte.</div>';
       return;
     }
 
     els.tasksList.innerHTML = `<div class="kanban-board" aria-label="Aufgaben Kanban Board">
-      ${TASK_COLUMNS.map(column => {
+      ${TASK_BOARD_COLUMNS.map(column => {
         const columnTasks = tasks.filter(task => (task.status || 'open') === column.status);
         return `<section class="kanban-column" data-task-drop data-status="${column.status}">
           <div class="kanban-column-head">
@@ -4114,12 +4232,49 @@
       }).join('')}
     </div>`;
   }
+
+  function renderTaskBacklog(backlog = backlogTasks()) {
+    if (!els.taskBacklogList) return;
+    if (!backlog.length) {
+      els.taskBacklogList.innerHTML = '<div class="empty-state">Dein Backlog ist leer. Ziehe eine Karte hierhin oder nutze auf einer Karte den Backlog-Button.</div>';
+      return;
+    }
+    els.taskBacklogList.innerHTML = backlog.map((task, index) => renderBacklogTaskCard(task, index, backlog.length)).join('');
+  }
+
+  function renderBacklogTaskCard(task, index, total) {
+    const priority = normalizeTaskPriority(task.priority);
+    const priorityMeta = taskPriorityMeta(priority);
+    const dueState = taskDueState(task);
+    const dueLabel = task.due_at ? `${dueState.overdue ? 'überfällig' : 'fällig'} ${formatDateTime(task.due_at)}` : 'ohne Fälligkeitsdatum';
+    return `<article class="kanban-card backlog-card ${editingTaskId === task.id ? 'is-editing' : ''} ${dueState.overdue ? 'is-overdue' : ''}" draggable="true" data-task-card data-backlog-card data-id="${task.id}">
+      <div class="kanban-card-top">
+        <span class="drag-handle" aria-hidden="true">⋮⋮</span>
+        <div class="task-badges">
+          <span class="badge muted ${taskPriorityClass(priority)}">${escapeHtml(priorityMeta.short)}</span>
+          <span class="badge muted">#${index + 1}</span>
+        </div>
+      </div>
+      <h4>${escapeHtml(task.title)}</h4>
+      <p class="meta">Backlog · Aufwand ${task.effort}/5 · Priorität ${escapeHtml(priorityMeta.label)} · ${escapeHtml(dueLabel)}${task.description ? `<br>${escapeHtml(task.description)}` : ''}</p>
+      ${renderOverdueDots(task)}
+      <div class="list-actions compact-actions backlog-actions">
+        <button class="mini-btn primary" type="button" data-action="move-backlog-task" data-status="open" data-id="${task.id}">In Offen</button>
+        <button class="mini-btn" type="button" data-action="edit-task" data-id="${task.id}">Bearbeiten</button>
+        <button class="mini-btn" type="button" data-action="backlog-rank-up" data-id="${task.id}" ${index === 0 ? 'disabled' : ''}>↑</button>
+        <button class="mini-btn" type="button" data-action="backlog-rank-down" data-id="${task.id}" ${index === total - 1 ? 'disabled' : ''}>↓</button>
+        <button class="mini-btn danger" type="button" data-action="delete-task" data-id="${task.id}">Löschen</button>
+      </div>
+    </article>`;
+  }
+
   function renderTaskCard(task) {
     const status = task.status || 'open';
     const priority = normalizeTaskPriority(task.priority);
     const priorityMeta = taskPriorityMeta(priority);
     const statusLabel = TASK_COLUMNS.find(column => column.status === status)?.title || 'Offen';
-    const isOverdue = task.due_at && status !== 'done' && new Date(task.due_at).getTime() < Date.now();
+    const dueState = taskDueState(task);
+    const isOverdue = dueState.overdue;
     const primaryAction = status === 'open'
       ? `<button class="mini-btn primary" type="button" data-action="move-task" data-status="in_progress" data-id="${task.id}">In Bearbeitung</button>`
       : status === 'in_progress'
@@ -4127,9 +4282,9 @@
         : status === 'done'
           ? `<button class="mini-btn" type="button" data-action="move-task" data-status="in_progress" data-id="${task.id}">Zurück in Arbeit</button>`
           : `<button class="mini-btn" type="button" data-action="move-task" data-status="open" data-id="${task.id}">Reaktivieren</button>`;
-    const archiveAction = status === 'archived'
+    const archiveAction = status === TASK_BACKLOG_STATUS
       ? ''
-      : `<button class="mini-btn" type="button" data-action="move-task" data-status="archived" data-id="${task.id}">Archiv</button>`;
+      : `<button class="mini-btn" type="button" data-action="move-task-to-backlog" data-id="${task.id}">Backlog</button>`;
     return `<article class="kanban-card ${editingTaskId === task.id ? 'is-editing' : ''} ${isOverdue ? 'is-overdue' : ''}" draggable="true" data-task-card data-id="${task.id}">
       <div class="kanban-card-top">
         <span class="drag-handle" aria-hidden="true">⋮⋮</span>
@@ -4140,6 +4295,7 @@
       </div>
       <h4>${escapeHtml(task.title)}</h4>
       <p class="meta">${escapeHtml(statusLabel)} · Aufwand ${task.effort}/5 · Priorität ${escapeHtml(priorityMeta.label)} · ${task.due_at ? `${isOverdue ? 'Überfällig' : 'Fällig'} ${formatDateTime(task.due_at)}` : 'ohne Fälligkeitsdatum'}${task.description ? `<br>${escapeHtml(task.description)}` : ''}</p>
+      ${renderOverdueDots(task)}
       <div class="list-actions compact-actions">
         ${primaryAction}
         <button class="mini-btn" type="button" data-action="edit-task" data-id="${task.id}">Bearbeiten</button>
@@ -4148,6 +4304,62 @@
       </div>
     </article>`;
   }
+
+  function renderTaskTimeline() {
+    if (!els.taskTimeline) return;
+    const active = state.tasks
+      .map(normalizeTask)
+      .filter(task => isActiveTask(task) && task.due_at && Number.isFinite(new Date(task.due_at).getTime()))
+      .sort((a, b) => new Date(a.due_at).getTime() - new Date(b.due_at).getTime());
+    if (!active.length) {
+      els.taskTimeline.innerHTML = '<div class="empty-state">Keine offenen oder laufenden Aufgaben mit Fälligkeitsdatum. Sobald du ein Datum setzt, erscheint hier der Planer.</div>';
+      return;
+    }
+    const now = Date.now();
+    const dueTimes = active.map(task => new Date(task.due_at).getTime()).filter(Number.isFinite);
+    const minTime = Math.min(now - 3 * DAY_MS, ...dueTimes.map(time => Math.min(time, now))) - DAY_MS;
+    const maxTime = Math.max(now + 10 * DAY_MS, ...dueTimes.map(time => Math.max(time, now))) + DAY_MS;
+    const range = Math.max(DAY_MS, maxTime - minTime);
+    const pos = (time) => Math.max(0, Math.min(100, ((time - minTime) / range) * 100));
+    const todayLeft = pos(now);
+    const ticks = Array.from({ length: 8 }, (_, index) => {
+      const time = minTime + (range / 7) * index;
+      return `<span style="left:${pos(time).toFixed(2)}%">${escapeHtml(new Date(time).toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' }))}</span>`;
+    }).join('');
+    const rows = active.map(task => renderTaskTimelineRow(task, minTime, range, todayLeft)).join('');
+    els.taskTimeline.innerHTML = `<div class="task-timeline-scroll">
+      <div class="task-timeline-axis"><span class="timeline-today-label" style="left:${todayLeft.toFixed(2)}%">Heute</span>${ticks}</div>
+      <div class="task-timeline-rows">${rows}</div>
+    </div>`;
+  }
+
+  function renderTaskTimelineRow(task, minTime, range, todayLeft) {
+    const due = new Date(task.due_at).getTime();
+    const now = Date.now();
+    const dueState = taskDueState(task);
+    const start = Math.min(due, now);
+    const end = Math.max(due, now);
+    const left = Math.max(0, Math.min(100, ((start - minTime) / range) * 100));
+    const width = Math.max(1.2, ((end - start) / range) * 100);
+    const dueLeft = Math.max(0, Math.min(100, ((due - minTime) / range) * 100));
+    const priority = taskPriorityMeta(task);
+    const stateLabel = task.status === 'in_progress' ? 'In Bearbeitung' : 'Offen';
+    return `<article class="task-timeline-row ${dueState.overdue ? 'is-overdue' : 'is-future'}">
+      <div class="task-timeline-meta">
+        <span class="badge muted ${taskPriorityClass(task.priority)}">${escapeHtml(priority.short)}</span>
+        <strong>${escapeHtml(task.title)}</strong>
+        <small>${escapeHtml(stateLabel)} · ${escapeHtml(dueState.label)}</small>
+        ${renderOverdueDots(task, { compact: true })}
+      </div>
+      <div class="task-timeline-track">
+        <span class="task-today-line" style="left:${todayLeft.toFixed(2)}%"></span>
+        <span class="task-timebar" style="left:${left.toFixed(2)}%;width:${width.toFixed(2)}%"></span>
+        <span class="task-due-marker" style="left:${dueLeft.toFixed(2)}%"></span>
+        <span class="task-time-label" style="left:${dueLeft.toFixed(2)}%">${escapeHtml(formatDateTime(task.due_at))}</span>
+      </div>
+    </article>`;
+  }
+
   function renderCalendar() {
     const year = calendarCursor.getFullYear();
     const month = calendarCursor.getMonth();
@@ -4830,6 +5042,7 @@ async function deleteAlcoholLog(id) {
     if (!task || task.status === nextStatus) return;
     const previousStatus = task.status || 'open';
     task.status = nextStatus;
+    if (nextStatus === TASK_BACKLOG_STATUS && !Number.isFinite(Number(task.backlog_rank))) task.backlog_rank = nextBacklogRank();
     task.updated_at = nowIso();
     task.synced = false;
 
@@ -4837,20 +5050,72 @@ async function deleteAlcoholLog(id) {
       task.completed_at = nowIso();
       task.points = taskPoints(task);
       addPoints('task', task.id, task.points, `Aufgabe abgeschlossen: ${task.title}`, task.completed_at);
-    } else if (previousStatus === 'done' && nextStatus !== 'archived') {
+    } else if (previousStatus === 'done' && nextStatus !== TASK_BACKLOG_STATUS) {
       task.completed_at = null;
       task.points = 0;
       markRemoteDeletedMany('points_ledger', removeTaskPoints(task.id));
-    } else if (nextStatus === 'archived' && previousStatus !== 'done') {
+    } else if (nextStatus === TASK_BACKLOG_STATUS) {
       task.completed_at = null;
       task.points = 0;
       markRemoteDeletedMany('points_ledger', removeTaskPoints(task.id));
     }
 
-    if (editingTaskId === id && nextStatus === 'archived') resetTaskFormMode({ clearForm: true });
+    if (editingTaskId === id && nextStatus === TASK_BACKLOG_STATUS) resetTaskFormMode({ clearForm: true });
+    if (previousStatus === TASK_BACKLOG_STATUS || nextStatus === TASK_BACKLOG_STATUS) compactBacklogRanks();
     saveState();
     const label = TASK_COLUMNS.find(column => column.status === nextStatus)?.title || 'verschoben';
     toast(`Aufgabe: ${label}`);
+    syncWithSupabase({ silent: true });
+  }
+
+  function moveTaskToBacklog(id, targetId = null, { insertAfter = false } = {}) {
+    const task = state.tasks.find(t => t.id === id);
+    if (!task) return;
+    if (targetId === id && (task.status || 'open') === TASK_BACKLOG_STATUS) return;
+    const ordered = backlogTasks().filter(item => item.id !== id);
+    const wasBacklog = (task.status || 'open') === TASK_BACKLOG_STATUS;
+    task.status = TASK_BACKLOG_STATUS;
+    task.completed_at = null;
+    task.points = 0;
+    task.updated_at = nowIso();
+    task.synced = false;
+    markRemoteDeletedMany('points_ledger', removeTaskPoints(task.id));
+
+    let insertIndex = ordered.length;
+    if (targetId) {
+      const targetIndex = ordered.findIndex(item => item.id === targetId);
+      if (targetIndex >= 0) insertIndex = targetIndex + (insertAfter ? 1 : 0);
+    }
+    ordered.splice(insertIndex, 0, task);
+    ordered.forEach((item, index) => {
+      const source = state.tasks.find(t => t.id === item.id);
+      if (source) source.backlog_rank = index + 1;
+    });
+    taskBacklogOpen = true;
+    if (editingTaskId === id) resetTaskFormMode({ clearForm: true });
+    saveState();
+    toast(wasBacklog ? 'Backlog neu priorisiert' : 'Aufgabe ins Backlog verschoben');
+    syncWithSupabase({ silent: true });
+  }
+
+  function shiftBacklogTask(id, delta) {
+    const ordered = backlogTasks();
+    const index = ordered.findIndex(task => task.id === id);
+    if (index < 0) return;
+    const nextIndex = Math.max(0, Math.min(ordered.length - 1, index + delta));
+    if (nextIndex === index) return;
+    const [item] = ordered.splice(index, 1);
+    ordered.splice(nextIndex, 0, item);
+    ordered.forEach((task, orderIndex) => {
+      const source = state.tasks.find(t => t.id === task.id);
+      if (source) {
+        source.backlog_rank = orderIndex + 1;
+        source.updated_at = nowIso();
+        source.synced = false;
+      }
+    });
+    saveState();
+    toast('Backlog priorisiert');
     syncWithSupabase({ silent: true });
   }
 
@@ -5887,6 +6152,7 @@ async function deleteAlcoholLog(id) {
         updated_at: t.updated_at || nowIso()
       };
       if (remoteTaskPrioritySupported) row.priority = normalizeTaskPriority(t.priority);
+      if (remoteTaskBacklogRankSupported && t.backlog_rank != null) row.backlog_rank = Number(t.backlog_rank) || null;
       return row;
     });
   }
@@ -5907,6 +6173,11 @@ async function deleteAlcoholLog(id) {
         console.warn('Remote Tasks-Tabelle kennt in_progress noch nicht. Sync mappt diesen Status vorübergehend auf offen.', error);
         continue;
       }
+      if (remoteTaskBacklogRankSupported && isMissingRemoteColumnError(error, 'backlog_rank')) {
+        remoteTaskBacklogRankSupported = false;
+        console.warn('Remote Tasks-Tabelle hat noch keine backlog_rank-Spalte. Backlog-Reihenfolge bleibt lokal, bis supabase.sql angewendet ist.', error);
+        continue;
+      }
       throw error;
     }
   }
@@ -5920,6 +6191,12 @@ async function deleteAlcoholLog(id) {
   function isTaskStatusConstraintError(error) {
     const message = String(error?.message || error || '').toLowerCase();
     return message.includes('tasks_status_check') || (message.includes('check constraint') && message.includes('status'));
+  }
+
+  function isMissingRemoteColumnError(error, column) {
+    const message = String(error?.message || error?.details || error?.hint || error || '').toLowerCase();
+    const needle = String(column || '').toLowerCase();
+    return Boolean(needle) && (message.includes(needle) || (message.includes('schema cache') && message.includes('column')));
   }
 
   function isMissingRemoteRelationError(error) {
@@ -6169,6 +6446,7 @@ async function deleteAlcoholLog(id) {
     const next = { ...remoteTask };
     if (!remoteTaskPrioritySupported) next.priority = localTask.priority || next.priority;
     if (!remoteTaskInProgressSupported && localTask.status === 'in_progress' && remoteTask.status === 'open') next.status = 'in_progress';
+    if (!remoteTaskBacklogRankSupported && localTask.backlog_rank != null) next.backlog_rank = localTask.backlog_rank;
     return next;
   }
 
@@ -6224,7 +6502,7 @@ async function deleteAlcoholLog(id) {
   const mapRemoteCigarette = c => ({ id: c.id, smoked_at: c.smoked_at, interval_minutes: c.interval_minutes, alcohol_context: c.alcohol_context, points: c.points, note: c.note, created_at: c.created_at, updated_at: c.updated_at, synced: true });
   const mapRemoteAlcohol = a => ({ id: a.id, log_date: a.log_date, consumed: a.consumed, note: a.note, created_at: a.created_at, updated_at: a.updated_at, synced: true });
   const mapRemoteAlcoholEvent = a => ({ id: a.id, occurred_at: a.occurred_at, drink_type: a.drink_type || 'other', note: a.note, created_at: a.created_at, updated_at: a.updated_at, synced: true });
-  const mapRemoteTask = t => ({ id: t.id, title: t.title, description: t.description, effort: t.effort, priority: normalizeTaskPriority(t.priority), status: TASK_COLUMNS.some(column => column.status === t.status) ? t.status : 'open', due_at: t.due_at, completed_at: t.completed_at, points: t.points, created_at: t.created_at, updated_at: t.updated_at, synced: true });
+  const mapRemoteTask = t => ({ id: t.id, title: t.title, description: t.description, effort: t.effort, priority: normalizeTaskPriority(t.priority), status: TASK_COLUMNS.some(column => column.status === t.status) ? t.status : 'open', due_at: t.due_at, completed_at: t.completed_at, points: t.points, backlog_rank: t.backlog_rank, created_at: t.created_at, updated_at: t.updated_at, synced: true });
   const mapRemoteAppointment = a => normalizeAppointment({ id: a.id, title: a.title, description: a.description, location: a.location, appointment_type: a.appointment_type, starts_at: a.starts_at, ends_at: a.ends_at, created_at: a.created_at, updated_at: a.updated_at, synced: true });
   const mapRemoteLedger = p => normalizeMorningRoutineLedgerPoint({ id: p.id, source_type: p.source_type, source_id: p.source_id, points: p.points, reason: p.reason, earned_at: p.earned_at, created_at: p.created_at, updated_at: p.created_at, synced: true });
 

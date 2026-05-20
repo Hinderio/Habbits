@@ -404,9 +404,13 @@
       </section>
 
       <section id="screen-tasks" class="screen" data-screen="tasks" hidden aria-hidden="true">
-        <div class="section-toolbar glass">
+        <div class="section-toolbar glass task-toolbar">
           <div><p class="eyebrow">Tasks</p><h3>Aufgaben-Board</h3></div>
-          <button id="taskFormToggleBtn" class="bubble-add-btn" type="button" aria-label="Aufgaben-Formular öffnen"><span data-icon="plus"></span></button>
+          <div class="task-toolbar-actions" aria-label="Task-Aktionen">
+            <button id="taskBacklogToggleBtn" class="pill secondary" type="button" aria-expanded="false">Backlog <span id="taskBacklogCount" class="inline-count">0</span></button>
+            <button id="taskTimelineToggleBtn" class="pill secondary" type="button" aria-expanded="false">Task-Kalender</button>
+            <button id="taskFormToggleBtn" class="bubble-add-btn" type="button" aria-label="Aufgaben-Formular öffnen"><span data-icon="plus"></span></button>
+          </div>
         </div>
         <section id="taskFormPanel" class="panel glass drawer-form-panel hidden">
           <div class="panel-head"><div><p class="eyebrow">Tasks</p><h3 id="taskFormTitle">Aufgabe erfassen</h3></div><button id="taskFormCloseBtn" class="icon-btn" type="button" aria-label="Aufgaben-Formular schliessen">×</button></div>
@@ -418,6 +422,20 @@
             <label class="full"><span>Notiz</span><textarea name="description" rows="3" placeholder="optional"></textarea></label>
             <div class="form-actions full"><button id="taskSubmitBtn" class="pill primary" type="submit">Aufgabe speichern</button><button id="cancelTaskEditBtn" class="pill secondary hidden" type="button">Abbrechen</button></div>
           </form>
+        </section>
+        <section id="taskBacklogPanel" class="panel glass task-backlog-panel hidden">
+          <div class="panel-head">
+            <div><p class="eyebrow">Backlog</p><h3>Später priorisieren</h3></div>
+            <span class="subtle">Karten ziehen oder mobil mit ↑ / ↓ sortieren</span>
+          </div>
+          <div id="taskBacklogList" class="task-backlog-list" data-backlog-drop></div>
+        </section>
+        <section id="taskTimelinePanel" class="panel glass task-timeline-panel hidden">
+          <div class="panel-head">
+            <div><p class="eyebrow">Task-Kalender</p><h3>Fälligkeiten auf einen Blick</h3></div>
+            <span class="subtle">Offen & in Bearbeitung</span>
+          </div>
+          <div id="taskTimeline" class="task-timeline"></div>
         </section>
         <section class="panel glass">
           <div class="panel-head"><div><p class="eyebrow">Kanban</p><h3>Aufgaben-Board</h3></div><span id="taskPointsPreview" class="badge muted">Aufwand × 20 Pkt.</span></div>
