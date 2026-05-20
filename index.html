@@ -68,7 +68,7 @@
         </div>
 
 
-        <div class="grid cards-4">
+        <div class="grid cards-4 dashboard-kpi-strip" aria-label="Dashboard Kennzahlen">
           <article class="metric-card glass"><span class="metric-label">Fokus-Pause</span><strong id="currentPause">–</strong><small>seit letzter Zigarette</small></article>
           <article class="metric-card glass"><span class="metric-label">Zigaretten heute</span><strong id="todayCigarettes">0</strong><small>kurz erfasst</small></article>
           <article class="metric-card glass"><span class="metric-label">Habits heute</span><strong id="avgPause7">0</strong><small>geloggte Einträge</small></article>
@@ -92,6 +92,8 @@
           </div>
         </section>
 
+        <details class="mobile-dashboard-section" open>
+          <summary><span>Risiko & Planung</span><small>Trigger und Abendplan</small></summary>
         <div class="grid two-columns intelligence-support-grid">
           <section class="panel glass">
             <div class="panel-head"><div><p class="eyebrow">Trigger Heatmap</p><h3>Risikofenster</h3></div><span class="subtle">21 Tage</span></div>
@@ -102,7 +104,10 @@
             <div id="partyPlanCard" class="party-plan-card"></div>
           </section>
         </div>
+        </details>
 
+        <details class="mobile-dashboard-section" open>
+          <summary><span>Trends & XP</span><small>Analyse öffnen</small></summary>
         <div class="grid two-columns">
           <section class="panel glass dashboard-chart-panel">
             <div class="panel-head chart-head">
@@ -116,17 +121,36 @@
             <div class="chart-wrap"><canvas id="pointsChart"></canvas></div>
           </section>
         </div>
+        </details>
 
+        <details class="mobile-dashboard-section" open>
+          <summary><span>Habit-Rhythmus</span><small>14 Tage Heatmap</small></summary>
         <section class="panel glass">
           <div class="panel-head"><div><p class="eyebrow">Heatmap</p><h3>Habit-Rhythmus</h3></div><span class="subtle">14 Tage</span></div>
           <div id="habitHeatmap" class="habit-heatmap"></div>
         </section>
+        </details>
 
+        <details class="mobile-dashboard-section" open>
+          <summary><span>Insights & Review</span><small>automatisch berechnet</small></summary>
         <section class="panel glass">
           <div class="panel-head"><div><p class="eyebrow">Insights</p><h3>Automatisch berechnet</h3></div></div>
           <div id="insightsGrid" class="insights-grid"></div>
           <div id="weeklyReview" class="weekly-review-card"></div>
         </section>
+        </details>
+
+        <details id="mobileQuickAdd" class="mobile-quick-add">
+          <summary aria-label="Schnellerfassung öffnen"><span>+</span><strong>Erfassen</strong></summary>
+          <div class="mobile-quick-sheet glass">
+            <div class="mobile-quick-head"><p class="eyebrow">Schnellaktion</p><h3>Was möchtest du erfassen?</h3></div>
+            <button type="button" data-action="record-cigarette">+ Zigarette</button>
+            <button type="button" data-action="open-morning-routine">Morgenroutine</button>
+            <button type="button" data-action="open-task-form">Aufgabe</button>
+            <button type="button" data-action="open-coach">Coach</button>
+            <button class="is-danger" type="button" data-action="start-emergency-craving">Ich will jetzt rauchen</button>
+          </div>
+        </details>
       </section>
 
       <section id="screen-smoking" class="screen" data-screen="smoking">

@@ -697,6 +697,7 @@
 
     document.addEventListener('focusout', flushDeferredRender);
     document.addEventListener('change', flushDeferredRender);
+    setupMobileDashboardSections();
 
     document.addEventListener('click', event => {
       const actionEl = event.target.closest('[data-action]');
@@ -740,7 +741,11 @@
       if (action === 'switch-consumption-mode') switchConsumptionMode(actionEl.dataset.mode);
       if (action === 'rotate-craving-tip') rotateSmokingTip();
       if (action === 'log-meditation') logMeditationTechnique(id);
-      if (action === 'open-coach') openCoachModal();
+      if (action === 'record-cigarette') { recordCigarette(); closeMobileQuickAdd(); }
+      if (action === 'open-morning-routine') { openMorningRoutineFromHero(); closeMobileQuickAdd(); }
+      if (action === 'open-task-form') { showScreen('tasks'); openTaskForm(); closeMobileQuickAdd(); }
+      if (action === 'start-emergency-craving') { startEmergencyCravingFlow(); closeMobileQuickAdd(); }
+      if (action === 'open-coach') { openCoachModal(); closeMobileQuickAdd(); }
       if (action === 'start-coach-delay') startCoachDelay();
       if (action === 'coach-breath-reset') coachBreathReset();
       if (action === 'coach-record-smoke') coachRecordSmoke();
@@ -1616,6 +1621,38 @@
     toast('Morgenroutine neu gestartet');
   }
 
+  function closeMobileQuickAdd() {
+    const quickAdd = document.getElementById('mobileQuickAdd');
+    if (quickAdd) quickAdd.open = false;
+  }
+
+  function setupMobileDashboardSections() {
+    const sections = [...document.querySelectorAll('#screen-dashboard .mobile-dashboard-section')];
+    if (!sections.length) return;
+    const apply = () => {
+      if (window.matchMedia('(max-width: 760px)').matches) {
+        sections.forEach(section => {
+          if (!section.dataset.mobilePrepared) {
+            section.open = false;
+            section.dataset.mobilePrepared = 'true';
+          }
+        });
+      } else {
+        sections.forEach(section => { section.open = true; });
+      }
+    };
+    apply();
+    window.addEventListener('resize', apply, { passive: true });
+    sections.forEach(section => {
+      section.addEventListener('toggle', () => {
+        if (section.open) requestAnimationFrame(() => {
+          window.dispatchEvent(new Event('resize'));
+          renderCharts();
+        });
+      });
+    });
+  }
+
 
   function renderDashboard() {
     const total = getTotalPoints();
@@ -1635,7 +1672,7 @@
     if (els.dailyScore) els.dailyScore.textContent = `${score.score}%`;
     if (els.dailyScoreHint) els.dailyScoreHint.textContent = score.label;
 
-    els.dashboardTitle.textContent = 'Dein Fortschritt auf einen Blick.';
+    els.dashboardTitle.textContent = window.matchMedia('(max-width: 760px)').matches ? 'Dein Tag. Ein klarer nächster Schritt.' : 'Dein Fortschritt auf einen Blick.';
     els.dashboardSubtitle.textContent = habitLogsToday || completedToday || todayCount
       ? `${habitLogsToday} Habit-Log${habitLogsToday === 1 ? '' : 's'}, ${completedToday} erledigte Aufgabe${completedToday === 1 ? '' : 'n'} und ${todayCount} Zigarette${todayCount === 1 ? '' : 'n'} heute.`
       : 'Wähle eine Auswertung, erfasse kleine Schritte und halte deine wichtigsten Muster sichtbar.';
