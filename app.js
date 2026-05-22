@@ -12,6 +12,9 @@
   const HABIT_DNA_UI_KEY = 'habitflow-habit-dna-open';
   const HABIT_CARD_UI_KEY = 'habitflow-habit-cards-open';
   const CONSUMPTION_MODE_KEY = 'habitflow-consumption-mode';
+  const LEISURE_FILTER_KEY = 'habitflow-leisure-filters-v1';
+  const ACTIVITY_CATALOG_URL = './data/activity-ideas.json';
+  const LEISURE_RESULT_LIMIT = 12;
   const SUPABASE_CONFIG = window.HABITFLOW_SUPABASE_CONFIG || {};
   const MEDITATION_TECHNIQUES = [
     { key: '7-3-11', title: '7-3-11 Atemtechnik', subtitle: 'Runterfahren mit langer Ausatmung', minutes: 6, pattern: '7 ein · 3 halten · 11 aus' },
@@ -467,6 +470,11 @@
   let expandedHabitDnaIds = loadExpandedHabitDnaIds();
   let expandedHabitCardIds = loadExpandedHabitCardIds();
   let activeConsumptionMode = localStorage.getItem(CONSUMPTION_MODE_KEY) === 'alcohol' ? 'alcohol' : 'smoke';
+  let leisureCatalog = [];
+  let leisureCatalogError = null;
+  let leisureCatalogLoaded = false;
+  let leisureFilters = loadLeisureFilters();
+  let leisureResultOffset = 0;
 
   const els = {};
 
@@ -481,6 +489,7 @@
     bindEvents();
     showScreen(document.querySelector('.nav-btn.active')?.dataset.target || 'dashboard', { refresh: false });
     renderStaticIcons();
+    loadLeisureCatalog();
     migrateCigaretteScoring();
     migrateAlcoholScoring();
     await initSupabase();
@@ -614,6 +623,9 @@
       taskIdeasPanel: $('#taskIdeasPanel'),
       taskIdeaForm: $('#taskIdeaForm'),
       taskIdeaList: $('#taskIdeaList'),
+      activityFinderForm: $('#activityFinderForm'),
+      activityFinderMeta: $('#activityFinderMeta'),
+      activitySuggestionList: $('#activitySuggestionList'),
       taskBacklogToggleBtn: $('#taskBacklogToggleBtn'),
       taskArchiveToggleBtn: $('#taskArchiveToggleBtn'),
       taskTimelineToggleBtn: $('#taskTimelineToggleBtn'),
@@ -727,6 +739,10 @@
     els.habitForm.addEventListener('submit', createHabit);
     els.taskForm.addEventListener('submit', createTask);
     if (els.taskIdeaForm) els.taskIdeaForm.addEventListener('submit', createTaskIdea);
+    if (els.activityFinderForm) {
+      els.activityFinderForm.addEventListener('change', updateLeisureFiltersFromForm);
+      els.activityFinderForm.addEventListener('input', updateLeisureFiltersFromForm);
+    }
     if (els.appointmentForm) els.appointmentForm.addEventListener('submit', createAppointment);
     els.taskForm.elements.effort.addEventListener('change', updateTaskPreview);
     els.taskForm.elements.priority.addEventListener('change', updateTaskPreview);
@@ -782,6 +798,11 @@
       if (action === 'dismiss-task-idea') dismissTaskIdea(id);
       if (action === 'reopen-task-idea') reopenTaskIdea(id);
       if (action === 'delete-task-idea') deleteTaskIdea(id);
+      if (action === 'refresh-leisure-ideas') refreshLeisureIdeas();
+      if (action === 'reset-leisure-filters') resetLeisureFilters();
+      if (action === 'activity-to-idea') createTaskIdeaFromActivity(id);
+      if (action === 'activity-to-task') createTaskFromActivity(id, 'open');
+      if (action === 'activity-to-backlog') createTaskFromActivity(id, TASK_BACKLOG_STATUS);
       if (action === 'weekly-plan-task') planExistingTaskForWeek(id, actionEl.dataset.day);
       if (action === 'weekly-plan-backlog') planBacklogTaskForWeek(id, actionEl.dataset.day);
       if (action === 'weekly-plan-idea') planIdeaForWeek(id, actionEl.dataset.day);
@@ -1408,7 +1429,7 @@
     const active = document.activeElement;
     if (!active || active === document.body) return false;
     if (!active.matches?.('input, textarea, select')) return false;
-    return Boolean(active.closest('#habitCards, #habitFormPanel, #taskFormPanel, #appointmentFormPanel, #smokeHistory, #historyModal, #coachModal'));
+    return Boolean(active.closest('#habitCards, #habitFormPanel, #taskFormPanel, #taskIdeasPanel, #appointmentFormPanel, #smokeHistory, #historyModal, #coachModal'));
   }
 
   function flushDeferredRender() {
@@ -1439,6 +1460,39 @@
 
   function saveSettingsToStorage() {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  }
+
+  function defaultLeisureFilters() {
+    return { mood: 'any', duration: 'any', people: 'any', setting: 'any', budget: 'any', energy: 'any', transport: 'any', query: '' };
+  }
+
+  function loadLeisureFilters() {
+    try {
+      return { ...defaultLeisureFilters(), ...(JSON.parse(localStorage.getItem(LEISURE_FILTER_KEY)) || {}) };
+    } catch {
+      return defaultLeisureFilters();
+    }
+  }
+
+  function saveLeisureFilters() {
+    localStorage.setItem(LEISURE_FILTER_KEY, JSON.stringify(leisureFilters));
+  }
+
+  async function loadLeisureCatalog() {
+    try {
+      const response = await fetch(ACTIVITY_CATALOG_URL, { cache: 'force-cache' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const payload = await response.json();
+      leisureCatalog = Array.isArray(payload?.items) ? payload.items.map(normalizeLeisureActivity).filter(item => item.id && item.title) : [];
+      leisureCatalogError = null;
+    } catch (error) {
+      leisureCatalog = [];
+      leisureCatalogError = error;
+      console.warn('Freizeit-Katalog konnte nicht geladen werden.', error);
+    } finally {
+      leisureCatalogLoaded = true;
+      renderLeisureFinder();
+    }
   }
 
   function applyTheme() {
@@ -4834,6 +4888,7 @@
     if (els.taskArchiveCount) els.taskArchiveCount.textContent = archive.length;
     syncTaskUtilityPanels();
     renderTaskIdeas();
+    renderLeisureFinder();
     renderTaskWeeklyPlanning();
     renderTaskBacklog(backlog);
     renderTaskArchive(archive);
@@ -4864,6 +4919,272 @@
       .map(normalizeTaskIdea)
       .filter(idea => idea.title)
       .sort(compareTaskIdeas);
+  }
+
+  function normalizeLeisureActivity(item = {}) {
+    const id = String(item.id || '').trim();
+    const title = String(item.title || '').trim();
+    const summary = String(item.summary || item.task_description || '').trim();
+    const story = Number(item.story_points || 2);
+    return {
+      ...item,
+      id,
+      title,
+      summary,
+      category: String(item.category || 'random_fun').trim(),
+      category_label: String(item.category_label || item.category || 'Idee').trim(),
+      idea_category: TASK_IDEA_CATEGORIES[item.idea_category] ? item.idea_category : 'experiment',
+      mood: String(item.mood || 'curious').trim(),
+      energy: ['low', 'medium', 'high'].includes(String(item.energy || '').trim()) ? String(item.energy).trim() : 'medium',
+      duration_band: String(item.duration_band || '1h').trim(),
+      minutes: Number(item.minutes || 60),
+      budget: ['free', 'low', 'medium', 'high'].includes(String(item.budget || '').trim()) ? String(item.budget).trim() : 'low',
+      setting: ['indoor', 'outdoor', 'mixed'].includes(String(item.setting || '').trim()) ? String(item.setting).trim() : 'mixed',
+      people: Array.isArray(item.people) ? item.people.map(String) : ['solo'],
+      weather: Array.isArray(item.weather) ? item.weather.map(String) : ['any'],
+      transport: Array.isArray(item.transport) ? item.transport.map(String) : ['any'],
+      story_points: [1, 2, 3, 5, 8].includes(story) ? story : 2,
+      priority: normalizeTaskPriority(item.priority),
+      task_title: String(item.task_title || title).trim(),
+      task_description: String(item.task_description || summary).trim(),
+      tags: Array.isArray(item.tags) ? item.tags.map(tag => String(tag).trim()).filter(Boolean) : []
+    };
+  }
+
+  function updateLeisureFilterForm() {
+    if (!els.activityFinderForm) return;
+    const fields = els.activityFinderForm.elements;
+    Object.entries(defaultLeisureFilters()).forEach(([key, fallback]) => {
+      if (fields[key]) fields[key].value = leisureFilters[key] ?? fallback;
+    });
+  }
+
+  function updateLeisureFiltersFromForm() {
+    if (!els.activityFinderForm) return;
+    const data = new FormData(els.activityFinderForm);
+    leisureFilters = {
+      mood: String(data.get('mood') || 'any'),
+      duration: String(data.get('duration') || 'any'),
+      people: String(data.get('people') || 'any'),
+      setting: String(data.get('setting') || 'any'),
+      budget: String(data.get('budget') || 'any'),
+      energy: String(data.get('energy') || 'any'),
+      transport: String(data.get('transport') || 'any'),
+      query: String(data.get('query') || '').trim()
+    };
+    leisureResultOffset = 0;
+    saveLeisureFilters();
+    renderLeisureFinder();
+  }
+
+  function resetLeisureFilters() {
+    leisureFilters = defaultLeisureFilters();
+    leisureResultOffset = 0;
+    saveLeisureFilters();
+    updateLeisureFilterForm();
+    renderLeisureFinder();
+    toast('Freizeit-Filter zurückgesetzt');
+  }
+
+  function refreshLeisureIdeas() {
+    leisureResultOffset = (leisureResultOffset + LEISURE_RESULT_LIMIT) % Math.max(LEISURE_RESULT_LIMIT, filteredLeisureActivities().length || LEISURE_RESULT_LIMIT);
+    renderLeisureFinder();
+  }
+
+  function filteredLeisureActivities() {
+    const query = normalizeSearchText(leisureFilters.query || '');
+    return leisureCatalog
+      .map(activity => ({ activity, score: leisureActivityScore(activity, leisureFilters, query) }))
+      .filter(item => item.score > -1000)
+      .sort((a, b) => b.score - a.score || String(a.activity.title).localeCompare(String(b.activity.title), 'de-CH'))
+      .map(item => item.activity);
+  }
+
+  function leisureActivityScore(activity, filters, query) {
+    let score = 0;
+    const mood = String(filters.mood || 'any');
+    const duration = String(filters.duration || 'any');
+    const people = String(filters.people || 'any');
+    const setting = String(filters.setting || 'any');
+    const budget = String(filters.budget || 'any');
+    const energy = String(filters.energy || 'any');
+    const transport = String(filters.transport || 'any');
+    if (mood !== 'any') {
+      if (activity.mood === mood || activity.category === mood || activity.tags.includes(mood)) score += 22;
+      else if ((mood === 'nightlife' && activity.category === 'nightlife') || (mood === 'active' && ['movement', 'sport_game', 'nature'].includes(activity.category))) score += 18;
+      else score -= 8;
+    }
+    if (duration !== 'any') score += activity.duration_band === duration ? 18 : durationDistanceScore(activity.duration_band, duration);
+    if (people !== 'any') score += activity.people.includes(people) ? 18 : -20;
+    if (setting !== 'any') score += (activity.setting === setting || activity.setting === 'mixed') ? 12 : -12;
+    if (budget !== 'any') score += budgetRank(activity.budget) <= budgetRank(budget) ? 12 : -14;
+    if (energy !== 'any') score += activity.energy === energy ? 12 : (energy === 'low' && activity.energy === 'medium' ? -4 : -10);
+    if (transport !== 'any') score += (activity.transport.includes(transport) || activity.transport.includes('any')) ? 10 : -8;
+    if (query) {
+      const haystack = normalizeSearchText([activity.title, activity.summary, activity.category_label, activity.tags.join(' ')].join(' '));
+      if (haystack.includes(query)) score += 35;
+      else return -1001;
+    }
+    if (activity.source === 'seed') score += 4;
+    return score;
+  }
+
+  function durationDistanceScore(actual, wanted) {
+    const order = ['15m', '30m', '1h', '2h', 'evening', 'halfday', 'day'];
+    const ai = order.indexOf(actual);
+    const wi = order.indexOf(wanted);
+    if (ai < 0 || wi < 0) return -3;
+    const diff = Math.abs(ai - wi);
+    if (diff === 1) return 5;
+    if (diff === 2) return -2;
+    return -9;
+  }
+
+  function budgetRank(value) {
+    return { free: 0, low: 1, medium: 2, high: 3 }[value] ?? 1;
+  }
+
+  function normalizeSearchText(value) {
+    return String(value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\u00df/g, 'ss').trim();
+  }
+
+  function renderLeisureFinder() {
+    if (!els.activitySuggestionList || !els.activityFinderMeta) return;
+    updateLeisureFilterForm();
+    if (!leisureCatalogLoaded) {
+      els.activityFinderMeta.textContent = 'Lade 1000 kuratierte Vorschläge...';
+      els.activitySuggestionList.innerHTML = '<div class="empty-state">Freizeit-Finder wird vorbereitet.</div>';
+      return;
+    }
+    if (leisureCatalogError) {
+      els.activityFinderMeta.textContent = 'Katalog konnte nicht geladen werden.';
+      els.activitySuggestionList.innerHTML = '<div class="empty-state">Der Freizeit-Katalog ist gerade nicht verfügbar. Nach einem Hard Refresh sollte die JSON-Datei neu geladen werden.</div>';
+      return;
+    }
+    const matches = filteredLeisureActivities();
+    if (!matches.length) {
+      els.activityFinderMeta.textContent = `${leisureCatalog.length} Vorschläge im Katalog · 0 Treffer`;
+      els.activitySuggestionList.innerHTML = '<div class="empty-state">Keine passende Idee gefunden. Setze einzelne Filter zurück oder nutze ein anderes Stichwort.</div>';
+      return;
+    }
+    const start = Math.min(leisureResultOffset, Math.max(0, matches.length - 1));
+    const rotated = matches.slice(start).concat(matches.slice(0, start));
+    const visible = rotated.slice(0, LEISURE_RESULT_LIMIT);
+    els.activityFinderMeta.textContent = `${leisureCatalog.length} Vorschläge · ${matches.length} passende Treffer · ${visible.length} angezeigt`;
+    els.activitySuggestionList.innerHTML = visible.map(renderLeisureActivityCard).join('');
+  }
+
+  function renderLeisureActivityCard(activity) {
+    const duration = leisureDurationLabel(activity.duration_band, activity.minutes);
+    const people = leisurePeopleLabel(activity.people);
+    const budget = leisureBudgetLabel(activity.budget);
+    const setting = leisureSettingLabel(activity.setting);
+    return `<article class="activity-suggestion-card" data-activity-id="${escapeHtml(activity.id)}">
+      <div class="activity-card-top">
+        <span class="idea-card-icon">${svgIcon('idea', 'ui-icon')}</span>
+        <div class="task-badges">
+          <span class="badge muted">${escapeHtml(activity.category_label)}</span>
+          <span class="badge muted">${Number(activity.story_points || 2)} SP</span>
+        </div>
+      </div>
+      <h4>${escapeHtml(activity.title)}</h4>
+      <p>${escapeHtml(activity.summary)}</p>
+      <div class="activity-meta-strip">
+        <span>${escapeHtml(duration)}</span>
+        <span>${escapeHtml(people)}</span>
+        <span>${escapeHtml(budget)}</span>
+        <span>${escapeHtml(setting)}</span>
+      </div>
+      <div class="activity-tags">${activity.tags.slice(0, 4).map(tag => `<span>${escapeHtml(tag)}</span>`).join('')}</div>
+      <div class="list-actions compact-actions idea-actions">
+        <button class="mini-btn primary" type="button" data-action="activity-to-idea" data-id="${escapeHtml(activity.id)}">Als Idee</button>
+        <button class="mini-btn" type="button" data-action="activity-to-task" data-id="${escapeHtml(activity.id)}">Als Task</button>
+        <button class="mini-btn" type="button" data-action="activity-to-backlog" data-id="${escapeHtml(activity.id)}">In Backlog</button>
+      </div>
+    </article>`;
+  }
+
+  function leisureDurationLabel(band, minutes) {
+    const map = { '15m': '15 Min.', '30m': '30 Min.', '1h': '1 Std.', '2h': '2 Std.', halfday: 'Halbtag', day: 'Tag', evening: 'Abend' };
+    return map[band] || `${Number(minutes || 60)} Min.`;
+  }
+
+  function leisurePeopleLabel(people = []) {
+    const map = { solo: 'Solo', duo: 'Zu zweit', friends: 'Freunde', family: 'Familie', club: 'Club' };
+    return people.slice(0, 2).map(key => map[key] || key).join(' / ') || 'Flexibel';
+  }
+
+  function leisureBudgetLabel(value) {
+    return { free: 'Gratis', low: 'Klein', medium: 'Normal', high: 'Premium' }[value] || 'Budget offen';
+  }
+
+  function leisureSettingLabel(value) {
+    return { indoor: 'Drinnen', outdoor: 'Draussen', mixed: 'Flexibel' }[value] || 'Flexibel';
+  }
+
+  function findLeisureActivity(id) {
+    return leisureCatalog.find(activity => activity.id === id);
+  }
+
+  function leisureActivityToIdeaPayload(activity) {
+    return normalizeTaskIdea({
+      id: uid(),
+      title: activity.task_title || activity.title,
+      description: [activity.task_description || activity.summary, `Freizeit-Finder · ${activity.category_label} · ${leisureDurationLabel(activity.duration_band, activity.minutes)}`].filter(Boolean).join('\n\n'),
+      category: activity.idea_category || 'experiment',
+      story_points: activity.story_points || 2,
+      priority: normalizeTaskPriority(activity.priority),
+      idea_status: 'open',
+      source_key: `activity:${activity.id}`,
+      generated_task_id: null,
+      created_at: nowIso(),
+      updated_at: nowIso(),
+      synced: false
+    });
+  }
+
+  function createTaskIdeaFromActivity(id) {
+    const activity = findLeisureActivity(id);
+    if (!activity) return;
+    const sourceKey = `activity:${activity.id}`;
+    const existing = state.taskIdeas.find(idea => idea.source_key === sourceKey && idea.idea_status === 'open');
+    if (existing) {
+      toast('Diese Freizeit-Idee ist bereits im Ideenpool');
+      return;
+    }
+    state.taskIdeas.push(leisureActivityToIdeaPayload(activity));
+    taskIdeasOpen = true;
+    saveState();
+    toast('Freizeit-Idee in den Ideenpool übernommen');
+    syncWithSupabase({ silent: true });
+  }
+
+  function createTaskFromActivity(id, targetStatus = 'open') {
+    const activity = findLeisureActivity(id);
+    if (!activity) return;
+    const created = nowIso();
+    const nextStatus = targetStatus === TASK_BACKLOG_STATUS ? TASK_BACKLOG_STATUS : 'open';
+    state.tasks.push({
+      id: uid(),
+      title: activity.task_title || activity.title,
+      description: [activity.task_description || activity.summary, `Freizeit-Finder · ${activity.category_label} · ${Number(activity.story_points || 2)} Story Points`].filter(Boolean).join('\n\n'),
+      effort: storyPointsToEffort(activity.story_points),
+      priority: normalizeTaskPriority(activity.priority),
+      due_at: null,
+      status: nextStatus,
+      backlog_rank: nextStatus === TASK_BACKLOG_STATUS ? nextBacklogRank() : null,
+      completed_at: null,
+      done_archived_at: null,
+      done_archive_rank: null,
+      points: 0,
+      created_at: created,
+      updated_at: created,
+      synced: false
+    });
+    if (nextStatus === TASK_BACKLOG_STATUS) taskBacklogOpen = true;
+    saveState();
+    toast(nextStatus === TASK_BACKLOG_STATUS ? 'Freizeit-Idee als Backlog-Task erstellt' : 'Freizeit-Idee als Task erstellt');
+    syncWithSupabase({ silent: true });
   }
 
   function renderTaskIdeas(ideas = taskIdeas()) {

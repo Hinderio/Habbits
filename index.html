@@ -482,8 +482,33 @@
         <section id="taskIdeasPanel" class="panel glass task-ideas-panel hidden">
           <div class="panel-head task-ideas-head">
             <div><p class="eyebrow">Ideenpool</p><h3>Ideen bestätigen statt neu erfassen</h3></div>
-            <button class="mini-btn primary" type="button" data-action="generate-task-ideas">Vorschläge generieren</button>
+            <div class="action-row idea-head-actions">
+              <button class="mini-btn" type="button" data-action="refresh-leisure-ideas">Freizeit neu mischen</button>
+              <button class="mini-btn primary" type="button" data-action="generate-task-ideas">Vorschläge generieren</button>
+            </div>
           </div>
+          <section class="activity-finder-card" aria-labelledby="activityFinderTitle">
+            <div class="activity-finder-copy">
+              <p class="eyebrow">Freizeit-Finder</p>
+              <h4 id="activityFinderTitle">Was machen wir gegen Langeweile?</h4>
+              <p>Beantworte ein paar kurze Fragen. Die App filtert aus dem kuratierten Vorschlagspool passende Ausflüge, Events und Mini-Abenteuer.</p>
+            </div>
+            <form id="activityFinderForm" class="activity-finder-form">
+              <label><span>Worauf hast du Lust?</span><select name="mood"><option value="any">Egal</option><option value="active">Bewegung</option><option value="chill">Ruhig</option><option value="creative">Kreativ</option><option value="social">Sozial</option><option value="curious">Entdecken</option><option value="adventure">Mini-Abenteuer</option><option value="nightlife">Ausgang</option><option value="recovery">Recovery</option></select></label>
+              <label><span>Wie viel Zeit?</span><select name="duration"><option value="any">Egal</option><option value="15m">15 Min.</option><option value="30m">30 Min.</option><option value="1h">1 Std.</option><option value="2h">2 Std.</option><option value="halfday">Halbtag</option><option value="day">Ganzer Tag</option><option value="evening">Abend</option></select></label>
+              <label><span>Mit wem?</span><select name="people"><option value="any">Egal</option><option value="solo">Solo</option><option value="duo">Zu zweit</option><option value="friends">Freunde</option><option value="family">Familie</option><option value="club">Club</option></select></label>
+              <label><span>Wo passt es?</span><select name="setting"><option value="any">Egal</option><option value="outdoor">Draussen</option><option value="indoor">Drinnen</option><option value="mixed">Flexibel</option></select></label>
+              <label><span>Budget?</span><select name="budget"><option value="any">Egal</option><option value="free">Gratis</option><option value="low">Klein</option><option value="medium">Normal</option><option value="high">Premium</option></select></label>
+              <label><span>Energie?</span><select name="energy"><option value="any">Egal</option><option value="low">Low Energy</option><option value="medium">Normal</option><option value="high">Aktiv</option></select></label>
+              <label><span>Transport?</span><select name="transport"><option value="any">Egal</option><option value="home">Zuhause</option><option value="walk">Zu Fuss</option><option value="bike">Bike</option><option value="vespa">Vespa</option><option value="train">Zug</option><option value="public">ÖV</option><option value="car">Auto</option></select></label>
+              <label><span>Stichwort</span><input name="query" placeholder="z. B. Jass, Techno, Wandern" /></label>
+            </form>
+            <div class="activity-finder-actions">
+              <span id="activityFinderMeta" class="subtle">Lade Vorschläge...</span>
+              <button class="mini-btn" type="button" data-action="reset-leisure-filters">Filter zurücksetzen</button>
+            </div>
+            <div id="activitySuggestionList" class="activity-suggestion-list"></div>
+          </section>
           <div class="task-ideas-shell">
             <form id="taskIdeaForm" class="form-grid task-idea-form">
               <label class="full"><span>Idee</span><input name="title" required placeholder="z. B. Abend-Reset nach 20 Uhr" /></label>
