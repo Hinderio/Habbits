@@ -440,12 +440,37 @@
         <div class="section-toolbar glass task-toolbar">
           <div><p class="eyebrow">Tasks</p><h3>Aufgaben-Board</h3></div>
           <div class="task-toolbar-actions" aria-label="Task-Aktionen">
+            <button id="taskIdeasToggleBtn" class="pill secondary" type="button" aria-expanded="false">Ideenpool <span id="taskIdeasCount" class="inline-count">0</span></button>
             <button id="taskBacklogToggleBtn" class="pill secondary" type="button" aria-expanded="false">Backlog <span id="taskBacklogCount" class="inline-count">0</span></button>
             <button id="taskArchiveToggleBtn" class="pill secondary" type="button" aria-expanded="false">Archiv <span id="taskArchiveCount" class="inline-count">0</span></button>
             <button id="taskTimelineToggleBtn" class="pill secondary" type="button" aria-expanded="false">Task-Kalender</button>
             <button id="taskFormToggleBtn" class="bubble-add-btn" type="button" aria-label="Aufgaben-Formular öffnen"><span data-icon="plus"></span></button>
           </div>
         </div>
+        <section id="taskIdeasPanel" class="panel glass task-ideas-panel hidden">
+          <div class="panel-head task-ideas-head">
+            <div><p class="eyebrow">Ideenpool</p><h3>Ideen bestätigen statt neu erfassen</h3></div>
+            <button class="mini-btn primary" type="button" data-action="generate-task-ideas">Vorschläge generieren</button>
+          </div>
+          <div class="task-ideas-shell">
+            <form id="taskIdeaForm" class="form-grid task-idea-form">
+              <label class="full"><span>Idee</span><input name="title" required placeholder="z. B. Abend-Reset nach 20 Uhr" /></label>
+              <label><span>Kategorie</span><select name="category"><option value="focus">Fokus</option><option value="health">Gesundheit</option><option value="consumption">Konsum</option><option value="habit">Habit</option><option value="admin">Admin</option><option value="experiment">Experiment</option></select></label>
+              <label><span>Story Points</span><select name="story_points"><option value="1">1 · sehr klein</option><option value="2" selected>2 · klein</option><option value="3">3 · mittel</option><option value="5">5 · gross</option><option value="8">8 · sehr gross</option></select></label>
+              <label><span>Priorität</span><select name="priority"><option value="low">Niedrig</option><option value="medium" selected>Normal</option><option value="high">Hoch</option><option value="urgent">Kritisch</option></select></label>
+              <label class="full"><span>Notiz</span><textarea name="description" rows="3" placeholder="Warum ist diese Idee wertvoll?"></textarea></label>
+              <div class="form-actions full"><button class="pill primary" type="submit">Idee speichern</button></div>
+            </form>
+            <aside class="idea-generator-card">
+              <span class="habit-icon mini">💡</span>
+              <div>
+                <strong>Smart aus deinem System</strong>
+                <p>Erkennt überfällige Tasks, Backlog-Potenzial, Habit-Lücken und Konsum-Muster. Du entscheidest, was wirklich zur Aufgabe wird.</p>
+              </div>
+            </aside>
+          </div>
+          <div id="taskIdeaList" class="task-idea-list"></div>
+        </section>
         <section id="taskFormPanel" class="panel glass drawer-form-panel hidden">
           <div class="panel-head"><div><p class="eyebrow">Tasks</p><h3 id="taskFormTitle">Aufgabe erfassen</h3></div><button id="taskFormCloseBtn" class="icon-btn" type="button" aria-label="Aufgaben-Formular schliessen">×</button></div>
           <form id="taskForm" class="form-grid">

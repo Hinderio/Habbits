@@ -90,6 +90,23 @@ create table if not exists public.tasks (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.task_ideas (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  title text not null,
+  description text,
+  category text not null default 'focus' check (category in ('focus','health','consumption','habit','admin','experiment')),
+  story_points smallint not null default 2 check (story_points in (1,2,3,5,8)),
+  priority text not null default 'medium' check (priority in ('low','medium','high','urgent')),
+  idea_status text not null default 'open' check (idea_status in ('open','accepted','dismissed')),
+  source_key text,
+  generated_task_id uuid,
+  accepted_at timestamptz,
+  dismissed_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.appointments (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
@@ -122,6 +139,7 @@ alter table public.cigarette_events add column if not exists user_id uuid refere
 alter table public.alcohol_logs add column if not exists user_id uuid references auth.users(id) on delete cascade;
 alter table public.alcohol_events add column if not exists user_id uuid references auth.users(id) on delete cascade;
 alter table public.tasks add column if not exists user_id uuid references auth.users(id) on delete cascade;
+alter table public.task_ideas add column if not exists user_id uuid references auth.users(id) on delete cascade;
 alter table public.appointments add column if not exists user_id uuid references auth.users(id) on delete cascade;
 alter table public.points_ledger add column if not exists user_id uuid references auth.users(id) on delete cascade;
 
@@ -131,6 +149,7 @@ alter table public.cigarette_events alter column user_id set default auth.uid();
 alter table public.alcohol_logs alter column user_id set default auth.uid();
 alter table public.alcohol_events alter column user_id set default auth.uid();
 alter table public.tasks alter column user_id set default auth.uid();
+alter table public.task_ideas alter column user_id set default auth.uid();
 alter table public.appointments alter column user_id set default auth.uid();
 alter table public.points_ledger alter column user_id set default auth.uid();
 
@@ -161,6 +180,29 @@ alter table public.tasks add constraint tasks_priority_check check (priority in 
 alter table public.tasks drop constraint if exists tasks_status_check;
 alter table public.tasks add constraint tasks_status_check check (status in ('open','in_progress','done','archived'));
 
+alter table public.task_ideas add column if not exists user_id uuid references auth.users(id) on delete cascade;
+alter table public.task_ideas alter column user_id set default auth.uid();
+alter table public.task_ideas add column if not exists title text;
+alter table public.task_ideas add column if not exists description text;
+alter table public.task_ideas add column if not exists category text not null default 'focus';
+alter table public.task_ideas add column if not exists story_points smallint not null default 2;
+alter table public.task_ideas add column if not exists priority text not null default 'medium';
+alter table public.task_ideas add column if not exists idea_status text not null default 'open';
+alter table public.task_ideas add column if not exists source_key text;
+alter table public.task_ideas add column if not exists generated_task_id uuid;
+alter table public.task_ideas add column if not exists accepted_at timestamptz;
+alter table public.task_ideas add column if not exists dismissed_at timestamptz;
+alter table public.task_ideas add column if not exists created_at timestamptz not null default now();
+alter table public.task_ideas add column if not exists updated_at timestamptz not null default now();
+alter table public.task_ideas drop constraint if exists task_ideas_category_check;
+alter table public.task_ideas add constraint task_ideas_category_check check (category in ('focus','health','consumption','habit','admin','experiment'));
+alter table public.task_ideas drop constraint if exists task_ideas_story_points_check;
+alter table public.task_ideas add constraint task_ideas_story_points_check check (story_points in (1,2,3,5,8));
+alter table public.task_ideas drop constraint if exists task_ideas_priority_check;
+alter table public.task_ideas add constraint task_ideas_priority_check check (priority in ('low','medium','high','urgent'));
+alter table public.task_ideas drop constraint if exists task_ideas_status_check;
+alter table public.task_ideas add constraint task_ideas_status_check check (idea_status in ('open','accepted','dismissed'));
+
 -- If you already have rows from the old unrestricted setup, run this once after creating your Auth user:
 -- update public.habit_definitions set user_id = '<YOUR_AUTH_USER_ID>' where user_id is null;
 -- update public.habit_entries set user_id = '<YOUR_AUTH_USER_ID>' where user_id is null;
@@ -168,6 +210,7 @@ alter table public.tasks add constraint tasks_status_check check (status in ('op
 -- update public.alcohol_logs set user_id = '<YOUR_AUTH_USER_ID>' where user_id is null;
 -- update public.alcohol_events set user_id = '<YOUR_AUTH_USER_ID>' where user_id is null;
 -- update public.tasks set user_id = '<YOUR_AUTH_USER_ID>' where user_id is null;
+-- update public.task_ideas set user_id = '<YOUR_AUTH_USER_ID>' where user_id is null;
 -- update public.appointments set user_id = '<YOUR_AUTH_USER_ID>' where user_id is null;
 -- update public.points_ledger set user_id = '<YOUR_AUTH_USER_ID>' where user_id is null;
 
@@ -179,6 +222,7 @@ create index if not exists idx_alcohol_logs_user_date on public.alcohol_logs(use
 create index if not exists idx_alcohol_events_user_time on public.alcohol_events(user_id, occurred_at desc);
 create index if not exists idx_tasks_user_due on public.tasks(user_id, status, due_at);
 create index if not exists idx_tasks_user_done_archive on public.tasks(user_id, done_archived_at desc, done_archive_rank);
+create index if not exists idx_task_ideas_user_status on public.task_ideas(user_id, idea_status, updated_at desc);
 create index if not exists idx_appointments_user_starts_at on public.appointments(user_id, starts_at desc);
 create index if not exists idx_appointments_type_starts_at on public.appointments(user_id, appointment_type, starts_at desc);
 create index if not exists idx_points_ledger_user_time on public.points_ledger(user_id, earned_at desc);
@@ -201,6 +245,9 @@ create trigger set_alcohol_events_updated_at before update on public.alcohol_eve
 drop trigger if exists set_tasks_updated_at on public.tasks;
 create trigger set_tasks_updated_at before update on public.tasks for each row execute function public.set_updated_at();
 
+drop trigger if exists set_task_ideas_updated_at on public.task_ideas;
+create trigger set_task_ideas_updated_at before update on public.task_ideas for each row execute function public.set_updated_at();
+
 drop trigger if exists set_appointments_updated_at on public.appointments;
 create trigger set_appointments_updated_at before update on public.appointments for each row execute function public.set_updated_at();
 
@@ -211,7 +258,7 @@ declare
   pol record;
 begin
   foreach tbl in array array[
-    'habit_definitions','habit_entries','cigarette_events','alcohol_logs','alcohol_events','tasks','appointments','points_ledger',
+    'habit_definitions','habit_entries','cigarette_events','alcohol_logs','alcohol_events','tasks','task_ideas','appointments','points_ledger',
     'participants','catches','duels','duel_events','duel_participants','duel_tracks','tournaments'
   ] loop
     if to_regclass(format('public.%I', tbl)) is null then
@@ -287,7 +334,7 @@ grant select, insert, update, delete on all tables in schema public to authentic
 do $$
 declare tbl text;
 begin
-  foreach tbl in array array['habit_definitions','habit_entries','cigarette_events','alcohol_logs','alcohol_events','tasks','appointments','points_ledger'] loop
+  foreach tbl in array array['habit_definitions','habit_entries','cigarette_events','alcohol_logs','alcohol_events','tasks','task_ideas','appointments','points_ledger'] loop
     begin
       execute format('alter publication supabase_realtime add table public.%I', tbl);
     exception when others then

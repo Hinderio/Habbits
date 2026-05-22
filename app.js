@@ -252,9 +252,9 @@
     sport: '00000000-0000-4000-8000-000000000103',
     meditation: '00000000-0000-4000-8000-000000000104'
   });
-  const SYNC_TABLES = ['habit_definitions', 'habit_entries', 'cigarette_events', 'alcohol_logs', 'alcohol_events', 'tasks', 'appointments', 'points_ledger'];
+  const SYNC_TABLES = ['habit_definitions', 'habit_entries', 'cigarette_events', 'alcohol_logs', 'alcohol_events', 'tasks', 'task_ideas', 'appointments', 'points_ledger'];
   const REMOTE_DELETE_TOMBSTONE_TTL_DAYS = 14;
-  const OPTIONAL_SYNC_TABLES = new Set(['alcohol_events', 'appointments']);
+  const OPTIONAL_SYNC_TABLES = new Set(['alcohol_events', 'appointments', 'task_ideas']);
   const BUILT_IN_DEFAULT_HABIT_NAMES = new Set(['gewicht', 'wasser', 'sport', 'meditation']);
   const TASK_COLUMNS = [
     { status: 'open', title: 'Offen', hint: 'geplant und noch nicht gestartet' },
@@ -270,6 +270,15 @@
     high: { label: 'Hoch', short: 'Hoch', rank: 3, bonus: 25 },
     urgent: { label: 'Kritisch', short: 'Kritisch', rank: 4, bonus: 40 }
   };
+  const TASK_IDEA_CATEGORIES = {
+    focus: { label: 'Fokus', short: 'Fokus' },
+    health: { label: 'Gesundheit', short: 'Health' },
+    consumption: { label: 'Konsum', short: 'Konsum' },
+    habit: { label: 'Habit', short: 'Habit' },
+    admin: { label: 'Admin', short: 'Admin' },
+    experiment: { label: 'Experiment', short: 'Test' }
+  };
+  const TASK_IDEA_STATUSES = new Set(['open', 'accepted', 'dismissed']);
   const APPOINTMENT_TYPES = {
     personal: { label: 'Privat', short: 'Privat' },
     work: { label: 'Arbeit', short: 'Arbeit' },
@@ -335,6 +344,7 @@
     coach: '<path d="M12 4 19 8v5c0 4-2.8 6.7-7 8-4.2-1.3-7-4-7-8V8l7-4Z"/><path d="M9 12h6"/><path d="M12 9v6"/>',
     habits: '<path d="M12 3v18"/><path d="M12 8c-4.5 0-7 2.1-7 6 4.5 0 7-2.1 7-6Z"/><path d="M12 11c4.5 0 7 2.1 7 6-4.5 0-7-2.1-7-6Z"/>',
     tasks: '<path d="M5 7h14"/><path d="M5 12h14"/><path d="M5 17h8"/><path d="m15 17 2 2 4-5"/>',
+    idea: '<path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.2 1 2.1V17h6v-.2c0-.9.4-1.6 1-2.1A7 7 0 0 0 12 2Z"/><path d="M10 9h4"/><path d="M12 7v4"/>',
     calendar: '<path d="M7 3v4"/><path d="M17 3v4"/><path d="M4 8h16"/><rect x="4" y="5" width="16" height="16" rx="3"/>',
     sync: '<path d="M20 7h-5V2"/><path d="M20 7a8 8 0 0 0-13.7-2.4"/><path d="M4 17h5v5"/><path d="M4 17a8 8 0 0 0 13.7 2.4"/>',
     weight: '<path d="M7 8h10l2 12H5L7 8Z"/><path d="M9 8a3 3 0 0 1 6 0"/>',
@@ -437,6 +447,7 @@
   let deferredRenderPending = false;
   let habitFormOpen = false;
   let taskFormOpen = false;
+  let taskIdeasOpen = false;
   let taskBacklogOpen = false;
   let taskArchiveOpen = false;
   let taskTimelineOpen = false;
@@ -447,6 +458,7 @@
   let remoteTaskInProgressSupported = true;
   let remoteTaskBacklogRankSupported = true;
   let remoteTaskDoneArchiveSupported = true;
+  let remoteTaskIdeasSupported = true;
   let remoteHabitTargetPeriodSupported = true;
   let pendingTriggerSmokeId = null;
   let rulesExpanded = localStorage.getItem(RULES_UI_KEY) !== 'collapsed';
@@ -586,6 +598,11 @@
       cancelTaskEditBtn: $('#cancelTaskEditBtn'),
       taskPointsPreview: $('#taskPointsPreview'),
       tasksList: $('#tasksList'),
+      taskIdeasToggleBtn: $('#taskIdeasToggleBtn'),
+      taskIdeasCount: $('#taskIdeasCount'),
+      taskIdeasPanel: $('#taskIdeasPanel'),
+      taskIdeaForm: $('#taskIdeaForm'),
+      taskIdeaList: $('#taskIdeaList'),
       taskBacklogToggleBtn: $('#taskBacklogToggleBtn'),
       taskArchiveToggleBtn: $('#taskArchiveToggleBtn'),
       taskTimelineToggleBtn: $('#taskTimelineToggleBtn'),
@@ -685,6 +702,7 @@
     if (els.habitFormToggleBtn) els.habitFormToggleBtn.addEventListener('click', () => openHabitForm());
     if (els.habitFormCloseBtn) els.habitFormCloseBtn.addEventListener('click', () => closeHabitForm({ clearForm: !editingHabitId }));
     if (els.taskFormToggleBtn) els.taskFormToggleBtn.addEventListener('click', toggleTaskForm);
+    if (els.taskIdeasToggleBtn) els.taskIdeasToggleBtn.addEventListener('click', toggleTaskIdeas);
     if (els.taskBacklogToggleBtn) els.taskBacklogToggleBtn.addEventListener('click', toggleTaskBacklog);
     if (els.taskArchiveToggleBtn) els.taskArchiveToggleBtn.addEventListener('click', toggleTaskArchive);
     if (els.taskTimelineToggleBtn) els.taskTimelineToggleBtn.addEventListener('click', toggleTaskTimeline);
@@ -693,6 +711,7 @@
     if (els.appointmentFormCloseBtn) els.appointmentFormCloseBtn.addEventListener('click', () => closeAppointmentForm({ clearForm: !editingAppointmentId }));
     els.habitForm.addEventListener('submit', createHabit);
     els.taskForm.addEventListener('submit', createTask);
+    if (els.taskIdeaForm) els.taskIdeaForm.addEventListener('submit', createTaskIdea);
     if (els.appointmentForm) els.appointmentForm.addEventListener('submit', createAppointment);
     els.taskForm.elements.effort.addEventListener('change', updateTaskPreview);
     els.taskForm.elements.priority.addEventListener('change', updateTaskPreview);
@@ -742,6 +761,12 @@
       if (action === 'restore-archived-task') restoreArchivedDoneTask(id);
       if (action === 'done-archive-rank-up') shiftArchivedDoneTask(id, -1);
       if (action === 'done-archive-rank-down') shiftArchivedDoneTask(id, 1);
+      if (action === 'generate-task-ideas') generateTaskIdeas();
+      if (action === 'idea-to-task') createTaskFromIdea(id, 'open');
+      if (action === 'idea-to-backlog') createTaskFromIdea(id, TASK_BACKLOG_STATUS);
+      if (action === 'dismiss-task-idea') dismissTaskIdea(id);
+      if (action === 'reopen-task-idea') reopenTaskIdea(id);
+      if (action === 'delete-task-idea') deleteTaskIdea(id);
       if (action === 'edit-task') editTask(id);
       if (action === 'delete-task') deleteTask(id);
       if (action === 'archive-task') archiveTask(id);
@@ -901,6 +926,7 @@
       alcoholLogs: [],
       alcoholUnits: [],
       tasks: [],
+      taskIdeas: [],
       appointments: [],
       pointsLedger: [],
       coachEvents: [],
@@ -933,6 +959,7 @@
     next.alcoholLogs = Array.isArray(next.alcoholLogs) ? next.alcoholLogs : [];
     next.alcoholUnits = Array.isArray(next.alcoholUnits) ? next.alcoholUnits : [];
     next.tasks = Array.isArray(next.tasks) ? next.tasks.map(normalizeTask) : [];
+    next.taskIdeas = Array.isArray(next.taskIdeas) ? next.taskIdeas.map(normalizeTaskIdea) : [];
     next.appointments = Array.isArray(next.appointments) ? next.appointments.map(normalizeAppointment) : [];
     next.pointsLedger = Array.isArray(next.pointsLedger) ? next.pointsLedger.map(normalizeMorningRoutineLedgerPoint) : [];
     next.habits = next.habits.map(normalizeHabit);
@@ -1023,6 +1050,28 @@
       priority: normalizeTaskPriority(task.priority),
       done_archived_at: doneArchivedAt,
       done_archive_rank: doneArchivedAt ? doneArchiveRank : null
+    };
+  }
+
+  function normalizeTaskIdea(idea = {}) {
+    const created = idea.created_at || nowIso();
+    const story = Number(idea.story_points ?? idea.storyPoints ?? 2);
+    const status = TASK_IDEA_STATUSES.has(String(idea.idea_status || idea.status || '').trim()) ? String(idea.idea_status || idea.status).trim() : 'open';
+    const category = TASK_IDEA_CATEGORIES[String(idea.category || '').trim()] ? String(idea.category).trim() : 'focus';
+    return {
+      ...idea,
+      title: String(idea.title || '').trim(),
+      description: String(idea.description || '').trim(),
+      category,
+      story_points: [1, 2, 3, 5, 8].includes(story) ? story : 2,
+      priority: normalizeTaskPriority(idea.priority),
+      idea_status: status,
+      generated_task_id: idea.generated_task_id || idea.task_id || null,
+      source_key: idea.source_key || null,
+      accepted_at: validIsoOrNull(idea.accepted_at),
+      dismissed_at: validIsoOrNull(idea.dismissed_at),
+      created_at: created,
+      updated_at: idea.updated_at || created
     };
   }
 
@@ -1135,6 +1184,31 @@
     return `priority-${normalizeTaskPriority(priority)}`;
   }
 
+  function taskIdeaCategoryMeta(category) {
+    return TASK_IDEA_CATEGORIES[String(category || '').trim()] || TASK_IDEA_CATEGORIES.focus;
+  }
+
+  function storyPointsToEffort(storyPoints) {
+    const points = Number(storyPoints || 2);
+    if (points <= 1) return 1;
+    if (points <= 2) return 2;
+    if (points <= 3) return 3;
+    if (points <= 5) return 4;
+    return 5;
+  }
+
+  function compareTaskIdeas(a, b) {
+    const statusRank = { open: 0, accepted: 1, dismissed: 2 };
+    const ar = statusRank[a.idea_status || 'open'] ?? 3;
+    const br = statusRank[b.idea_status || 'open'] ?? 3;
+    if (ar !== br) return ar - br;
+    const prio = taskPriorityMeta(b).rank - taskPriorityMeta(a).rank;
+    if (prio) return prio;
+    const story = Number(a.story_points || 2) - Number(b.story_points || 2);
+    if (story) return story;
+    return new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime();
+  }
+
   function normalizeAppointmentType(type) {
     const key = String(type || '').trim().toLowerCase();
     return APPOINTMENT_TYPES[key] ? key : 'other';
@@ -1199,12 +1273,28 @@
 
   function hasPendingRemoteDeletes() {
     state.deletedRemoteIds = normalizeDeletedRemoteIds(state.deletedRemoteIds);
-    return SYNC_TABLES.some(table => Object.values(state.deletedRemoteIds?.[table] || {}).some(meta => !meta?.synced_at));
+    return SYNC_TABLES.some(table => {
+      if (table === 'task_ideas' && !remoteTaskIdeasSupported) return false;
+      return Object.values(state.deletedRemoteIds?.[table] || {}).some(meta => !meta?.synced_at);
+    });
   }
 
   function dedupeStateCollections(nextState = state) {
     dedupeHabits(nextState);
     dedupeAlcoholLogs(nextState);
+    dedupeTaskIdeas(nextState);
+  }
+
+  function dedupeTaskIdeas(nextState = state) {
+    if (!Array.isArray(nextState.taskIdeas)) nextState.taskIdeas = [];
+    const byId = new Map();
+    nextState.taskIdeas.map(normalizeTaskIdea).filter(idea => idea.id && idea.title).forEach(idea => {
+      const current = byId.get(idea.id);
+      if (!current || new Date(idea.updated_at || idea.created_at || 0) >= new Date(current.updated_at || current.created_at || 0)) {
+        byId.set(idea.id, idea);
+      }
+    });
+    nextState.taskIdeas = Array.from(byId.values());
   }
 
   function isBuiltInDefaultHabit(habit) {
@@ -1417,6 +1507,12 @@
     els.taskFormToggleBtn?.setAttribute('title', taskFormOpen ? 'Aufgaben-Formular schliessen' : 'Aufgabe anlegen');
   }
 
+  function toggleTaskIdeas() {
+    taskIdeasOpen = !taskIdeasOpen;
+    syncTaskUtilityPanels();
+    if (taskIdeasOpen) requestAnimationFrame(() => els.taskIdeasPanel?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }
+
   function toggleTaskBacklog() {
     taskBacklogOpen = !taskBacklogOpen;
     syncTaskUtilityPanels();
@@ -1436,6 +1532,9 @@
   }
 
   function syncTaskUtilityPanels() {
+    els.taskIdeasPanel?.classList.toggle('hidden', !taskIdeasOpen);
+    els.taskIdeasToggleBtn?.classList.toggle('is-active', taskIdeasOpen);
+    els.taskIdeasToggleBtn?.setAttribute('aria-expanded', String(taskIdeasOpen));
     els.taskBacklogPanel?.classList.toggle('hidden', !taskBacklogOpen);
     els.taskBacklogToggleBtn?.classList.toggle('is-active', taskBacklogOpen);
     els.taskBacklogToggleBtn?.setAttribute('aria-expanded', String(taskBacklogOpen));
@@ -4423,9 +4522,12 @@
     const backlog = backlogTasks();
     const archive = archivedDoneTasks();
     if (els.openTasksCount) els.openTasksCount.textContent = totalOpen;
+    const openIdeas = taskIdeas().filter(idea => idea.idea_status === 'open');
+    if (els.taskIdeasCount) els.taskIdeasCount.textContent = openIdeas.length;
     if (els.taskBacklogCount) els.taskBacklogCount.textContent = backlog.length;
     if (els.taskArchiveCount) els.taskArchiveCount.textContent = archive.length;
     syncTaskUtilityPanels();
+    renderTaskIdeas();
     renderTaskBacklog(backlog);
     renderTaskArchive(archive);
     renderTaskTimeline();
@@ -4448,6 +4550,66 @@
         </section>`;
       }).join('')}
     </div>`;
+  }
+
+  function taskIdeas() {
+    return (state.taskIdeas || [])
+      .map(normalizeTaskIdea)
+      .filter(idea => idea.title)
+      .sort(compareTaskIdeas);
+  }
+
+  function renderTaskIdeas(ideas = taskIdeas()) {
+    if (!els.taskIdeaList) return;
+    const open = ideas.filter(idea => idea.idea_status === 'open').length;
+    const converted = ideas.filter(idea => idea.idea_status === 'accepted').length;
+    const dismissed = ideas.filter(idea => idea.idea_status === 'dismissed').length;
+    if (!ideas.length) {
+      els.taskIdeaList.innerHTML = '<div class="empty-state">Noch keine Ideen im Pool. Speichere eine Idee oder lass dir Vorschläge aus Tasks, Habits und Konsum-Mustern generieren.</div>';
+      return;
+    }
+    els.taskIdeaList.innerHTML = `
+      <div class="task-idea-stats" aria-label="Ideenpool Übersicht">
+        <article><small>Offen</small><strong>${open}</strong><span>bereit zum Übernehmen</span></article>
+        <article><small>Umgesetzt</small><strong>${converted}</strong><span>als Aufgabe erzeugt</span></article>
+        <article><small>Verworfen</small><strong>${dismissed}</strong><span>sauber geparkt</span></article>
+      </div>
+      <div class="task-idea-grid">${ideas.map(renderTaskIdeaCard).join('')}</div>`;
+  }
+
+  function renderTaskIdeaCard(idea) {
+    const priority = normalizeTaskPriority(idea.priority);
+    const priorityMeta = taskPriorityMeta(priority);
+    const category = taskIdeaCategoryMeta(idea.category);
+    const status = idea.idea_status || 'open';
+    const statusLabel = status === 'accepted' ? 'Umgesetzt' : status === 'dismissed' ? 'Verworfen' : 'Idee';
+    const meta = `${escapeHtml(category.label)} · ${Number(idea.story_points || 2)} SP · ${escapeHtml(priorityMeta.label)}`;
+    const actionBlock = status === 'open'
+      ? `<button class="mini-btn primary" type="button" data-action="idea-to-task" data-id="${idea.id}">Als Task</button>
+         <button class="mini-btn" type="button" data-action="idea-to-backlog" data-id="${idea.id}">In Backlog</button>
+         <button class="mini-btn" type="button" data-action="dismiss-task-idea" data-id="${idea.id}">Verwerfen</button>`
+      : `<button class="mini-btn" type="button" data-action="reopen-task-idea" data-id="${idea.id}">Wieder öffnen</button>`;
+    const source = idea.source_key ? '<span class="badge muted">Smart</span>' : '<span class="badge muted">Manuell</span>';
+    return `<article class="kanban-card idea-card idea-status-${escapeHtml(status)}">
+      <div class="kanban-card-top">
+        <span class="idea-card-icon">${svgIcon('idea', 'ui-icon')}</span>
+        <div class="task-badges">
+          ${source}
+          <span class="badge muted ${taskPriorityClass(priority)}">${escapeHtml(priorityMeta.short)}</span>
+          <span class="badge muted">${escapeHtml(statusLabel)}</span>
+        </div>
+      </div>
+      <h4>${escapeHtml(idea.title)}</h4>
+      <p class="meta">${meta}${idea.description ? `<br>${escapeHtml(idea.description)}` : ''}</p>
+      <div class="idea-value-strip">
+        <span>${Number(idea.story_points || 2)} Story Points</span>
+        <span>Aufwand ${storyPointsToEffort(idea.story_points)}/5</span>
+      </div>
+      <div class="list-actions compact-actions idea-actions">
+        ${actionBlock}
+        <button class="mini-btn danger" type="button" data-action="delete-task-idea" data-id="${idea.id}">Löschen</button>
+      </div>
+    </article>`;
   }
 
   function renderTaskBacklog(backlog = backlogTasks()) {
@@ -5307,6 +5469,219 @@ async function deleteAlcoholLog(id) {
     saveState();
     toast('Aufgabe gespeichert');
     syncWithSupabase({ silent: true });
+  }
+
+  function suggestedTaskIdeas() {
+    const todayKey = toDateKey(new Date());
+    const openIdeaKeys = new Set((state.taskIdeas || []).map(idea => idea.source_key).filter(Boolean));
+    const suggestions = [];
+    const add = idea => {
+      if (!idea.source_key || openIdeaKeys.has(idea.source_key)) return;
+      if (suggestions.some(item => item.source_key === idea.source_key)) return;
+      suggestions.push(idea);
+    };
+
+    const overdue = state.tasks
+      .map(normalizeTask)
+      .filter(task => isActiveTask(task) && taskDueState(task).overdue)
+      .sort((a, b) => taskOverdueDays(b) - taskOverdueDays(a))[0];
+    if (overdue) add({
+      source_key: `overdue:${overdue.id}`,
+      title: `Mini-Schritt für: ${overdue.title}`,
+      description: `Diese Aufgabe ist ${taskDueState(overdue).label}. Vorschlag: nächsten kleinsten Schritt formulieren und 15 Minuten blocken.`,
+      category: 'focus',
+      story_points: 2,
+      priority: 'high'
+    });
+
+    const backlog = backlogTasks()[0];
+    if (backlog) add({
+      source_key: `backlog:${backlog.id}`,
+      title: `Backlog prüfen: ${backlog.title}`,
+      description: 'Entscheide, ob diese Karte diese Woche aktiv werden soll oder bewusst im Backlog bleibt.',
+      category: 'focus',
+      story_points: 1,
+      priority: normalizeTaskPriority(backlog.priority)
+    });
+
+    const activeHabits = state.habits.filter(habit => !habit.is_archived);
+    const missedHabit = activeHabits.find(habit => !entriesForHabitOnDate(habit.id, todayKey).length);
+    if (missedHabit) add({
+      source_key: `habit-gap:${missedHabit.id}:${todayKey}`,
+      title: `${missedHabit.name} heute absichern`,
+      description: 'Kleinen Slot oder Mini-Version planen, damit der Habit nicht nur im Kopf bleibt.',
+      category: 'habit',
+      story_points: 2,
+      priority: 'medium'
+    });
+
+    const cigsToday = state.cigarettes.filter(cigarette => toDateKey(cigarette.smoked_at) === todayKey).length;
+    if (cigsToday >= 3) add({
+      source_key: `smoke-reset:${todayKey}`,
+      title: '10-Minuten Craving-Reset einplanen',
+      description: `${cigsToday} Zigaretten heute. Vorschlag: Wasser, kurzer Walk und Delay-Check als konkrete Gegenaktion.`,
+      category: 'consumption',
+      story_points: 2,
+      priority: 'high'
+    });
+
+    const alcoholLast7 = state.alcoholUnits.filter(unit => {
+      const time = new Date(unit.occurred_at || unit.created_at || 0).getTime();
+      return Number.isFinite(time) && Date.now() - time <= 7 * DAY_MS;
+    }).length;
+    if (alcoholLast7 > 0) add({
+      source_key: `alcohol-window:${todayKey}`,
+      title: 'Alkoholfreies Abendfenster festlegen',
+      description: 'Ein ruhiges Abendfenster reduziert Folge-Cravings und hält den nächsten Tag planbarer.',
+      category: 'consumption',
+      story_points: 1,
+      priority: 'medium'
+    });
+
+    if (!state.tasks.some(isActiveTask)) add({
+      source_key: `focus-task:${todayKey}`,
+      title: 'Eine wichtigste Aufgabe für heute definieren',
+      description: 'Nur eine aktive Karte wählen und in Bearbeitung ziehen. Das senkt Task-Druck sofort.',
+      category: 'focus',
+      story_points: 1,
+      priority: 'medium'
+    });
+
+    const appointmentsToday = appointmentsOnDate(todayKey);
+    if (appointmentsToday.length >= 3) add({
+      source_key: `calendar-buffer:${todayKey}`,
+      title: 'Puffer nach dichtem Kalender setzen',
+      description: `${appointmentsToday.length} Termine heute. Plane einen kleinen Recovery-Puffer, statt direkt in die nächste Aufgabe zu springen.`,
+      category: 'health',
+      story_points: 1,
+      priority: 'medium'
+    });
+
+    return suggestions.slice(0, 6);
+  }
+
+  function generateTaskIdeas() {
+    const suggestions = suggestedTaskIdeas();
+    if (!suggestions.length) {
+      toast('Keine neuen Vorschläge gefunden');
+      return;
+    }
+    const created = nowIso();
+    suggestions.forEach(idea => {
+      state.taskIdeas.push(normalizeTaskIdea({
+        id: uid(),
+        ...idea,
+        idea_status: 'open',
+        generated_task_id: null,
+        created_at: created,
+        updated_at: created,
+        synced: false
+      }));
+    });
+    taskIdeasOpen = true;
+    saveState();
+    toast(`${suggestions.length} Vorschlag/Vorschläge im Ideenpool`);
+    syncWithSupabase({ silent: true });
+  }
+
+  function createTaskIdea(event) {
+    event.preventDefault();
+    if (!els.taskIdeaForm) return;
+    const data = new FormData(els.taskIdeaForm);
+    const title = String(data.get('title') || '').trim();
+    if (!title) return;
+    const created = nowIso();
+    state.taskIdeas.push(normalizeTaskIdea({
+      id: uid(),
+      title,
+      description: String(data.get('description') || '').trim(),
+      category: data.get('category'),
+      story_points: Number(data.get('story_points') || 2),
+      priority: normalizeTaskPriority(data.get('priority')),
+      idea_status: 'open',
+      source_key: null,
+      generated_task_id: null,
+      created_at: created,
+      updated_at: created,
+      synced: false
+    }));
+    els.taskIdeaForm.reset();
+    els.taskIdeaForm.elements.story_points.value = '2';
+    els.taskIdeaForm.elements.priority.value = 'medium';
+    saveState();
+    toast('Idee gespeichert');
+    syncWithSupabase({ silent: true });
+  }
+
+  function createTaskFromIdea(id, targetStatus = 'open') {
+    const idea = state.taskIdeas.find(item => item.id === id);
+    if (!idea || idea.idea_status !== 'open') return;
+    const created = nowIso();
+    const nextStatus = targetStatus === TASK_BACKLOG_STATUS ? TASK_BACKLOG_STATUS : 'open';
+    const task = {
+      id: uid(),
+      title: idea.title,
+      description: [idea.description, `Aus Ideenpool übernommen · ${Number(idea.story_points || 2)} Story Points`].filter(Boolean).join('\n\n'),
+      effort: storyPointsToEffort(idea.story_points),
+      priority: normalizeTaskPriority(idea.priority),
+      due_at: null,
+      status: nextStatus,
+      backlog_rank: nextStatus === TASK_BACKLOG_STATUS ? nextBacklogRank() : null,
+      completed_at: null,
+      done_archived_at: null,
+      done_archive_rank: null,
+      points: 0,
+      created_at: created,
+      updated_at: created,
+      synced: false
+    };
+    state.tasks.push(task);
+    idea.idea_status = 'accepted';
+    idea.accepted_at = created;
+    idea.generated_task_id = task.id;
+    idea.updated_at = created;
+    idea.synced = false;
+    if (nextStatus === TASK_BACKLOG_STATUS) taskBacklogOpen = true;
+    saveState();
+    toast(nextStatus === TASK_BACKLOG_STATUS ? 'Idee als Backlog-Task erstellt' : 'Idee als Aufgabe erstellt');
+    syncWithSupabase({ silent: true });
+  }
+
+  function dismissTaskIdea(id) {
+    const idea = state.taskIdeas.find(item => item.id === id);
+    if (!idea) return;
+    idea.idea_status = 'dismissed';
+    idea.dismissed_at = nowIso();
+    idea.updated_at = idea.dismissed_at;
+    idea.synced = false;
+    saveState();
+    toast('Idee verworfen');
+    syncWithSupabase({ silent: true });
+  }
+
+  function reopenTaskIdea(id) {
+    const idea = state.taskIdeas.find(item => item.id === id);
+    if (!idea) return;
+    idea.idea_status = 'open';
+    idea.accepted_at = null;
+    idea.dismissed_at = null;
+    idea.updated_at = nowIso();
+    idea.synced = false;
+    saveState();
+    toast('Idee wieder geöffnet');
+    syncWithSupabase({ silent: true });
+  }
+
+  async function deleteTaskIdea(id) {
+    const idea = state.taskIdeas.find(item => item.id === id);
+    if (!idea) return;
+    if (!confirm(`Idee „${idea.title}“ wirklich löschen?`)) return;
+    state.taskIdeas = state.taskIdeas.filter(item => item.id !== id);
+    markRemoteDeleted('task_ideas', id);
+    saveState();
+    await deleteRemoteById('task_ideas', id);
+    toast('Idee gelöscht');
+    syncWithSupabase({ silent: true, pullFirst: false });
   }
 
   function completeTask(id) {
@@ -6236,7 +6611,7 @@ async function deleteAlcoholLog(id) {
   function hasPendingSyncWork() {
     if (!state) return false;
     if (hasPendingRemoteDeletes()) return true;
-    return ['habits', 'habitEntries', 'cigarettes', 'alcoholLogs', 'alcoholUnits', 'tasks', 'appointments', 'pointsLedger'].some(key => (state[key] || []).some(entry => entry?.synced === false));
+    return ['habits', 'habitEntries', 'cigarettes', 'alcoholLogs', 'alcoholUnits', 'tasks', ...(remoteTaskIdeasSupported ? ['taskIdeas'] : []), 'appointments', 'pointsLedger'].some(key => (state[key] || []).some(entry => entry?.synced === false));
   }
 
   function renderSyncStatus(mode) {
@@ -6353,6 +6728,8 @@ async function deleteAlcoholLog(id) {
       }
 
       await upsertTaskRows();
+
+      await upsertTaskIdeaRows();
 
       const appointmentRows = liveRowsForTable('appointments', state.appointments).map(a => ({
         id: a.id, title: a.title, description: a.description || null, location: a.location || null,
@@ -6495,6 +6872,42 @@ async function deleteAlcoholLog(id) {
     }
   }
 
+  function taskIdeaRowsForSync() {
+    return liveRowsForTable('task_ideas', state.taskIdeas || []).map(idea => ({
+      id: idea.id,
+      title: idea.title,
+      description: idea.description || null,
+      category: TASK_IDEA_CATEGORIES[idea.category] ? idea.category : 'focus',
+      story_points: Number(idea.story_points || 2),
+      priority: normalizeTaskPriority(idea.priority),
+      idea_status: TASK_IDEA_STATUSES.has(idea.idea_status) ? idea.idea_status : 'open',
+      source_key: idea.source_key || null,
+      generated_task_id: idea.generated_task_id || null,
+      accepted_at: idea.accepted_at || null,
+      dismissed_at: idea.dismissed_at || null,
+      created_at: idea.created_at,
+      updated_at: idea.updated_at || nowIso()
+    }));
+  }
+
+  async function upsertTaskIdeaRows() {
+    if (!remoteTaskIdeasSupported) return;
+    const rows = taskIdeaRowsForSync();
+    if (!rows.length) return;
+    const { error } = await supabaseClient.from('task_ideas').upsert(rowsForCurrentUser(rows), { onConflict: 'id' });
+    if (!error) {
+      markRowsSynced('taskIdeas', rows);
+      saveState({ skipRender: true });
+      return;
+    }
+    if (isMissingRemoteRelationError(error)) {
+      remoteTaskIdeasSupported = false;
+      console.warn('Remote Ideenpool-Tabelle fehlt. Ideenpool bleibt lokal, bis supabase.sql angewendet ist.', error);
+      return;
+    }
+    throw error;
+  }
+
   function taskRowsForSync() {
     return liveRowsForTable('tasks', state.tasks).map(t => {
       const row = {
@@ -6577,6 +6990,11 @@ async function deleteAlcoholLog(id) {
     try {
       const { error } = await supabaseClient.from(table).delete().eq('user_id', userId).eq('id', id);
       if (error) {
+        if (table === 'task_ideas' && isMissingRemoteRelationError(error)) {
+          remoteTaskIdeasSupported = false;
+          console.warn('Remote Ideenpool-Tabelle fehlt. Delete wird lokal behandelt.', error);
+          return true;
+        }
         console.warn(`Remote-Delete ${table} fehlgeschlagen`, error);
         return false;
       }
@@ -6593,6 +7011,11 @@ async function deleteAlcoholLog(id) {
     try {
       const { error } = await supabaseClient.from(table).delete().eq('user_id', userId).in('id', ids);
       if (error) {
+        if (table === 'task_ideas' && isMissingRemoteRelationError(error)) {
+          remoteTaskIdeasSupported = false;
+          console.warn('Remote Ideenpool-Tabelle fehlt. Delete wird lokal behandelt.', error);
+          return true;
+        }
         console.warn(`Remote-Delete ${table} fehlgeschlagen`, error);
         return false;
       }
@@ -6619,6 +7042,7 @@ async function deleteAlcoholLog(id) {
     if (!supabaseClient || !isAuthenticated()) return;
     state.deletedRemoteIds = normalizeDeletedRemoteIds(state.deletedRemoteIds);
     for (const table of SYNC_TABLES) {
+      if (table === 'task_ideas' && !remoteTaskIdeasSupported) continue;
       const entries = Object.entries(state.deletedRemoteIds[table] || {});
       const ids = entries.filter(([, meta]) => !meta?.synced_at).map(([id]) => id);
       if (!ids.length) continue;
@@ -6727,13 +7151,14 @@ async function deleteAlcoholLog(id) {
 
   async function pullSupabaseData() {
     if (!supabaseClient) return;
-    const [habits, entries, cigarettes, alcohol, alcoholEvents, tasks, appointments, ledger] = await Promise.all([
+    const [habits, entries, cigarettes, alcohol, alcoholEvents, tasks, taskIdeasRemote, appointments, ledger] = await Promise.all([
       fetchRemoteTable('habit_definitions'),
       fetchRemoteTable('habit_entries'),
       fetchRemoteTable('cigarette_events'),
       fetchRemoteTable('alcohol_logs'),
       fetchRemoteTable('alcohol_events'),
       fetchRemoteTable('tasks'),
+      fetchRemoteTable('task_ideas'),
       fetchRemoteTable('appointments'),
       fetchRemoteTable('points_ledger')
     ]);
@@ -6744,17 +7169,19 @@ async function deleteAlcoholLog(id) {
     const remoteAlcoholRows = remoteRows('alcohol_logs', alcohol);
     const remoteAlcoholEventRows = remoteRows('alcohol_events', alcoholEvents);
     const remoteTaskRows = remoteRows('tasks', tasks);
+    const remoteTaskIdeaRows = remoteRows('task_ideas', taskIdeasRemote);
     const remoteAppointmentRows = remoteRows('appointments', appointments);
     let remoteLedgerRows = remoteRows('points_ledger', ledger);
 
     applyRemoteCollectionAuthority('cigarette_events', 'cigarettes', remoteCigaretteRows, { ledgerSourceType: 'cigarette' });
     applyRemoteCollectionAuthority('appointments', 'appointments', remoteAppointmentRows);
+    if (remoteTaskIdeasSupported) applyRemoteCollectionAuthority('task_ideas', 'taskIdeas', remoteTaskIdeaRows);
     const removedAlcoholUnits = applyRemoteCollectionAuthority('alcohol_events', 'alcoholUnits', remoteAlcoholEventRows, {
       ledgerMatcher: (point, removedSet) => isAlcoholPointsEntry(point) && removedSet.has(point.source_id)
     });
     if (removedAlcoholUnits.length) clearAlcoholLogsWithoutUnits(removedAlcoholUnits);
     remoteLedgerRows = filterRemoteLedgerRows(remoteLedgerRows, { cigaretteRows: remoteCigaretteRows, alcoholEventRows: remoteAlcoholEventRows });
-    const remoteHasData = [remoteHabitRows, remoteEntryRows, remoteCigaretteRows, remoteAlcoholRows, remoteAlcoholEventRows, remoteTaskRows, remoteAppointmentRows, remoteLedgerRows].some(rows => rows.length > 0);
+    const remoteHasData = [remoteHabitRows, remoteEntryRows, remoteCigaretteRows, remoteAlcoholRows, remoteAlcoholEventRows, remoteTaskRows, remoteTaskIdeaRows, remoteAppointmentRows, remoteLedgerRows].some(rows => rows.length > 0);
 
     applyRemoteHabitAuthority(remoteHabitRows);
 
@@ -6765,6 +7192,7 @@ async function deleteAlcoholLog(id) {
       state.alcoholLogs = remoteAlcoholRows.map(mapRemoteAlcohol);
       state.alcoholUnits = remoteAlcoholEventRows.map(mapRemoteAlcoholEvent);
       state.tasks = remoteTaskRows.map(mapRemoteTask).map(normalizeTask);
+      state.taskIdeas = remoteTaskIdeaRows.map(mapRemoteTaskIdea).map(normalizeTaskIdea);
       state.appointments = remoteAppointmentRows.map(mapRemoteAppointment).map(normalizeAppointment);
       state.pointsLedger = remoteLedgerRows.map(mapRemoteLedger);
       dedupeStateCollections(state);
@@ -6779,17 +7207,20 @@ async function deleteAlcoholLog(id) {
     state.alcoholLogs = mergeById(state.alcoholLogs, remoteAlcoholRows, mapRemoteAlcohol);
     state.alcoholUnits = mergeById(state.alcoholUnits, remoteAlcoholEventRows, mapRemoteAlcoholEvent);
     state.tasks = mergeById(state.tasks, remoteTaskRows, mapRemoteTask).map(task => preserveLocalTaskFallbacks(normalizeTask(task), localTasksBeforePull.get(task.id)));
+    state.taskIdeas = mergeById(state.taskIdeas || [], remoteTaskIdeaRows, mapRemoteTaskIdea).map(normalizeTaskIdea);
     state.appointments = mergeById(state.appointments, remoteAppointmentRows, mapRemoteAppointment).map(normalizeAppointment);
     state.pointsLedger = mergeById(state.pointsLedger, remoteLedgerRows, mapRemoteLedger);
     dedupeStateCollections(state);
   }
 
   async function fetchRemoteTable(table) {
+    if (table === 'task_ideas' && !remoteTaskIdeasSupported) return { data: [], error: null };
     const userId = currentUserId();
     if (!userId) return { data: [], error: null };
     const result = await supabaseClient.from(table).select('*').eq('user_id', userId);
     if (result.error) {
       if (OPTIONAL_SYNC_TABLES.has(table) && isMissingRemoteRelationError(result.error)) {
+        if (table === 'task_ideas') remoteTaskIdeasSupported = false;
         console.warn(`Optionale Sync-Tabelle ${table} fehlt.`, result.error);
         return { data: [], error: null };
       }
@@ -6835,7 +7266,7 @@ async function deleteAlcoholLog(id) {
   function isLocalPristine() {
     const defaultIds = new Set(Object.values(DEFAULT_HABIT_IDS));
     const hasOnlyDefaultHabits = state.habits.every(h => defaultIds.has(h.id) || BUILT_IN_DEFAULT_HABIT_NAMES.has(String(h.name || '').trim().toLowerCase()));
-    return hasOnlyDefaultHabits && !state.habitEntries.length && !state.cigarettes.length && !state.alcoholLogs.length && !state.alcoholUnits.length && !state.tasks.length && !state.appointments.length && !state.morningRoutineLogs?.length && !state.pointsLedger.length;
+    return hasOnlyDefaultHabits && !state.habitEntries.length && !state.cigarettes.length && !state.alcoholLogs.length && !state.alcoholUnits.length && !state.tasks.length && !(state.taskIdeas || []).length && !state.appointments.length && !state.morningRoutineLogs?.length && !state.pointsLedger.length;
   }
 
   function subscribeToRemoteChanges() {
@@ -6844,6 +7275,7 @@ async function deleteAlcoholLog(id) {
     try {
       const channel = supabaseClient.channel(`habitflow-private-sync-${userId.slice(0, 8)}`);
       SYNC_TABLES.forEach(table => {
+        if (table === 'task_ideas' && !remoteTaskIdeasSupported) return;
         channel.on('postgres_changes', { event: '*', schema: 'public', table, filter: `user_id=eq.${userId}` }, scheduleRemotePull);
       });
       syncSubscription = channel.subscribe();
@@ -6874,6 +7306,7 @@ async function deleteAlcoholLog(id) {
   const mapRemoteAlcohol = a => ({ id: a.id, log_date: a.log_date, consumed: a.consumed, note: a.note, created_at: a.created_at, updated_at: a.updated_at, synced: true });
   const mapRemoteAlcoholEvent = a => ({ id: a.id, occurred_at: a.occurred_at, drink_type: a.drink_type || 'other', note: a.note, created_at: a.created_at, updated_at: a.updated_at, synced: true });
   const mapRemoteTask = t => ({ id: t.id, title: t.title, description: t.description, effort: t.effort, priority: normalizeTaskPriority(t.priority), status: TASK_COLUMNS.some(column => column.status === t.status) ? t.status : 'open', due_at: t.due_at, completed_at: t.completed_at, points: t.points, backlog_rank: t.backlog_rank, done_archived_at: t.done_archived_at, done_archive_rank: t.done_archive_rank, created_at: t.created_at, updated_at: t.updated_at, synced: true });
+  const mapRemoteTaskIdea = idea => normalizeTaskIdea({ id: idea.id, title: idea.title, description: idea.description, category: idea.category, story_points: idea.story_points, priority: idea.priority, idea_status: idea.idea_status, source_key: idea.source_key, generated_task_id: idea.generated_task_id, accepted_at: idea.accepted_at, dismissed_at: idea.dismissed_at, created_at: idea.created_at, updated_at: idea.updated_at, synced: true });
   const mapRemoteAppointment = a => normalizeAppointment({ id: a.id, title: a.title, description: a.description, location: a.location, appointment_type: a.appointment_type, starts_at: a.starts_at, ends_at: a.ends_at, created_at: a.created_at, updated_at: a.updated_at, synced: true });
   const mapRemoteLedger = p => normalizeMorningRoutineLedgerPoint({ id: p.id, source_type: p.source_type, source_id: p.source_id, points: p.points, reason: p.reason, earned_at: p.earned_at, created_at: p.created_at, updated_at: p.created_at, synced: true });
 
