@@ -13,6 +13,7 @@
   const HABIT_CARD_UI_KEY = 'habitflow-habit-cards-open';
   const CONSUMPTION_MODE_KEY = 'habitflow-consumption-mode';
   const LEISURE_FILTER_KEY = 'habitflow-leisure-filters-v1';
+  const GAMIFICATION_LOCKED_KEY = 'habitflow-gamification-show-locked-v1';
   const ACTIVITY_CATALOG_URL = './data/activity-ideas.json';
   const LEISURE_RESULT_LIMIT = 12;
   const SUPABASE_CONFIG = window.HABITFLOW_SUPABASE_CONFIG || {};
@@ -282,18 +283,57 @@
     experiment: { label: 'Experiment', short: 'Test' }
   };
   const GAMIFICATION_BADGES = [
-    { id: 'first-spark', title: 'Startfunke', icon: '✦', target: 1, unit: 'Aktion', description: 'Erster positiver Punkte-Eintrag.', value: stats => stats.positivePointEvents },
-    { id: 'routine-core', title: 'Routinen-Kern', icon: '☉', target: 1, unit: 'Routine', description: 'Eine Morgenroutine abgeschlossen.', value: stats => stats.routineDays },
-    { id: 'task-finisher', title: 'Task Finisher', icon: '✓', target: 5, unit: 'Tasks', description: 'Fuenf Aufgaben sauber erledigt.', value: stats => stats.completedTasks },
-    { id: 'focus-pause-2h', title: '2h Fokus-Pause', icon: 'Ⅱ', target: 120, unit: 'Min.', description: 'Zwei Stunden Tagespause geschafft.', value: stats => stats.bestDaytimePause },
-    { id: 'clean-air-8h', title: '8h Tagespause', icon: '∞', target: 480, unit: 'Min.', description: 'Acht Stunden Tagespause als Highscore.', value: stats => stats.bestDaytimePause },
-    { id: 'habit-gardener', title: 'Habit Gaertner', icon: '◇', target: 14, unit: 'Logs', description: '14 Habit-Logs gesammelt.', value: stats => stats.habitLogs },
+    { id: 'first-spark', title: 'Startfunke', icon: '✦', target: 1, unit: 'Aktion', description: 'Erster positiver Fortschritt im Ledger.', value: stats => stats.positivePointEvents },
+    { id: 'first-task', title: 'Erster Haken', icon: '✓', target: 1, unit: 'Task', description: 'Eine Aufgabe sauber abgeschlossen.', value: stats => stats.completedTasks },
+    { id: 'task-finisher', title: 'Task Finisher', icon: '▣', target: 5, unit: 'Tasks', description: 'Fuenf Aufgaben abgeschlossen.', value: stats => stats.completedTasks },
+    { id: 'task-closer-25', title: 'Closer 25', icon: '25', target: 25, unit: 'Tasks', description: '25 Aufgaben erledigt.', value: stats => stats.completedTasks },
+    { id: 'task-closer-50', title: 'Closer 50', icon: '50', target: 50, unit: 'Tasks', description: '50 Aufgaben erledigt.', value: stats => stats.completedTasks },
+    { id: 'today-triple', title: 'Tages-Triple', icon: 'III', target: 3, unit: 'Tasks', description: 'Drei Aufgaben an einem Tag erledigt.', value: stats => stats.todayCompletedTasks },
+    { id: 'overdue-rescuer', title: 'Verzug gerettet', icon: '↺', target: 3, unit: 'Tasks', description: 'Drei ueberfaellige Aufgaben abgeschlossen.', value: stats => stats.completedOverdueTasks },
+    { id: 'clear-board', title: 'Klares Board', icon: '□', target: 1, unit: 'Tag', description: 'Aktive Aufgaben ohne offenen Verzug.', value: stats => stats.noOverdueSignal },
+    { id: 'priority-pilot', title: 'Prio-Pilot', icon: '▲', target: 5, unit: 'Tasks', description: 'Fuenf hohe oder kritische Aufgaben erledigt.', value: stats => stats.highPriorityDone },
+    { id: 'backlog-curator', title: 'Backlog Kurator', icon: '◇', target: 5, unit: 'Karten', description: 'Fuenf Ideen oder Aufgaben bewusst im Backlog.', value: stats => stats.backlogTasks },
+    { id: 'archive-keeper', title: 'Archiv-Hueter', icon: '▤', target: 5, unit: 'Tasks', description: 'Fuenf erledigte Aufgaben archiviert.', value: stats => stats.archivedDoneTasks },
     { id: 'weekly-planner', title: 'Wochenplaner', icon: '▦', target: 3, unit: 'geplant', description: 'Drei Aufgaben mit Datum geplant.', value: stats => stats.plannedTasks },
-    { id: 'idea-alchemist', title: 'Ideen-Alchemist', icon: '✧', target: 3, unit: 'Ideen', description: 'Drei Ideen in echte Tasks verwandelt.', value: stats => stats.acceptedIdeas },
+    { id: 'weekly-architect', title: 'Wochen-Architekt', icon: '▥', target: 5, unit: 'Tasks', description: 'Fuenf Aufgaben in der aktuellen Woche geplant.', value: stats => stats.weeklyPlannedTasks },
+    { id: 'calendar-sense', title: 'Kalender-Sinn', icon: '◷', target: 5, unit: 'Termine', description: 'Fuenf Termine im Kalender gepflegt.', value: stats => stats.appointments },
+    { id: 'week-flow', title: 'Wochenfluss', icon: '≈', target: 3, unit: 'Termine', description: 'Drei Termine in den letzten sieben Tagen geplant.', value: stats => stats.appointments7 },
+    { id: 'idea-spark', title: 'Ideenfunke', icon: '✧', target: 1, unit: 'Idee', description: 'Eine Idee im Ideenpool erfasst.', value: stats => stats.taskIdeasTotal },
+    { id: 'idea-alchemist', title: 'Ideen-Alchemist', icon: '✺', target: 3, unit: 'Ideen', description: 'Drei Ideen in echte Tasks verwandelt.', value: stats => stats.acceptedIdeas },
+    { id: 'idea-founder', title: 'Ideen-Gründer', icon: '✹', target: 10, unit: 'Ideen', description: 'Zehn Ideen umgesetzt oder in Tasks verwandelt.', value: stats => stats.acceptedIdeas },
+    { id: 'idea-cleaner', title: 'Ideen-Cleaner', icon: '⌫', target: 5, unit: 'Ideen', description: 'Fuenf Ideen bewusst verworfen.', value: stats => stats.dismissedIdeas },
+    { id: 'activity-hunter', title: 'Freizeit-Scout', icon: '⌖', target: 3, unit: 'Ideen', description: 'Drei Freizeit-Ideen als Task oder Idee uebernommen.', value: stats => stats.activityIdeasAccepted },
+    { id: 'routine-core', title: 'Routinen-Kern', icon: '☉', target: 1, unit: 'Routine', description: 'Eine Morgenroutine abgeschlossen.', value: stats => stats.routineDays },
+    { id: 'routine-five', title: 'Routine 5', icon: '⑤', target: 5, unit: 'Tage', description: 'Fuenf Routinen-Tage gesammelt.', value: stats => stats.routineDays },
+    { id: 'routine-twenty', title: 'Routine 20', icon: '⑳', target: 20, unit: 'Tage', description: '20 Routinen-Tage gesammelt.', value: stats => stats.routineDays },
+    { id: 'habit-gardener', title: 'Habit Gaertner', icon: '⌘', target: 14, unit: 'Logs', description: '14 Habit-Logs gesammelt.', value: stats => stats.habitLogs },
+    { id: 'habit-forest', title: 'Habit Wald', icon: '♢', target: 50, unit: 'Logs', description: '50 Habit-Logs gesammelt.', value: stats => stats.habitLogs },
+    { id: 'habit-rhythm', title: 'Rhythmus', icon: '∿', target: 7, unit: 'Tage', description: 'An sieben Tagen Habit-Momentum gezeigt.', value: stats => stats.habitLogDays },
+    { id: 'habit-builder', title: 'Builder', icon: '◫', target: 3, unit: 'Habits', description: 'Drei aktive Habits im System.', value: stats => stats.activeHabits },
     { id: 'stable-day', title: 'Stabiler Tag', icon: '◌', target: 1, unit: 'Tag', description: 'Ein Tag mit Score 80 oder hoeher.', value: stats => stats.highScoreDays },
+    { id: 'stable-week', title: 'Stabile Woche', icon: '◍', target: 5, unit: 'Tage', description: 'Fuenf starke Score-Tage in 30 Tagen.', value: stats => stats.highScoreDays },
+    { id: 'perfect-day', title: 'Perfect Day', icon: '◎', target: 1, unit: 'Tag', description: 'Ein Tag mit Score 95 oder hoeher.', value: stats => stats.perfectScoreDays },
+    { id: 'focus-pause-2h', title: '2h Fokus-Pause', icon: 'Ⅱ', target: 120, unit: 'Min.', description: 'Zwei Stunden Tagespause geschafft.', value: stats => stats.bestDaytimePause },
+    { id: 'focus-pause-4h', title: '4h Fokus-Pause', icon: 'Ⅳ', target: 240, unit: 'Min.', description: 'Vier Stunden Tagespause geschafft.', value: stats => stats.bestDaytimePause },
+    { id: 'focus-pause-8h', title: '8h Tagespause', icon: 'Ⅷ', target: 480, unit: 'Min.', description: 'Acht Stunden Tagespause als Highscore.', value: stats => stats.bestDaytimePause },
+    { id: 'full-reset-24h', title: '24h Reset', icon: '24', target: 1440, unit: 'Min.', description: '24 Stunden Abstand als persoenlicher Highscore.', value: stats => stats.bestPause },
     { id: 'aware-tracker', title: 'Konsum bewusst', icon: '⌁', target: 10, unit: 'Logs', description: 'Zehn Konsum-Momente bewusst erfasst.', value: stats => stats.consumptionLogs },
+    { id: 'smoke-analyst', title: 'Rauch-Analyst', icon: '⌬', target: 20, unit: 'Logs', description: '20 Rauch-Momente sichtbar gemacht.', value: stats => stats.cigaretteLogs },
+    { id: 'alcohol-aware', title: 'Alkohol-Aware', icon: '◒', target: 10, unit: 'Logs', description: 'Zehn Alkohol-Einheiten bewusst erfasst.', value: stats => stats.alcoholLogs },
+    { id: 'smoke-free-seven', title: 'Ruhige 7', icon: '7', target: 7, unit: 'Tage', description: 'Sieben aktive Tage ohne Rauch-Log.', value: stats => stats.smokeFreeActiveDays },
+    { id: 'clear-evenings', title: 'Klare Abende', icon: '☾', target: 5, unit: 'Tage', description: 'Fuenf aktive Tage ohne Konsum-Log.', value: stats => stats.noConsumptionActiveDays },
+    { id: 'coach-visitor', title: 'Coach Kontakt', icon: '☏', target: 3, unit: 'Events', description: 'Drei Coach-Momente genutzt.', value: stats => stats.coachEvents },
+    { id: 'recovery-first', title: 'Recovery Start', icon: '♧', target: 1, unit: 'Session', description: 'Eine Recovery-Session gestartet.', value: stats => stats.recoverySessions },
+    { id: 'recovery-builder', title: 'Recovery Builder', icon: '♧+', target: 5, unit: 'Sessions', description: 'Fuenf Recovery-Sessions gesammelt.', value: stats => stats.recoverySessions },
+    { id: 'experimenter', title: 'Experimenter', icon: '⚗', target: 1, unit: 'Test', description: 'Ein Verhaltensexperiment gestartet.', value: stats => stats.experimentsTotal },
+    { id: 'scientist', title: 'Scientist', icon: '⚙', target: 3, unit: 'Tests', description: 'Drei Experimente abgeschlossen.', value: stats => stats.experimentsCompleted },
+    { id: 'party-planner', title: 'Party Planer', icon: '◐', target: 1, unit: 'Plan', description: 'Einen Abend bewusst vorgeplant.', value: stats => stats.partyPlansTotal },
+    { id: 'party-master', title: 'Party Master', icon: '◑', target: 3, unit: 'Plaene', description: 'Drei Party-Plaene abgeschlossen.', value: stats => stats.partyPlansCompleted },
     { id: 'focus-streak', title: 'Momentum-Serie', icon: '↗', target: 3, unit: 'Tage', description: 'Drei aktive Tage in Folge.', value: stats => stats.momentumStreak },
-    { id: 'level-five', title: 'Level 5', icon: '◆', target: 5, unit: 'Level', description: 'Companion auf Level 5 gebracht.', value: stats => stats.level }
+    { id: 'week-streak', title: '7-Tage Flow', icon: '↟', target: 7, unit: 'Tage', description: 'Sieben aktive Tage in Folge.', value: stats => stats.momentumStreak },
+    { id: 'level-five', title: 'Companion Level 5', icon: '◆', target: 5, unit: 'Level', description: 'Companion auf Level 5 gebracht.', value: stats => stats.level },
+    { id: 'level-ten', title: 'Companion Level 10', icon: '◆◆', target: 10, unit: 'Level', description: 'Companion auf Level 10 gebracht.', value: stats => stats.level },
+    { id: 'level-twelve', title: 'Guardian Mode', icon: '✦◆', target: 12, unit: 'Level', description: 'Companion in den Guardian-Modus gebracht.', value: stats => stats.level }
   ];
 
   const TASK_IDEA_STATUSES = new Set(['open', 'accepted', 'dismissed']);
@@ -490,6 +530,7 @@
   let leisureCatalogLoaded = false;
   let leisureFilters = loadLeisureFilters();
   let leisureResultOffset = 0;
+  let gamificationShowLocked = localStorage.getItem(GAMIFICATION_LOCKED_KEY) === 'show';
 
   const els = {};
 
@@ -559,6 +600,7 @@
       companionCard: $('#companionCard'),
       badgeShelf: $('#badgeShelf'),
       badgeUnlockCount: $('#badgeUnlockCount'),
+      toggleLockedBadgesBtn: $('#toggleLockedBadgesBtn'),
       currentPause: $('#currentPause'),
       todayCigarettes: $('#todayCigarettes'),
       avgPause7: $('#avgPause7'),
@@ -714,6 +756,7 @@
     els.heroTaskBtn.addEventListener('click', () => { showScreen('tasks'); openTaskForm(); });
     if (els.heroCoachBtn) els.heroCoachBtn.addEventListener('click', openCoachModal);
     if (els.heroEmergencyBtn) els.heroEmergencyBtn.addEventListener('click', startEmergencyCravingFlow);
+    if (els.toggleLockedBadgesBtn) els.toggleLockedBadgesBtn.addEventListener('click', toggleLockedBadges);
     if (els.morningRoutineModalCloseBtn) els.morningRoutineModalCloseBtn.addEventListener('click', closeMorningRoutineModal);
     if (els.morningRoutineModal) {
       els.morningRoutineModal.addEventListener('click', event => {
@@ -2078,9 +2121,9 @@
     const safeTotal = Math.max(0, Number(total || 0));
     const level = Math.floor(safeTotal / 500) + 1;
     const levelPoints = safeTotal % 500;
-    els.totalPoints.textContent = total.toLocaleString('de-CH');
-    els.levelLabel.textContent = `Level ${level}`;
-    els.levelProgress.style.width = `${Math.min(100, (levelPoints / 500) * 100)}%`;
+    if (els.totalPoints) els.totalPoints.textContent = total.toLocaleString('de-CH');
+    if (els.levelLabel) els.levelLabel.textContent = `Level ${level}`;
+    if (els.levelProgress) els.levelProgress.style.width = `${Math.min(100, (levelPoints / 500) * 100)}%`;
     const todayKey = toDateKey(new Date());
     const todayCount = cigarettesOnDate(todayKey).length;
     const habitLogsToday = state.habitEntries.filter(e => toDateKey(e.occurred_at) === todayKey).length;
@@ -2112,10 +2155,24 @@
     const stats = buildGamificationStats();
     const badgeStates = GAMIFICATION_BADGES.map(config => gamificationBadgeState(config, stats));
     stats.unlockedBadges = badgeStates.filter(badge => badge.unlocked).length;
+    const visibleBadges = gamificationShowLocked ? badgeStates : badgeStates.filter(badge => badge.unlocked);
     const companion = companionProfile(stats);
     if (els.badgeUnlockCount) els.badgeUnlockCount.textContent = `${stats.unlockedBadges}/${badgeStates.length} gesammelt`;
+    if (els.toggleLockedBadgesBtn) {
+      els.toggleLockedBadgesBtn.textContent = gamificationShowLocked ? 'Nicht erreichte ausblenden' : 'Nicht erreichte anzeigen';
+      els.toggleLockedBadgesBtn.setAttribute('aria-pressed', gamificationShowLocked ? 'true' : 'false');
+    }
+    els.badgeShelf.classList.toggle('show-locked', gamificationShowLocked);
     els.companionCard.innerHTML = renderCompanionCard(companion, stats);
-    els.badgeShelf.innerHTML = badgeStates.map(renderGamificationBadge).join('');
+    els.badgeShelf.innerHTML = visibleBadges.length
+      ? visibleBadges.map(renderGamificationBadge).join('')
+      : `<article class="badge-empty-state"><strong>Noch keine Badges gesammelt</strong><p>Starte mit einer kleinen Aktion. Nicht erreichte Badges kannst du bei Bedarf einblenden.</p></article>`;
+  }
+
+  function toggleLockedBadges() {
+    gamificationShowLocked = !gamificationShowLocked;
+    localStorage.setItem(GAMIFICATION_LOCKED_KEY, gamificationShowLocked ? 'show' : 'hide');
+    renderGamification();
   }
 
   function buildGamificationStats() {
@@ -2125,15 +2182,54 @@
     const levelPoints = safeTotal % 500;
     const todayKey = toDateKey(new Date());
     const dayScore = calculateDailyScore(todayKey);
+    const keys7 = daysBack(7);
     const keys14 = daysBack(14);
+    const keys30 = daysBack(30);
+    const currentWeekKeys = Array.from({ length: 7 }, (_, index) => {
+      const date = startOfWeekDate(new Date());
+      date.setDate(date.getDate() + index);
+      return toDateKey(date);
+    });
     const completedTasks = state.tasks.filter(task => task.status === 'done').length;
+    const todayCompletedTasks = state.tasks.filter(task => task.status === 'done' && toDateKey(task.completed_at || task.updated_at || task.created_at) === todayKey).length;
+    const completedOverdueTasks = state.tasks.filter(task => {
+      if (task.status !== 'done' || !task.due_at) return false;
+      const due = new Date(task.due_at);
+      const done = new Date(task.completed_at || task.updated_at || task.created_at || nowIso());
+      if (Number.isNaN(due.getTime()) || Number.isNaN(done.getTime())) return false;
+      return done.getTime() > due.getTime() + DAY_MS - 1;
+    }).length;
+    const highPriorityDone = state.tasks.filter(task => task.status === 'done' && ['high', 'urgent'].includes(task.priority || 'medium')).length;
     const plannedTasks = state.tasks.filter(task => isActiveTask(task) && Boolean(task.due_at)).length;
+    const weeklyPlannedTasks = state.tasks.filter(task => isActiveTask(task) && currentWeekKeys.includes(toDateKey(task.due_at))).length;
+    const backlogTasks = state.tasks.filter(task => task.status === TASK_BACKLOG_STATUS).length;
+    const archivedDoneTasks = state.tasks.filter(task => task.status === 'done' && task.done_archived_at).length;
+    const taskIdeasTotal = (state.taskIdeas || []).length;
     const acceptedIdeas = (state.taskIdeas || []).filter(idea => idea.idea_status === 'accepted' || idea.generated_task_id).length;
+    const dismissedIdeas = (state.taskIdeas || []).filter(idea => idea.idea_status === 'dismissed').length;
+    const activityIdeasAccepted = (state.taskIdeas || []).filter(idea => (idea.source_key || '').includes('activity') && (idea.idea_status === 'accepted' || idea.generated_task_id)).length;
     const routineDays = new Set((state.morningRoutineLogs || []).map(log => log.date_key || toDateKey(log.completed_at))).size;
-    const highScoreDays = keys14.filter(key => dayHasTrackedActivity(key) && calculateDailyScore(key).score >= 80).length;
+    const highScoreDays = keys30.filter(key => dayHasTrackedActivity(key) && calculateDailyScore(key).score >= 80).length;
+    const perfectScoreDays = keys30.filter(key => dayHasTrackedActivity(key) && calculateDailyScore(key).score >= 95).length;
     const momentumStreak = currentMomentumStreak();
     const positivePointEvents = state.pointsLedger.filter(point => Number(point.points || 0) > 0).length;
+    const activeTasks = state.tasks.filter(isActiveTask).length;
     const activeOverdue = state.tasks.filter(task => isActiveTask(task) && taskDueState(task).overdue).length;
+    const activeHabits = state.habits.filter(habit => !habit.is_archived).length;
+    const habitLogDays = new Set(state.habitEntries.map(entry => toDateKey(entry.occurred_at)).filter(Boolean)).size;
+    const cigaretteLogs = state.cigarettes.length;
+    const alcoholLogs = state.alcoholUnits.length;
+    const smokeFreeActiveDays = keys14.filter(key => dayHasTrackedActivity(key) && !state.cigarettes.some(cigarette => toDateKey(cigarette.smoked_at) === key)).length;
+    const noConsumptionActiveDays = keys14.filter(key => dayHasTrackedActivity(key) && !state.cigarettes.some(cigarette => toDateKey(cigarette.smoked_at) === key) && !state.alcoholUnits.some(unit => toDateKey(unit.occurred_at || unit.created_at) === key)).length;
+    const appointments = state.appointments.length;
+    const appointments7 = state.appointments.filter(appointment => keys7.includes(toDateKey(appointment.starts_at))).length;
+    const experimentsTotal = (state.experiments || []).length;
+    const experimentsCompleted = (state.experiments || []).filter(experiment => experiment.completed_at || experiment.result || experiment.status === 'done').length;
+    const partyPlansTotal = (state.partyPlans || []).length;
+    const partyPlansCompleted = (state.partyPlans || []).filter(plan => plan.completed_at || plan.status === 'done').length;
+    const recoverySessions = (state.recoverySessions || []).length;
+    const coachEvents = (state.coachEvents || []).length;
+    const noOverdueSignal = activeTasks > 0 && activeOverdue === 0 ? 1 : 0;
     return {
       total,
       level,
@@ -2141,18 +2237,43 @@
       levelProgress: Math.round((levelPoints / 500) * 100),
       dayScore,
       completedTasks,
+      todayCompletedTasks,
+      completedOverdueTasks,
+      highPriorityDone,
       plannedTasks,
+      weeklyPlannedTasks,
+      backlogTasks,
+      archivedDoneTasks,
+      taskIdeasTotal,
       acceptedIdeas,
+      dismissedIdeas,
+      activityIdeasAccepted,
       routineDays,
       highScoreDays,
+      perfectScoreDays,
       momentumStreak,
       positivePointEvents,
       bestDaytimePause: bestDaytimePauseMinutes() || 0,
       bestPause: bestPauseMinutes() || 0,
       habitLogs: state.habitEntries.length,
+      habitLogDays,
+      activeHabits,
       consumptionLogs: state.cigarettes.length + state.alcoholUnits.length,
-      activeTasks: state.tasks.filter(isActiveTask).length,
+      cigaretteLogs,
+      alcoholLogs,
+      smokeFreeActiveDays,
+      noConsumptionActiveDays,
+      appointments,
+      appointments7,
+      experimentsTotal,
+      experimentsCompleted,
+      partyPlansTotal,
+      partyPlansCompleted,
+      recoverySessions,
+      coachEvents,
+      activeTasks,
       activeOverdue,
+      noOverdueSignal,
       unlockedBadges: 0
     };
   }
@@ -2209,10 +2330,10 @@
   }
 
   function companionProfile(stats) {
-    const stage = stats.level >= 12 ? 4 : stats.level >= 7 ? 3 : stats.level >= 4 ? 2 : 1;
-    const names = { 1: 'Milo', 2: 'Milo Scout', 3: 'Milo Ranger', 4: 'Milo Prime' };
-    const titles = { 1: 'Starter', 2: 'Scout', 3: 'Ranger', 4: 'Guardian' };
-    const faces = { 1: '•ᴗ•', 2: 'ᵔᴗᵔ', 3: '◕ᴗ◕', 4: '✦ᴗ✦' };
+    const stage = stats.unlockedBadges >= 40 || stats.level >= 12 ? 5 : stats.unlockedBadges >= 28 || stats.level >= 9 ? 4 : stats.unlockedBadges >= 16 || stats.level >= 6 ? 3 : stats.unlockedBadges >= 6 || stats.level >= 3 ? 2 : 1;
+    const names = { 1: 'Milo', 2: 'Milo Scout', 3: 'Milo Ranger', 4: 'Milo Prime', 5: 'Milo Nova' };
+    const titles = { 1: 'Starter', 2: 'Scout', 3: 'Ranger', 4: 'Guardian', 5: 'Nova Guardian' };
+    const faces = { 1: '•ᴗ•', 2: 'ᵔᴗᵔ', 3: '◕ᴗ◕', 4: '✦ᴗ✦', 5: '✦◡✦' };
     const score = stats.dayScore.score;
     const mood = score >= 82 ? 'fokussiert' : score >= 62 ? 'stabil' : score >= 42 ? 'wachsam' : 'Recovery';
     const cue = stats.activeOverdue
@@ -2220,27 +2341,39 @@
       : stats.momentumStreak >= 3
         ? `${stats.momentumStreak} Tage Momentum halten.`
         : 'Ein kleiner Log reicht fuer Bindung.';
-    const bond = Math.min(100, 18 + stats.unlockedBadges * 5 + stats.momentumStreak * 12 + Math.min(25, stats.routineDays * 2));
-    return { stage, name: names[stage], title: titles[stage], face: faces[stage], mood, cue, bond };
+    const bond = Math.min(100, 18 + stats.unlockedBadges * 3 + stats.momentumStreak * 10 + Math.min(25, stats.routineDays * 2));
+    const charge = Math.min(100, Math.round((stats.levelProgress * 0.45) + (score * 0.35) + (bond * 0.2)));
+    const trait = stats.activeOverdue ? 'ordnet Verzug' : stats.momentumStreak >= 7 ? 'haelt Streak' : stats.unlockedBadges >= 20 ? 'sammelt Mastery' : 'baut Momentum';
+    return { stage, name: names[stage], title: titles[stage], face: faces[stage], mood, cue, bond, charge, trait };
   }
 
   function renderCompanionCard(companion, stats) {
     const nextLevel = 500 - stats.levelPoints;
+    const unlockedText = `${stats.unlockedBadges}/${GAMIFICATION_BADGES.length}`;
     return `<div class="companion-shell stage-${companion.stage}">
-      <div class="companion-avatar" aria-hidden="true"><span>${escapeHtml(companion.face)}</span><i></i></div>
+      <div class="companion-hero" aria-hidden="true">
+        <div class="companion-orbit"><span></span><span></span><span></span></div>
+        <div class="companion-avatar"><span class="companion-face">${escapeHtml(companion.face)}</span><b></b><i></i></div>
+      </div>
       <div class="companion-copy">
         <p class="eyebrow">Companion</p>
         <h4>${escapeHtml(companion.name)}</h4>
         <p>${escapeHtml(companion.title)} · ${escapeHtml(companion.mood)} · ${escapeHtml(companion.cue)}</p>
+        <div class="companion-traits">
+          <span>Stage ${companion.stage}</span>
+          <span>${escapeHtml(companion.trait)}</span>
+          <span>${unlockedText} Badges</span>
+        </div>
       </div>
       <div class="companion-stats">
         <article><small>Level</small><strong>${stats.level}</strong></article>
         <article><small>Bindung</small><strong>${companion.bond}%</strong></article>
-        <article><small>Badges</small><strong>${stats.unlockedBadges}</strong></article>
+        <article><small>Energie</small><strong>${companion.charge}%</strong></article>
       </div>
       <div class="companion-bars">
         <div><span>Naechstes Level</span><em>${nextLevel} Pkt.</em><i><b style="width:${stats.levelProgress}%"></b></i></div>
         <div><span>Tagesenergie</span><em>${stats.dayScore.score}%</em><i><b style="width:${stats.dayScore.score}%"></b></i></div>
+        <div><span>Bindung</span><em>${companion.bond}%</em><i><b style="width:${companion.bond}%"></b></i></div>
       </div>
       <div class="companion-actions">
         <button class="mini-btn" type="button" data-action="open-coach">Coach</button>

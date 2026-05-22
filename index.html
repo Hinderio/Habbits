@@ -59,12 +59,6 @@
               <button id="heroEmergencyBtn" class="pill primary large" type="button">Ich will jetzt rauchen</button>
             </div>
           </div>
-          <div class="level-orb" aria-label="Gamification Level">
-            <span id="levelLabel">Level 1</span>
-            <strong id="totalPoints">0</strong>
-            <small>Clean Points</small>
-            <div class="orb-progress"><i id="levelProgress"></i></div>
-          </div>
         </div>
 
 
@@ -87,8 +81,11 @@
             <article id="companionCard" class="companion-card" aria-live="polite"></article>
             <div class="badge-shelf-wrap">
               <div class="badge-shelf-head">
-                <strong>Badge-Sammlung</strong>
-                <span class="subtle">automatisch aus deinem Fortschritt</span>
+                <div>
+                  <strong>Badge-Sammlung</strong>
+                  <span class="subtle">erreichte Badges direkt sichtbar</span>
+                </div>
+                <button id="toggleLockedBadgesBtn" class="mini-btn badge-locked-toggle" type="button" aria-pressed="false">Nicht erreichte anzeigen</button>
               </div>
               <div id="badgeShelf" class="badge-shelf" aria-label="Badge-Sammlung"></div>
             </div>
