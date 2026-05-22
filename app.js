@@ -451,6 +451,8 @@
   let taskBacklogOpen = false;
   let taskArchiveOpen = false;
   let taskTimelineOpen = false;
+  let taskWeeklyOpen = false;
+  let taskWeeklyCursor = startOfWeekDate(new Date());
   let taskTimelineScrollLeft = null;
   let taskTimelineDragState = null;
   let appointmentFormOpen = false;
@@ -599,6 +601,15 @@
       taskPointsPreview: $('#taskPointsPreview'),
       tasksList: $('#tasksList'),
       taskIdeasToggleBtn: $('#taskIdeasToggleBtn'),
+      taskWeeklyToggleBtn: $('#taskWeeklyToggleBtn'),
+      taskWeeklyPanel: $('#taskWeeklyPanel'),
+      taskWeeklyRange: $('#taskWeeklyRange'),
+      taskWeeklyOverview: $('#taskWeeklyOverview'),
+      taskWeeklySuggestions: $('#taskWeeklySuggestions'),
+      taskWeeklyDays: $('#taskWeeklyDays'),
+      taskWeeklyPrevBtn: $('#taskWeeklyPrevBtn'),
+      taskWeeklyTodayBtn: $('#taskWeeklyTodayBtn'),
+      taskWeeklyNextBtn: $('#taskWeeklyNextBtn'),
       taskIdeasCount: $('#taskIdeasCount'),
       taskIdeasPanel: $('#taskIdeasPanel'),
       taskIdeaForm: $('#taskIdeaForm'),
@@ -703,6 +714,10 @@
     if (els.habitFormCloseBtn) els.habitFormCloseBtn.addEventListener('click', () => closeHabitForm({ clearForm: !editingHabitId }));
     if (els.taskFormToggleBtn) els.taskFormToggleBtn.addEventListener('click', toggleTaskForm);
     if (els.taskIdeasToggleBtn) els.taskIdeasToggleBtn.addEventListener('click', toggleTaskIdeas);
+    if (els.taskWeeklyToggleBtn) els.taskWeeklyToggleBtn.addEventListener('click', toggleTaskWeekly);
+    if (els.taskWeeklyPrevBtn) els.taskWeeklyPrevBtn.addEventListener('click', () => moveTaskPlanningWeek(-1));
+    if (els.taskWeeklyTodayBtn) els.taskWeeklyTodayBtn.addEventListener('click', () => moveTaskPlanningWeek(0, { reset: true }));
+    if (els.taskWeeklyNextBtn) els.taskWeeklyNextBtn.addEventListener('click', () => moveTaskPlanningWeek(1));
     if (els.taskBacklogToggleBtn) els.taskBacklogToggleBtn.addEventListener('click', toggleTaskBacklog);
     if (els.taskArchiveToggleBtn) els.taskArchiveToggleBtn.addEventListener('click', toggleTaskArchive);
     if (els.taskTimelineToggleBtn) els.taskTimelineToggleBtn.addEventListener('click', toggleTaskTimeline);
@@ -767,6 +782,10 @@
       if (action === 'dismiss-task-idea') dismissTaskIdea(id);
       if (action === 'reopen-task-idea') reopenTaskIdea(id);
       if (action === 'delete-task-idea') deleteTaskIdea(id);
+      if (action === 'weekly-plan-task') planExistingTaskForWeek(id, actionEl.dataset.day);
+      if (action === 'weekly-plan-backlog') planBacklogTaskForWeek(id, actionEl.dataset.day);
+      if (action === 'weekly-plan-idea') planIdeaForWeek(id, actionEl.dataset.day);
+      if (action === 'weekly-clear-task-date') clearTaskDueDate(id);
       if (action === 'edit-task') editTask(id);
       if (action === 'delete-task') deleteTask(id);
       if (action === 'archive-task') archiveTask(id);
@@ -1513,6 +1532,23 @@
     if (taskIdeasOpen) requestAnimationFrame(() => els.taskIdeasPanel?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   }
 
+  function toggleTaskWeekly() {
+    taskWeeklyOpen = !taskWeeklyOpen;
+    if (taskWeeklyOpen && !taskWeeklyCursor) taskWeeklyCursor = startOfWeekDate(new Date());
+    syncTaskUtilityPanels();
+    if (taskWeeklyOpen) requestAnimationFrame(() => els.taskWeeklyPanel?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }
+
+  function moveTaskPlanningWeek(delta, { reset = false } = {}) {
+    const base = reset ? new Date() : new Date(taskWeeklyCursor || startOfWeekDate(new Date()));
+    const next = startOfWeekDate(base);
+    if (!reset) next.setDate(next.getDate() + (Number(delta) || 0) * 7);
+    taskWeeklyCursor = next;
+    taskWeeklyOpen = true;
+    syncTaskUtilityPanels();
+    renderTaskWeeklyPlanning();
+  }
+
   function toggleTaskBacklog() {
     taskBacklogOpen = !taskBacklogOpen;
     syncTaskUtilityPanels();
@@ -1535,6 +1571,9 @@
     els.taskIdeasPanel?.classList.toggle('hidden', !taskIdeasOpen);
     els.taskIdeasToggleBtn?.classList.toggle('is-active', taskIdeasOpen);
     els.taskIdeasToggleBtn?.setAttribute('aria-expanded', String(taskIdeasOpen));
+    els.taskWeeklyPanel?.classList.toggle('hidden', !taskWeeklyOpen);
+    els.taskWeeklyToggleBtn?.classList.toggle('is-active', taskWeeklyOpen);
+    els.taskWeeklyToggleBtn?.setAttribute('aria-expanded', String(taskWeeklyOpen));
     els.taskBacklogPanel?.classList.toggle('hidden', !taskBacklogOpen);
     els.taskBacklogToggleBtn?.classList.toggle('is-active', taskBacklogOpen);
     els.taskBacklogToggleBtn?.setAttribute('aria-expanded', String(taskBacklogOpen));
@@ -4515,6 +4554,273 @@
     return ranks.length ? Math.max(...ranks) + 1 : 1;
   }
 
+
+  function startOfWeekDate(value = new Date()) {
+    const date = value instanceof Date ? new Date(value) : new Date(value || Date.now());
+    if (Number.isNaN(date.getTime())) return startOfWeekDate(new Date());
+    date.setHours(0, 0, 0, 0);
+    const day = date.getDay() || 7;
+    date.setDate(date.getDate() - day + 1);
+    return date;
+  }
+
+  function addDays(value, days = 0) {
+    const date = value instanceof Date ? new Date(value) : new Date(value || Date.now());
+    date.setDate(date.getDate() + Number(days || 0));
+    return date;
+  }
+
+  function taskPlanningWeekDays() {
+    const start = startOfWeekDate(taskWeeklyCursor || new Date());
+    return Array.from({ length: 7 }, (_, index) => addDays(start, index));
+  }
+
+  function dayKeyToDueIso(dayKey, hour = 17) {
+    if (!dayKey) return null;
+    const date = new Date(`${dayKey}T${String(hour).padStart(2, '0')}:00:00`);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  }
+
+  function formatWeekRange(days = taskPlanningWeekDays()) {
+    const first = days[0];
+    const last = days[days.length - 1];
+    if (!first || !last) return 'Diese Woche';
+    return `${first.toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' })} – ${last.toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+  }
+
+  function appointmentDurationHours(appointment) {
+    const start = new Date(appointment?.starts_at || 0).getTime();
+    const end = new Date(appointment?.ends_at || appointment?.starts_at || 0).getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 1;
+    return Math.max(0.5, Math.min(12, (end - start) / 3_600_000));
+  }
+
+  function taskWeeklyDayLoad(dayKey) {
+    const tasks = state.tasks.map(normalizeTask).filter(task => isActiveTask(task) && toDateKey(task.due_at) === dayKey);
+    const appointments = appointmentsOnDate(dayKey);
+    const effort = sum(tasks.map(task => Number(task.effort || 3)));
+    const appointmentHours = appointments.reduce((total, appointment) => total + appointmentDurationHours(appointment), 0);
+    return { tasks, appointments, effort, appointmentHours, load: effort + appointmentHours };
+  }
+
+  function suggestWeeklyPlanningDay({ effort = 2, preferOffset = 0 } = {}) {
+    const days = taskPlanningWeekDays();
+    const todayKey = toDateKey(new Date());
+    const candidates = days.map((date, index) => {
+      const key = toDateKey(date);
+      const load = taskWeeklyDayLoad(key);
+      const pastPenalty = key < todayKey ? 100 : 0;
+      const todayPenalty = key === todayKey ? 0.4 : 0;
+      const spreadPenalty = Math.abs(index - Number(preferOffset || 0)) * 0.18;
+      return { key, score: load.load + Number(effort || 2) * 0.35 + pastPenalty + todayPenalty + spreadPenalty };
+    });
+    candidates.sort((a, b) => a.score - b.score || a.key.localeCompare(b.key));
+    return candidates[0]?.key || todayKey;
+  }
+
+  function buildWeeklyPlanningSuggestions() {
+    const suggestions = [];
+    const add = suggestion => {
+      if (!suggestion?.title) return;
+      if (suggestions.some(item => item.key === suggestion.key)) return;
+      suggestions.push(suggestion);
+    };
+
+    state.tasks.map(normalizeTask)
+      .filter(task => isActiveTask(task) && taskDueState(task).overdue)
+      .sort((a, b) => taskOverdueDays(b) - taskOverdueDays(a) || compareTasks(a, b))
+      .slice(0, 3)
+      .forEach((task, index) => add({
+        key: `overdue:${task.id}`,
+        type: 'task',
+        id: task.id,
+        day: suggestWeeklyPlanningDay({ effort: task.effort, preferOffset: index }),
+        tone: 'danger',
+        label: 'Ueberfaellig',
+        title: task.title,
+        body: `${taskDueState(task).label}. Neu einplanen, damit die Karte wieder handhabbar wird.`,
+        action: 'Neu planen'
+      }));
+
+    state.tasks.map(normalizeTask)
+      .filter(task => isActiveTask(task) && !task.due_at)
+      .sort(compareTasks)
+      .slice(0, 4)
+      .forEach((task, index) => add({
+        key: `undated:${task.id}`,
+        type: 'task',
+        id: task.id,
+        day: suggestWeeklyPlanningDay({ effort: task.effort, preferOffset: index + 1 }),
+        tone: 'focus',
+        label: 'Ohne Datum',
+        title: task.title,
+        body: `Aufwand ${task.effort}/5 · ${taskPriorityMeta(task).label}. Ein konkreter Tag macht die Aufgabe sichtbar.`,
+        action: 'Einplanen'
+      }));
+
+    backlogTasks().slice(0, 3).forEach((task, index) => add({
+      key: `backlog:${task.id}`,
+      type: 'backlog',
+      id: task.id,
+      day: suggestWeeklyPlanningDay({ effort: task.effort, preferOffset: index + 2 }),
+      tone: 'backlog',
+      label: 'Backlog',
+      title: task.title,
+      body: `Prioritaet ${taskPriorityMeta(task).label} · Aufwand ${task.effort}/5. Als aktive Aufgabe fuer diese Woche uebernehmen.`,
+      action: 'Aktivieren'
+    }));
+
+    taskIdeas().filter(idea => idea.idea_status === 'open').slice(0, 3).forEach((idea, index) => add({
+      key: `idea:${idea.id}`,
+      type: 'idea',
+      id: idea.id,
+      day: suggestWeeklyPlanningDay({ effort: storyPointsToEffort(idea.story_points), preferOffset: index + 3 }),
+      tone: 'idea',
+      label: 'Idee',
+      title: idea.title,
+      body: `${Number(idea.story_points || 2)} Story Points · ${taskPriorityMeta(idea).label}. Direkt als geplanten Task erstellen.`,
+      action: 'Als Task planen'
+    }));
+
+    taskPlanningWeekDays().forEach(date => {
+      const key = toDateKey(date);
+      const load = taskWeeklyDayLoad(key);
+      if (load.load >= 8) add({
+        key: `load:${key}`,
+        type: 'info',
+        day: key,
+        tone: 'warning',
+        label: 'Dichter Tag',
+        title: date.toLocaleDateString('de-CH', { weekday: 'long', day: '2-digit', month: '2-digit' }),
+        body: `${load.tasks.length} Task(s), ${load.appointments.length} Termin(e). Besser nur kleine Karten dort planen.`,
+        action: ''
+      });
+    });
+
+    return suggestions.slice(0, 9);
+  }
+
+  function renderTaskWeeklyPlanning() {
+    if (!els.taskWeeklyPanel) return;
+    const days = taskPlanningWeekDays();
+    const keys = days.map(toDateKey);
+    const active = state.tasks.map(normalizeTask).filter(isActiveTask);
+    const plannedThisWeek = active.filter(task => keys.includes(toDateKey(task.due_at)));
+    const unplanned = active.filter(task => !task.due_at);
+    const overdue = active.filter(task => taskDueState(task).overdue);
+    const weekLoad = keys.reduce((total, key) => total + taskWeeklyDayLoad(key).load, 0);
+    const score = active.length ? Math.round((plannedThisWeek.length / active.length) * 100) : 100;
+    const suggestions = buildWeeklyPlanningSuggestions();
+
+    if (els.taskWeeklyRange) els.taskWeeklyRange.textContent = formatWeekRange(days);
+    if (els.taskWeeklyOverview) {
+      const focus = overdue.length ? `${overdue.length} ueberfaellige Karte(n) zuerst beruhigen` : unplanned.length ? `${unplanned.length} Aufgabe(n) brauchen noch ein Datum` : 'Woche ist sauber geplant';
+      els.taskWeeklyOverview.innerHTML = `
+        <article class="weekly-command-card">
+          <small>Planbarkeit</small>
+          <strong>${score}%</strong>
+          <span>${escapeHtml(focus)}</span>
+        </article>
+        <article><small>Geplant</small><strong>${plannedThisWeek.length}</strong><span>aktive Tasks diese Woche</span></article>
+        <article><small>Offen ohne Datum</small><strong>${unplanned.length}</strong><span>direkt einplanbar</span></article>
+        <article><small>Backlog</small><strong>${backlogTasks().length}</strong><span>Kandidaten fuer Fokus</span></article>
+        <article><small>Wochenlast</small><strong>${Math.round(weekLoad)}</strong><span>SP + Termin-Stunden</span></article>`;
+    }
+    if (els.taskWeeklySuggestions) {
+      els.taskWeeklySuggestions.innerHTML = suggestions.length
+        ? suggestions.map(renderWeeklyPlanningSuggestion).join('')
+        : '<div class="empty-state">Keine offenen Planungsvorschlaege. Die Woche wirkt ruhig und gut sortiert.</div>';
+    }
+    if (els.taskWeeklyDays) {
+      els.taskWeeklyDays.innerHTML = days.map(renderWeeklyPlanningDay).join('');
+    }
+  }
+
+  function renderWeeklyPlanningSuggestion(item) {
+    const dateLabel = item.day ? new Date(`${item.day}T12:00:00`).toLocaleDateString('de-CH', { weekday: 'short', day: '2-digit', month: '2-digit' }) : '';
+    const actionMap = { task: 'weekly-plan-task', backlog: 'weekly-plan-backlog', idea: 'weekly-plan-idea' };
+    const action = actionMap[item.type];
+    const actionButton = action
+      ? `<button class="mini-btn primary" type="button" data-action="${action}" data-id="${escapeHtml(item.id)}" data-day="${escapeHtml(item.day)}">${escapeHtml(item.action)} · ${escapeHtml(dateLabel)}</button>`
+      : '';
+    return `<article class="weekly-suggestion-card is-${escapeHtml(item.tone || 'focus')}">
+      <div class="weekly-suggestion-top"><span class="badge muted">${escapeHtml(item.label || 'Plan')}</span>${dateLabel ? `<span class="subtle">${escapeHtml(dateLabel)}</span>` : ''}</div>
+      <h4>${escapeHtml(item.title)}</h4>
+      <p>${escapeHtml(item.body || '')}</p>
+      ${actionButton ? `<div class="list-actions compact-actions">${actionButton}</div>` : ''}
+    </article>`;
+  }
+
+  function renderWeeklyPlanningDay(date) {
+    const key = toDateKey(date);
+    const load = taskWeeklyDayLoad(key);
+    const loadLevel = Math.min(100, Math.round((load.load / 8) * 100));
+    const weekday = date.toLocaleDateString('de-CH', { weekday: 'short' });
+    const dateLabel = date.toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' });
+    const taskCards = load.tasks.length
+      ? load.tasks.map(task => `<article class="weekly-day-item task"><strong>${escapeHtml(task.title)}</strong><span>${escapeHtml(taskPriorityMeta(task).label)} · Aufwand ${Number(task.effort || 3)}/5</span><button class="mini-btn" type="button" data-action="weekly-clear-task-date" data-id="${task.id}">Datum entfernen</button></article>`).join('')
+      : '<div class="weekly-day-empty">Noch kein Task</div>';
+    const appointmentCards = load.appointments.slice(0, 3).map(appointment => `<article class="weekly-day-item appointment"><strong>${escapeHtml(formatAppointmentRange(appointment))}</strong><span>${escapeHtml(appointment.title)}</span></article>`).join('');
+    const moreAppointments = load.appointments.length > 3 ? `<div class="weekly-day-more">+${load.appointments.length - 3} weitere Termine</div>` : '';
+    return `<article class="weekly-day-card ${key === toDateKey(new Date()) ? 'is-today' : ''}">
+      <div class="weekly-day-head"><div><small>${escapeHtml(weekday)}</small><strong>${escapeHtml(dateLabel)}</strong></div><span>${load.tasks.length} Task</span></div>
+      <div class="weekly-load-meter" aria-label="Auslastung ${loadLevel}%"><i style="width:${loadLevel}%"></i></div>
+      <div class="weekly-day-stack">${appointmentCards}${moreAppointments}${taskCards}</div>
+    </article>`;
+  }
+
+  function planExistingTaskForWeek(id, dayKey) {
+    const task = state.tasks.find(item => item.id === id);
+    const dueAt = dayKeyToDueIso(dayKey);
+    if (!task || !dueAt) return;
+    if (!isActiveTask(task)) {
+      toast('Nur offene oder laufende Aufgaben werden in die Woche geplant.');
+      return;
+    }
+    task.due_at = dueAt;
+    task.updated_at = nowIso();
+    task.synced = false;
+    saveState();
+    toast('Aufgabe eingeplant');
+    syncWithSupabase({ silent: true });
+  }
+
+  function planBacklogTaskForWeek(id, dayKey) {
+    const task = state.tasks.find(item => item.id === id);
+    const dueAt = dayKeyToDueIso(dayKey);
+    if (!task || !dueAt) return;
+    task.status = 'open';
+    task.due_at = dueAt;
+    task.backlog_rank = null;
+    task.completed_at = null;
+    task.done_archived_at = null;
+    task.done_archive_rank = null;
+    task.points = 0;
+    task.updated_at = nowIso();
+    task.synced = false;
+    compactBacklogRanks();
+    saveState();
+    toast('Backlog-Task fuer die Woche aktiviert');
+    syncWithSupabase({ silent: true });
+  }
+
+  function planIdeaForWeek(id, dayKey) {
+    const dueAt = dayKeyToDueIso(dayKey);
+    if (!dueAt) return;
+    createTaskFromIdea(id, 'open', { dueAt });
+  }
+
+  function clearTaskDueDate(id) {
+    const task = state.tasks.find(item => item.id === id);
+    if (!task || !task.due_at) return;
+    task.due_at = null;
+    task.updated_at = nowIso();
+    task.synced = false;
+    saveState();
+    toast('Fälligkeitsdatum entfernt');
+    syncWithSupabase({ silent: true });
+  }
+
   function renderTasks() {
     const tasks = [...state.tasks].map(normalizeTask).sort(compareTasks);
     const boardTasks = tasks.filter(task => !isDoneArchivedTask(task));
@@ -4528,6 +4834,7 @@
     if (els.taskArchiveCount) els.taskArchiveCount.textContent = archive.length;
     syncTaskUtilityPanels();
     renderTaskIdeas();
+    renderTaskWeeklyPlanning();
     renderTaskBacklog(backlog);
     renderTaskArchive(archive);
     renderTaskTimeline();
@@ -5613,7 +5920,7 @@ async function deleteAlcoholLog(id) {
     syncWithSupabase({ silent: true });
   }
 
-  function createTaskFromIdea(id, targetStatus = 'open') {
+  function createTaskFromIdea(id, targetStatus = 'open', { dueAt = null } = {}) {
     const idea = state.taskIdeas.find(item => item.id === id);
     if (!idea || idea.idea_status !== 'open') return;
     const created = nowIso();
@@ -5624,7 +5931,7 @@ async function deleteAlcoholLog(id) {
       description: [idea.description, `Aus Ideenpool übernommen · ${Number(idea.story_points || 2)} Story Points`].filter(Boolean).join('\n\n'),
       effort: storyPointsToEffort(idea.story_points),
       priority: normalizeTaskPriority(idea.priority),
-      due_at: null,
+      due_at: dueAt || null,
       status: nextStatus,
       backlog_rank: nextStatus === TASK_BACKLOG_STATUS ? nextBacklogRank() : null,
       completed_at: null,
@@ -5643,7 +5950,7 @@ async function deleteAlcoholLog(id) {
     idea.synced = false;
     if (nextStatus === TASK_BACKLOG_STATUS) taskBacklogOpen = true;
     saveState();
-    toast(nextStatus === TASK_BACKLOG_STATUS ? 'Idee als Backlog-Task erstellt' : 'Idee als Aufgabe erstellt');
+    toast(dueAt ? 'Idee als geplante Aufgabe erstellt' : (nextStatus === TASK_BACKLOG_STATUS ? 'Idee als Backlog-Task erstellt' : 'Idee als Aufgabe erstellt'));
     syncWithSupabase({ silent: true });
   }
 

@@ -441,12 +441,44 @@
           <div><p class="eyebrow">Tasks</p><h3>Aufgaben-Board</h3></div>
           <div class="task-toolbar-actions" aria-label="Task-Aktionen">
             <button id="taskIdeasToggleBtn" class="pill secondary" type="button" aria-expanded="false">Ideenpool <span id="taskIdeasCount" class="inline-count">0</span></button>
+            <button id="taskWeeklyToggleBtn" class="pill secondary" type="button" aria-expanded="false">Wochenplan</button>
             <button id="taskBacklogToggleBtn" class="pill secondary" type="button" aria-expanded="false">Backlog <span id="taskBacklogCount" class="inline-count">0</span></button>
             <button id="taskArchiveToggleBtn" class="pill secondary" type="button" aria-expanded="false">Archiv <span id="taskArchiveCount" class="inline-count">0</span></button>
             <button id="taskTimelineToggleBtn" class="pill secondary" type="button" aria-expanded="false">Task-Kalender</button>
             <button id="taskFormToggleBtn" class="bubble-add-btn" type="button" aria-label="Aufgaben-Formular öffnen"><span data-icon="plus"></span></button>
           </div>
         </div>
+        <section id="taskWeeklyPanel" class="panel glass task-weekly-panel hidden">
+          <div class="panel-head task-weekly-head">
+            <div>
+              <p class="eyebrow">Smart Weekly Planning</p>
+              <h3>Woche bewusst planen</h3>
+              <span id="taskWeeklyRange" class="subtle">Diese Woche</span>
+            </div>
+            <div class="action-row task-weekly-controls" aria-label="Wochenplanung steuern">
+              <button id="taskWeeklyPrevBtn" class="icon-btn" type="button" aria-label="Vorherige Woche">‹</button>
+              <button id="taskWeeklyTodayBtn" class="pill secondary" type="button">Diese Woche</button>
+              <button id="taskWeeklyNextBtn" class="icon-btn" type="button" aria-label="Nächste Woche">›</button>
+            </div>
+          </div>
+          <div id="taskWeeklyOverview" class="task-weekly-overview"></div>
+          <div class="task-weekly-layout">
+            <section class="task-weekly-column">
+              <div class="weekly-column-head">
+                <div><p class="eyebrow">Vorschläge</p><h4>Realistische Planung</h4></div>
+                <span class="subtle">ein Tap plant sauber ein</span>
+              </div>
+              <div id="taskWeeklySuggestions" class="task-weekly-suggestions"></div>
+            </section>
+            <section class="task-weekly-column task-weekly-days-column">
+              <div class="weekly-column-head">
+                <div><p class="eyebrow">Woche</p><h4>Tasks & Termine</h4></div>
+                <span class="subtle">Desktop als Raster, Mobile swipebar</span>
+              </div>
+              <div id="taskWeeklyDays" class="task-weekly-days"></div>
+            </section>
+          </div>
+        </section>
         <section id="taskIdeasPanel" class="panel glass task-ideas-panel hidden">
           <div class="panel-head task-ideas-head">
             <div><p class="eyebrow">Ideenpool</p><h3>Ideen bestätigen statt neu erfassen</h3></div>
