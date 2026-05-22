@@ -257,6 +257,10 @@
     meditation: '00000000-0000-4000-8000-000000000104'
   });
   const SYNC_TABLES = ['habit_definitions', 'habit_entries', 'cigarette_events', 'alcohol_logs', 'alcohol_events', 'tasks', 'task_ideas', 'appointments', 'points_ledger'];
+  const IDLE_SYNC_CHECK_MS = 60_000;
+  const SAFETY_REMOTE_PULL_MS = 10 * 60_000;
+  const REMOTE_PULL_DEBOUNCE_MS = 1_500;
+  const SELF_WRITE_ECHO_GRACE_MS = 4_000;
   const REMOTE_DELETE_TOMBSTONE_TTL_DAYS = 14;
   const OPTIONAL_SYNC_TABLES = new Set(['alcohol_events', 'appointments', 'task_ideas']);
   const BUILT_IN_DEFAULT_HABIT_NAMES = new Set(['gewicht', 'wasser', 'sport', 'meditation']);
@@ -485,6 +489,8 @@
   let syncInFlight = false;
   let pendingSyncRequest = null;
   let lastSyncAt = null;
+  let lastRemotePullAt = 0;
+  let suppressRemotePullUntil = 0;
   let remotePullTimer = null;
   let selectedCalendarDate = toDateKey(new Date());
   let calendarCursor = new Date();
@@ -823,11 +829,11 @@
     if (els.settingsForm) {
       els.settingsForm.addEventListener('submit', event => {
         event.preventDefault();
-        syncWithSupabase({ silent: false, pullFirst: true });
+        syncWithSupabase({ silent: false, pullFirst: true, pullAfter: true, forcePushAll: true });
       });
     }
     if (els.logoutBtn) els.logoutBtn.addEventListener('click', logout);
-    els.syncNowBtn.addEventListener('click', () => syncWithSupabase({ silent: false, pullFirst: true }));
+    els.syncNowBtn.addEventListener('click', () => syncWithSupabase({ silent: false, pullFirst: true, pullAfter: true, forcePushAll: true }));
     els.exportBtn.addEventListener('click', exportJson);
     els.importInput.addEventListener('change', importJson);
     els.resetBtn.addEventListener('click', resetDemo);
@@ -7304,7 +7310,7 @@ async function deleteAlcoholLog(id) {
         return;
       }
       renderSyncStatus('syncing');
-      await syncWithSupabase({ silent: true, pullFirst: true });
+      await syncWithSupabase({ silent: true, pullFirst: true, pullAfter: true });
       subscribeToRemoteChanges();
       renderSyncStatus('connected');
       console.log('HabitFlow Supabase Auth verbunden');
@@ -7334,9 +7340,9 @@ async function deleteAlcoholLog(id) {
       setAuthSession(session || null);
       renderSyncStatus(currentUser ? 'connected' : 'auth');
       if (!currentUser) clearRemoteSubscription();
-      if (currentUser && (wasSignedOut || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
+      if (currentUser && (wasSignedOut || event === 'SIGNED_IN')) {
         subscribeToRemoteChanges();
-        syncWithSupabase({ silent: true, pullFirst: true });
+        syncWithSupabase({ silent: true, pullFirst: true, pullAfter: true });
       }
     });
     authSubscription = data?.subscription || null;
@@ -7488,7 +7494,7 @@ async function deleteAlcoholLog(id) {
       if (window.history?.replaceState) window.history.replaceState(null, document.title, window.location.href.split('#')[0]);
       renderAuthUi();
       renderSyncStatus('syncing');
-      await syncWithSupabase({ silent: true, pullFirst: true });
+      await syncWithSupabase({ silent: true, pullFirst: true, pullAfter: true });
       subscribeToRemoteChanges();
       renderSyncStatus('connected');
       toast('Passwort gespeichert');
@@ -7503,14 +7509,30 @@ async function deleteAlcoholLog(id) {
 
   function initOngoingSync() {
     if (!isSupabaseConfigured()) return;
-    setInterval(() => syncWithSupabase({ silent: true, pullFirst: true }), 60_000);
+    setInterval(runIdleSyncCheck, IDLE_SYNC_CHECK_MS);
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') syncWithSupabase({ silent: true, pullFirst: true });
-      if (document.visibilityState === 'hidden' && hasPendingSyncWork()) syncWithSupabase({ silent: true, pullFirst: false });
+      if (document.visibilityState === 'visible') runIdleSyncCheck({ forceSafetyPull: true });
+      if (document.visibilityState === 'hidden' && hasPendingSyncWork()) syncWithSupabase({ silent: true, pullFirst: false, pullAfter: false });
     });
-    window.addEventListener('online', () => syncWithSupabase({ silent: true, pullFirst: true }));
-    window.addEventListener('pagehide', () => { if (hasPendingSyncWork()) syncWithSupabase({ silent: true, pullFirst: false }); });
-    window.addEventListener('beforeunload', () => { if (hasPendingSyncWork()) syncWithSupabase({ silent: true, pullFirst: false }); });
+    window.addEventListener('online', () => runIdleSyncCheck({ forceSafetyPull: true }));
+    window.addEventListener('pagehide', () => { if (hasPendingSyncWork()) syncWithSupabase({ silent: true, pullFirst: false, pullAfter: false }); });
+    window.addEventListener('beforeunload', () => { if (hasPendingSyncWork()) syncWithSupabase({ silent: true, pullFirst: false, pullAfter: false }); });
+  }
+
+  function runIdleSyncCheck({ forceSafetyPull = false } = {}) {
+    if (!isAuthenticated() || syncInFlight) return;
+    if (document.visibilityState && document.visibilityState !== 'visible') return;
+    if (hasPendingSyncWork()) {
+      syncWithSupabase({ silent: true, pullFirst: false, pullAfter: false });
+      return;
+    }
+    if (forceSafetyPull || shouldRunSafetyRemotePull()) {
+      syncWithSupabase({ silent: true, pullOnly: true });
+    }
+  }
+
+  function shouldRunSafetyRemotePull() {
+    return !lastRemotePullAt || Date.now() - lastRemotePullAt >= SAFETY_REMOTE_PULL_MS;
   }
 
   function applyRulesVisibility() {
@@ -7584,7 +7606,7 @@ async function deleteAlcoholLog(id) {
 
   async function manualSyncFromSettings(event) {
     if (event) event.preventDefault();
-    await syncWithSupabase({ silent: false, pullFirst: true });
+    await syncWithSupabase({ silent: false, pullFirst: true, pullAfter: true, forcePushAll: true });
   }
 
   async function logout() {
@@ -7604,7 +7626,7 @@ async function deleteAlcoholLog(id) {
     }
   }
 
-  async function syncWithSupabase({ silent = false, pullFirst = true } = {}) {
+  async function syncWithSupabase({ silent = false, pullFirst = false, pullAfter = null, forcePushAll = false, pullOnly = false } = {}) {
     if (!supabaseClient) {
       if (!silent) toast(isSupabaseConfigured() ? 'Supabase ist noch nicht bereit.' : 'Supabase ist nicht konfiguriert.');
       return;
@@ -7617,76 +7639,98 @@ async function deleteAlcoholLog(id) {
     if (syncInFlight) {
       pendingSyncRequest = {
         silent: pendingSyncRequest ? (pendingSyncRequest.silent && silent) : silent,
-        pullFirst: pendingSyncRequest ? (pendingSyncRequest.pullFirst || pullFirst) : pullFirst
+        pullFirst: pendingSyncRequest ? (pendingSyncRequest.pullFirst || pullFirst || pullOnly) : (pullFirst || pullOnly),
+        pullAfter: pendingSyncRequest ? (pendingSyncRequest.pullAfter || pullAfter || pullOnly) : (pullAfter || pullOnly),
+        forcePushAll: pendingSyncRequest ? (pendingSyncRequest.forcePushAll || forcePushAll) : forcePushAll,
+        pullOnly: pendingSyncRequest ? (pendingSyncRequest.pullOnly && pullOnly) : pullOnly
       };
       renderSyncStatus('pending');
       return;
     }
     syncInFlight = true;
     renderSyncStatus('syncing');
+    let wroteRemote = false;
     try {
-      if (pullFirst) await pullSupabaseData();
-      await flushRemoteDeletes();
-      dedupeStateCollections(state);
-      migrateCigaretteScoring();
-      migrateAlcoholScoring();
-      await flushRemoteDeletes();
-
-      await upsertHabitRows();
-
-      await upsertHabitEntryRows();
-
-      const cigaretteRows = liveRowsForTable('cigarette_events', state.cigarettes).map(c => ({
-        id: c.id, smoked_at: c.smoked_at, interval_minutes: c.interval_minutes, alcohol_context: Boolean(c.alcohol_context),
-        points: Number(c.points || 0), note: c.note || null, created_at: c.created_at, updated_at: c.updated_at || nowIso()
-      }));
-      if (await upsertRows('cigarette_events', cigaretteRows)) {
-        markRowsSynced('cigarettes', cigaretteRows);
-        saveState({ skipRender: true });
+      const pendingBeforePull = hasPendingSyncWork();
+      const effectivePullOnly = pullOnly && !pendingBeforePull && !forcePushAll;
+      if (pullFirst || effectivePullOnly) {
+        await pullSupabaseData();
+        lastRemotePullAt = Date.now();
       }
 
-      const alcoholLogRows = liveRowsForTable('alcohol_logs', state.alcoholLogs).map(a => ({
-        id: a.id, log_date: a.log_date, consumed: Boolean(a.consumed), note: a.note || null,
-        created_at: a.created_at, updated_at: a.updated_at || nowIso()
-      }));
-      if (await upsertRows('alcohol_logs', alcoholLogRows)) {
-        markRowsSynced('alcoholLogs', alcoholLogRows);
-        saveState({ skipRender: true });
+      if (!effectivePullOnly) {
+        wroteRemote = await flushRemoteDeletes() || wroteRemote;
+        dedupeStateCollections(state);
+        migrateCigaretteScoring();
+        migrateAlcoholScoring();
+        wroteRemote = await flushRemoteDeletes() || wroteRemote;
+
+        wroteRemote = await upsertHabitRows({ forceAll: forcePushAll }) || wroteRemote;
+
+        wroteRemote = await upsertHabitEntryRows({ forceAll: forcePushAll }) || wroteRemote;
+
+        const cigaretteRows = rowsPendingSync('cigarette_events', state.cigarettes, { forceAll: forcePushAll }).map(c => ({
+          id: c.id, smoked_at: c.smoked_at, interval_minutes: c.interval_minutes, alcohol_context: Boolean(c.alcohol_context),
+          points: Number(c.points || 0), note: c.note || null, created_at: c.created_at, updated_at: c.updated_at || nowIso()
+        }));
+        if (await upsertRows('cigarette_events', cigaretteRows)) {
+          wroteRemote = true;
+          markRowsSynced('cigarettes', cigaretteRows);
+          saveState({ skipRender: true });
+        }
+
+        const alcoholLogRows = rowsPendingSync('alcohol_logs', state.alcoholLogs, { forceAll: forcePushAll }).map(a => ({
+          id: a.id, log_date: a.log_date, consumed: Boolean(a.consumed), note: a.note || null,
+          created_at: a.created_at, updated_at: a.updated_at || nowIso()
+        }));
+        if (await upsertRows('alcohol_logs', alcoholLogRows)) {
+          wroteRemote = true;
+          markRowsSynced('alcoholLogs', alcoholLogRows);
+          saveState({ skipRender: true });
+        }
+
+        const alcoholEventRows = rowsPendingSync('alcohol_events', state.alcoholUnits, { forceAll: forcePushAll }).map(a => ({
+          id: a.id, occurred_at: a.occurred_at, drink_type: a.drink_type || 'other', note: a.note || null,
+          created_at: a.created_at, updated_at: a.updated_at || nowIso()
+        }));
+        if (await upsertRows('alcohol_events', alcoholEventRows)) {
+          wroteRemote = true;
+          markRowsSynced('alcoholUnits', alcoholEventRows);
+          saveState({ skipRender: true });
+        }
+
+        wroteRemote = await upsertTaskRows({ forceAll: forcePushAll }) || wroteRemote;
+
+        wroteRemote = await upsertTaskIdeaRows({ forceAll: forcePushAll }) || wroteRemote;
+
+        const appointmentRows = rowsPendingSync('appointments', state.appointments, { forceAll: forcePushAll }).map(a => ({
+          id: a.id, title: a.title, description: a.description || null, location: a.location || null,
+          appointment_type: normalizeAppointmentType(a.appointment_type), starts_at: a.starts_at, ends_at: a.ends_at || null,
+          created_at: a.created_at, updated_at: a.updated_at || nowIso()
+        }));
+        if (await upsertRows('appointments', appointmentRows)) {
+          wroteRemote = true;
+          markRowsSynced('appointments', appointmentRows);
+          saveState({ skipRender: true });
+        }
+
+        const ledgerRows = rowsPendingSync('points_ledger', state.pointsLedger, { forceAll: forcePushAll }).map(p => ({
+          id: p.id, source_type: p.source_type, source_id: remoteLedgerSourceId(p), points: Number(p.points || 0), reason: p.reason || null,
+          earned_at: p.earned_at, created_at: p.created_at || nowIso()
+        }));
+        if (await upsertRows('points_ledger', ledgerRows)) {
+          wroteRemote = true;
+          markRowsSynced('pointsLedger', ledgerRows);
+          saveState({ skipRender: true });
+        }
       }
 
-      const alcoholEventRows = liveRowsForTable('alcohol_events', state.alcoholUnits).map(a => ({
-        id: a.id, occurred_at: a.occurred_at, drink_type: a.drink_type || 'other', note: a.note || null,
-        created_at: a.created_at, updated_at: a.updated_at || nowIso()
-      }));
-      if (await upsertRows('alcohol_events', alcoholEventRows)) {
-        markRowsSynced('alcoholUnits', alcoholEventRows);
-        saveState({ skipRender: true });
+      if (wroteRemote) suppressRemotePullUntil = Date.now() + SELF_WRITE_ECHO_GRACE_MS;
+      const shouldPullAfter = pullAfter ?? Boolean(pullFirst);
+      if (!effectivePullOnly && shouldPullAfter) {
+        await pullSupabaseData();
+        lastRemotePullAt = Date.now();
       }
-
-      await upsertTaskRows();
-
-      await upsertTaskIdeaRows();
-
-      const appointmentRows = liveRowsForTable('appointments', state.appointments).map(a => ({
-        id: a.id, title: a.title, description: a.description || null, location: a.location || null,
-        appointment_type: normalizeAppointmentType(a.appointment_type), starts_at: a.starts_at, ends_at: a.ends_at || null,
-        created_at: a.created_at, updated_at: a.updated_at || nowIso()
-      }));
-      if (await upsertRows('appointments', appointmentRows)) {
-        markRowsSynced('appointments', appointmentRows);
-        saveState({ skipRender: true });
-      }
-
-      const ledgerRows = liveRowsForTable('points_ledger', state.pointsLedger).map(p => ({
-        id: p.id, source_type: p.source_type, source_id: remoteLedgerSourceId(p), points: Number(p.points || 0), reason: p.reason || null,
-        earned_at: p.earned_at, created_at: p.created_at || nowIso()
-      }));
-      if (await upsertRows('points_ledger', ledgerRows)) {
-        markRowsSynced('pointsLedger', ledgerRows);
-        saveState({ skipRender: true });
-      }
-
-      await pullSupabaseData();
       saveState({ skipRender: true });
       lastSyncAt = new Date();
       safeRender();
@@ -7707,7 +7751,7 @@ async function deleteAlcoholLog(id) {
   }
 
   async function upsertRows(table, rows) {
-    if (!rows.length) return true;
+    if (!rows.length) return false;
     const scopedRows = rowsForCurrentUser(rows);
     const { error } = await supabaseClient.from(table).upsert(scopedRows, { onConflict: 'id' });
     if (error && OPTIONAL_SYNC_TABLES.has(table) && isMissingRemoteRelationError(error)) {
@@ -7719,9 +7763,9 @@ async function deleteAlcoholLog(id) {
   }
 
 
-  function habitEntryRowsForSync() {
+  function habitEntryRowsForSync({ forceAll = false } = {}) {
     const habitIds = new Set(state.habits.map(habit => habit.id));
-    return liveRowsForTable('habit_entries', state.habitEntries)
+    return rowsPendingSync('habit_entries', state.habitEntries, { forceAll })
       .filter(entry => entry.id && entry.habit_id && habitIds.has(entry.habit_id))
       .map(entry => ({
         id: entry.id,
@@ -7768,22 +7812,25 @@ async function deleteAlcoholLog(id) {
     return { ok, failed };
   }
 
-  async function upsertHabitEntryRows() {
-    const rows = habitEntryRowsForSync();
-    if (!rows.length) return;
+  async function upsertHabitEntryRows({ forceAll = false } = {}) {
+    const rows = habitEntryRowsForSync({ forceAll });
+    if (!rows.length) return false;
     await upsertRowsWithIsolation('habit_entries', rows, {
       beforeRetry: async (error) => {
         if (isForeignKeySyncError(error)) {
           // A freshly created habit and its first log can happen very close together on mobile/desktop.
           // Re-upsert definitions before retrying entries so duration habits like "Spazieren" do not get stuck locally.
-          await upsertHabitRows();
+          await upsertHabitRows({ forceAll: true });
         }
       }
     });
+    markRowsSynced('habitEntries', rows);
+    saveState({ skipRender: true });
+    return true;
   }
 
-  function habitRowsForSync() {
-    return liveRowsForTable('habit_definitions', state.habits).map(h => {
+  function habitRowsForSync({ forceAll = false } = {}) {
+    return rowsPendingSync('habit_definitions', state.habits, { forceAll }).map(h => {
       const row = {
         id: h.id, name: h.name, type: h.type, unit: h.unit, direction: h.direction, target: h.target,
         icon: h.icon, color: h.color || '#4ad7d1', is_archived: Boolean(h.is_archived), created_at: h.created_at, updated_at: h.updated_at || nowIso()
@@ -7793,12 +7840,18 @@ async function deleteAlcoholLog(id) {
     });
   }
 
-  async function upsertHabitRows() {
-    const rows = habitRowsForSync();
-    if (!rows.length) return;
+  async function upsertHabitRows({ forceAll = false } = {}) {
+    const rows = habitRowsForSync({ forceAll });
+    if (!rows.length) return false;
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      const { error } = await supabaseClient.from('habit_definitions').upsert(rowsForCurrentUser(habitRowsForSync()), { onConflict: 'id' });
-      if (!error) return;
+      const activeRows = habitRowsForSync({ forceAll });
+      if (!activeRows.length) return false;
+      const { error } = await supabaseClient.from('habit_definitions').upsert(rowsForCurrentUser(activeRows), { onConflict: 'id' });
+      if (!error) {
+        markRowsSynced('habits', activeRows);
+        saveState({ skipRender: true });
+        return true;
+      }
       if (remoteHabitTargetPeriodSupported && String(error.message || '').toLowerCase().includes('target_period')) {
         remoteHabitTargetPeriodSupported = false;
         console.warn('Remote Habit-Tabelle hat noch keine target_period-Spalte. Sync läuft ohne Zielperiode, bis supabase.sql angewendet ist.', error);
@@ -7806,10 +7859,11 @@ async function deleteAlcoholLog(id) {
       }
       throw error;
     }
+    return false;
   }
 
-  function taskIdeaRowsForSync() {
-    return liveRowsForTable('task_ideas', state.taskIdeas || []).map(idea => ({
+  function taskIdeaRowsForSync({ forceAll = false } = {}) {
+    return rowsPendingSync('task_ideas', state.taskIdeas || [], { forceAll }).map(idea => ({
       id: idea.id,
       title: idea.title,
       description: idea.description || null,
@@ -7826,26 +7880,26 @@ async function deleteAlcoholLog(id) {
     }));
   }
 
-  async function upsertTaskIdeaRows() {
-    if (!remoteTaskIdeasSupported) return;
-    const rows = taskIdeaRowsForSync();
-    if (!rows.length) return;
+  async function upsertTaskIdeaRows({ forceAll = false } = {}) {
+    if (!remoteTaskIdeasSupported) return false;
+    const rows = taskIdeaRowsForSync({ forceAll });
+    if (!rows.length) return false;
     const { error } = await supabaseClient.from('task_ideas').upsert(rowsForCurrentUser(rows), { onConflict: 'id' });
     if (!error) {
       markRowsSynced('taskIdeas', rows);
       saveState({ skipRender: true });
-      return;
+      return true;
     }
     if (isMissingRemoteRelationError(error)) {
       remoteTaskIdeasSupported = false;
       console.warn('Remote Ideenpool-Tabelle fehlt. Ideenpool bleibt lokal, bis supabase.sql angewendet ist.', error);
-      return;
+      return false;
     }
     throw error;
   }
 
-  function taskRowsForSync() {
-    return liveRowsForTable('tasks', state.tasks).map(t => {
+  function taskRowsForSync({ forceAll = false } = {}) {
+    return rowsPendingSync('tasks', state.tasks, { forceAll }).map(t => {
       const row = {
         id: t.id,
         title: t.title,
@@ -7868,12 +7922,18 @@ async function deleteAlcoholLog(id) {
     });
   }
 
-  async function upsertTaskRows() {
-    const rows = taskRowsForSync();
-    if (!rows.length) return;
+  async function upsertTaskRows({ forceAll = false } = {}) {
+    const rows = taskRowsForSync({ forceAll });
+    if (!rows.length) return false;
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      const { error } = await supabaseClient.from('tasks').upsert(rowsForCurrentUser(taskRowsForSync()), { onConflict: 'id' });
-      if (!error) return;
+      const activeRows = taskRowsForSync({ forceAll });
+      if (!activeRows.length) return false;
+      const { error } = await supabaseClient.from('tasks').upsert(rowsForCurrentUser(activeRows), { onConflict: 'id' });
+      if (!error) {
+        markRowsSynced('tasks', activeRows);
+        saveState({ skipRender: true });
+        return true;
+      }
       if (remoteTaskPrioritySupported && String(error.message || '').toLowerCase().includes('priority')) {
         remoteTaskPrioritySupported = false;
         console.warn('Remote Tasks-Tabelle hat noch keine priority-Spalte. Sync läuft ohne Priorität, bis supabase.sql angewendet ist.', error);
@@ -7896,6 +7956,7 @@ async function deleteAlcoholLog(id) {
       }
       throw error;
     }
+    return false;
   }
 
   function taskStatusForRemote(status) {
@@ -7966,6 +8027,10 @@ async function deleteAlcoholLog(id) {
     return rows.filter(row => row?.id && !isRemoteDeleted(table, row.id));
   }
 
+  function rowsPendingSync(table, rows = [], { forceAll = false } = {}) {
+    return liveRowsForTable(table, rows).filter(row => forceAll || row?.synced !== true);
+  }
+
   function markRowsSynced(localKey, syncedRows = []) {
     const ids = new Set(syncedRows.map(row => row?.id).filter(Boolean));
     if (!ids.size || !Array.isArray(state[localKey])) return;
@@ -7975,7 +8040,8 @@ async function deleteAlcoholLog(id) {
   }
 
   async function flushRemoteDeletes() {
-    if (!supabaseClient || !isAuthenticated()) return;
+    if (!supabaseClient || !isAuthenticated()) return false;
+    let changed = false;
     state.deletedRemoteIds = normalizeDeletedRemoteIds(state.deletedRemoteIds);
     for (const table of SYNC_TABLES) {
       if (table === 'task_ideas' && !remoteTaskIdeasSupported) continue;
@@ -7988,8 +8054,10 @@ async function deleteAlcoholLog(id) {
         ids.forEach(id => {
           if (state.deletedRemoteIds[table]?.[id]) state.deletedRemoteIds[table][id].synced_at = syncedAt;
         });
+        changed = true;
       }
     }
+    return changed;
   }
 
   function applyRemoteCollectionAuthority(table, localKey, remoteRowsForTable, { ledgerSourceType = null, ledgerMatcher = null } = {}) {
@@ -8232,8 +8300,14 @@ async function deleteAlcoholLog(id) {
   }
 
   function scheduleRemotePull() {
+    if (Date.now() < suppressRemotePullUntil) return;
     clearTimeout(remotePullTimer);
-    remotePullTimer = setTimeout(() => syncWithSupabase({ silent: true, pullFirst: true }), 900);
+    remotePullTimer = setTimeout(() => {
+      if (Date.now() < suppressRemotePullUntil) return;
+      syncWithSupabase(hasPendingSyncWork()
+        ? { silent: true, pullFirst: false, pullAfter: true }
+        : { silent: true, pullOnly: true });
+    }, REMOTE_PULL_DEBOUNCE_MS);
   }
 
   const mapRemoteHabit = h => normalizeHabit({ id: h.id, name: h.name, type: h.type, unit: h.unit, direction: h.direction, target: h.target, target_period: h.target_period || 'day', icon: h.icon, color: h.color, is_archived: h.is_archived, created_at: h.created_at, updated_at: h.updated_at, synced: true });
