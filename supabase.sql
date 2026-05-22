@@ -107,6 +107,35 @@ create table if not exists public.task_ideas (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.activity_ideas (
+  id text not null,
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  title text not null,
+  summary text,
+  category text not null default 'random_fun',
+  category_label text not null default 'Idee',
+  idea_category text not null default 'experiment' check (idea_category in ('focus','health','consumption','habit','admin','experiment')),
+  mood text not null default 'curious',
+  energy text not null default 'medium' check (energy in ('low','medium','high')),
+  duration_band text not null default '1h' check (duration_band in ('15m','30m','1h','2h','halfday','day','evening')),
+  minutes integer not null default 60,
+  budget text not null default 'low' check (budget in ('free','low','medium','high')),
+  setting text not null default 'mixed' check (setting in ('indoor','outdoor','mixed')),
+  people text[] not null default array['solo']::text[],
+  weather text[] not null default array['any']::text[],
+  transport text[] not null default array['any']::text[],
+  story_points smallint not null default 2 check (story_points in (1,2,3,5,8)),
+  priority text not null default 'medium' check (priority in ('low','medium','high','urgent')),
+  task_title text,
+  task_description text,
+  tags text[] not null default array[]::text[],
+  source text not null default 'custom',
+  is_archived boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (user_id, id)
+);
+
 create table if not exists public.appointments (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
@@ -140,6 +169,7 @@ alter table public.alcohol_logs add column if not exists user_id uuid references
 alter table public.alcohol_events add column if not exists user_id uuid references auth.users(id) on delete cascade;
 alter table public.tasks add column if not exists user_id uuid references auth.users(id) on delete cascade;
 alter table public.task_ideas add column if not exists user_id uuid references auth.users(id) on delete cascade;
+alter table public.activity_ideas add column if not exists user_id uuid references auth.users(id) on delete cascade;
 alter table public.appointments add column if not exists user_id uuid references auth.users(id) on delete cascade;
 alter table public.points_ledger add column if not exists user_id uuid references auth.users(id) on delete cascade;
 
@@ -150,6 +180,7 @@ alter table public.alcohol_logs alter column user_id set default auth.uid();
 alter table public.alcohol_events alter column user_id set default auth.uid();
 alter table public.tasks alter column user_id set default auth.uid();
 alter table public.task_ideas alter column user_id set default auth.uid();
+alter table public.activity_ideas alter column user_id set default auth.uid();
 alter table public.appointments alter column user_id set default auth.uid();
 alter table public.points_ledger alter column user_id set default auth.uid();
 
@@ -203,6 +234,47 @@ alter table public.task_ideas add constraint task_ideas_priority_check check (pr
 alter table public.task_ideas drop constraint if exists task_ideas_status_check;
 alter table public.task_ideas add constraint task_ideas_status_check check (idea_status in ('open','accepted','dismissed'));
 
+alter table public.activity_ideas add column if not exists id text;
+alter table public.activity_ideas add column if not exists user_id uuid references auth.users(id) on delete cascade;
+alter table public.activity_ideas alter column user_id set default auth.uid();
+alter table public.activity_ideas add column if not exists title text;
+alter table public.activity_ideas add column if not exists summary text;
+alter table public.activity_ideas add column if not exists category text not null default 'random_fun';
+alter table public.activity_ideas add column if not exists category_label text not null default 'Idee';
+alter table public.activity_ideas add column if not exists idea_category text not null default 'experiment';
+alter table public.activity_ideas add column if not exists mood text not null default 'curious';
+alter table public.activity_ideas add column if not exists energy text not null default 'medium';
+alter table public.activity_ideas add column if not exists duration_band text not null default '1h';
+alter table public.activity_ideas add column if not exists minutes integer not null default 60;
+alter table public.activity_ideas add column if not exists budget text not null default 'low';
+alter table public.activity_ideas add column if not exists setting text not null default 'mixed';
+alter table public.activity_ideas add column if not exists people text[] not null default array['solo']::text[];
+alter table public.activity_ideas add column if not exists weather text[] not null default array['any']::text[];
+alter table public.activity_ideas add column if not exists transport text[] not null default array['any']::text[];
+alter table public.activity_ideas add column if not exists story_points smallint not null default 2;
+alter table public.activity_ideas add column if not exists priority text not null default 'medium';
+alter table public.activity_ideas add column if not exists task_title text;
+alter table public.activity_ideas add column if not exists task_description text;
+alter table public.activity_ideas add column if not exists tags text[] not null default array[]::text[];
+alter table public.activity_ideas add column if not exists source text not null default 'custom';
+alter table public.activity_ideas add column if not exists is_archived boolean not null default false;
+alter table public.activity_ideas add column if not exists created_at timestamptz not null default now();
+alter table public.activity_ideas add column if not exists updated_at timestamptz not null default now();
+alter table public.activity_ideas drop constraint if exists activity_ideas_idea_category_check;
+alter table public.activity_ideas add constraint activity_ideas_idea_category_check check (idea_category in ('focus','health','consumption','habit','admin','experiment'));
+alter table public.activity_ideas drop constraint if exists activity_ideas_energy_check;
+alter table public.activity_ideas add constraint activity_ideas_energy_check check (energy in ('low','medium','high'));
+alter table public.activity_ideas drop constraint if exists activity_ideas_duration_band_check;
+alter table public.activity_ideas add constraint activity_ideas_duration_band_check check (duration_band in ('15m','30m','1h','2h','halfday','day','evening'));
+alter table public.activity_ideas drop constraint if exists activity_ideas_budget_check;
+alter table public.activity_ideas add constraint activity_ideas_budget_check check (budget in ('free','low','medium','high'));
+alter table public.activity_ideas drop constraint if exists activity_ideas_setting_check;
+alter table public.activity_ideas add constraint activity_ideas_setting_check check (setting in ('indoor','outdoor','mixed'));
+alter table public.activity_ideas drop constraint if exists activity_ideas_story_points_check;
+alter table public.activity_ideas add constraint activity_ideas_story_points_check check (story_points in (1,2,3,5,8));
+alter table public.activity_ideas drop constraint if exists activity_ideas_priority_check;
+alter table public.activity_ideas add constraint activity_ideas_priority_check check (priority in ('low','medium','high','urgent'));
+
 -- If you already have rows from the old unrestricted setup, run this once after creating your Auth user:
 -- update public.habit_definitions set user_id = '<YOUR_AUTH_USER_ID>' where user_id is null;
 -- update public.habit_entries set user_id = '<YOUR_AUTH_USER_ID>' where user_id is null;
@@ -211,6 +283,7 @@ alter table public.task_ideas add constraint task_ideas_status_check check (idea
 -- update public.alcohol_events set user_id = '<YOUR_AUTH_USER_ID>' where user_id is null;
 -- update public.tasks set user_id = '<YOUR_AUTH_USER_ID>' where user_id is null;
 -- update public.task_ideas set user_id = '<YOUR_AUTH_USER_ID>' where user_id is null;
+-- update public.activity_ideas set user_id = '<YOUR_AUTH_USER_ID>' where user_id is null;
 -- update public.appointments set user_id = '<YOUR_AUTH_USER_ID>' where user_id is null;
 -- update public.points_ledger set user_id = '<YOUR_AUTH_USER_ID>' where user_id is null;
 
@@ -223,6 +296,8 @@ create index if not exists idx_alcohol_events_user_time on public.alcohol_events
 create index if not exists idx_tasks_user_due on public.tasks(user_id, status, due_at);
 create index if not exists idx_tasks_user_done_archive on public.tasks(user_id, done_archived_at desc, done_archive_rank);
 create index if not exists idx_task_ideas_user_status on public.task_ideas(user_id, idea_status, updated_at desc);
+create index if not exists idx_activity_ideas_user_active on public.activity_ideas(user_id, is_archived, updated_at desc);
+create index if not exists idx_activity_ideas_user_category on public.activity_ideas(user_id, category, mood);
 create index if not exists idx_appointments_user_starts_at on public.appointments(user_id, starts_at desc);
 create index if not exists idx_appointments_type_starts_at on public.appointments(user_id, appointment_type, starts_at desc);
 create index if not exists idx_points_ledger_user_time on public.points_ledger(user_id, earned_at desc);
@@ -248,6 +323,9 @@ create trigger set_tasks_updated_at before update on public.tasks for each row e
 drop trigger if exists set_task_ideas_updated_at on public.task_ideas;
 create trigger set_task_ideas_updated_at before update on public.task_ideas for each row execute function public.set_updated_at();
 
+drop trigger if exists set_activity_ideas_updated_at on public.activity_ideas;
+create trigger set_activity_ideas_updated_at before update on public.activity_ideas for each row execute function public.set_updated_at();
+
 drop trigger if exists set_appointments_updated_at on public.appointments;
 create trigger set_appointments_updated_at before update on public.appointments for each row execute function public.set_updated_at();
 
@@ -258,7 +336,7 @@ declare
   pol record;
 begin
   foreach tbl in array array[
-    'habit_definitions','habit_entries','cigarette_events','alcohol_logs','alcohol_events','tasks','task_ideas','appointments','points_ledger',
+    'habit_definitions','habit_entries','cigarette_events','alcohol_logs','alcohol_events','tasks','task_ideas','activity_ideas','appointments','points_ledger',
     'participants','catches','duels','duel_events','duel_participants','duel_tracks','tournaments'
   ] loop
     if to_regclass(format('public.%I', tbl)) is null then
@@ -334,7 +412,7 @@ grant select, insert, update, delete on all tables in schema public to authentic
 do $$
 declare tbl text;
 begin
-  foreach tbl in array array['habit_definitions','habit_entries','cigarette_events','alcohol_logs','alcohol_events','tasks','task_ideas','appointments','points_ledger'] loop
+  foreach tbl in array array['habit_definitions','habit_entries','cigarette_events','alcohol_logs','alcohol_events','tasks','task_ideas','activity_ideas','appointments','points_ledger'] loop
     begin
       execute format('alter publication supabase_realtime add table public.%I', tbl);
     exception when others then

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v50-activity-finder';
+const CACHE_NAME = 'habitflow-v51-activity-db';
 const ASSETS = ['./', './index.html', './style.css', './app.js', './supabase-config.js', './supabase-schema.js', './manifest.json', './icons/coach-clean.svg', './data/activity-ideas.json'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));

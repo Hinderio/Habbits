@@ -14,6 +14,8 @@
   const CONSUMPTION_MODE_KEY = 'habitflow-consumption-mode';
   const LEISURE_FILTER_KEY = 'habitflow-leisure-filters-v1';
   const ACTIVITY_CATALOG_URL = './data/activity-ideas.json';
+  const ACTIVITY_REMOTE_SEED_KEY = 'habitflow-activity-remote-seeded-v1';
+  const ACTIVITY_CATALOG_TABLE = 'activity_ideas';
   const LEISURE_RESULT_LIMIT = 12;
   const SUPABASE_CONFIG = window.HABITFLOW_SUPABASE_CONFIG || {};
   const MEDITATION_TECHNIQUES = [
@@ -431,6 +433,7 @@
   let pendingSyncRequest = null;
   let lastSyncAt = null;
   let remotePullTimer = null;
+  let leisurePullTimer = null;
   let selectedCalendarDate = toDateKey(new Date());
   let calendarCursor = new Date();
   let charts = { trend: null, points: null };
@@ -464,14 +467,18 @@
   let remoteTaskBacklogRankSupported = true;
   let remoteTaskDoneArchiveSupported = true;
   let remoteTaskIdeasSupported = true;
+  let remoteActivityIdeasSupported = true;
   let remoteHabitTargetPeriodSupported = true;
   let pendingTriggerSmokeId = null;
   let rulesExpanded = localStorage.getItem(RULES_UI_KEY) !== 'collapsed';
   let expandedHabitDnaIds = loadExpandedHabitDnaIds();
   let expandedHabitCardIds = loadExpandedHabitCardIds();
   let activeConsumptionMode = localStorage.getItem(CONSUMPTION_MODE_KEY) === 'alcohol' ? 'alcohol' : 'smoke';
+  let leisureSeedCatalog = [];
   let leisureCatalog = [];
   let leisureCatalogError = null;
+  let editingActivityIdeaId = null;
+  let activityCatalogFormOpen = false;
   let leisureCatalogLoaded = false;
   let leisureFilters = loadLeisureFilters();
   let leisureResultOffset = 0;
@@ -489,7 +496,7 @@
     bindEvents();
     showScreen(document.querySelector('.nav-btn.active')?.dataset.target || 'dashboard', { refresh: false });
     renderStaticIcons();
-    loadLeisureCatalog();
+    await loadLeisureCatalog();
     migrateCigaretteScoring();
     migrateAlcoholScoring();
     await initSupabase();
@@ -626,6 +633,10 @@
       activityFinderForm: $('#activityFinderForm'),
       activityFinderMeta: $('#activityFinderMeta'),
       activitySuggestionList: $('#activitySuggestionList'),
+      activityCatalogForm: $('#activityCatalogForm'),
+      activityCatalogFormPanel: $('#activityCatalogFormPanel'),
+      activityCatalogFormTitle: $('#activityCatalogFormTitle'),
+      activityCatalogSubmitBtn: $('#activityCatalogSubmitBtn'),
       taskBacklogToggleBtn: $('#taskBacklogToggleBtn'),
       taskArchiveToggleBtn: $('#taskArchiveToggleBtn'),
       taskTimelineToggleBtn: $('#taskTimelineToggleBtn'),
@@ -743,6 +754,7 @@
       els.activityFinderForm.addEventListener('change', updateLeisureFiltersFromForm);
       els.activityFinderForm.addEventListener('input', updateLeisureFiltersFromForm);
     }
+    if (els.activityCatalogForm) els.activityCatalogForm.addEventListener('submit', saveLeisureActivityFromForm);
     if (els.appointmentForm) els.appointmentForm.addEventListener('submit', createAppointment);
     els.taskForm.elements.effort.addEventListener('change', updateTaskPreview);
     els.taskForm.elements.priority.addEventListener('change', updateTaskPreview);
@@ -759,13 +771,17 @@
       renderDayDetails();
     });
     if (els.settingsForm) {
-      els.settingsForm.addEventListener('submit', event => {
+      els.settingsForm.addEventListener('submit', async event => {
         event.preventDefault();
-        syncWithSupabase({ silent: false, pullFirst: true });
+        await syncWithSupabase({ silent: false, pullFirst: true });
+        await syncLeisureCatalogWithSupabase({ silent: false });
       });
     }
     if (els.logoutBtn) els.logoutBtn.addEventListener('click', logout);
-    els.syncNowBtn.addEventListener('click', () => syncWithSupabase({ silent: false, pullFirst: true }));
+    els.syncNowBtn.addEventListener('click', async () => {
+      await syncWithSupabase({ silent: false, pullFirst: true });
+      await syncLeisureCatalogWithSupabase({ silent: false });
+    });
     els.exportBtn.addEventListener('click', exportJson);
     els.importInput.addEventListener('change', importJson);
     els.resetBtn.addEventListener('click', resetDemo);
@@ -800,6 +816,10 @@
       if (action === 'delete-task-idea') deleteTaskIdea(id);
       if (action === 'refresh-leisure-ideas') refreshLeisureIdeas();
       if (action === 'reset-leisure-filters') resetLeisureFilters();
+      if (action === 'toggle-activity-form') toggleLeisureActivityForm();
+      if (action === 'cancel-activity-edit') closeLeisureActivityForm({ clearForm: true });
+      if (action === 'edit-activity') editLeisureActivity(id);
+      if (action === 'delete-activity') deleteLeisureActivity(id);
       if (action === 'activity-to-idea') createTaskIdeaFromActivity(id);
       if (action === 'activity-to-task') createTaskFromActivity(id, 'open');
       if (action === 'activity-to-backlog') createTaskFromActivity(id, TASK_BACKLOG_STATUS);
@@ -967,6 +987,7 @@
       alcoholUnits: [],
       tasks: [],
       taskIdeas: [],
+      activityIdeas: [],
       appointments: [],
       pointsLedger: [],
       coachEvents: [],
@@ -1000,6 +1021,7 @@
     next.alcoholUnits = Array.isArray(next.alcoholUnits) ? next.alcoholUnits : [];
     next.tasks = Array.isArray(next.tasks) ? next.tasks.map(normalizeTask) : [];
     next.taskIdeas = Array.isArray(next.taskIdeas) ? next.taskIdeas.map(normalizeTaskIdea) : [];
+    next.activityIdeas = Array.isArray(next.activityIdeas) ? next.activityIdeas.map(normalizeLeisureActivity).filter(item => item.id && item.title) : [];
     next.appointments = Array.isArray(next.appointments) ? next.appointments.map(normalizeAppointment) : [];
     next.pointsLedger = Array.isArray(next.pointsLedger) ? next.pointsLedger.map(normalizeMorningRoutineLedgerPoint) : [];
     next.habits = next.habits.map(normalizeHabit);
@@ -1323,6 +1345,19 @@
     dedupeHabits(nextState);
     dedupeAlcoholLogs(nextState);
     dedupeTaskIdeas(nextState);
+    dedupeActivityIdeas(nextState);
+  }
+
+  function dedupeActivityIdeas(nextState = state) {
+    if (!Array.isArray(nextState.activityIdeas)) nextState.activityIdeas = [];
+    const byId = new Map();
+    nextState.activityIdeas.map(normalizeLeisureActivity).filter(item => item.id && item.title).forEach(item => {
+      const current = byId.get(item.id);
+      if (!current || new Date(item.updated_at || item.created_at || 0) >= new Date(current.updated_at || current.created_at || 0)) {
+        byId.set(item.id, item);
+      }
+    });
+    nextState.activityIdeas = Array.from(byId.values());
   }
 
   function dedupeTaskIdeas(nextState = state) {
@@ -1483,16 +1518,27 @@
       const response = await fetch(ACTIVITY_CATALOG_URL, { cache: 'force-cache' });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const payload = await response.json();
-      leisureCatalog = Array.isArray(payload?.items) ? payload.items.map(normalizeLeisureActivity).filter(item => item.id && item.title) : [];
+      leisureSeedCatalog = Array.isArray(payload?.items) ? payload.items.map(normalizeLeisureActivity).filter(item => item.id && item.title) : [];
+      if (!state.activityIdeas?.length && leisureSeedCatalog.length) {
+        state.activityIdeas = leisureSeedCatalog.map(item => ({ ...item, synced: true }));
+        saveState({ skipRender: true });
+      }
+      refreshLeisureCatalogFromState();
       leisureCatalogError = null;
     } catch (error) {
-      leisureCatalog = [];
-      leisureCatalogError = error;
-      console.warn('Freizeit-Katalog konnte nicht geladen werden.', error);
+      refreshLeisureCatalogFromState();
+      leisureCatalogError = state.activityIdeas?.length ? null : error;
+      if (!state.activityIdeas?.length) console.warn('Freizeit-Katalog konnte nicht geladen werden.', error);
     } finally {
       leisureCatalogLoaded = true;
       renderLeisureFinder();
     }
+  }
+
+  function refreshLeisureCatalogFromState() {
+    leisureCatalog = (state.activityIdeas || [])
+      .map(normalizeLeisureActivity)
+      .filter(item => item.id && item.title && !item.is_archived);
   }
 
   function applyTheme() {
@@ -4922,10 +4968,16 @@
   }
 
   function normalizeLeisureActivity(item = {}) {
+    const created = item.created_at || nowIso();
     const id = String(item.id || '').trim();
     const title = String(item.title || '').trim();
     const summary = String(item.summary || item.task_description || '').trim();
     const story = Number(item.story_points || 2);
+    const list = (value, fallback = []) => {
+      if (Array.isArray(value)) return value.map(entry => String(entry).trim()).filter(Boolean);
+      if (typeof value === 'string') return value.split(',').map(entry => entry.trim()).filter(Boolean);
+      return fallback;
+    };
     return {
       ...item,
       id,
@@ -4940,14 +4992,18 @@
       minutes: Number(item.minutes || 60),
       budget: ['free', 'low', 'medium', 'high'].includes(String(item.budget || '').trim()) ? String(item.budget).trim() : 'low',
       setting: ['indoor', 'outdoor', 'mixed'].includes(String(item.setting || '').trim()) ? String(item.setting).trim() : 'mixed',
-      people: Array.isArray(item.people) ? item.people.map(String) : ['solo'],
-      weather: Array.isArray(item.weather) ? item.weather.map(String) : ['any'],
-      transport: Array.isArray(item.transport) ? item.transport.map(String) : ['any'],
+      people: list(item.people, ['solo']),
+      weather: list(item.weather, ['any']),
+      transport: list(item.transport, ['any']),
       story_points: [1, 2, 3, 5, 8].includes(story) ? story : 2,
       priority: normalizeTaskPriority(item.priority),
       task_title: String(item.task_title || title).trim(),
       task_description: String(item.task_description || summary).trim(),
-      tags: Array.isArray(item.tags) ? item.tags.map(tag => String(tag).trim()).filter(Boolean) : []
+      tags: list(item.tags, []),
+      source: String(item.source || 'custom').trim(),
+      is_archived: Boolean(item.is_archived || item.deleted_at),
+      created_at: created,
+      updated_at: item.updated_at || created
     };
   }
 
@@ -4984,6 +5040,307 @@
     updateLeisureFilterForm();
     renderLeisureFinder();
     toast('Freizeit-Filter zurückgesetzt');
+  }
+
+
+  function toggleLeisureActivityForm() {
+    if (activityCatalogFormOpen) closeLeisureActivityForm({ clearForm: true });
+    else openLeisureActivityForm();
+  }
+
+  function openLeisureActivityForm(activity = null) {
+    if (!els.activityCatalogForm || !els.activityCatalogFormPanel) return;
+    activityCatalogFormOpen = true;
+    editingActivityIdeaId = activity?.id || null;
+    els.activityCatalogFormPanel.classList.remove('hidden');
+    els.activityCatalogFormPanel.setAttribute('aria-hidden', 'false');
+    if (els.activityCatalogFormTitle) els.activityCatalogFormTitle.textContent = editingActivityIdeaId ? 'Vorschlag bearbeiten' : 'Eigenen Vorschlag erfassen';
+    if (els.activityCatalogSubmitBtn) els.activityCatalogSubmitBtn.textContent = editingActivityIdeaId ? 'Vorschlag aktualisieren' : 'Vorschlag speichern';
+    fillLeisureActivityForm(activity || {});
+    if (!activity) requestAnimationFrame(() => els.activityCatalogForm?.elements?.title?.focus());
+  }
+
+  function closeLeisureActivityForm({ clearForm = false } = {}) {
+    activityCatalogFormOpen = false;
+    editingActivityIdeaId = null;
+    if (els.activityCatalogFormPanel) {
+      els.activityCatalogFormPanel.classList.add('hidden');
+      els.activityCatalogFormPanel.setAttribute('aria-hidden', 'true');
+    }
+    if (els.activityCatalogFormTitle) els.activityCatalogFormTitle.textContent = 'Eigenen Vorschlag erfassen';
+    if (els.activityCatalogSubmitBtn) els.activityCatalogSubmitBtn.textContent = 'Vorschlag speichern';
+    if (clearForm && els.activityCatalogForm) resetLeisureActivityForm();
+  }
+
+  function fillLeisureActivityForm(activity = {}) {
+    if (!els.activityCatalogForm) return;
+    const normalized = normalizeLeisureActivity(activity);
+    const fields = els.activityCatalogForm.elements;
+    fields.title.value = normalized.title || '';
+    fields.summary.value = normalized.summary || '';
+    fields.category_label.value = normalized.category_label || '';
+    fields.category.value = normalized.category || 'random_fun';
+    fields.mood.value = normalized.mood || 'curious';
+    fields.duration_band.value = normalized.duration_band || '1h';
+    fields.people.value = normalized.people.join(', ');
+    fields.setting.value = normalized.setting || 'mixed';
+    fields.budget.value = normalized.budget || 'low';
+    fields.energy.value = normalized.energy || 'medium';
+    fields.transport.value = normalized.transport.join(', ');
+    fields.story_points.value = String(normalized.story_points || 2);
+    fields.priority.value = normalizeTaskPriority(normalized.priority);
+    fields.tags.value = normalized.tags.join(', ');
+  }
+
+  function resetLeisureActivityForm() {
+    if (!els.activityCatalogForm) return;
+    els.activityCatalogForm.reset();
+    const fields = els.activityCatalogForm.elements;
+    fields.mood.value = 'curious';
+    fields.duration_band.value = '1h';
+    fields.setting.value = 'mixed';
+    fields.budget.value = 'low';
+    fields.energy.value = 'medium';
+    fields.story_points.value = '2';
+    fields.priority.value = 'medium';
+  }
+
+  function formListValue(value, fallback = []) {
+    const entries = String(value || '').split(',').map(item => item.trim()).filter(Boolean);
+    return entries.length ? entries : fallback;
+  }
+
+  async function saveLeisureActivityFromForm(event) {
+    event.preventDefault();
+    if (!els.activityCatalogForm) return;
+    const data = new FormData(els.activityCatalogForm);
+    const title = String(data.get('title') || '').trim();
+    if (!title) return;
+    const now = nowIso();
+    const existing = editingActivityIdeaId ? (state.activityIdeas || []).find(item => item.id === editingActivityIdeaId) : null;
+    const activity = normalizeLeisureActivity({
+      ...(existing || {}),
+      id: existing?.id || `activity_custom_${uid()}`,
+      title,
+      summary: String(data.get('summary') || '').trim(),
+      category: String(data.get('category') || 'random_fun').trim(),
+      category_label: String(data.get('category_label') || data.get('category') || 'Idee').trim(),
+      idea_category: 'experiment',
+      mood: String(data.get('mood') || 'curious'),
+      duration_band: String(data.get('duration_band') || '1h'),
+      minutes: durationBandToMinutes(String(data.get('duration_band') || '1h')),
+      people: formListValue(data.get('people'), ['solo']),
+      weather: existing?.weather || ['any'],
+      setting: String(data.get('setting') || 'mixed'),
+      budget: String(data.get('budget') || 'low'),
+      energy: String(data.get('energy') || 'medium'),
+      transport: formListValue(data.get('transport'), ['any']),
+      story_points: Number(data.get('story_points') || 2),
+      priority: normalizeTaskPriority(data.get('priority')),
+      task_title: title,
+      task_description: String(data.get('summary') || '').trim(),
+      tags: formListValue(data.get('tags'), []),
+      source: existing?.source || 'custom',
+      is_archived: false,
+      created_at: existing?.created_at || now,
+      updated_at: now,
+      synced: false
+    });
+    const list = Array.isArray(state.activityIdeas) ? state.activityIdeas : [];
+    const index = list.findIndex(item => item.id === activity.id);
+    if (index >= 0) list[index] = activity;
+    else list.unshift(activity);
+    state.activityIdeas = list;
+    refreshLeisureCatalogFromState();
+    closeLeisureActivityForm({ clearForm: true });
+    saveState();
+    toast(existing ? 'Freizeit-Vorschlag aktualisiert' : 'Freizeit-Vorschlag gespeichert');
+    await upsertLeisureActivityRemote(activity, { silent: true });
+  }
+
+  function durationBandToMinutes(band) {
+    return { '15m': 15, '30m': 30, '1h': 60, '2h': 120, evening: 180, halfday: 240, day: 480 }[band] || 60;
+  }
+
+  function editLeisureActivity(id) {
+    const activity = (state.activityIdeas || []).map(normalizeLeisureActivity).find(item => item.id === id);
+    if (!activity) return;
+    openLeisureActivityForm(activity);
+    requestAnimationFrame(() => els.activityCatalogFormPanel?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
+  }
+
+  async function deleteLeisureActivity(id) {
+    const activity = (state.activityIdeas || []).find(item => item.id === id);
+    if (!activity) return;
+    if (!confirm(`Freizeit-Vorschlag „${activity.title}“ wirklich löschen?`)) return;
+    const now = nowIso();
+    activity.is_archived = true;
+    activity.updated_at = now;
+    activity.synced = false;
+    if (editingActivityIdeaId === id) closeLeisureActivityForm({ clearForm: true });
+    refreshLeisureCatalogFromState();
+    saveState();
+    toast('Freizeit-Vorschlag gelöscht');
+    await upsertLeisureActivityRemote(activity, { silent: true });
+  }
+
+  function leisureActivityRowsForRemote(items = []) {
+    return items.map(item => normalizeLeisureActivity(item)).filter(item => item.id && item.title).map(item => ({
+      id: item.id,
+      title: item.title,
+      summary: item.summary || null,
+      category: item.category || 'random_fun',
+      category_label: item.category_label || 'Idee',
+      idea_category: TASK_IDEA_CATEGORIES[item.idea_category] ? item.idea_category : 'experiment',
+      mood: item.mood || 'curious',
+      energy: item.energy || 'medium',
+      duration_band: item.duration_band || '1h',
+      minutes: Number(item.minutes || 60),
+      budget: item.budget || 'low',
+      setting: item.setting || 'mixed',
+      people: item.people || ['solo'],
+      weather: item.weather || ['any'],
+      transport: item.transport || ['any'],
+      story_points: Number(item.story_points || 2),
+      priority: normalizeTaskPriority(item.priority),
+      task_title: item.task_title || item.title,
+      task_description: item.task_description || item.summary || null,
+      tags: item.tags || [],
+      source: item.source || 'custom',
+      is_archived: Boolean(item.is_archived),
+      created_at: item.created_at || nowIso(),
+      updated_at: item.updated_at || nowIso()
+    }));
+  }
+
+  const mapRemoteLeisureActivity = item => normalizeLeisureActivity({ ...item, synced: true });
+
+  function mergeActivityIdeas(localRows = [], remoteRows = []) {
+    const map = new Map(localRows.map(row => [row.id, normalizeLeisureActivity(row)]));
+    remoteRows.map(mapRemoteLeisureActivity).forEach(remote => {
+      const local = map.get(remote.id);
+      if (!local || new Date(remote.updated_at || remote.created_at || 0) >= new Date(local.updated_at || local.created_at || 0)) {
+        map.set(remote.id, remote);
+      }
+    });
+    return Array.from(map.values());
+  }
+
+  function activitySeededUsers() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(ACTIVITY_REMOTE_SEED_KEY) || '{}');
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function markActivitySeededForUser(userId) {
+    if (!userId) return;
+    const seeded = activitySeededUsers();
+    seeded[userId] = nowIso();
+    localStorage.setItem(ACTIVITY_REMOTE_SEED_KEY, JSON.stringify(seeded));
+  }
+
+  function hasActivitySeededForUser(userId) {
+    return Boolean(userId && activitySeededUsers()[userId]);
+  }
+
+  function isMissingActivityRelationError(error) {
+    return isMissingRemoteRelationError(error) || String(error?.message || '').toLowerCase().includes(ACTIVITY_CATALOG_TABLE);
+  }
+
+  async function fetchRemoteLeisureActivities() {
+    const userId = currentUserId();
+    if (!supabaseClient || !userId || !remoteActivityIdeasSupported) return null;
+    const { data, error } = await supabaseClient
+      .from(ACTIVITY_CATALOG_TABLE)
+      .select('*')
+      .eq('user_id', userId)
+      .order('updated_at', { ascending: false });
+    if (error) {
+      if (isMissingActivityRelationError(error)) {
+        remoteActivityIdeasSupported = false;
+        console.warn('Remote Freizeit-Tabelle fehlt. Freizeit-Finder bleibt lokal, bis supabase.sql angewendet ist.', error);
+        return null;
+      }
+      throw error;
+    }
+    return Array.isArray(data) ? data : [];
+  }
+
+  async function upsertLeisureActivityRemote(activity, { silent = true } = {}) {
+    if (!supabaseClient || !currentUserId() || !remoteActivityIdeasSupported) return false;
+    try {
+      const rows = rowsForCurrentUser(leisureActivityRowsForRemote([activity]));
+      const { error } = await supabaseClient.from(ACTIVITY_CATALOG_TABLE).upsert(rows, { onConflict: 'user_id,id' });
+      if (error) {
+        if (isMissingActivityRelationError(error)) {
+          remoteActivityIdeasSupported = false;
+          if (!silent) toast('Freizeit-Tabelle fehlt noch in Supabase. Lokal gespeichert.');
+          return false;
+        }
+        throw error;
+      }
+      const local = (state.activityIdeas || []).find(item => item.id === activity.id);
+      if (local) local.synced = true;
+      saveState({ skipRender: true });
+      return true;
+    } catch (error) {
+      console.warn('Freizeit-Vorschlag konnte nicht remote gespeichert werden.', error);
+      if (!silent) toast('Freizeit-Vorschlag lokal gespeichert, Remote-Sync prüfen.');
+      return false;
+    }
+  }
+
+  async function upsertLeisureActivitiesRemote(items = [], { chunkSize = 150 } = {}) {
+    if (!supabaseClient || !currentUserId() || !remoteActivityIdeasSupported || !items.length) return false;
+    const rows = leisureActivityRowsForRemote(items);
+    try {
+      for (let index = 0; index < rows.length; index += chunkSize) {
+        const batch = rows.slice(index, index + chunkSize);
+        const { error } = await supabaseClient.from(ACTIVITY_CATALOG_TABLE).upsert(rowsForCurrentUser(batch), { onConflict: 'user_id,id' });
+        if (error) {
+          if (isMissingActivityRelationError(error)) {
+            remoteActivityIdeasSupported = false;
+            console.warn('Remote Freizeit-Tabelle fehlt. Freizeit-Finder bleibt lokal, bis supabase.sql angewendet ist.', error);
+            return false;
+          }
+          throw error;
+        }
+      }
+      const syncedIds = new Set(rows.map(row => row.id));
+      (state.activityIdeas || []).forEach(item => { if (syncedIds.has(item.id)) item.synced = true; });
+      saveState({ skipRender: true });
+      return true;
+    } catch (error) {
+      console.warn('Freizeit-Katalog konnte nicht remote gespeichert werden.', error);
+      return false;
+    }
+  }
+
+  async function syncLeisureCatalogWithSupabase({ silent = true } = {}) {
+    if (!supabaseClient || !currentUserId() || !remoteActivityIdeasSupported) return;
+    try {
+      const userId = currentUserId();
+      const remoteRows = await fetchRemoteLeisureActivities();
+      if (!remoteRows) return;
+      const localRows = Array.isArray(state.activityIdeas) ? state.activityIdeas.map(normalizeLeisureActivity) : [];
+      const unsyncedLocal = localRows.filter(item => item.synced === false);
+      if (!remoteRows.length && localRows.length && !hasActivitySeededForUser(userId)) {
+        const seeded = await upsertLeisureActivitiesRemote(localRows);
+        if (seeded) markActivitySeededForUser(userId);
+      } else if (remoteRows.length) {
+        state.activityIdeas = mergeActivityIdeas(localRows, remoteRows);
+        if (unsyncedLocal.length) await upsertLeisureActivitiesRemote(unsyncedLocal);
+        saveState({ skipRender: true });
+      }
+      refreshLeisureCatalogFromState();
+      renderLeisureFinder();
+    } catch (error) {
+      console.warn('Freizeit-Katalog-Sync fehlgeschlagen.', error);
+      if (!silent) toast('Freizeit-Katalog-Sync fehlgeschlagen.');
+    }
   }
 
   function refreshLeisureIdeas() {
@@ -5052,7 +5409,7 @@
     if (!els.activitySuggestionList || !els.activityFinderMeta) return;
     updateLeisureFilterForm();
     if (!leisureCatalogLoaded) {
-      els.activityFinderMeta.textContent = 'Lade 1000 kuratierte Vorschläge...';
+      els.activityFinderMeta.textContent = 'Lade Freizeit-Vorschläge...';
       els.activitySuggestionList.innerHTML = '<div class="empty-state">Freizeit-Finder wird vorbereitet.</div>';
       return;
     }
@@ -5063,14 +5420,14 @@
     }
     const matches = filteredLeisureActivities();
     if (!matches.length) {
-      els.activityFinderMeta.textContent = `${leisureCatalog.length} Vorschläge im Katalog · 0 Treffer`;
+      els.activityFinderMeta.textContent = `${leisureCatalog.length} aktive Vorschläge · 0 Treffer`;
       els.activitySuggestionList.innerHTML = '<div class="empty-state">Keine passende Idee gefunden. Setze einzelne Filter zurück oder nutze ein anderes Stichwort.</div>';
       return;
     }
     const start = Math.min(leisureResultOffset, Math.max(0, matches.length - 1));
     const rotated = matches.slice(start).concat(matches.slice(0, start));
     const visible = rotated.slice(0, LEISURE_RESULT_LIMIT);
-    els.activityFinderMeta.textContent = `${leisureCatalog.length} Vorschläge · ${matches.length} passende Treffer · ${visible.length} angezeigt`;
+    els.activityFinderMeta.textContent = `${leisureCatalog.length} aktive Vorschläge · ${matches.length} passende Treffer · ${visible.length} angezeigt${remoteActivityIdeasSupported && currentUserId() ? ' · DB bereit' : ' · lokal'}`;
     els.activitySuggestionList.innerHTML = visible.map(renderLeisureActivityCard).join('');
   }
 
@@ -5100,6 +5457,8 @@
         <button class="mini-btn primary" type="button" data-action="activity-to-idea" data-id="${escapeHtml(activity.id)}">Als Idee</button>
         <button class="mini-btn" type="button" data-action="activity-to-task" data-id="${escapeHtml(activity.id)}">Als Task</button>
         <button class="mini-btn" type="button" data-action="activity-to-backlog" data-id="${escapeHtml(activity.id)}">In Backlog</button>
+        <button class="mini-btn" type="button" data-action="edit-activity" data-id="${escapeHtml(activity.id)}">Bearbeiten</button>
+        <button class="mini-btn danger-text" type="button" data-action="delete-activity" data-id="${escapeHtml(activity.id)}">Löschen</button>
       </div>
     </article>`;
   }
@@ -6997,6 +7356,7 @@ async function deleteAlcoholLog(id) {
       }
       renderSyncStatus('syncing');
       await syncWithSupabase({ silent: true, pullFirst: true });
+      await syncLeisureCatalogWithSupabase({ silent: true });
       subscribeToRemoteChanges();
       renderSyncStatus('connected');
       console.log('HabitFlow Supabase Auth verbunden');
@@ -7028,7 +7388,7 @@ async function deleteAlcoholLog(id) {
       if (!currentUser) clearRemoteSubscription();
       if (currentUser && (wasSignedOut || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
         subscribeToRemoteChanges();
-        syncWithSupabase({ silent: true, pullFirst: true });
+        syncWithSupabase({ silent: true, pullFirst: true }).then(() => syncLeisureCatalogWithSupabase({ silent: true }));
       }
     });
     authSubscription = data?.subscription || null;
@@ -7181,6 +7541,7 @@ async function deleteAlcoholLog(id) {
       renderAuthUi();
       renderSyncStatus('syncing');
       await syncWithSupabase({ silent: true, pullFirst: true });
+      await syncLeisureCatalogWithSupabase({ silent: true });
       subscribeToRemoteChanges();
       renderSyncStatus('connected');
       toast('Passwort gespeichert');
@@ -7197,10 +7558,16 @@ async function deleteAlcoholLog(id) {
     if (!isSupabaseConfigured()) return;
     setInterval(() => syncWithSupabase({ silent: true, pullFirst: true }), 60_000);
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') syncWithSupabase({ silent: true, pullFirst: true });
+      if (document.visibilityState === 'visible') {
+        syncWithSupabase({ silent: true, pullFirst: true });
+        syncLeisureCatalogWithSupabase({ silent: true });
+      }
       if (document.visibilityState === 'hidden' && hasPendingSyncWork()) syncWithSupabase({ silent: true, pullFirst: false });
     });
-    window.addEventListener('online', () => syncWithSupabase({ silent: true, pullFirst: true }));
+    window.addEventListener('online', () => {
+      syncWithSupabase({ silent: true, pullFirst: true });
+      syncLeisureCatalogWithSupabase({ silent: true });
+    });
     window.addEventListener('pagehide', () => { if (hasPendingSyncWork()) syncWithSupabase({ silent: true, pullFirst: false }); });
     window.addEventListener('beforeunload', () => { if (hasPendingSyncWork()) syncWithSupabase({ silent: true, pullFirst: false }); });
   }
@@ -7906,6 +8273,9 @@ async function deleteAlcoholLog(id) {
         if (table === 'task_ideas' && !remoteTaskIdeasSupported) return;
         channel.on('postgres_changes', { event: '*', schema: 'public', table, filter: `user_id=eq.${userId}` }, scheduleRemotePull);
       });
+      if (remoteActivityIdeasSupported) {
+        channel.on('postgres_changes', { event: '*', schema: 'public', table: ACTIVITY_CATALOG_TABLE, filter: `user_id=eq.${userId}` }, scheduleLeisureRemotePull);
+      }
       syncSubscription = channel.subscribe();
     } catch (error) {
       console.warn('Realtime Sync konnte nicht aktiviert werden.', error);
@@ -7913,6 +8283,8 @@ async function deleteAlcoholLog(id) {
   }
 
   function clearRemoteSubscription() {
+    clearTimeout(leisurePullTimer);
+    leisurePullTimer = null;
     if (!supabaseClient || !syncSubscription) return;
     try {
       if (supabaseClient.removeChannel) supabaseClient.removeChannel(syncSubscription);
@@ -7926,6 +8298,11 @@ async function deleteAlcoholLog(id) {
   function scheduleRemotePull() {
     clearTimeout(remotePullTimer);
     remotePullTimer = setTimeout(() => syncWithSupabase({ silent: true, pullFirst: true }), 900);
+  }
+
+  function scheduleLeisureRemotePull() {
+    clearTimeout(leisurePullTimer);
+    leisurePullTimer = setTimeout(() => syncLeisureCatalogWithSupabase({ silent: true }), 900);
   }
 
   const mapRemoteHabit = h => normalizeHabit({ id: h.id, name: h.name, type: h.type, unit: h.unit, direction: h.direction, target: h.target, target_period: h.target_period || 'day', icon: h.icon, color: h.color, is_archived: h.is_archived, created_at: h.created_at, updated_at: h.updated_at, synced: true });
