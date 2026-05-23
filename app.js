@@ -1248,6 +1248,31 @@
     });
   }
 
+  function pauseOverlapMinutesBetween(startValue, endValue, { scope, targetId = null } = {}) {
+    const start = new Date(startValue).getTime();
+    const end = new Date(endValue).getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0;
+    const normalizedScope = normalizePauseScope(scope);
+    return activePausePeriods({ scope: normalizedScope, targetId, includeFuture: true }).reduce((total, period) => {
+      if (period.scope === 'habit' && targetId && period.target_id !== targetId) return total;
+      const pauseStart = new Date(period.starts_at).getTime();
+      const pauseEnd = period.ends_at ? new Date(period.ends_at).getTime() : end;
+      if (!Number.isFinite(pauseStart) || !Number.isFinite(pauseEnd)) return total;
+      const overlapStart = Math.max(start, pauseStart);
+      const overlapEnd = Math.min(end, pauseEnd);
+      return overlapEnd > overlapStart ? total + ((overlapEnd - overlapStart) / 60000) : total;
+    }, 0);
+  }
+
+  function activeMinutesBetweenExcludingPauses(startValue, endValue, options = {}) {
+    const start = new Date(startValue).getTime();
+    const end = new Date(endValue).getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0;
+    const rawMinutes = (end - start) / 60000;
+    const pausedMinutes = pauseOverlapMinutesBetween(startValue, endValue, options);
+    return Math.max(0, Math.round(rawMinutes - pausedMinutes));
+  }
+
   function activePauseNow(scope, targetId = null) {
     return activePausePeriods({ scope, targetId }).find(period => isWithinPauseAt(nowIso(), { scope, targetId: period.scope === 'habit' ? targetId : null })) || null;
   }
@@ -3916,7 +3941,7 @@
       q1,
       q3: p75,
       qualityLabel,
-      subtitle: `Analysefenster ${days} Tage · ${durations.length} Pause${durations.length === 1 ? '' : 'n'}`
+      subtitle: `Analysefenster ${days} Tage · ${durations.length} Pause${durations.length === 1 ? '' : 'n'} · Pausen ausgeklammert`
     });
 
     const skyline = recent.map(item => {
@@ -4138,7 +4163,7 @@
           </svg>
         </div>
         <div class="interval-violin-caption">
-          <p><b>Leserichtung:</b> links = längere Pausen · rechts = dichtere Rauchmomente.</p>
+          <p><b>Leserichtung:</b> links = längere Pausen · rechts = dichtere Rauchmomente. Pausierte Zeitraeume werden aus den Intervallen herausgerechnet.</p>
           <div class="interval-violin-legend">
             <span><i class="is-fill"></i>Dichteform</span>
             <span><i class="is-iqr"></i>mittlere 50%</span>
@@ -6591,7 +6616,7 @@
     const sorted = [...visibleCigarettes()].sort((a, b) => new Date(a.smoked_at) - new Date(b.smoked_at));
     sorted.forEach((c, index) => {
       const prev = sorted[index - 1] || null;
-      const interval = prev ? Math.max(0, Math.round((new Date(c.smoked_at) - new Date(prev.smoked_at)) / 60000)) : null;
+      const interval = prev ? activeMinutesBetweenExcludingPauses(prev.smoked_at, c.smoked_at, { scope: 'smoke' }) : null;
       const scoringContext = smokingScoringContext(prev, c);
       const points = cigarettePoints(interval, scoringContext);
       const hasChanged = c.interval_minutes !== interval || Number(c.points || 0) !== points;
@@ -7919,15 +7944,15 @@ async function deleteAlcoholLog(id) {
 
   function averagePauseText(days) {
     const keys = daysBack(days);
-    const intervals = visibleCigarettes()
-      .filter(c => keys.includes(toDateKey(c.smoked_at)) && Number.isFinite(Number(c.interval_minutes)))
-      .map(c => Number(c.interval_minutes));
+    const intervals = smokeIntervalSnapshots()
+      .filter(item => keys.includes(toDateKey(item.cigarette.smoked_at)) && Number.isFinite(Number(item.interval_minutes)))
+      .map(item => Number(item.interval_minutes));
     if (!intervals.length) return '–';
     return formatDuration(Math.round(sum(intervals) / intervals.length));
   }
 
   function bestPauseMinutes() {
-    const intervals = visibleCigarettes().map(c => Number(c.interval_minutes)).filter(Number.isFinite);
+    const intervals = smokeIntervalSnapshots().map(item => Number(item.interval_minutes)).filter(Number.isFinite);
     return intervals.length ? Math.max(...intervals) : null;
   }
 
@@ -7942,7 +7967,7 @@ async function deleteAlcoholLog(id) {
     const sorted = [...visibleCigarettes()].sort((a, b) => new Date(a.smoked_at) - new Date(b.smoked_at));
     return sorted.map((c, index) => {
       const prev = sorted[index - 1] || null;
-      const interval = prev ? Math.max(0, Math.round((new Date(c.smoked_at) - new Date(prev.smoked_at)) / 60000)) : null;
+      const interval = prev ? activeMinutesBetweenExcludingPauses(prev.smoked_at, c.smoked_at, { scope: 'smoke' }) : null;
       return { cigarette: c, previous: prev, interval_minutes: interval, ...smokingScoringContext(prev, c) };
     });
   }
