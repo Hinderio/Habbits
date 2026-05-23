@@ -259,14 +259,20 @@
     sport: '00000000-0000-4000-8000-000000000103',
     meditation: '00000000-0000-4000-8000-000000000104'
   });
-  const SYNC_TABLES = ['habit_definitions', 'habit_entries', 'cigarette_events', 'alcohol_logs', 'alcohol_events', 'tasks', 'task_ideas', 'appointments', 'points_ledger'];
+  const SYNC_TABLES = ['habit_definitions', 'habit_entries', 'cigarette_events', 'alcohol_logs', 'alcohol_events', 'tasks', 'task_ideas', 'appointments', 'points_ledger', 'pause_periods'];
   const IDLE_SYNC_CHECK_MS = 60_000;
   const SAFETY_REMOTE_PULL_MS = 10 * 60_000;
   const REMOTE_PULL_DEBOUNCE_MS = 1_500;
   const SELF_WRITE_ECHO_GRACE_MS = 4_000;
   const REMOTE_DELETE_TOMBSTONE_TTL_DAYS = 14;
-  const OPTIONAL_SYNC_TABLES = new Set(['alcohol_events', 'appointments', 'task_ideas']);
+  const OPTIONAL_SYNC_TABLES = new Set(['alcohol_events', 'appointments', 'task_ideas', 'pause_periods']);
   const BUILT_IN_DEFAULT_HABIT_NAMES = new Set(['gewicht', 'wasser', 'sport', 'meditation']);
+  const PAUSE_SCOPE_META = {
+    smoke: { label: 'Rauchen', eyebrow: 'Konsum-Pause', helper: 'Rauch-Logs im Zeitraum bleiben gespeichert, werden in Auswertungen aber pausiert betrachtet.' },
+    alcohol: { label: 'Alkohol', eyebrow: 'Konsum-Pause', helper: 'Alkohol-Einheiten im Zeitraum bleiben gespeichert, werden in Auswertungen aber pausiert betrachtet.' },
+    habit: { label: 'Habit', eyebrow: 'Habit-Pause', helper: 'Habit-Logs im Zeitraum bleiben gespeichert, werden fuer Ziele und Rhythmus pausiert betrachtet.' }
+  };
+
   const TASK_COLUMNS = [
     { status: 'open', title: 'Offen', hint: 'geplant und noch nicht gestartet' },
     { status: 'in_progress', title: 'In Bearbeitung', hint: 'aktiver Fokus für heute' },
@@ -521,6 +527,8 @@
   let taskWeeklyOpen = false;
   let activityCatalogFormOpen = false;
   let editingActivityIdeaId = null;
+  let pauseModalContext = { scope: 'smoke', targetId: null };
+  let remotePausePeriodsSupported = true;
   let taskWeeklyCursor = startOfWeekDate(new Date());
   let taskTimelineScrollLeft = null;
   let taskTimelineDragState = null;
@@ -650,6 +658,9 @@
       smokeMobileKpis: $('#smokeMobileKpis'),
       alcoholMobileInsight: $('#alcoholMobileInsight'),
       alcoholMobileKpis: $('#alcoholMobileKpis'),
+      smokePauseStatus: $('#smokePauseStatus'),
+      alcoholPauseStatus: $('#alcoholPauseStatus'),
+      consumptionPauseList: $('#consumptionPauseList'),
       historyModal: $('#historyModal'),
       historyModalCloseBtn: $('#historyModalCloseBtn'),
       historyModalContent: $('#historyModalContent'),
@@ -676,6 +687,12 @@
       cancelHabitEditBtn: $('#cancelHabitEditBtn'),
       habitCards: $('#habitCards'),
       habitDnaOverview: $('#habitDnaOverview'),
+      habitPauseList: $('#habitPauseList'),
+      pauseModal: $('#pauseModal'),
+      pauseModalCloseBtn: $('#pauseModalCloseBtn'),
+      pauseModalTitle: $('#pauseModalTitle'),
+      pauseScopeLabel: $('#pauseScopeLabel'),
+      pauseForm: $('#pauseForm'),
       taskFormPanel: $('#taskFormPanel'),
       taskFormToggleBtn: $('#taskFormToggleBtn'),
       taskFormCloseBtn: $('#taskFormCloseBtn'),
@@ -789,6 +806,12 @@
         if (event.target === els.historyModal) closeHistoryModal();
       });
     }
+    if (els.pauseModalCloseBtn) els.pauseModalCloseBtn.addEventListener('click', closePauseModal);
+    if (els.pauseModal) {
+      els.pauseModal.addEventListener('click', event => {
+        if (event.target === els.pauseModal) closePauseModal();
+      });
+    }
     if (els.coachModal) {
       els.coachModal.addEventListener('click', event => {
         if (event.target === els.coachModal) closeCoachModal();
@@ -825,6 +848,7 @@
       els.activityFinderForm.addEventListener('input', updateLeisureFiltersFromForm);
     }
     if (els.activityCatalogForm) els.activityCatalogForm.addEventListener('submit', saveLeisureActivityFromForm);
+    if (els.pauseForm) els.pauseForm.addEventListener('submit', savePausePeriod);
     if (els.appointmentForm) els.appointmentForm.addEventListener('submit', createAppointment);
     els.taskForm.elements.effort.addEventListener('change', updateTaskPreview);
     els.taskForm.elements.priority.addEventListener('change', updateTaskPreview);
@@ -896,6 +920,10 @@
       if (action === 'edit-habit') editHabit(id);
       if (action === 'delete-habit') deleteHabit(id);
       if (action === 'archive-habit') archiveHabit(id);
+      if (action === 'open-pause-modal') openPauseModal({ scope: actionEl.dataset.scope || 'smoke', targetId: actionEl.dataset.targetId || id || null });
+      if (action === 'close-pause-modal') closePauseModal();
+      if (action === 'delete-pause') deletePausePeriod(id);
+      if (action === 'end-pause-now') endPauseNow(id);
       if (action === 'toggle-habit-card') toggleHabitCard(id);
       if (action === 'toggle-habit-dna') toggleHabitDna(id);
       if (action === 'log-habit') logHabit(id);
@@ -951,6 +979,7 @@
 
     document.addEventListener('keydown', event => {
       if (event.key !== 'Escape') return;
+      if (els.pauseModal && !els.pauseModal.classList.contains('hidden')) return closePauseModal();
       if (els.historyModal && !els.historyModal.classList.contains('hidden')) return closeHistoryModal();
       if (els.morningRoutineModal && !els.morningRoutineModal.classList.contains('hidden')) return closeMorningRoutineModal();
       if (els.coachModal && !els.coachModal.classList.contains('hidden')) closeCoachModal();
@@ -1049,6 +1078,7 @@
       tasks: [],
       taskIdeas: [],
       activityIdeas: [],
+      pausePeriods: [],
       appointments: [],
       pointsLedger: [],
       coachEvents: [],
@@ -1083,6 +1113,7 @@
     next.tasks = Array.isArray(next.tasks) ? next.tasks.map(normalizeTask) : [];
     next.taskIdeas = Array.isArray(next.taskIdeas) ? next.taskIdeas.map(normalizeTaskIdea) : [];
     next.activityIdeas = Array.isArray(next.activityIdeas) ? next.activityIdeas.map(normalizeLeisureActivity).filter(item => item.id && item.title) : [];
+    next.pausePeriods = Array.isArray(next.pausePeriods) ? next.pausePeriods.map(normalizePausePeriod).filter(item => item.id && item.scope && item.starts_at) : [];
     next.appointments = Array.isArray(next.appointments) ? next.appointments.map(normalizeAppointment) : [];
     next.pointsLedger = Array.isArray(next.pointsLedger) ? next.pointsLedger.map(normalizeMorningRoutineLedgerPoint) : [];
     next.habits = next.habits.map(normalizeHabit);
@@ -1160,6 +1191,98 @@
       else if (value && typeof value === 'object') Object.entries(value).forEach(([id, meta]) => remember(table, id, meta));
     });
     return normalized;
+  }
+
+
+  function normalizePauseScope(scope) {
+    const key = String(scope || '').trim().toLowerCase();
+    return PAUSE_SCOPE_META[key] ? key : 'smoke';
+  }
+
+  function normalizePausePeriod(period = {}) {
+    const created = validIsoOrFallback(period.created_at || period.createdAt || nowIso());
+    const startsAt = validIsoOrFallback(period.starts_at || period.startsAt || created, created);
+    const endsAt = validIsoOrNull(period.ends_at || period.endsAt);
+    const scope = normalizePauseScope(period.scope);
+    return {
+      ...period,
+      scope,
+      target_id: scope === 'habit' ? (period.target_id || period.targetId || null) : null,
+      starts_at: startsAt,
+      ends_at: endsAt && new Date(endsAt) >= new Date(startsAt) ? endsAt : null,
+      note: String(period.note || '').trim(),
+      is_archived: Boolean(period.is_archived),
+      created_at: created,
+      updated_at: validIsoOrFallback(period.updated_at || period.updatedAt || created, created)
+    };
+  }
+
+  function pauseScopeLabel(scope, targetId = null) {
+    const normalized = normalizePauseScope(scope);
+    if (normalized === 'habit') {
+      const habit = state.habits.find(item => item.id === targetId);
+      return habit ? `Habit · ${habit.name}` : 'Habit';
+    }
+    return PAUSE_SCOPE_META[normalized]?.label || 'Pause';
+  }
+
+  function activePausePeriods({ scope = null, targetId = null, includeFuture = false } = {}) {
+    const now = Date.now();
+    return (state.pausePeriods || [])
+      .map(normalizePausePeriod)
+      .filter(period => !period.is_archived)
+      .filter(period => !scope || period.scope === normalizePauseScope(scope))
+      .filter(period => period.scope !== 'habit' || !targetId || period.target_id === targetId)
+      .filter(period => includeFuture || new Date(period.starts_at).getTime() <= now)
+      .sort((a, b) => new Date(b.starts_at) - new Date(a.starts_at));
+  }
+
+  function isWithinPauseAt(dateValue, { scope, targetId = null } = {}) {
+    const time = new Date(dateValue || nowIso()).getTime();
+    if (!Number.isFinite(time)) return false;
+    return activePausePeriods({ scope, targetId, includeFuture: true }).some(period => {
+      if (period.scope === 'habit' && targetId && period.target_id !== targetId) return false;
+      const start = new Date(period.starts_at).getTime();
+      const end = period.ends_at ? new Date(period.ends_at).getTime() : Infinity;
+      return time >= start && time <= end;
+    });
+  }
+
+  function activePauseNow(scope, targetId = null) {
+    return activePausePeriods({ scope, targetId }).find(period => isWithinPauseAt(nowIso(), { scope, targetId: period.scope === 'habit' ? targetId : null })) || null;
+  }
+
+  function visibleCigarettes() {
+    return state.cigarettes.filter(item => !isWithinPauseAt(item.smoked_at, { scope: 'smoke' }));
+  }
+
+  function visibleAlcoholUnits() {
+    return state.alcoholUnits.filter(item => !isWithinPauseAt(item.occurred_at || item.created_at, { scope: 'alcohol' }));
+  }
+
+  function visibleHabitEntries(habitId = null) {
+    return state.habitEntries.filter(entry => !isWithinPauseAt(entry.occurred_at, { scope: 'habit', targetId: entry.habit_id })).filter(entry => !habitId || entry.habit_id === habitId);
+  }
+
+
+  function isPausedLedgerPoint(point = {}) {
+    if (point.source_type === 'cigarette') {
+      const source = state.cigarettes.find(item => item.id === point.source_id);
+      return source ? isWithinPauseAt(source.smoked_at, { scope: 'smoke' }) : false;
+    }
+    if (isAlcoholPointsEntry(point)) {
+      const source = state.alcoholUnits.find(item => item.id === point.source_id);
+      return source ? isWithinPauseAt(source.occurred_at || source.created_at, { scope: 'alcohol' }) : false;
+    }
+    if (point.source_type === 'habit') {
+      const source = state.habitEntries.find(item => item.id === point.source_id);
+      return source ? isWithinPauseAt(source.occurred_at, { scope: 'habit', targetId: source.habit_id }) : false;
+    }
+    return false;
+  }
+
+  function visibleLedgerPoints() {
+    return state.pointsLedger.filter(point => !isPausedLedgerPoint(point));
   }
 
 
@@ -1398,6 +1521,7 @@
     state.deletedRemoteIds = normalizeDeletedRemoteIds(state.deletedRemoteIds);
     return SYNC_TABLES.some(table => {
       if (table === 'task_ideas' && !remoteTaskIdeasSupported) return false;
+      if (table === 'pause_periods' && !remotePausePeriodsSupported) return false;
       return Object.values(state.deletedRemoteIds?.[table] || {}).some(meta => !meta?.synced_at);
     });
   }
@@ -1407,6 +1531,7 @@
     dedupeAlcoholLogs(nextState);
     dedupeTaskIdeas(nextState);
     dedupeActivityIdeas(nextState);
+    dedupePausePeriods(nextState);
   }
 
   function dedupeActivityIdeas(nextState = state) {
@@ -1419,6 +1544,19 @@
       }
     });
     nextState.activityIdeas = Array.from(byId.values());
+  }
+
+
+  function dedupePausePeriods(nextState = state) {
+    if (!Array.isArray(nextState.pausePeriods)) nextState.pausePeriods = [];
+    const byId = new Map();
+    nextState.pausePeriods.map(normalizePausePeriod).filter(item => item.id && item.starts_at).forEach(item => {
+      const current = byId.get(item.id);
+      if (!current || new Date(item.updated_at || item.created_at || 0) >= new Date(current.updated_at || current.created_at || 0)) {
+        byId.set(item.id, item);
+      }
+    });
+    nextState.pausePeriods = Array.from(byId.values());
   }
 
   function dedupeTaskIdeas(nextState = state) {
@@ -1829,6 +1967,7 @@
     renderSection('calendar', renderCalendar);
     renderSection('day-details', renderDayDetails);
     renderSection('history-modal', renderHistoryModal);
+    renderSection('pause-ui', renderPauseUi);
     renderSection('sync-status', renderSyncStatus);
   }
 
@@ -2192,7 +2331,7 @@
     if (els.levelProgress) els.levelProgress.style.width = `${Math.min(100, (levelPoints / 500) * 100)}%`;
     const todayKey = toDateKey(new Date());
     const todayCount = cigarettesOnDate(todayKey).length;
-    const habitLogsToday = state.habitEntries.filter(e => toDateKey(e.occurred_at) === todayKey).length;
+    const habitLogsToday = visibleHabitEntries().filter(e => toDateKey(e.occurred_at) === todayKey).length;
     const completedToday = state.tasks.filter(t => t.status === 'done' && toDateKey(t.completed_at || t.updated_at || t.created_at) === todayKey).length;
     els.todayCigarettes.textContent = todayCount;
     els.avgPause7.textContent = habitLogsToday;
@@ -2282,11 +2421,11 @@
     const activeTasks = state.tasks.filter(isActiveTask).length;
     const activeOverdue = state.tasks.filter(task => isActiveTask(task) && taskDueState(task).overdue).length;
     const activeHabits = state.habits.filter(habit => !habit.is_archived).length;
-    const habitLogDays = new Set(state.habitEntries.map(entry => toDateKey(entry.occurred_at)).filter(Boolean)).size;
-    const cigaretteLogs = state.cigarettes.length;
-    const alcoholLogs = state.alcoholUnits.length;
-    const smokeFreeActiveDays = keys14.filter(key => dayHasTrackedActivity(key) && !state.cigarettes.some(cigarette => toDateKey(cigarette.smoked_at) === key)).length;
-    const noConsumptionActiveDays = keys14.filter(key => dayHasTrackedActivity(key) && !state.cigarettes.some(cigarette => toDateKey(cigarette.smoked_at) === key) && !state.alcoholUnits.some(unit => toDateKey(unit.occurred_at || unit.created_at) === key)).length;
+    const habitLogDays = new Set(visibleHabitEntries().map(entry => toDateKey(entry.occurred_at)).filter(Boolean)).size;
+    const cigaretteLogs = visibleCigarettes().length;
+    const alcoholLogs = visibleAlcoholUnits().length;
+    const smokeFreeActiveDays = keys14.filter(key => dayHasTrackedActivity(key) && !visibleCigarettes().some(cigarette => toDateKey(cigarette.smoked_at) === key)).length;
+    const noConsumptionActiveDays = keys14.filter(key => dayHasTrackedActivity(key) && !visibleCigarettes().some(cigarette => toDateKey(cigarette.smoked_at) === key) && !visibleAlcoholUnits().some(unit => toDateKey(unit.occurred_at || unit.created_at) === key)).length;
     const appointments = state.appointments.length;
     const appointments7 = state.appointments.filter(appointment => keys7.includes(toDateKey(appointment.starts_at))).length;
     const experimentsTotal = (state.experiments || []).length;
@@ -2321,10 +2460,10 @@
       positivePointEvents,
       bestDaytimePause: bestDaytimePauseMinutes() || 0,
       bestPause: bestPauseMinutes() || 0,
-      habitLogs: state.habitEntries.length,
+      habitLogs: visibleHabitEntries().length,
       habitLogDays,
       activeHabits,
-      consumptionLogs: state.cigarettes.length + state.alcoholUnits.length,
+      consumptionLogs: visibleCigarettes().length + visibleAlcoholUnits().length,
       cigaretteLogs,
       alcoholLogs,
       smokeFreeActiveDays,
@@ -2346,18 +2485,18 @@
 
   function dayHasTrackedActivity(key) {
     if (!key) return false;
-    return state.habitEntries.some(entry => toDateKey(entry.occurred_at) === key) ||
+    return visibleHabitEntries().some(entry => toDateKey(entry.occurred_at) === key) ||
       state.tasks.some(task => task.status === 'done' && toDateKey(task.completed_at || task.updated_at || task.created_at) === key) ||
-      state.pointsLedger.some(point => toDateKey(point.earned_at || point.created_at) === key) ||
-      state.cigarettes.some(cigarette => toDateKey(cigarette.smoked_at) === key) ||
-      state.alcoholUnits.some(unit => toDateKey(unit.occurred_at || unit.created_at) === key) ||
+      visibleLedgerPoints().some(point => toDateKey(point.earned_at || point.created_at) === key) ||
+      visibleCigarettes().some(cigarette => toDateKey(cigarette.smoked_at) === key) ||
+      visibleAlcoholUnits().some(unit => toDateKey(unit.occurred_at || unit.created_at) === key) ||
       Boolean(morningRoutineCompletedLog(key));
   }
 
   function dayHasPositiveMomentum(key) {
     if (!key) return false;
     return pointsOnDate(key) > 0 ||
-      state.habitEntries.some(entry => toDateKey(entry.occurred_at) === key) ||
+      visibleHabitEntries().some(entry => toDateKey(entry.occurred_at) === key) ||
       state.tasks.some(task => task.status === 'done' && toDateKey(task.completed_at || task.updated_at || task.created_at) === key) ||
       Boolean(morningRoutineCompletedLog(key));
   }
@@ -2462,8 +2601,8 @@
 
   function renderInsights() {
     const last7 = daysBack(7);
-    const cigarettes7 = state.cigarettes.filter(c => last7.includes(toDateKey(c.smoked_at))).length;
-    const alcoholUnits7 = state.alcoholUnits.filter(unit => last7.includes(toDateKey(unit.occurred_at))).length;
+    const cigarettes7 = visibleCigarettes().filter(c => last7.includes(toDateKey(c.smoked_at))).length;
+    const alcoholUnits7 = visibleAlcoholUnits().filter(unit => last7.includes(toDateKey(unit.occurred_at))).length;
     const completed7 = state.tasks.filter(t => t.status === 'done' && last7.includes(toDateKey(t.completed_at || t.updated_at || t.created_at))).length;
     const activeTasks7 = state.tasks.filter(isActiveTask).length;
     const bestPause = bestPauseMinutes();
@@ -2498,7 +2637,7 @@
     const cigarettes = cigarettesOnDate(key).length;
     const alcohol = alcoholUnitsOnDate(key).length;
     const tasksDone = state.tasks.filter(t => t.status === 'done' && toDateKey(t.completed_at || t.updated_at || t.created_at) === key).length;
-    const habitLogs = state.habitEntries.filter(e => toDateKey(e.occurred_at) === key).length;
+    const habitLogs = visibleHabitEntries().filter(e => toDateKey(e.occurred_at) === key).length;
     const last = getLastCigarette();
     const pauseHours = last ? Math.max(0, (Date.now() - new Date(last.smoked_at).getTime()) / 36e5) : 8;
     let score = 72;
@@ -2514,14 +2653,14 @@
 
   function detectPrimaryPattern() {
     const keys = daysBack(14);
-    const alcoholDays = new Set(state.alcoholUnits.filter(u => keys.includes(toDateKey(u.occurred_at))).map(u => toDateKey(u.occurred_at)));
+    const alcoholDays = new Set(visibleAlcoholUnits().filter(u => keys.includes(toDateKey(u.occurred_at))).map(u => toDateKey(u.occurred_at)));
     const byHour = new Map();
-    state.cigarettes.filter(c => keys.includes(toDateKey(c.smoked_at))).forEach(c => {
+    visibleCigarettes().filter(c => keys.includes(toDateKey(c.smoked_at))).forEach(c => {
       const h = new Date(c.smoked_at).getHours();
       const bucket = h < 11 ? 'Morgen' : h < 16 ? 'Mittag' : h < 21 ? 'Abend' : 'Spätabend';
       byHour.set(bucket, (byHour.get(bucket) || 0) + 1);
     });
-    const alcoholSmoke = state.cigarettes.filter(c => alcoholDays.has(toDateKey(c.smoked_at))).length;
+    const alcoholSmoke = visibleCigarettes().filter(c => alcoholDays.has(toDateKey(c.smoked_at))).length;
     const topTime = [...byHour.entries()].sort((a,b)=>b[1]-a[1])[0];
     if (alcoholSmoke >= 3) return { body: `Alkohol-Tage erzeugen aktuell auffällig viele Rauchmomente (${alcoholSmoke} in 14 Tagen). Plane vor dem ersten Drink einen Delay-Schritt.` };
     if (topTime) return { body: `${topTime[0]} ist dein stärkstes Rauchfenster (${topTime[1]}× in 14 Tagen). Der Coach priorisiert dort kurze Unterbrechungen.` };
@@ -2531,7 +2670,7 @@
   function topSmokeTrigger(days = 14) {
     const keys = daysBack(days);
     const counts = new Map();
-    state.cigarettes.filter(c => keys.includes(toDateKey(c.smoked_at))).forEach(c => {
+    visibleCigarettes().filter(c => keys.includes(toDateKey(c.smoked_at))).forEach(c => {
       const match = String(c.note || '').match(/trigger:([a-z_]+)/);
       const key = match?.[1];
       if (COACH_TRIGGER_META[key]) counts.set(key, (counts.get(key) || 0) + 1);
@@ -2542,12 +2681,12 @@
 
   function buildWeeklyReview() {
     const keys = daysBack(7);
-    const cigs = state.cigarettes.filter(c => keys.includes(toDateKey(c.smoked_at)));
+    const cigs = visibleCigarettes().filter(c => keys.includes(toDateKey(c.smoked_at)));
     const routineDays = keys.filter(key => Boolean(morningRoutineCompletedLog(key))).length;
     const tasks = state.tasks.filter(t => t.status === 'done' && keys.includes(toDateKey(t.completed_at || t.updated_at || t.created_at)));
-    const habits = state.habitEntries.filter(e => keys.includes(toDateKey(e.occurred_at)));
+    const habits = visibleHabitEntries().filter(e => keys.includes(toDateKey(e.occurred_at)));
     const best = bestPauseMinutes();
-    const alcoholDays = new Set(state.alcoholUnits.filter(u => keys.includes(toDateKey(u.occurred_at))).map(u => toDateKey(u.occurred_at))).size;
+    const alcoholDays = new Set(visibleAlcoholUnits().filter(u => keys.includes(toDateKey(u.occurred_at))).map(u => toDateKey(u.occurred_at))).size;
     const score = Math.round(sum(keys.map(k => calculateDailyScore(k).score)) / Math.max(1, keys.length));
     const pattern = detectPrimaryPattern().body;
     return {
@@ -2598,7 +2737,7 @@
     const now = new Date();
     const hour = now.getHours();
     const keys = daysBack(21);
-    const recentCigs = state.cigarettes.filter(c => keys.includes(toDateKey(c.smoked_at)));
+    const recentCigs = visibleCigarettes().filter(c => keys.includes(toDateKey(c.smoked_at)));
     const currentBucket = dayPartKey(hour);
     const currentBucketCount = recentCigs.filter(c => dayPartKey(new Date(c.smoked_at).getHours()) === currentBucket).length;
     const weekdayCount = recentCigs.filter(c => new Date(c.smoked_at).getDay() === now.getDay()).length;
@@ -2641,7 +2780,7 @@
   function buildKeystoneHabitInsight() {
     const keys = daysBack(21);
     const candidates = state.habits.filter(h => !h.is_archived).map(habit => {
-      const daysWith = keys.filter(key => state.habitEntries.some(e => e.habit_id === habit.id && toDateKey(e.occurred_at) === key));
+      const daysWith = keys.filter(key => visibleHabitEntries(habit.id).some(e => e.habit_id === habit.id && toDateKey(e.occurred_at) === key));
       if (daysWith.length < 2) return null;
       const daysWithout = keys.filter(key => !daysWith.includes(key));
       const cigsWith = average(daysWith.map(key => cigarettesOnDate(key).length));
@@ -2696,7 +2835,7 @@
     const labels = ['Mo','Di','Mi','Do','Fr','Sa','So'];
     const matrix = Array.from({ length: 7 }, () => Object.fromEntries(buckets.map(b => [b, 0])));
     const keys = daysBack(21);
-    state.cigarettes.filter(c => keys.includes(toDateKey(c.smoked_at))).forEach(c => {
+    visibleCigarettes().filter(c => keys.includes(toDateKey(c.smoked_at))).forEach(c => {
       const date = new Date(c.smoked_at);
       const dayIndex = (date.getDay() + 6) % 7;
       matrix[dayIndex][dayPartKey(date.getHours())] += 1;
@@ -2741,7 +2880,7 @@
   function renderHistoryModal() {
     if (!els.historyModal || !els.historyModalContent || els.historyModal.classList.contains('hidden')) return;
     if (historyModalMode === 'smoke') {
-      const count = state.cigarettes.length;
+      const count = visibleCigarettes().length;
       els.historyModalContent.innerHTML = `<div class="history-modal-head">
         <p class="eyebrow">Konsum</p>
         <h2 id="historyModalTitle">Zigarettenverlauf</h2>
@@ -2763,7 +2902,7 @@
       return;
     }
     if (historyModalMode === 'alcohol') {
-      const count = state.alcoholUnits.length;
+      const count = visibleAlcoholUnits().length;
       els.historyModalContent.innerHTML = `<div class="history-modal-head">
         <p class="eyebrow">Konsum</p>
         <h2 id="historyModalTitle">Alkoholverlauf</h2>
@@ -2779,7 +2918,7 @@
         els.historyModalContent.innerHTML = `<div class="history-modal-head"><p class="eyebrow">Habits</p><h2 id="historyModalTitle">Logs</h2></div><div class="empty-state">Habit nicht gefunden.</div>`;
         return;
       }
-      const entries = state.habitEntries.filter(entry => entry.habit_id === habit.id);
+      const entries = visibleHabitEntries(habit.id).filter(entry => entry.habit_id === habit.id);
       els.historyModalContent.innerHTML = `<div class="history-modal-head">
         <p class="eyebrow">Habits</p>
         <h2 id="historyModalTitle">${escapeHtml(habit.name)} · Logs</h2>
@@ -3000,7 +3139,7 @@
       <button class="mini-btn primary" type="button" data-action="log-meditation" data-id="${escapeHtml(technique.key)}">Loggen</button>
     </article>`).join('');
 
-    const sessions = meditationHabit ? state.habitEntries
+    const sessions = meditationHabit ? visibleHabitEntries(meditationHabit.id)
       .filter(entry => entry.habit_id === meditationHabit.id)
       .sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at))
       .slice(0, 5) : [];
@@ -3058,7 +3197,7 @@
 
   function renderSmoking() {
     const last = getLastCigarette();
-    const smokeCount = state.cigarettes.length;
+    const smokeCount = visibleCigarettes().length;
     if (els.lastSmokePoints) els.lastSmokePoints.textContent = `${smokeCount} Eintrag${smokeCount === 1 ? '' : 'e'}`;
     renderSmokingTip(last);
     renderTriggerCapture();
@@ -3133,7 +3272,7 @@
   function renderSmokeHistoryLauncher() {
     if (!els.smokeHistory) return;
     const metrics = smokeCostMetrics();
-    const smokeCount = state.cigarettes.length;
+    const smokeCount = visibleCigarettes().length;
     const todayCount = cigarettesOnDate(toDateKey(new Date())).length;
     els.smokeHistory.innerHTML = `<div class="history-launch-grid">
       <button class="history-open-card" type="button" data-action="open-smoke-history">
@@ -3150,7 +3289,7 @@
   }
 
   function renderSmokeHistoryList() {
-    const items = [...state.cigarettes]
+    const items = [...visibleCigarettes()]
       .sort((a, b) => new Date(b.smoked_at) - new Date(a.smoked_at))
       .slice(0, 25);
 
@@ -3194,7 +3333,7 @@
 
   function renderAlcoholUnitHistory() {
     if (!els.alcoholUnitHistory) return;
-    const units = [...state.alcoholUnits]
+    const units = [...visibleAlcoholUnits()]
       .sort((a, b) => sortDate(b.occurred_at || b.created_at) - sortDate(a.occurred_at || a.created_at));
     const todayCount = units.filter(unit => toDateKey(unit.occurred_at || unit.created_at) === toDateKey(new Date())).length;
     els.alcoholUnitHistory.innerHTML = `<button class="history-open-card" type="button" data-action="open-alcohol-history">
@@ -3205,7 +3344,7 @@
   }
 
   function renderAlcoholUnitHistoryList() {
-    const units = [...state.alcoholUnits]
+    const units = [...visibleAlcoholUnits()]
       .sort((a, b) => sortDate(b.occurred_at || b.created_at) - sortDate(a.occurred_at || a.created_at))
       .slice(0, 50);
     if (!units.length) {
@@ -3231,7 +3370,7 @@
     const todayKey = toDateKey(new Date());
     const todayUnits = alcoholUnitsOnDate(todayKey);
     const todayPoints = sum(todayUnits.map(unit => alcoholPointsForUnit(unit.id)));
-    const units7 = state.alcoholUnits.filter(unit => daysBack(7).includes(toDateKey(unit.occurred_at || unit.created_at))).length;
+    const units7 = visibleAlcoholUnits().filter(unit => daysBack(7).includes(toDateKey(unit.occurred_at || unit.created_at))).length;
     if (els.alcoholTodayUnits) els.alcoholTodayUnits.textContent = String(todayUnits.length);
     if (els.alcoholTodayHint) {
       els.alcoholTodayHint.textContent = todayUnits.length
@@ -3239,7 +3378,8 @@
         : 'Noch keine Einheit erfasst';
     }
     if (els.lastAlcoholPoints) {
-      els.lastAlcoholPoints.textContent = `${state.alcoholUnits.length} Einheit${state.alcoholUnits.length === 1 ? '' : 'en'}`;
+      const visibleAlcoholCount = visibleAlcoholUnits().length;
+      els.lastAlcoholPoints.textContent = `${visibleAlcoholCount} Einheit${visibleAlcoholCount === 1 ? '' : 'en'}`;
     }
   }
 
@@ -3251,7 +3391,7 @@
   function renderSmokeMobileOverview(last = getLastCigarette()) {
     const todayKey = toDateKey(new Date());
     const cigarettesToday = cigarettesOnDate(todayKey).length;
-    const cigarettes7 = state.cigarettes.filter(c => daysBack(7).includes(toDateKey(c.smoked_at))).length;
+    const cigarettes7 = visibleCigarettes().filter(c => daysBack(7).includes(toDateKey(c.smoked_at))).length;
     const pauseMinutes = last ? Math.max(0, Math.floor((Date.now() - new Date(last.smoked_at).getTime()) / 60000)) : null;
     const nextGoal = getNextPauseGoalMinutes(pauseMinutes);
     const trigger = topSmokeTrigger(14);
@@ -3285,12 +3425,12 @@
   function renderAlcoholMobileOverview() {
     const todayKey = toDateKey(new Date());
     const todayUnits = alcoholUnitsOnDate(todayKey);
-    const units7 = state.alcoholUnits.filter(unit => daysBack(7).includes(toDateKey(unit.occurred_at || unit.created_at))).length;
+    const units7 = visibleAlcoholUnits().filter(unit => daysBack(7).includes(toDateKey(unit.occurred_at || unit.created_at))).length;
     const todayPoints = sum(todayUnits.map(unit => alcoholPointsForUnit(unit.id)));
-    const sortedUnits = [...state.alcoholUnits].sort((a, b) => sortDate(b.occurred_at || b.created_at) - sortDate(a.occurred_at || a.created_at));
+    const sortedUnits = [...visibleAlcoholUnits()].sort((a, b) => sortDate(b.occurred_at || b.created_at) - sortDate(a.occurred_at || a.created_at));
     const lastUnit = sortedUnits[0] || null;
     const lastMinutes = lastUnit ? Math.max(0, Math.floor((Date.now() - sortDate(lastUnit.occurred_at || lastUnit.created_at)) / 60000)) : null;
-    const activeDays7 = new Set(state.alcoholUnits.filter(unit => daysBack(7).includes(toDateKey(unit.occurred_at || unit.created_at))).map(unit => toDateKey(unit.occurred_at || unit.created_at))).size;
+    const activeDays7 = new Set(visibleAlcoholUnits().filter(unit => daysBack(7).includes(toDateKey(unit.occurred_at || unit.created_at))).map(unit => toDateKey(unit.occurred_at || unit.created_at))).size;
     const densityLabel = units7 >= 8 ? 'Dichte senken' : units7 >= 4 ? 'kontrollieren' : 'ruhig halten';
 
     if (els.alcoholMobileInsight) {
@@ -3328,7 +3468,7 @@
       total: 0,
       cells: weeks.map(week => ({ key: week.key, count: 0 }))
     }));
-    const relevant = state.alcoholUnits.filter(unit => weekKeys.has(isoWeekInfo(unit.occurred_at || unit.created_at).key));
+    const relevant = visibleAlcoholUnits().filter(unit => weekKeys.has(isoWeekInfo(unit.occurred_at || unit.created_at).key));
 
     if (!relevant.length) {
       els.alcoholHeatmapVisual.innerHTML = '<div class="empty-state">Noch keine Alkohol-Einheiten im Kalenderwochen-Fenster. Sobald Verlauf vorhanden ist, zeigt diese Matrix, an welchen Tagen die Einheiten liegen.</div>';
@@ -3409,7 +3549,7 @@
   }
 
   function alcoholIntervalSnapshots() {
-    const sorted = [...state.alcoholUnits].sort((a, b) => new Date(a.occurred_at || a.created_at) - new Date(b.occurred_at || b.created_at));
+    const sorted = [...visibleAlcoholUnits()].sort((a, b) => new Date(a.occurred_at || a.created_at) - new Date(b.occurred_at || b.created_at));
     return sorted.map((unit, index) => {
       const prev = sorted[index - 1] || null;
       const occurredAt = unit.occurred_at || unit.created_at;
@@ -3556,7 +3696,7 @@
       total: 0,
       cells: weeks.map(week => ({ key: week.key, count: 0 }))
     }));
-    const relevant = state.cigarettes.filter(c => weekKeys.has(isoWeekInfo(c.smoked_at).key));
+    const relevant = visibleCigarettes().filter(c => weekKeys.has(isoWeekInfo(c.smoked_at).key));
 
     if (!relevant.length) {
       els.cigaretteHeatmapVisual.innerHTML = '<div class="empty-state">Noch keine Zigaretten im Kalenderwochen-Fenster. Sobald Verlauf vorhanden ist, zeigt diese Matrix, an welchen Wochentagen welche Wochen wirklich auffällig waren.</div>';
@@ -4060,7 +4200,7 @@
     const pauseMinutes = last ? Math.max(0, Math.floor((Date.now() - new Date(last.smoked_at).getTime()) / 60000)) : null;
     const todayCount = cigarettesOnDate(todayKey).length;
     const last7Keys = daysBack(7);
-    const cigarettes7 = state.cigarettes.filter(c => last7Keys.includes(toDateKey(c.smoked_at))).length;
+    const cigarettes7 = visibleCigarettes().filter(c => last7Keys.includes(toDateKey(c.smoked_at))).length;
     const avgPerDay = cigarettes7 ? cigarettes7 / 7 : 0;
     const alcoholToday = Boolean(alcoholForDate(todayKey)?.consumed);
     const trigger = COACH_TRIGGER_META[coachSession.trigger] || COACH_TRIGGER_META.stress;
@@ -4075,7 +4215,7 @@
     const overdueTasks = activeTasks.filter(task => task.due_at && new Date(task.due_at).getTime() < Date.now());
     const focusTask = [...activeTasks].sort(compareTasks)[0] || null;
     const activeHabits = state.habits.filter(habit => !habit.is_archived);
-    const loggedHabitIdsToday = new Set(state.habitEntries.filter(entry => toDateKey(entry.occurred_at) === todayKey).map(entry => entry.habit_id));
+    const loggedHabitIdsToday = new Set(visibleHabitEntries().filter(entry => toDateKey(entry.occurred_at) === todayKey).map(entry => entry.habit_id));
     const missingHabits = activeHabits.filter(habit => !loggedHabitIdsToday.has(habit.id));
     const focusHabit = missingHabits[0] || null;
     const habitLoggedCount = activeHabits.length - missingHabits.length;
@@ -4287,6 +4427,7 @@
       const progress = habit.target ? Math.min(100, Math.abs(Number(periodValue.value || 0) / Number(habit.target)) * 100) : 0;
       const unit = habit.unit || defaultUnit(habit.type);
       const isSystemHabit = isSystemMeditationHabit(habit);
+      const habitPause = activePauseNow('habit', habit.id);
       const isExpanded = expandedHabitCardIds.has(habit.id) || editingHabitId === habit.id || editingHabitEntryId && state.habitEntries.some(entry => entry.id === editingHabitEntryId && entry.habit_id === habit.id);
       const dna = buildHabitDna(habit);
       const control = isSystemHabit
@@ -4295,12 +4436,12 @@
           ? `<button class="pill primary" type="button" data-action="log-habit" data-id="${habit.id}">${todayValue ? 'Heute erledigt' : 'Heute abhaken'}</button>`
           : `<div class="habit-log-row"><input id="habit-input-${habit.id}" type="number" step="0.01" placeholder="Wert ${unit ? `(${escapeHtml(unit)})` : ''}" /><button class="pill primary" type="button" data-action="log-habit" data-id="${habit.id}">Loggen</button></div>`;
       const habitActions = isSystemHabit
-        ? `<button class="mini-btn" type="button" data-action="edit-habit" data-id="${habit.id}">Bearbeiten</button><span class="badge muted">System</span>`
-        : `<button class="mini-btn" type="button" data-action="edit-habit" data-id="${habit.id}">Bearbeiten</button><button class="mini-btn" type="button" data-action="archive-habit" data-id="${habit.id}">Archiv</button><button class="mini-btn danger" type="button" data-action="delete-habit" data-id="${habit.id}">Löschen</button>`;
+        ? `<button class="mini-btn" type="button" data-action="edit-habit" data-id="${habit.id}">Bearbeiten</button><button class="mini-btn" type="button" data-action="open-pause-modal" data-scope="habit" data-target-id="${habit.id}">Pausieren</button><span class="badge muted">System</span>`
+        : `<button class="mini-btn" type="button" data-action="edit-habit" data-id="${habit.id}">Bearbeiten</button><button class="mini-btn" type="button" data-action="open-pause-modal" data-scope="habit" data-target-id="${habit.id}">Pausieren</button><button class="mini-btn" type="button" data-action="archive-habit" data-id="${habit.id}">Archiv</button><button class="mini-btn danger" type="button" data-action="delete-habit" data-id="${habit.id}">Löschen</button>`;
       const todayLabel = formatHabitValue(habit, todayValue);
       const completionLabel = `${Math.round(dna.completionRate * 100)}% Treffer`;
       const targetLabel = habit.target ? `${periodMeta.short}: ${periodValue.label} / Ziel ${habit.target}${unit ? ` ${unit}` : ''}` : 'ohne Zielwert';
-      const activityLabel = todayEntries.length ? `${todayEntries.length} Log${todayEntries.length === 1 ? '' : 's'} heute` : 'heute offen';
+      const activityLabel = habitPause ? 'pausiert' : (todayEntries.length ? `${todayEntries.length} Log${todayEntries.length === 1 ? '' : 's'} heute` : 'heute offen');
       const detailsId = `habit-details-${escapeHtml(habit.id)}`;
 
       return `<article class="habit-card ${isSystemHabit ? 'is-meditation-habit' : ''} ${editingHabitId === habit.id ? 'is-editing' : ''} ${isExpanded ? 'is-expanded' : 'is-collapsed'}">
@@ -4317,7 +4458,7 @@
           </span>
         </button>
         <div id="${detailsId}" class="habit-card-details">
-          <div class="habit-card-actions-row"><span class="badge ${dna.riskMeta.tone === 'high' ? 'danger-badge' : dna.riskMeta.tone === 'mid' ? 'warning-badge' : 'muted'}">Risiko ${escapeHtml(dna.riskMeta.label)}</span><div class="list-actions">${habitActions}</div></div>
+          <div class="habit-card-actions-row"><span class="badge ${habitPause ? 'warning-badge' : dna.riskMeta.tone === 'high' ? 'danger-badge' : dna.riskMeta.tone === 'mid' ? 'warning-badge' : 'muted'}">${habitPause ? 'Pausiert' : `Risiko ${escapeHtml(dna.riskMeta.label)}`}</span><div class="list-actions">${habitActions}</div></div>
           ${control}
           <div class="meta">Heute: <strong>${escapeHtml(todayLabel)}</strong>${habit.target ? ` · ${periodMeta.short}: <strong>${escapeHtml(periodValue.label)}</strong> / Ziel ${habit.target} ${escapeHtml(unit)}` : ''}</div>
           ${habit.target ? `<div class="habit-progress-track"><i style="width:${progress}%"></i></div>` : ''}
@@ -4404,12 +4545,12 @@
   }
 
   function habitCompletionRate(habit) {
-    if (!habit.target) return state.habitEntries.some(entry => entry.habit_id === habit.id) ? 0.72 : 0;
+    if (!habit.target) return visibleHabitEntries(habit.id).some(entry => entry.habit_id === habit.id) ? 0.72 : 0;
     const period = normalizeHabitTargetPeriod(habit.target_period);
     const windows = habitPeriodWindows(period, period === 'month' ? 3 : period === 'week' ? 5 : 10);
     if (!windows.length) return 0;
     const successes = windows.filter(window => {
-      const entries = state.habitEntries.filter(entry => entry.habit_id === habit.id && new Date(entry.occurred_at) >= window.start && new Date(entry.occurred_at) <= window.end);
+      const entries = visibleHabitEntries(habit.id).filter(entry => entry.habit_id === habit.id && new Date(entry.occurred_at) >= window.start && new Date(entry.occurred_at) <= window.end);
       return aggregateHabitEntriesValue(habit, entries) >= Number(habit.target || 0);
     }).length;
     return successes / windows.length;
@@ -4451,7 +4592,7 @@
   }
 
   function buildHabitDna(habit) {
-    const entries = state.habitEntries.filter(entry => entry.habit_id === habit.id).sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at));
+    const entries = visibleHabitEntries(habit.id).filter(entry => entry.habit_id === habit.id).sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at));
     const recent = entries.filter(entry => Date.now() - new Date(entry.occurred_at).getTime() <= 45 * DAY_MS);
     const lastLoggedAt = entries[0]?.occurred_at || null;
     const daysSinceLog = lastLoggedAt ? Math.max(0, Math.floor((Date.now() - new Date(lastLoggedAt).getTime()) / DAY_MS)) : 999;
@@ -4597,7 +4738,7 @@
 
   function riskySmokingWeekday(days = 42) {
     const cutoff = Date.now() - days * DAY_MS;
-    const rows = state.cigarettes.filter(item => new Date(item.smoked_at).getTime() >= cutoff);
+    const rows = visibleCigarettes().filter(item => new Date(item.smoked_at).getTime() >= cutoff);
     if (rows.length < 8) return null;
     const counts = new Map();
     rows.forEach(item => {
@@ -4611,7 +4752,7 @@
   }
 
   function dominantHabitTime(activeHabits = []) {
-    const entries = state.habitEntries.filter(entry => activeHabits.some(habit => habit.id === entry.habit_id));
+    const entries = visibleHabitEntries().filter(entry => activeHabits.some(habit => habit.id === entry.habit_id));
     if (entries.length < 4) return 'balanced';
     const buckets = entries.reduce((acc, entry) => {
       const hour = new Date(entry.occurred_at).getHours();
@@ -4660,10 +4801,10 @@
     const todayKey = toDateKey(new Date());
     const last7 = daysBack(7);
     const last30 = daysBack(30);
-    const totalCount = state.cigarettes.length;
+    const totalCount = visibleCigarettes().length;
     const todayCount = cigarettesOnDate(todayKey).length;
-    const weekCount = state.cigarettes.filter(item => last7.includes(toDateKey(item.smoked_at))).length;
-    const monthCount = state.cigarettes.filter(item => last30.includes(toDateKey(item.smoked_at))).length;
+    const weekCount = visibleCigarettes().filter(item => last7.includes(toDateKey(item.smoked_at))).length;
+    const monthCount = visibleCigarettes().filter(item => last30.includes(toDateKey(item.smoked_at))).length;
     const averagePerDay7 = weekCount / 7;
     return {
       unitCost,
@@ -4722,7 +4863,7 @@
     const expanded = expandedMeditationHabitId === habit.id;
     const sessionsToday = entriesForHabitOnDate(habit.id, toDateKey(new Date()));
     const minutesToday = sum(sessionsToday.map(entry => Number(entry.value_num || 0)));
-    const latest = state.habitEntries
+    const latest = visibleHabitEntries(habit.id)
       .filter(entry => entry.habit_id === habit.id)
       .sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at))[0];
     return `<div class="meditation-habit-control">
@@ -4749,7 +4890,7 @@
   }
 
   function renderHabitEntryList(habit) {
-    const entries = state.habitEntries
+    const entries = visibleHabitEntries(habit.id)
       .filter(entry => entry.habit_id === habit.id)
       .sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at));
     const total = entries.length;
@@ -4763,7 +4904,7 @@
   }
 
   function renderHabitEntryModalList(habit) {
-    const entries = state.habitEntries
+    const entries = visibleHabitEntries(habit.id)
       .filter(entry => entry.habit_id === habit.id)
       .sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at))
       .slice(0, 50);
@@ -6447,7 +6588,7 @@
   function recalculateSmokeIntervals({ markUpdated = false } = {}) {
     const touchedAt = nowIso();
     let changed = false;
-    const sorted = [...state.cigarettes].sort((a, b) => new Date(a.smoked_at) - new Date(b.smoked_at));
+    const sorted = [...visibleCigarettes()].sort((a, b) => new Date(a.smoked_at) - new Date(b.smoked_at));
     sorted.forEach((c, index) => {
       const prev = sorted[index - 1] || null;
       const interval = prev ? Math.max(0, Math.round((new Date(c.smoked_at) - new Date(prev.smoked_at)) / 60000)) : null;
@@ -6534,7 +6675,7 @@
       return false;
     }
 
-    const units = [...state.alcoholUnits]
+    const units = [...visibleAlcoholUnits()]
       .filter(unit => unit?.id)
       .sort((a, b) => sortDate(a.occurred_at || a.created_at) - sortDate(b.occurred_at || b.created_at));
     const allDayKeys = new Set(units.map(unit => toDateKey(unit.occurred_at || unit.created_at)));
@@ -6577,7 +6718,7 @@
   }
 
   function alcoholUnitsOnDate(key) {
-    return state.alcoholUnits.filter(unit => toDateKey(unit.occurred_at) === key);
+    return visibleAlcoholUnits().filter(unit => toDateKey(unit.occurred_at) === key);
   }
 
   function ensureAlcoholDayLog(key, note = '') {
@@ -6656,6 +6797,158 @@ async function deleteAlcoholLog(id) {
     syncWithSupabase({ silent: true, pullFirst: false });
   }
 
+  function defaultPauseRange(scope = 'smoke') {
+    const now = new Date();
+    const end = new Date(now.getTime() + 7 * DAY_MS);
+    return {
+      start: toDateTimeLocalValue(now.toISOString()),
+      end: toDateTimeLocalValue(end.toISOString()),
+      scope: normalizePauseScope(scope)
+    };
+  }
+
+  function openPauseModal({ scope = 'smoke', targetId = null } = {}) {
+    if (!els.pauseModal || !els.pauseForm) return;
+    const normalizedScope = normalizePauseScope(scope);
+    pauseModalContext = { scope: normalizedScope, targetId: normalizedScope === 'habit' ? targetId : null };
+    const range = defaultPauseRange(normalizedScope);
+    els.pauseForm.reset();
+    els.pauseForm.elements.scope.value = pauseModalContext.scope;
+    els.pauseForm.elements.target_id.value = pauseModalContext.targetId || '';
+    els.pauseForm.elements.starts_at.value = range.start;
+    els.pauseForm.elements.ends_at.value = range.end;
+    if (els.pauseScopeLabel) els.pauseScopeLabel.value = pauseScopeLabel(pauseModalContext.scope, pauseModalContext.targetId);
+    if (els.pauseModalTitle) els.pauseModalTitle.textContent = `${pauseScopeLabel(pauseModalContext.scope, pauseModalContext.targetId)} pausieren`;
+    els.pauseModal.classList.remove('hidden');
+    document.body.classList.add('modal-open');
+    setTimeout(() => els.pauseForm.elements.starts_at?.focus(), 30);
+  }
+
+  function closePauseModal() {
+    if (!els.pauseModal) return;
+    els.pauseModal.classList.add('hidden');
+    document.body.classList.remove('modal-open');
+  }
+
+  function savePausePeriod(event) {
+    event.preventDefault();
+    if (!els.pauseForm) return;
+    const data = new FormData(els.pauseForm);
+    const scope = normalizePauseScope(data.get('scope'));
+    const targetId = scope === 'habit' ? String(data.get('target_id') || '').trim() : null;
+    const startsAt = fromDateTimeLocalValue(data.get('starts_at'));
+    const endsAt = data.get('ends_at') ? fromDateTimeLocalValue(data.get('ends_at')) : null;
+    if (!startsAt) {
+      toast('Bitte Startdatum der Pause setzen.');
+      return;
+    }
+    if (scope === 'habit' && !state.habits.some(habit => habit.id === targetId)) {
+      toast('Habit fuer Pause nicht gefunden.');
+      return;
+    }
+    if (endsAt && new Date(endsAt) < new Date(startsAt)) {
+      toast('Ende der Pause muss nach dem Start liegen.');
+      return;
+    }
+    const created = nowIso();
+    state.pausePeriods.push(normalizePausePeriod({
+      id: uid(),
+      scope,
+      target_id: targetId,
+      starts_at: startsAt,
+      ends_at: endsAt,
+      note: String(data.get('note') || '').trim(),
+      is_archived: false,
+      created_at: created,
+      updated_at: created,
+      synced: false
+    }));
+    migrateCigaretteScoring();
+    migrateAlcoholScoring();
+    saveState();
+    closePauseModal();
+    toast('Pause gespeichert');
+    syncWithSupabase({ silent: true, pullFirst: false });
+  }
+
+  async function deletePausePeriod(id) {
+    const pause = state.pausePeriods.find(item => item.id === id);
+    if (!pause) return;
+    if (!confirm('Pause wirklich löschen?')) return;
+    state.pausePeriods = state.pausePeriods.filter(item => item.id !== id);
+    markRemoteDeleted('pause_periods', id);
+    migrateCigaretteScoring();
+    migrateAlcoholScoring();
+    saveState();
+    await deleteRemoteById('pause_periods', id);
+    toast('Pause gelöscht');
+    syncWithSupabase({ silent: true, pullFirst: false });
+  }
+
+  function endPauseNow(id) {
+    const pause = state.pausePeriods.find(item => item.id === id);
+    if (!pause) return;
+    pause.ends_at = nowIso();
+    pause.updated_at = nowIso();
+    pause.synced = false;
+    migrateCigaretteScoring();
+    migrateAlcoholScoring();
+    saveState();
+    toast('Pause beendet');
+    syncWithSupabase({ silent: true, pullFirst: false });
+  }
+
+  function renderPauseStatus(targetEl, scope, targetId = null) {
+    if (!targetEl) return;
+    const current = activePauseNow(scope, targetId);
+    if (!current) {
+      targetEl.innerHTML = `<span class="pause-dot is-ready"></span><strong>Aktiv</strong><small>Keine Pause aktiv</small>`;
+      return;
+    }
+    const until = current.ends_at ? `bis ${formatDateTimeCompact(current.ends_at)}` : 'ohne Enddatum';
+    targetEl.innerHTML = `<span class="pause-dot is-paused"></span><strong>Pausiert</strong><small>${until}</small>`;
+  }
+
+  function formatDateTimeCompact(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'offen';
+    return date.toLocaleString('de-CH', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  }
+
+  function pausePeriodCard(period) {
+    const label = pauseScopeLabel(period.scope, period.target_id);
+    const isActive = isWithinPauseAt(nowIso(), { scope: period.scope, targetId: period.target_id });
+    const endLabel = period.ends_at ? formatDateTimeCompact(period.ends_at) : 'offen';
+    return `<article class="pause-card ${isActive ? 'is-active' : ''}">
+      <div><p class="eyebrow">${escapeHtml(PAUSE_SCOPE_META[period.scope]?.eyebrow || 'Pause')}</p><h4>${escapeHtml(label)}</h4></div>
+      <p>${formatDateTimeCompact(period.starts_at)} – ${endLabel}</p>
+      ${period.note ? `<small>${escapeHtml(period.note)}</small>` : '<small>Kein Kommentar</small>'}
+      <div class="pause-card-actions">
+        ${isActive ? `<button class="mini-btn" type="button" data-action="end-pause-now" data-id="${period.id}">Jetzt beenden</button>` : ''}
+        <button class="mini-btn danger" type="button" data-action="delete-pause" data-id="${period.id}">Löschen</button>
+      </div>
+    </article>`;
+  }
+
+  function renderPauseList(targetEl, periods, emptyText) {
+    if (!targetEl) return;
+    if (!periods.length) {
+      targetEl.innerHTML = `<div class="empty-state compact">${emptyText}</div>`;
+      return;
+    }
+    targetEl.innerHTML = periods.map(pausePeriodCard).join('');
+  }
+
+  function renderPauseUi() {
+    renderPauseStatus(els.smokePauseStatus, 'smoke');
+    renderPauseStatus(els.alcoholPauseStatus, 'alcohol');
+    const consumptionPauses = activePausePeriods({ includeFuture: true }).filter(period => ['smoke', 'alcohol'].includes(period.scope));
+    renderPauseList(els.consumptionPauseList, consumptionPauses, 'Noch keine Konsum-Pausen. Plane eine Pause für Rauchen oder Alkohol – auch rückwirkend.');
+    const habitPauses = activePausePeriods({ scope: 'habit', includeFuture: true });
+    renderPauseList(els.habitPauseList, habitPauses, 'Noch keine Habit-Pausen. Pausiere einzelne Habits direkt auf der Karte.');
+  }
+
+
   function createHabit(event) {
     event.preventDefault();
     const data = new FormData(els.habitForm);
@@ -6721,6 +7014,8 @@ async function deleteAlcoholLog(id) {
   function logHabit(habitId) {
     const habit = state.habits.find(h => h.id === habitId);
     if (!habit) return;
+    const pause = activePauseNow('habit', habit.id);
+    if (pause && !confirm(`${habit.name} ist gerade pausiert. Trotzdem loggen?`)) return;
     let valueNum = null;
     let valueBool = null;
     if (habit.type === 'boolean') {
@@ -6946,7 +7241,7 @@ async function deleteAlcoholLog(id) {
       priority: 'medium'
     });
 
-    const cigsToday = state.cigarettes.filter(cigarette => toDateKey(cigarette.smoked_at) === todayKey).length;
+    const cigsToday = visibleCigarettes().filter(cigarette => toDateKey(cigarette.smoked_at) === todayKey).length;
     if (cigsToday >= 3) add({
       source_key: `smoke-reset:${todayKey}`,
       title: '10-Minuten Craving-Reset einplanen',
@@ -6956,7 +7251,7 @@ async function deleteAlcoholLog(id) {
       priority: 'high'
     });
 
-    const alcoholLast7 = state.alcoholUnits.filter(unit => {
+    const alcoholLast7 = visibleAlcoholUnits().filter(unit => {
       const time = new Date(unit.occurred_at || unit.created_at || 0).getTime();
       return Number.isFinite(time) && Date.now() - time <= 7 * DAY_MS;
     }).length;
@@ -7550,7 +7845,7 @@ async function deleteAlcoholLog(id) {
   }
 
   function migrateCigaretteScoring() {
-    if (!state.cigarettes.length) return false;
+    if (!visibleCigarettes().length) return false;
     const changed = recalculateSmokeIntervals({ markUpdated: true });
     if (changed) saveState({ skipRender: true });
     return changed;
@@ -7574,30 +7869,30 @@ async function deleteAlcoholLog(id) {
   }
 
   function getTotalPoints() {
-    return sum(state.pointsLedger.map(p => Number(p.points || 0)));
+    return sum(visibleLedgerPoints().map(p => Number(p.points || 0)));
   }
 
   function pointsOnDate(key) {
-    return sum(state.pointsLedger.filter(p => toDateKey(p.earned_at) === key).map(p => Number(p.points || 0))) +
-      sum(state.cigarettes.filter(c => toDateKey(c.smoked_at) === key && !state.pointsLedger.some(p => p.source_type === 'cigarette' && p.source_id === c.id)).map(c => Number(c.points || 0)));
+    return sum(visibleLedgerPoints().filter(p => toDateKey(p.earned_at) === key).map(p => Number(p.points || 0))) +
+      sum(visibleCigarettes().filter(c => toDateKey(c.smoked_at) === key && !state.pointsLedger.some(p => p.source_type === 'cigarette' && p.source_id === c.id)).map(c => Number(c.points || 0)));
   }
 
 
   function calendarPointsOnDate(key) {
-    return sum(state.pointsLedger
+    return sum(visibleLedgerPoints()
       .filter(p => p.source_type !== 'habit' && toDateKey(p.earned_at) === key)
       .map(p => Number(p.points || 0))) +
-      sum(state.cigarettes
+      sum(visibleCigarettes()
         .filter(c => toDateKey(c.smoked_at) === key && !state.pointsLedger.some(p => p.source_type === 'cigarette' && p.source_id === c.id))
         .map(c => Number(c.points || 0)));
   }
 
   function getLastCigarette() {
-    return [...state.cigarettes].sort((a, b) => new Date(b.smoked_at) - new Date(a.smoked_at))[0] || null;
+    return [...visibleCigarettes()].sort((a, b) => new Date(b.smoked_at) - new Date(a.smoked_at))[0] || null;
   }
 
   function cigarettesOnDate(key) {
-    return state.cigarettes.filter(c => toDateKey(c.smoked_at) === key);
+    return visibleCigarettes().filter(c => toDateKey(c.smoked_at) === key);
   }
 
   function alcoholForDate(key) {
@@ -7608,7 +7903,7 @@ async function deleteAlcoholLog(id) {
     const meta = habitTargetPeriodMeta(habit);
     const endKey = toDateKey(endDate);
     const keys = meta.days === 1 ? [endKey] : daysBack(meta.days);
-    const entries = state.habitEntries.filter(e => e.habit_id === habit.id && keys.includes(toDateKey(e.occurred_at)));
+    const entries = visibleHabitEntries(habit.id).filter(e => e.habit_id === habit.id && keys.includes(toDateKey(e.occurred_at)));
     if (!entries.length) return { value: habit.type === 'boolean' ? 0 : 0, label: formatHabitValue(habit, 0), entries };
     if (habit.type === 'boolean') {
       const value = new Set(entries.filter(e => e.value_bool).map(e => toDateKey(e.occurred_at))).size;
@@ -7619,12 +7914,12 @@ async function deleteAlcoholLog(id) {
   }
 
   function entriesForHabitOnDate(habitId, key) {
-    return state.habitEntries.filter(e => e.habit_id === habitId && toDateKey(e.occurred_at) === key);
+    return visibleHabitEntries(habitId).filter(e => e.habit_id === habitId && toDateKey(e.occurred_at) === key);
   }
 
   function averagePauseText(days) {
     const keys = daysBack(days);
-    const intervals = state.cigarettes
+    const intervals = visibleCigarettes()
       .filter(c => keys.includes(toDateKey(c.smoked_at)) && Number.isFinite(Number(c.interval_minutes)))
       .map(c => Number(c.interval_minutes));
     if (!intervals.length) return '–';
@@ -7632,7 +7927,7 @@ async function deleteAlcoholLog(id) {
   }
 
   function bestPauseMinutes() {
-    const intervals = state.cigarettes.map(c => Number(c.interval_minutes)).filter(Number.isFinite);
+    const intervals = visibleCigarettes().map(c => Number(c.interval_minutes)).filter(Number.isFinite);
     return intervals.length ? Math.max(...intervals) : null;
   }
 
@@ -7644,7 +7939,7 @@ async function deleteAlcoholLog(id) {
   }
 
   function smokeIntervalSnapshots() {
-    const sorted = [...state.cigarettes].sort((a, b) => new Date(a.smoked_at) - new Date(b.smoked_at));
+    const sorted = [...visibleCigarettes()].sort((a, b) => new Date(a.smoked_at) - new Date(b.smoked_at));
     return sorted.map((c, index) => {
       const prev = sorted[index - 1] || null;
       const interval = prev ? Math.max(0, Math.round((new Date(c.smoked_at) - new Date(prev.smoked_at)) / 60000)) : null;
@@ -7700,6 +7995,12 @@ async function deleteAlcoholLog(id) {
     if (Number.isNaN(date.getTime())) return '';
     const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
     return local.toISOString().slice(0, 16);
+  }
+
+  function fromDateTimeLocalValue(value) {
+    if (!value) return null;
+    const date = new Date(String(value));
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
   }
 
   function localDateTimeFromParts(dateValue, timeValue) {
@@ -8069,7 +8370,7 @@ async function deleteAlcoholLog(id) {
   function hasPendingSyncWork() {
     if (!state) return false;
     if (hasPendingRemoteDeletes()) return true;
-    return ['habits', 'habitEntries', 'cigarettes', 'alcoholLogs', 'alcoholUnits', 'tasks', ...(remoteTaskIdeasSupported ? ['taskIdeas'] : []), 'appointments', 'pointsLedger'].some(key => (state[key] || []).some(entry => entry?.synced === false));
+    return ['habits', 'habitEntries', 'cigarettes', 'alcoholLogs', 'alcoholUnits', 'tasks', ...(remoteTaskIdeasSupported ? ['taskIdeas'] : []), 'appointments', 'pointsLedger', ...(remotePausePeriodsSupported ? ['pausePeriods'] : [])].some(key => (state[key] || []).some(entry => entry?.synced === false));
   }
 
   function renderSyncStatus(mode) {
@@ -8215,6 +8516,25 @@ async function deleteAlcoholLog(id) {
           saveState({ skipRender: true });
         }
 
+        if (remotePausePeriodsSupported) {
+          const pauseRows = rowsPendingSync('pause_periods', state.pausePeriods || [], { forceAll: forcePushAll }).map(pause => ({
+            id: pause.id,
+            scope: normalizePauseScope(pause.scope),
+            target_id: pause.scope === 'habit' ? pause.target_id : null,
+            starts_at: pause.starts_at,
+            ends_at: pause.ends_at || null,
+            note: pause.note || null,
+            is_archived: Boolean(pause.is_archived),
+            created_at: pause.created_at,
+            updated_at: pause.updated_at || nowIso()
+          }));
+          if (await upsertRows('pause_periods', pauseRows)) {
+            wroteRemote = true;
+            markRowsSynced('pausePeriods', pauseRows);
+            saveState({ skipRender: true });
+          }
+        }
+
         const ledgerRows = rowsPendingSync('points_ledger', state.pointsLedger, { forceAll: forcePushAll }).map(p => ({
           id: p.id, source_type: p.source_type, source_id: remoteLedgerSourceId(p), points: Number(p.points || 0), reason: p.reason || null,
           earned_at: p.earned_at, created_at: p.created_at || nowIso()
@@ -8256,6 +8576,8 @@ async function deleteAlcoholLog(id) {
     const scopedRows = rowsForCurrentUser(rows);
     const { error } = await supabaseClient.from(table).upsert(scopedRows, { onConflict: 'id' });
     if (error && OPTIONAL_SYNC_TABLES.has(table) && isMissingRemoteRelationError(error)) {
+      if (table === 'task_ideas') remoteTaskIdeasSupported = false;
+      if (table === 'pause_periods') remotePausePeriodsSupported = false;
       console.warn(`Optionale Sync-Tabelle ${table} fehlt. App läuft lokal weiter.`, error);
       return false;
     }
@@ -8493,6 +8815,11 @@ async function deleteAlcoholLog(id) {
           console.warn('Remote Ideenpool-Tabelle fehlt. Delete wird lokal behandelt.', error);
           return true;
         }
+        if (table === 'pause_periods' && isMissingRemoteRelationError(error)) {
+          remotePausePeriodsSupported = false;
+          console.warn('Remote Pausen-Tabelle fehlt. Delete wird lokal behandelt.', error);
+          return true;
+        }
         console.warn(`Remote-Delete ${table} fehlgeschlagen`, error);
         return false;
       }
@@ -8512,6 +8839,11 @@ async function deleteAlcoholLog(id) {
         if (table === 'task_ideas' && isMissingRemoteRelationError(error)) {
           remoteTaskIdeasSupported = false;
           console.warn('Remote Ideenpool-Tabelle fehlt. Delete wird lokal behandelt.', error);
+          return true;
+        }
+        if (table === 'pause_periods' && isMissingRemoteRelationError(error)) {
+          remotePausePeriodsSupported = false;
+          console.warn('Remote Pausen-Tabelle fehlt. Delete wird lokal behandelt.', error);
           return true;
         }
         console.warn(`Remote-Delete ${table} fehlgeschlagen`, error);
@@ -8546,6 +8878,7 @@ async function deleteAlcoholLog(id) {
     state.deletedRemoteIds = normalizeDeletedRemoteIds(state.deletedRemoteIds);
     for (const table of SYNC_TABLES) {
       if (table === 'task_ideas' && !remoteTaskIdeasSupported) continue;
+      if (table === 'pause_periods' && !remotePausePeriodsSupported) continue;
       const entries = Object.entries(state.deletedRemoteIds[table] || {});
       const ids = entries.filter(([, meta]) => !meta?.synced_at).map(([id]) => id);
       if (!ids.length) continue;
@@ -8656,7 +8989,7 @@ async function deleteAlcoholLog(id) {
 
   async function pullSupabaseData() {
     if (!supabaseClient) return;
-    const [habits, entries, cigarettes, alcohol, alcoholEvents, tasks, taskIdeasRemote, appointments, ledger] = await Promise.all([
+    const [habits, entries, cigarettes, alcohol, alcoholEvents, tasks, taskIdeasRemote, appointments, ledger, pausePeriods] = await Promise.all([
       fetchRemoteTable('habit_definitions'),
       fetchRemoteTable('habit_entries'),
       fetchRemoteTable('cigarette_events'),
@@ -8665,7 +8998,8 @@ async function deleteAlcoholLog(id) {
       fetchRemoteTable('tasks'),
       fetchRemoteTable('task_ideas'),
       fetchRemoteTable('appointments'),
-      fetchRemoteTable('points_ledger')
+      fetchRemoteTable('points_ledger'),
+      fetchRemoteTable('pause_periods')
     ]);
 
     const remoteHabitRows = remoteRows('habit_definitions', habits);
@@ -8677,16 +9011,18 @@ async function deleteAlcoholLog(id) {
     const remoteTaskIdeaRows = remoteRows('task_ideas', taskIdeasRemote);
     const remoteAppointmentRows = remoteRows('appointments', appointments);
     let remoteLedgerRows = remoteRows('points_ledger', ledger);
+    const remotePauseRows = remoteRows('pause_periods', pausePeriods);
 
     applyRemoteCollectionAuthority('cigarette_events', 'cigarettes', remoteCigaretteRows, { ledgerSourceType: 'cigarette' });
     applyRemoteCollectionAuthority('appointments', 'appointments', remoteAppointmentRows);
+    if (remotePausePeriodsSupported) applyRemoteCollectionAuthority('pause_periods', 'pausePeriods', remotePauseRows);
     if (remoteTaskIdeasSupported) applyRemoteCollectionAuthority('task_ideas', 'taskIdeas', remoteTaskIdeaRows);
     const removedAlcoholUnits = applyRemoteCollectionAuthority('alcohol_events', 'alcoholUnits', remoteAlcoholEventRows, {
       ledgerMatcher: (point, removedSet) => isAlcoholPointsEntry(point) && removedSet.has(point.source_id)
     });
     if (removedAlcoholUnits.length) clearAlcoholLogsWithoutUnits(removedAlcoholUnits);
     remoteLedgerRows = filterRemoteLedgerRows(remoteLedgerRows, { cigaretteRows: remoteCigaretteRows, alcoholEventRows: remoteAlcoholEventRows });
-    const remoteHasData = [remoteHabitRows, remoteEntryRows, remoteCigaretteRows, remoteAlcoholRows, remoteAlcoholEventRows, remoteTaskRows, remoteTaskIdeaRows, remoteAppointmentRows, remoteLedgerRows].some(rows => rows.length > 0);
+    const remoteHasData = [remoteHabitRows, remoteEntryRows, remoteCigaretteRows, remoteAlcoholRows, remoteAlcoholEventRows, remoteTaskRows, remoteTaskIdeaRows, remoteAppointmentRows, remoteLedgerRows, remotePauseRows].some(rows => rows.length > 0);
 
     applyRemoteHabitAuthority(remoteHabitRows);
 
@@ -8700,6 +9036,7 @@ async function deleteAlcoholLog(id) {
       state.taskIdeas = remoteTaskIdeaRows.map(mapRemoteTaskIdea).map(normalizeTaskIdea);
       state.appointments = remoteAppointmentRows.map(mapRemoteAppointment).map(normalizeAppointment);
       state.pointsLedger = remoteLedgerRows.map(mapRemoteLedger);
+      state.pausePeriods = remotePauseRows.map(mapRemotePausePeriod).map(normalizePausePeriod);
       dedupeStateCollections(state);
       return;
     }
@@ -8715,17 +9052,20 @@ async function deleteAlcoholLog(id) {
     state.taskIdeas = mergeById(state.taskIdeas || [], remoteTaskIdeaRows, mapRemoteTaskIdea).map(normalizeTaskIdea);
     state.appointments = mergeById(state.appointments, remoteAppointmentRows, mapRemoteAppointment).map(normalizeAppointment);
     state.pointsLedger = mergeById(state.pointsLedger, remoteLedgerRows, mapRemoteLedger);
+    state.pausePeriods = mergeById(state.pausePeriods || [], remotePauseRows, mapRemotePausePeriod).map(normalizePausePeriod);
     dedupeStateCollections(state);
   }
 
   async function fetchRemoteTable(table) {
     if (table === 'task_ideas' && !remoteTaskIdeasSupported) return { data: [], error: null };
+    if (table === 'pause_periods' && !remotePausePeriodsSupported) return { data: [], error: null };
     const userId = currentUserId();
     if (!userId) return { data: [], error: null };
     const result = await supabaseClient.from(table).select('*').eq('user_id', userId);
     if (result.error) {
       if (OPTIONAL_SYNC_TABLES.has(table) && isMissingRemoteRelationError(result.error)) {
         if (table === 'task_ideas') remoteTaskIdeasSupported = false;
+        if (table === 'pause_periods') remotePausePeriodsSupported = false;
         console.warn(`Optionale Sync-Tabelle ${table} fehlt.`, result.error);
         return { data: [], error: null };
       }
@@ -8771,7 +9111,7 @@ async function deleteAlcoholLog(id) {
   function isLocalPristine() {
     const defaultIds = new Set(Object.values(DEFAULT_HABIT_IDS));
     const hasOnlyDefaultHabits = state.habits.every(h => defaultIds.has(h.id) || BUILT_IN_DEFAULT_HABIT_NAMES.has(String(h.name || '').trim().toLowerCase()));
-    return hasOnlyDefaultHabits && !state.habitEntries.length && !state.cigarettes.length && !state.alcoholLogs.length && !state.alcoholUnits.length && !state.tasks.length && !(state.taskIdeas || []).length && !state.appointments.length && !state.morningRoutineLogs?.length && !state.pointsLedger.length;
+    return hasOnlyDefaultHabits && !state.habitEntries.length && !state.cigarettes.length && !state.alcoholLogs.length && !state.alcoholUnits.length && !state.tasks.length && !(state.taskIdeas || []).length && !state.appointments.length && !state.morningRoutineLogs?.length && !state.pointsLedger.length && !(state.pausePeriods || []).length;
   }
 
   function subscribeToRemoteChanges() {
@@ -8834,6 +9174,7 @@ async function deleteAlcoholLog(id) {
   const mapRemoteTaskIdea = idea => normalizeTaskIdea({ id: idea.id, title: idea.title, description: idea.description, category: idea.category, story_points: idea.story_points, priority: idea.priority, idea_status: idea.idea_status, source_key: idea.source_key, generated_task_id: idea.generated_task_id, accepted_at: idea.accepted_at, dismissed_at: idea.dismissed_at, created_at: idea.created_at, updated_at: idea.updated_at, synced: true });
   const mapRemoteAppointment = a => normalizeAppointment({ id: a.id, title: a.title, description: a.description, location: a.location, appointment_type: a.appointment_type, starts_at: a.starts_at, ends_at: a.ends_at, created_at: a.created_at, updated_at: a.updated_at, synced: true });
   const mapRemoteLedger = p => normalizeMorningRoutineLedgerPoint({ id: p.id, source_type: p.source_type, source_id: p.source_id, points: p.points, reason: p.reason, earned_at: p.earned_at, created_at: p.created_at, updated_at: p.created_at, synced: true });
+  const mapRemotePausePeriod = p => normalizePausePeriod({ id: p.id, scope: p.scope, target_id: p.target_id, starts_at: p.starts_at, ends_at: p.ends_at, note: p.note, is_archived: p.is_archived, created_at: p.created_at, updated_at: p.updated_at, synced: true });
 
   function exportJson() {
     const blob = new Blob([JSON.stringify({ state, settings: { email: settings.email || '' } }, null, 2)], { type: 'application/json' });

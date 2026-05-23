@@ -72,6 +72,20 @@ create table if not exists public.alcohol_events (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.pause_periods (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  scope text not null check (scope in ('habit','smoke','alcohol')),
+  target_id uuid,
+  starts_at timestamptz not null default now(),
+  ends_at timestamptz,
+  note text,
+  is_archived boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint pause_periods_time_check check (ends_at is null or ends_at >= starts_at)
+);
+
 create table if not exists public.tasks (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
@@ -172,6 +186,20 @@ alter table public.task_ideas add column if not exists user_id uuid references a
 alter table public.activity_ideas add column if not exists user_id uuid references auth.users(id) on delete cascade;
 alter table public.appointments add column if not exists user_id uuid references auth.users(id) on delete cascade;
 alter table public.points_ledger add column if not exists user_id uuid references auth.users(id) on delete cascade;
+alter table public.pause_periods add column if not exists user_id uuid references auth.users(id) on delete cascade;
+alter table public.pause_periods alter column user_id set default auth.uid();
+alter table public.pause_periods add column if not exists scope text not null default 'smoke';
+alter table public.pause_periods add column if not exists target_id uuid;
+alter table public.pause_periods add column if not exists starts_at timestamptz not null default now();
+alter table public.pause_periods add column if not exists ends_at timestamptz;
+alter table public.pause_periods add column if not exists note text;
+alter table public.pause_periods add column if not exists is_archived boolean not null default false;
+alter table public.pause_periods add column if not exists created_at timestamptz not null default now();
+alter table public.pause_periods add column if not exists updated_at timestamptz not null default now();
+alter table public.pause_periods drop constraint if exists pause_periods_scope_check;
+alter table public.pause_periods add constraint pause_periods_scope_check check (scope in ('habit','smoke','alcohol'));
+alter table public.pause_periods drop constraint if exists pause_periods_time_check;
+alter table public.pause_periods add constraint pause_periods_time_check check (ends_at is null or ends_at >= starts_at);
 
 alter table public.habit_definitions alter column user_id set default auth.uid();
 alter table public.habit_entries alter column user_id set default auth.uid();
@@ -183,6 +211,7 @@ alter table public.task_ideas alter column user_id set default auth.uid();
 alter table public.activity_ideas alter column user_id set default auth.uid();
 alter table public.appointments alter column user_id set default auth.uid();
 alter table public.points_ledger alter column user_id set default auth.uid();
+alter table public.pause_periods alter column user_id set default auth.uid();
 
 alter table public.appointments add column if not exists description text;
 alter table public.appointments add column if not exists location text;
@@ -286,6 +315,7 @@ alter table public.activity_ideas add constraint activity_ideas_priority_check c
 -- update public.activity_ideas set user_id = '<YOUR_AUTH_USER_ID>' where user_id is null;
 -- update public.appointments set user_id = '<YOUR_AUTH_USER_ID>' where user_id is null;
 -- update public.points_ledger set user_id = '<YOUR_AUTH_USER_ID>' where user_id is null;
+-- update public.pause_periods set user_id = '<YOUR_AUTH_USER_ID>' where user_id is null;
 
 create index if not exists idx_habit_definitions_user on public.habit_definitions(user_id, updated_at desc);
 create index if not exists idx_habit_entries_user_time on public.habit_entries(user_id, occurred_at desc);
@@ -301,6 +331,7 @@ create index if not exists idx_activity_ideas_user_category on public.activity_i
 create index if not exists idx_appointments_user_starts_at on public.appointments(user_id, starts_at desc);
 create index if not exists idx_appointments_type_starts_at on public.appointments(user_id, appointment_type, starts_at desc);
 create index if not exists idx_points_ledger_user_time on public.points_ledger(user_id, earned_at desc);
+create index if not exists idx_pause_periods_user_scope on public.pause_periods(user_id, scope, starts_at desc);
 
 drop trigger if exists set_habit_definitions_updated_at on public.habit_definitions;
 create trigger set_habit_definitions_updated_at before update on public.habit_definitions for each row execute function public.set_updated_at();
@@ -329,6 +360,9 @@ create trigger set_activity_ideas_updated_at before update on public.activity_id
 drop trigger if exists set_appointments_updated_at on public.appointments;
 create trigger set_appointments_updated_at before update on public.appointments for each row execute function public.set_updated_at();
 
+drop trigger if exists set_pause_periods_updated_at on public.pause_periods;
+create trigger set_pause_periods_updated_at before update on public.pause_periods for each row execute function public.set_updated_at();
+
 -- Remove all old public/unrestricted policies and create strict owner policies.
 do $$
 declare
@@ -336,7 +370,7 @@ declare
   pol record;
 begin
   foreach tbl in array array[
-    'habit_definitions','habit_entries','cigarette_events','alcohol_logs','alcohol_events','tasks','task_ideas','activity_ideas','appointments','points_ledger',
+    'habit_definitions','habit_entries','cigarette_events','alcohol_logs','alcohol_events','tasks','task_ideas','activity_ideas','appointments','points_ledger','pause_periods',
     'participants','catches','duels','duel_events','duel_participants','duel_tracks','tournaments'
   ] loop
     if to_regclass(format('public.%I', tbl)) is null then
@@ -412,7 +446,7 @@ grant select, insert, update, delete on all tables in schema public to authentic
 do $$
 declare tbl text;
 begin
-  foreach tbl in array array['habit_definitions','habit_entries','cigarette_events','alcohol_logs','alcohol_events','tasks','task_ideas','activity_ideas','appointments','points_ledger'] loop
+  foreach tbl in array array['habit_definitions','habit_entries','cigarette_events','alcohol_logs','alcohol_events','tasks','task_ideas','activity_ideas','appointments','points_ledger','pause_periods'] loop
     begin
       execute format('alter publication supabase_realtime add table public.%I', tbl);
     exception when others then

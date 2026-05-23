@@ -199,6 +199,10 @@
                 <strong id="smokePauseLive">–</strong>
                 <span id="smokePauseHint">Noch kein Eintrag vorhanden</span>
               </div>
+              <div class="pause-status-row">
+                <div id="smokePauseStatus" class="pause-status-pill" aria-live="polite"></div>
+                <button class="mini-btn" type="button" data-action="open-pause-modal" data-scope="smoke">Rauchen pausieren</button>
+              </div>
               <div id="smokeMobileInsight" class="consumption-command-insight" aria-live="polite"></div>
               <div id="smokeMobileKpis" class="mobile-consumption-kpis" aria-label="Rauch-Kennzahlen"></div>
               <div class="craving-coach-card" aria-live="polite">
@@ -263,6 +267,10 @@
                 <strong id="alcoholTodayUnits">0</strong>
                 <span id="alcoholTodayHint">Noch keine Einheit erfasst</span>
               </div>
+              <div class="pause-status-row">
+                <div id="alcoholPauseStatus" class="pause-status-pill" aria-live="polite"></div>
+                <button class="mini-btn" type="button" data-action="open-pause-modal" data-scope="alcohol">Alkohol pausieren</button>
+              </div>
               <div id="alcoholMobileInsight" class="consumption-command-insight" aria-live="polite"></div>
               <div id="alcoholMobileKpis" class="mobile-consumption-kpis" aria-label="Alkohol-Kennzahlen"></div>
               <div class="alcohol-unit-grid" aria-label="Alkohol-Einheit speichern">
@@ -308,6 +316,11 @@
           </div>
         </div>
 
+        <section class="panel glass pause-overview-panel">
+          <div class="panel-head"><div><p class="eyebrow">Pausen</p><h3>Konsum bewusst aussetzen</h3></div><span class="subtle">auch rueckwirkend</span></div>
+          <div id="consumptionPauseList" class="pause-card-list"></div>
+        </section>
+
         <details class="mobile-consumption-section consumption-rules-section">
           <summary><span>Regelwerk</span><small>Punkte-Logik</small></summary>
           <section class="panel glass">
@@ -346,6 +359,26 @@
           </section>
         </details>
       </section>
+
+      <div id="pauseModal" class="coach-modal pause-modal hidden" role="dialog" aria-modal="true" aria-labelledby="pauseModalTitle">
+        <section class="coach-modal-card pause-modal-card">
+          <button id="pauseModalCloseBtn" class="icon-btn coach-close-btn" type="button" aria-label="Pause-Dialog schliessen">×</button>
+          <div class="pause-modal-head">
+            <p class="eyebrow">Pause planen</p>
+            <h2 id="pauseModalTitle">Pause speichern</h2>
+            <p>Setze Habits, Rauchen oder Alkohol fuer einen Zeitraum aus. Das funktioniert auch rueckwirkend und laesst bestehende Logs unangetastet.</p>
+          </div>
+          <form id="pauseForm" class="form-grid pause-form">
+            <input type="hidden" name="scope" />
+            <input type="hidden" name="target_id" />
+            <label><span>Bereich</span><input id="pauseScopeLabel" type="text" readonly /></label>
+            <label><span>Von</span><input name="starts_at" type="datetime-local" required /></label>
+            <label><span>Bis</span><input name="ends_at" type="datetime-local" /></label>
+            <label class="full"><span>Notiz</span><textarea name="note" rows="3" placeholder="optional: Ferien, Krankheit, bewusste Pause..."></textarea></label>
+            <div class="form-actions full"><button class="pill primary" type="submit">Pause speichern</button><button class="pill secondary" type="button" data-action="close-pause-modal">Abbrechen</button></div>
+          </form>
+        </section>
+      </div>
 
       <div id="historyModal" class="coach-modal history-modal hidden" role="dialog" aria-modal="true" aria-labelledby="historyModalTitle">
         <section class="coach-modal-card history-modal-card">
@@ -421,6 +454,10 @@
           <div><p class="eyebrow">Flexible Habits</p><h3>Gewohnheiten, Meditation & Quick Logging</h3></div>
           <button id="habitFormToggleBtn" class="bubble-add-btn" type="button" aria-label="Habit-Formular öffnen"><span data-icon="plus"></span></button>
         </div>
+        <section class="panel glass pause-overview-panel habit-pause-overview">
+          <div class="panel-head"><div><p class="eyebrow">Pausen</p><h3>Habits flexibel aussetzen</h3></div><span class="subtle">pro Habit, auch rueckwirkend</span></div>
+          <div id="habitPauseList" class="pause-card-list"></div>
+        </section>
         <section id="habitFormPanel" class="panel glass drawer-form-panel hidden">
           <div class="panel-head"><div><p class="eyebrow">Flexible Habits</p><h3 id="habitFormTitle">Gewohnheit anlegen</h3></div><button id="habitFormCloseBtn" class="icon-btn" type="button" aria-label="Habit-Formular schliessen">×</button></div>
           <form id="habitForm" class="form-grid">
