@@ -3831,7 +3831,7 @@
         start,
         end,
         label: `KW ${info.week}`,
-        rangeLabel: formatWeekRange(start, end)
+        rangeLabel: formatCompactWeekRange(start, end)
       });
     }
     return weeks;
@@ -3858,7 +3858,7 @@
     return { year, week, key: `${year}-W${String(week).padStart(2, '0')}` };
   }
 
-  function formatWeekRange(start, end) {
+  function formatCompactWeekRange(start, end) {
     const format = date => date.toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' });
     return `${format(start)}–${format(end)}`;
   }
@@ -5016,6 +5016,15 @@
     return `${first.toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' })} – ${last.toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
   }
 
+  function weekLabelForTaskPlanning(days = taskPlanningWeekDays()) {
+    const first = days[0];
+    if (!first) return 'Diese Woche';
+    const currentStart = startOfWeekDate(new Date());
+    if (toDateKey(first) === toDateKey(currentStart)) return 'Diese Woche';
+    const info = isoWeekInfo(first);
+    return info.week ? `KW ${String(info.week).padStart(2, '0')} · ${info.year}` : formatWeekRange(days);
+  }
+
   function appointmentDurationHours(appointment) {
     const start = new Date(appointment?.starts_at || 0).getTime();
     const end = new Date(appointment?.ends_at || appointment?.starts_at || 0).getTime();
@@ -5140,7 +5149,13 @@
     const score = active.length ? Math.round((plannedThisWeek.length / active.length) * 100) : 100;
     const suggestions = buildWeeklyPlanningSuggestions();
 
-    if (els.taskWeeklyRange) els.taskWeeklyRange.textContent = formatWeekRange(days);
+    const weekLabel = weekLabelForTaskPlanning(days);
+    if (els.taskWeeklyRange) els.taskWeeklyRange.textContent = `${weekLabel} · ${formatWeekRange(days)}`;
+    if (els.taskWeeklyTodayBtn) {
+      els.taskWeeklyTodayBtn.textContent = weekLabel;
+      els.taskWeeklyTodayBtn.setAttribute('aria-label', weekLabel === 'Diese Woche' ? 'Aktuelle Woche anzeigen' : 'Zur aktuellen Woche springen');
+      els.taskWeeklyTodayBtn.setAttribute('title', weekLabel === 'Diese Woche' ? 'Aktuelle Woche' : 'Zur aktuellen Woche springen');
+    }
     if (els.taskWeeklyOverview) {
       const focus = overdue.length ? `${overdue.length} ueberfaellige Karte(n) zuerst beruhigen` : unplanned.length ? `${unplanned.length} Aufgabe(n) brauchen noch ein Datum` : 'Woche ist sauber geplant';
       els.taskWeeklyOverview.innerHTML = `
