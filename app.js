@@ -1248,29 +1248,28 @@
     });
   }
 
-  function pauseOverlapMinutesBetween(startValue, endValue, { scope, targetId = null } = {}) {
-    const start = new Date(startValue).getTime();
-    const end = new Date(endValue).getTime();
-    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0;
-    const normalizedScope = normalizePauseScope(scope);
-    return activePausePeriods({ scope: normalizedScope, targetId, includeFuture: true }).reduce((total, period) => {
-      if (period.scope === 'habit' && targetId && period.target_id !== targetId) return total;
+  function pausePeriodsOverlappingRange(startValue, endValue, { scope, targetId = null } = {}) {
+    const startMs = new Date(startValue || 0).getTime();
+    const endMs = new Date(endValue || 0).getTime();
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return [];
+    return activePausePeriods({ scope, targetId, includeFuture: true }).filter(period => {
+      if (period.scope === 'habit' && targetId && period.target_id !== targetId) return false;
       const pauseStart = new Date(period.starts_at).getTime();
-      const pauseEnd = period.ends_at ? new Date(period.ends_at).getTime() : end;
-      if (!Number.isFinite(pauseStart) || !Number.isFinite(pauseEnd)) return total;
-      const overlapStart = Math.max(start, pauseStart);
-      const overlapEnd = Math.min(end, pauseEnd);
-      return overlapEnd > overlapStart ? total + ((overlapEnd - overlapStart) / 60000) : total;
-    }, 0);
+      const pauseEnd = period.ends_at ? new Date(period.ends_at).getTime() : Infinity;
+      return Number.isFinite(pauseStart) && pauseStart < endMs && pauseEnd > startMs;
+    });
   }
 
-  function activeMinutesBetweenExcludingPauses(startValue, endValue, options = {}) {
-    const start = new Date(startValue).getTime();
-    const end = new Date(endValue).getTime();
-    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0;
-    const rawMinutes = (end - start) / 60000;
-    const pausedMinutes = pauseOverlapMinutesBetween(startValue, endValue, options);
-    return Math.max(0, Math.round(rawMinutes - pausedMinutes));
+  function intervalCrossesPause(startValue, endValue, options = {}) {
+    return pausePeriodsOverlappingRange(startValue, endValue, options).length > 0;
+  }
+
+  function minutesBetweenIfNotPaused(startValue, endValue, options = {}) {
+    const startMs = new Date(startValue || 0).getTime();
+    const endMs = new Date(endValue || 0).getTime();
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return null;
+    if (intervalCrossesPause(startValue, endValue, options)) return null;
+    return Math.max(0, Math.round((endMs - startMs) / 60000));
   }
 
   function activePauseNow(scope, targetId = null) {
@@ -3579,8 +3578,9 @@
       const prev = sorted[index - 1] || null;
       const occurredAt = unit.occurred_at || unit.created_at;
       const previousAt = prev?.occurred_at || prev?.created_at;
-      const interval = prev ? Math.max(0, Math.round((new Date(occurredAt) - new Date(previousAt)) / 60000)) : null;
-      return { unit, previous: prev, interval_minutes: interval };
+      const crossesPause = Boolean(prev && intervalCrossesPause(previousAt, occurredAt, { scope: 'alcohol' }));
+      const interval = prev && !crossesPause ? minutesBetweenIfNotPaused(previousAt, occurredAt, { scope: 'alcohol' }) : null;
+      return { unit, previous: prev, interval_minutes: interval, interval_is_paused_bridge: crossesPause };
     });
   }
 
@@ -3876,11 +3876,14 @@
   function renderSmokeIntervalVisual(days = 28) {
     if (!els.smokeIntervalVisual) return;
     const keys = new Set(daysBack(days));
-    const snapshots = smokeIntervalSnapshots().filter(item => keys.has(toDateKey(item.cigarette.smoked_at)) && Number.isFinite(Number(item.interval_minutes)));
+    const allSnapshots = smokeIntervalSnapshots().filter(item => keys.has(toDateKey(item.cigarette.smoked_at)));
+    const skippedPauseBridges = allSnapshots.filter(item => item.interval_is_paused_bridge).length;
+    const snapshots = allSnapshots.filter(item => Number.isFinite(Number(item.interval_minutes)));
 
     if (!snapshots.length) {
-      if (els.smokeIntervalQuality) els.smokeIntervalQuality.textContent = 'lernt noch';
-      els.smokeIntervalVisual.innerHTML = '<div class="empty-state">Für die Intervall-Analyse braucht es mindestens zwei Einträge im Verlauf. Danach zeigt die App Median, Verteilung und den Verlauf deiner Pausen.</div>';
+      if (els.smokeIntervalQuality) els.smokeIntervalQuality.textContent = skippedPauseBridges ? 'pausiert' : 'lernt noch';
+      const pauseHint = skippedPauseBridges ? ` ${skippedPauseBridges} Pause-Brücke${skippedPauseBridges === 1 ? '' : 'n'} wurden bewusst ausgeklammert.` : '';
+      els.smokeIntervalVisual.innerHTML = `<div class="empty-state">Für die Intervall-Analyse braucht es mindestens zwei Einträge ausserhalb pausierter Zeiträume.${pauseHint}</div>`;
       return;
     }
 
@@ -3941,7 +3944,7 @@
       q1,
       q3: p75,
       qualityLabel,
-      subtitle: `Analysefenster ${days} Tage · ${durations.length} Pause${durations.length === 1 ? '' : 'n'} · Pausen ausgeklammert`
+      subtitle: `Analysefenster ${days} Tage · ${durations.length} Pause${durations.length === 1 ? '' : 'n'}${skippedPauseBridges ? ` · ${skippedPauseBridges} Pause-Brücke${skippedPauseBridges === 1 ? '' : 'n'} ausgeklammert` : ''}`
     });
 
     const skyline = recent.map(item => {
@@ -4163,7 +4166,7 @@
           </svg>
         </div>
         <div class="interval-violin-caption">
-          <p><b>Leserichtung:</b> links = längere Pausen · rechts = dichtere Rauchmomente. Pausierte Zeitraeume werden aus den Intervallen herausgerechnet.</p>
+          <p><b>Leserichtung:</b> links = längere Pausen · rechts = dichtere Rauchmomente.</p>
           <div class="interval-violin-legend">
             <span><i class="is-fill"></i>Dichteform</span>
             <span><i class="is-iqr"></i>mittlere 50%</span>
@@ -6616,7 +6619,7 @@
     const sorted = [...visibleCigarettes()].sort((a, b) => new Date(a.smoked_at) - new Date(b.smoked_at));
     sorted.forEach((c, index) => {
       const prev = sorted[index - 1] || null;
-      const interval = prev ? activeMinutesBetweenExcludingPauses(prev.smoked_at, c.smoked_at, { scope: 'smoke' }) : null;
+      const interval = prev ? Math.max(0, Math.round((new Date(c.smoked_at) - new Date(prev.smoked_at)) / 60000)) : null;
       const scoringContext = smokingScoringContext(prev, c);
       const points = cigarettePoints(interval, scoringContext);
       const hasChanged = c.interval_minutes !== interval || Number(c.points || 0) !== points;
@@ -7944,15 +7947,15 @@ async function deleteAlcoholLog(id) {
 
   function averagePauseText(days) {
     const keys = daysBack(days);
-    const intervals = smokeIntervalSnapshots()
-      .filter(item => keys.includes(toDateKey(item.cigarette.smoked_at)) && Number.isFinite(Number(item.interval_minutes)))
-      .map(item => Number(item.interval_minutes));
+    const intervals = visibleCigarettes()
+      .filter(c => keys.includes(toDateKey(c.smoked_at)) && Number.isFinite(Number(c.interval_minutes)))
+      .map(c => Number(c.interval_minutes));
     if (!intervals.length) return '–';
     return formatDuration(Math.round(sum(intervals) / intervals.length));
   }
 
   function bestPauseMinutes() {
-    const intervals = smokeIntervalSnapshots().map(item => Number(item.interval_minutes)).filter(Number.isFinite);
+    const intervals = visibleCigarettes().map(c => Number(c.interval_minutes)).filter(Number.isFinite);
     return intervals.length ? Math.max(...intervals) : null;
   }
 
@@ -7967,8 +7970,9 @@ async function deleteAlcoholLog(id) {
     const sorted = [...visibleCigarettes()].sort((a, b) => new Date(a.smoked_at) - new Date(b.smoked_at));
     return sorted.map((c, index) => {
       const prev = sorted[index - 1] || null;
-      const interval = prev ? activeMinutesBetweenExcludingPauses(prev.smoked_at, c.smoked_at, { scope: 'smoke' }) : null;
-      return { cigarette: c, previous: prev, interval_minutes: interval, ...smokingScoringContext(prev, c) };
+      const crossesPause = Boolean(prev && intervalCrossesPause(prev.smoked_at, c.smoked_at, { scope: 'smoke' }));
+      const interval = prev && !crossesPause ? minutesBetweenIfNotPaused(prev.smoked_at, c.smoked_at, { scope: 'smoke' }) : null;
+      return { cigarette: c, previous: prev, interval_minutes: interval, interval_is_paused_bridge: crossesPause, ...smokingScoringContext(prev, c) };
     });
   }
 
