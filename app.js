@@ -539,6 +539,7 @@
   let activeConsumptionMode = localStorage.getItem(CONSUMPTION_MODE_KEY) === 'alcohol' ? 'alcohol' : 'smoke';
   let leisureSeedCatalog = [];
   let leisureCatalog = [];
+  let leisureCatalogSyncInFlight = false;
   let leisureCatalogError = null;
   let leisureCatalogLoaded = false;
   let leisureFilters = loadLeisureFilters();
@@ -559,7 +560,7 @@
     bindEvents();
     showScreen(document.querySelector('.nav-btn.active')?.dataset.target || 'dashboard', { refresh: false });
     renderStaticIcons();
-    loadLeisureCatalog();
+    loadLeisureCatalog({ allowJsonFallback: !isSupabaseConfigured() });
     migrateCigaretteScoring();
     migrateAlcoholScoring();
     await initSupabase();
@@ -1573,38 +1574,19 @@
     localStorage.setItem(LEISURE_FILTER_KEY, JSON.stringify(leisureFilters));
   }
 
-  async function loadLeisureCatalog() {
+  async function loadLeisureCatalog({ allowJsonFallback = false } = {}) {
     try {
-      const response = await fetch(ACTIVITY_CATALOG_URL, { cache: 'force-cache' });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const payload = await response.json();
-      const archivedIds = archivedLeisureActivityIds();
-      leisureSeedCatalog = Array.isArray(payload?.items)
-        ? payload.items.map(item => normalizeLeisureActivity({ ...item, is_archived: archivedIds.has(String(item?.id || '').trim()) })).filter(item => item.id && item.title)
-        : [];
-      if (leisureSeedCatalog.length) {
-        const byId = new Map((state.activityIdeas || []).map(item => [String(item.id || '').trim(), normalizeLeisureActivity(item)]).filter(([id]) => id));
-        let changed = false;
-        leisureSeedCatalog.forEach(seed => {
-          const local = byId.get(seed.id);
-          if (local) {
-            if (archivedIds.has(seed.id) && !local.is_archived) {
-              byId.set(seed.id, { ...local, is_archived: true, synced: false, updated_at: nowIso() });
-              changed = true;
-            }
-            return;
-          }
-          byId.set(seed.id, { ...seed, synced: true });
-          changed = true;
-        });
-        if (changed || !state.activityIdeas?.length) {
-          state.activityIdeas = Array.from(byId.values());
+      refreshLeisureCatalogFromState();
+      leisureCatalogError = null;
+      if (allowJsonFallback && !state.activityIdeas?.length) {
+        const seedRows = await fetchLeisureSeedCatalog({ applyLocalArchives: true });
+        if (seedRows.length) {
+          state.activityIdeas = seedRows.map(item => ({ ...item, synced: true }));
           dedupeActivityIdeas(state);
+          refreshLeisureCatalogFromState();
           saveState({ skipRender: true });
         }
       }
-      refreshLeisureCatalogFromState();
-      leisureCatalogError = null;
     } catch (error) {
       refreshLeisureCatalogFromState();
       leisureCatalogError = state.activityIdeas?.length ? null : error;
@@ -1613,6 +1595,25 @@
       leisureCatalogLoaded = true;
       renderLeisureFinder();
     }
+  }
+
+  async function fetchLeisureSeedCatalog({ applyLocalArchives = true } = {}) {
+    if (leisureSeedCatalog.length) return leisureSeedCatalog;
+    const response = await fetch(ACTIVITY_CATALOG_URL, { cache: 'force-cache' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const payload = await response.json();
+    const archivedIds = applyLocalArchives ? archivedLeisureActivityIds() : new Set();
+    leisureSeedCatalog = Array.isArray(payload?.items)
+      ? payload.items
+          .map(item => normalizeLeisureActivity({
+            ...item,
+            source: item.source || 'seed',
+            is_archived: archivedIds.has(String(item?.id || '').trim()),
+            synced: false
+          }))
+          .filter(item => item.id && item.title)
+      : [];
+    return leisureSeedCatalog;
   }
 
   function refreshLeisureCatalogFromState() {
@@ -5690,30 +5691,84 @@
     }
   }
 
+
+  async function buildInitialLeisureActivitiesForRemote(localRows = []) {
+    const now = nowIso();
+    const seedRows = await fetchLeisureSeedCatalog({ applyLocalArchives: true });
+    const archivedIds = archivedLeisureActivityIds();
+    const localMap = new Map(
+      localRows.map(normalizeLeisureActivity).filter(item => item.id && item.title).map(item => [item.id, item])
+    );
+    const result = new Map();
+
+    seedRows.forEach(seed => {
+      const local = localMap.get(seed.id);
+      const archived = archivedIds.has(seed.id) || Boolean(local?.is_archived) || Boolean(seed.is_archived);
+      result.set(seed.id, normalizeLeisureActivity({
+        ...seed,
+        ...(local || {}),
+        source: local?.source || seed.source || 'seed',
+        is_archived: archived,
+        updated_at: local?.updated_at || seed.updated_at || now,
+        synced: false
+      }));
+    });
+
+    localMap.forEach(local => {
+      if (!result.has(local.id)) {
+        result.set(local.id, normalizeLeisureActivity({ ...local, synced: false }));
+      }
+    });
+
+    archivedIds.forEach(id => {
+      const item = result.get(id);
+      if (item && !item.is_archived) {
+        result.set(id, normalizeLeisureActivity({ ...item, is_archived: true, updated_at: now, synced: false }));
+      }
+    });
+
+    return Array.from(result.values());
+  }
+
   async function syncLeisureCatalogWithSupabase({ silent = true } = {}) {
-    if (!supabaseClient || !currentUserId() || !remoteActivityIdeasSupported) return;
+    if (!supabaseClient || !currentUserId() || !remoteActivityIdeasSupported || leisureCatalogSyncInFlight) return;
+    leisureCatalogSyncInFlight = true;
     try {
       const userId = currentUserId();
-      const remoteRows = await fetchRemoteLeisureActivities();
+      let remoteRows = await fetchRemoteLeisureActivities();
       if (!remoteRows) return;
-      const localRows = Array.isArray(state.activityIdeas) ? state.activityIdeas.map(normalizeLeisureActivity) : [];
-      const unsyncedLocal = localRows.filter(item => item.synced === false);
-      if (!remoteRows.length && localRows.length && !hasActivitySeededForUser(userId)) {
-        const seeded = await upsertLeisureActivitiesRemote(localRows);
-        if (seeded) markActivitySeededForUser(userId);
-      } else {
-        if (remoteRows.length) state.activityIdeas = mergeActivityIdeas(localRows, remoteRows);
-        const archivedIds = archivedLeisureActivityIds();
-        const pendingArchived = (state.activityIdeas || []).filter(item => archivedIds.has(item.id) && item.synced === false);
-        const rowsToPush = Array.from(new Map([...unsyncedLocal, ...pendingArchived].map(item => [item.id, item])).values());
-        if (rowsToPush.length) await upsertLeisureActivitiesRemote(rowsToPush);
-        saveState({ skipRender: true });
+      let localRows = Array.isArray(state.activityIdeas) ? state.activityIdeas.map(normalizeLeisureActivity) : [];
+      let unsyncedLocal = localRows.filter(item => item.synced === false);
+
+      if (!remoteRows.length && !hasActivitySeededForUser(userId)) {
+        const seedRows = await buildInitialLeisureActivitiesForRemote(localRows);
+        if (seedRows.length) {
+          const seeded = await upsertLeisureActivitiesRemote(seedRows);
+          if (seeded) {
+            markActivitySeededForUser(userId);
+            remoteRows = await fetchRemoteLeisureActivities() || [];
+          }
+        }
+      } else if (unsyncedLocal.length) {
+        await upsertLeisureActivitiesRemote(unsyncedLocal);
+        remoteRows = await fetchRemoteLeisureActivities() || remoteRows;
       }
+
+      if (remoteRows.length) {
+        state.activityIdeas = remoteRows.map(mapRemoteLeisureActivity);
+      } else if (hasActivitySeededForUser(userId)) {
+        state.activityIdeas = [];
+      }
+
+      dedupeActivityIdeas(state);
       refreshLeisureCatalogFromState();
+      saveState({ skipRender: true });
       renderLeisureFinder();
     } catch (error) {
       console.warn('Freizeit-Katalog-Sync fehlgeschlagen.', error);
       if (!silent) toast('Freizeit-Katalog-Sync fehlgeschlagen.');
+    } finally {
+      leisureCatalogSyncInFlight = false;
     }
   }
 
@@ -5783,13 +5838,13 @@
     if (!els.activitySuggestionList || !els.activityFinderMeta) return;
     updateLeisureFilterForm();
     if (!leisureCatalogLoaded) {
-      els.activityFinderMeta.textContent = 'Lade 1000 kuratierte Vorschläge...';
+      els.activityFinderMeta.textContent = 'Lade Freizeit-Vorschläge...';
       els.activitySuggestionList.innerHTML = '<div class="empty-state">Freizeit-Finder wird vorbereitet.</div>';
       return;
     }
     if (leisureCatalogError) {
       els.activityFinderMeta.textContent = 'Katalog konnte nicht geladen werden.';
-      els.activitySuggestionList.innerHTML = '<div class="empty-state">Der Freizeit-Katalog ist gerade nicht verfügbar. Nach einem Hard Refresh sollte die JSON-Datei neu geladen werden.</div>';
+      els.activitySuggestionList.innerHTML = '<div class="empty-state">Der Freizeit-Katalog ist gerade nicht verfügbar. Prüfe Supabase oder versuche es nach einem erneuten Laden nochmals.</div>';
       return;
     }
     const matches = filteredLeisureActivities();
