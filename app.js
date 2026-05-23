@@ -2,6 +2,8 @@
   'use strict';
 
   const STORAGE_KEY = 'habitflow-state-v1';
+  const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
+  const APP_DATA_SCHEMA_VERSION = 'v62-sync-cache-repair';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -488,6 +490,7 @@
   }
 
   var state = loadState();
+  runLocalCacheRepair();
   let settings = loadSettings();
   let supabaseClient = null;
   let authSession = null;
@@ -1090,6 +1093,21 @@
     };
   }
 
+  function runLocalCacheRepair() {
+    const previousVersion = localStorage.getItem(APP_DATA_SCHEMA_KEY);
+    if (previousVersion === APP_DATA_SCHEMA_VERSION) return;
+    state.deletedRemoteIds = normalizeDeletedRemoteIds(state.deletedRemoteIds);
+    // Synced delete markers are only a local cache aid. If a browser kept a stale marker,
+    // it can hide valid Supabase rows after a hard refresh. Pending deletes stay intact.
+    Object.keys(state.deletedRemoteIds || {}).forEach(table => {
+      Object.entries(state.deletedRemoteIds[table] || {}).forEach(([id, meta]) => {
+        if (meta?.synced_at) delete state.deletedRemoteIds[table][id];
+      });
+    });
+    localStorage.setItem(APP_DATA_SCHEMA_KEY, APP_DATA_SCHEMA_VERSION);
+    saveState({ skipRender: true });
+  }
+
   function loadState() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -1539,6 +1557,16 @@
 
   function isRemoteDeleted(table, id) {
     return Boolean(id && state.deletedRemoteIds?.[table]?.[id]);
+  }
+
+  function isRemoteDeletePending(table, id) {
+    const meta = id ? state.deletedRemoteIds?.[table]?.[id] : null;
+    return Boolean(meta && !meta.synced_at);
+  }
+
+  function clearRemoteDeleteMarker(table, id) {
+    if (!table || !id || !state.deletedRemoteIds?.[table]?.[id]) return;
+    delete state.deletedRemoteIds[table][id];
   }
 
   function hasPendingRemoteDeletes() {
@@ -3878,12 +3906,17 @@
     const keys = new Set(daysBack(days));
     const allSnapshots = smokeIntervalSnapshots().filter(item => keys.has(toDateKey(item.cigarette.smoked_at)));
     const skippedPauseBridges = allSnapshots.filter(item => item.interval_is_paused_bridge).length;
-    const snapshots = allSnapshots.filter(item => Number.isFinite(Number(item.interval_minutes)));
+    const finiteSnapshots = allSnapshots.filter(item => Number.isFinite(Number(item.interval_minutes)) && Number(item.interval_minutes) > 0);
+    const skippedBoundaryIntervals = finiteSnapshots.filter(item => !item.isDaytimeInterval).length;
+    const snapshots = finiteSnapshots.filter(item => item.isDaytimeInterval);
 
     if (!snapshots.length) {
       if (els.smokeIntervalQuality) els.smokeIntervalQuality.textContent = skippedPauseBridges ? 'pausiert' : 'lernt noch';
-      const pauseHint = skippedPauseBridges ? ` ${skippedPauseBridges} Pause-Brücke${skippedPauseBridges === 1 ? '' : 'n'} wurden bewusst ausgeklammert.` : '';
-      els.smokeIntervalVisual.innerHTML = `<div class="empty-state">Für die Intervall-Analyse braucht es mindestens zwei Einträge ausserhalb pausierter Zeiträume.${pauseHint}</div>`;
+      const hints = [];
+      if (skippedPauseBridges) hints.push(`${skippedPauseBridges} Pause-Brücke${skippedPauseBridges === 1 ? '' : 'n'} ausgeklammert`);
+      if (skippedBoundaryIntervals) hints.push(`${skippedBoundaryIntervals} Nacht-/Mehrtagspause${skippedBoundaryIntervals === 1 ? '' : 'n'} nicht in der Dichteverteilung`);
+      const pauseHint = hints.length ? ` ${hints.join(' · ')}.` : '';
+      els.smokeIntervalVisual.innerHTML = `<div class="empty-state">Für die Intervall-Analyse braucht es mindestens zwei Tages-Einträge ausserhalb pausierter Zeiträume.${pauseHint}</div>`;
       return;
     }
 
@@ -3897,8 +3930,8 @@
     const daytimeBest = snapshots.filter(item => item.isDaytimeInterval).map(item => Number(item.interval_minutes));
     const bestDaytime = daytimeBest.length ? Math.max(...daytimeBest) : null;
     const recent = snapshots.slice(-20);
-    const cap = Math.max(240, percentile(sortedDurations, 0.9));
-    const violinCap = Math.max(cap, sortedDurations[sortedDurations.length - 1] || 0, 120);
+    const cap = Math.max(240, percentile(sortedDurations, 0.92));
+    const violinCap = Math.max(cap, 120);
     const halfIndex = Math.floor(recent.length / 2);
     const earlierSample = recent.slice(0, halfIndex);
     const laterSample = recent.slice(halfIndex);
@@ -3944,7 +3977,7 @@
       q1,
       q3: p75,
       qualityLabel,
-      subtitle: `Analysefenster ${days} Tage · ${durations.length} Pause${durations.length === 1 ? '' : 'n'}${skippedPauseBridges ? ` · ${skippedPauseBridges} Pause-Brücke${skippedPauseBridges === 1 ? '' : 'n'} ausgeklammert` : ''}`
+      subtitle: `Aktive Tagespausen · ${days} Tage · ${durations.length} Pause${durations.length === 1 ? '' : 'n'}${skippedPauseBridges ? ` · ${skippedPauseBridges} Pause-Brücke${skippedPauseBridges === 1 ? '' : 'n'} ausgeklammert` : ''}${skippedBoundaryIntervals ? ` · ${skippedBoundaryIntervals} Nacht-/Mehrtagspause${skippedBoundaryIntervals === 1 ? '' : 'n'} ausgeklammert` : ''}`
     });
 
     const skyline = recent.map(item => {
@@ -4128,10 +4161,8 @@
     const peakPoint = scaledPoints.reduce((best, point) => point.density > best.density ? point : best, scaledPoints[0]);
     const peakValue = peakPoint?.value || safeMedian;
 
-    const tickStep = upperBound <= 90 ? 15 : upperBound <= 180 ? 30 : upperBound <= 360 ? 60 : upperBound <= 720 ? 120 : 240;
-    const tickValues = [];
-    for (let value = 0; value <= upperBound + 0.001; value += tickStep) tickValues.push(value);
-    if (!tickValues.length || tickValues[tickValues.length - 1] < upperBound) tickValues.push(upperBound);
+    const tickCount = upperBound <= 180 ? 5 : 6;
+    const tickValues = Array.from({ length: tickCount }, (_, index) => (upperBound / Math.max(1, tickCount - 1)) * index);
     const uniqueTicks = [...new Set(tickValues.map(value => Math.max(0, Math.min(upperBound, Math.round(value)))))];
     const tickMarkup = uniqueTicks.map(value => {
       const x = valueToX(value);
@@ -4166,7 +4197,7 @@
           </svg>
         </div>
         <div class="interval-violin-caption">
-          <p><b>Leserichtung:</b> links = längere Pausen · rechts = dichtere Rauchmomente.</p>
+          <p><b>Leserichtung:</b> links = längere Tagespausen · rechts = dichtere Rauchmomente.</p>
           <div class="interval-violin-legend">
             <span><i class="is-fill"></i>Dichteform</span>
             <span><i class="is-iqr"></i>mittlere 50%</span>
@@ -6619,8 +6650,9 @@
     const sorted = [...visibleCigarettes()].sort((a, b) => new Date(a.smoked_at) - new Date(b.smoked_at));
     sorted.forEach((c, index) => {
       const prev = sorted[index - 1] || null;
-      const interval = prev ? Math.max(0, Math.round((new Date(c.smoked_at) - new Date(prev.smoked_at)) / 60000)) : null;
-      const scoringContext = smokingScoringContext(prev, c);
+      const crossesPause = Boolean(prev && intervalCrossesPause(prev.smoked_at, c.smoked_at, { scope: 'smoke' }));
+      const interval = prev && !crossesPause ? Math.max(0, Math.round((new Date(c.smoked_at) - new Date(prev.smoked_at)) / 60000)) : null;
+      const scoringContext = smokingScoringContext(prev && !crossesPause ? prev : null, c);
       const points = cigarettePoints(interval, scoringContext);
       const hasChanged = c.interval_minutes !== interval || Number(c.points || 0) !== points;
       if (hasChanged) {
@@ -7972,7 +8004,8 @@ async function deleteAlcoholLog(id) {
       const prev = sorted[index - 1] || null;
       const crossesPause = Boolean(prev && intervalCrossesPause(prev.smoked_at, c.smoked_at, { scope: 'smoke' }));
       const interval = prev && !crossesPause ? minutesBetweenIfNotPaused(prev.smoked_at, c.smoked_at, { scope: 'smoke' }) : null;
-      return { cigarette: c, previous: prev, interval_minutes: interval, interval_is_paused_bridge: crossesPause, ...smokingScoringContext(prev, c) };
+      const scoringContext = smokingScoringContext(prev && !crossesPause ? prev : null, c);
+      return { cigarette: c, previous: prev, interval_minutes: interval, interval_is_paused_bridge: crossesPause, ...scoringContext };
     });
   }
 
@@ -8436,7 +8469,7 @@ async function deleteAlcoholLog(id) {
 
   async function manualSyncFromSettings(event) {
     if (event) event.preventDefault();
-    await syncWithSupabase({ silent: false, pullFirst: true, pullAfter: true, forcePushAll: true });
+    await syncWithSupabase({ silent: false, pullFirst: true, pullAfter: true, forcePushAll: false });
     await syncLeisureCatalogWithSupabase({ silent: false });
   }
 
@@ -8886,7 +8919,7 @@ async function deleteAlcoholLog(id) {
   }
 
   function liveRowsForTable(table, rows = []) {
-    return rows.filter(row => row?.id && !isRemoteDeleted(table, row.id));
+    return rows.filter(row => row?.id && !isRemoteDeletePending(table, row.id));
   }
 
   function rowsPendingSync(table, rows = [], { forceAll = false } = {}) {
@@ -8987,7 +9020,12 @@ async function deleteAlcoholLog(id) {
   }
 
   function remoteRows(table, result) {
-    return (result.data || []).filter(row => !isRemoteDeleted(table, row.id));
+    const rows = (result.data || []).filter(row => row?.id && !isRemoteDeletePending(table, row.id));
+    rows.forEach(row => {
+      const marker = state.deletedRemoteIds?.[table]?.[row.id];
+      if (marker?.synced_at) clearRemoteDeleteMarker(table, row.id);
+    });
+    return rows;
   }
 
   function applyRemoteHabitAuthority(remoteHabitRows) {
