@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v63-gamification-evolution';
+  const APP_DATA_SCHEMA_VERSION = 'v64-fish-companion-evolution';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -2616,10 +2616,31 @@
   }
 
   function companionProfile(stats) {
-    const stage = stats.unlockedBadges >= 40 || stats.level >= 12 ? 5 : stats.unlockedBadges >= 28 || stats.level >= 9 ? 4 : stats.unlockedBadges >= 16 || stats.level >= 6 ? 3 : stats.unlockedBadges >= 6 || stats.level >= 3 ? 2 : 1;
-    const names = { 1: 'Milo Seed', 2: 'Milo Spark', 3: 'Milo Flow', 4: 'Milo Apex', 5: 'Milo Zenith' };
-    const titles = { 1: 'Anfaenger', 2: 'Aufbau', 3: 'Fokus', 4: 'Meister', 5: 'Champion' };
-    const subtitles = { 1: 'sanfter Start', 2: 'erste Dynamik', 3: 'stabile Form', 4: 'starke Kontrolle', 5: 'ruhige Meisterschaft' };
+    const stageNames = [
+      'Impuls', 'Funke', 'Anfang', 'Fokus',
+      'Takt', 'Form', 'Fluss', 'Stabil',
+      'Schub', 'Klar', 'Zug', 'Drive',
+      'Puls', 'Prime', 'Kontrolle', 'Apex',
+      'Zenith', 'Nova', 'Ascend', 'Champion'
+    ];
+    const chapters = [
+      { title: 'Erwachen', range: '1-4', detail: 'Fundament legen' },
+      { title: 'Aufbau', range: '5-8', detail: 'Gewohnheiten formen' },
+      { title: 'Fokus', range: '9-12', detail: 'Disziplin staerken' },
+      { title: 'Mastery', range: '13-16', detail: 'Kontrolle meistern' },
+      { title: 'Champion', range: '17-20', detail: 'Bestversion leben' }
+    ];
+    const stagePoints = Math.max(0, Number(stats.total || 0));
+    const pointStage = Math.floor(stagePoints / 250) + 1;
+    const badgeStage = Math.floor((stats.unlockedBadges || 0) / 2) + 1;
+    const habitStage = Math.floor((stats.habitLogDays || 0) / 3) + 1;
+    const stage = Math.min(20, Math.max(1, Math.max(pointStage, badgeStage, habitStage)));
+    const chapterIndex = Math.min(4, Math.floor((stage - 1) / 4));
+    const nextStageAt = stage >= 20 ? stagePoints : stage * 250;
+    const previousStageAt = stage <= 1 ? 0 : (stage - 1) * 250;
+    const stageProgress = stage >= 20
+      ? 100
+      : Math.min(100, Math.max(0, Math.round(((stagePoints - previousStageAt) / Math.max(1, nextStageAt - previousStageAt)) * 100)));
     const score = stats.dayScore.score;
     const mood = score >= 82 ? 'fokussiert' : score >= 62 ? 'stabil' : score >= 42 ? 'wachsam' : 'Recovery';
     const cue = stats.activeOverdue
@@ -2630,61 +2651,134 @@
     const bond = Math.min(100, 18 + stats.unlockedBadges * 3 + stats.momentumStreak * 10 + Math.min(25, stats.routineDays * 2));
     const charge = Math.min(100, Math.round((stats.levelProgress * 0.45) + (score * 0.35) + (bond * 0.2)));
     const trait = stats.activeOverdue ? 'ordnet Verzug' : stats.momentumStreak >= 7 ? 'haelt Streak' : stats.unlockedBadges >= 20 ? 'sammelt Mastery' : 'baut Momentum';
-    const evolution = ['Anfaenger', 'Aufbau', 'Fokus', 'Meister', 'Champion'];
-    return { stage, name: names[stage], title: titles[stage], subtitle: subtitles[stage], mood, cue, bond, charge, trait, evolution };
+    return {
+      stage,
+      stageName: stageNames[stage - 1],
+      chapter: chapters[chapterIndex],
+      chapters,
+      stageNames,
+      mood,
+      cue,
+      bond,
+      charge,
+      trait,
+      nextStageAt,
+      stageProgress
+    };
+  }
+
+  function renderCompanionFish(stage, size = 'hero') {
+    const numericStage = Number(stage || 1);
+    const safeStage = Number.isFinite(numericStage) ? Math.min(20, Math.max(1, numericStage)) : 1;
+    const fillHeight = Math.round((safeStage / 20) * 320);
+    const fillY = 340 - fillHeight;
+    const dotOpacity = Math.min(0.85, 0.12 + safeStage * 0.035).toFixed(2);
+    const scaleClass = String(size).startsWith('mini') ? 'is-mini' : 'is-hero';
+    const scaleLines = safeStage >= 5 ? Array.from({ length: Math.min(12, safeStage) }, (_, index) => {
+      const y = 132 + index * 8;
+      const width = Math.max(16, 62 - index * 2.6);
+      return `<path d="M${160 - width / 2} ${y} C ${148 - width / 3} ${y + 5}, ${148 - width / 3} ${y + 9}, ${160 - width / 2 + 2} ${y + 13}" />`;
+    }).join('') : '';
+    const energyLines = safeStage >= 13
+      ? `<g class="fish-energy-lines"><path d="M160 18 V350"/><path d="M92 72 C128 116 130 250 95 314"/><path d="M228 72 C192 116 190 250 225 314"/></g>`
+      : '';
+    return `<svg class="companion-fish-svg ${scaleClass}" viewBox="0 0 320 360" role="img" aria-label="Companion Fisch Stufe ${safeStage} von 20">
+      <defs>
+        <clipPath id="fishFillClip-${size}-${safeStage}">
+          <rect x="0" y="${fillY}" width="320" height="${fillHeight}" rx="0" />
+        </clipPath>
+        <clipPath id="fishBodyClip-${size}-${safeStage}">
+          <path d="M160 30 C121 58 101 114 101 185 C101 253 124 309 160 338 C196 309 219 253 219 185 C219 114 199 58 160 30 Z"/>
+          <path d="M101 185 C74 164 50 158 27 171 C48 191 72 195 101 185 Z"/>
+          <path d="M219 185 C246 164 270 158 293 171 C272 191 248 195 219 185 Z"/>
+          <path d="M160 338 C137 336 116 349 101 357 C128 358 146 354 160 338 Z"/>
+          <path d="M160 338 C183 336 204 349 219 357 C192 358 174 354 160 338 Z"/>
+        </clipPath>
+        <radialGradient id="fishRedGlow-${size}-${safeStage}" cx="50%" cy="68%" r="55%">
+          <stop offset="0" stop-color="#ff6f61" stop-opacity="0.95" />
+          <stop offset="0.58" stop-color="#ef3f37" stop-opacity="0.66" />
+          <stop offset="1" stop-color="#ef3f37" stop-opacity="0" />
+        </radialGradient>
+        <pattern id="fishDots-${size}-${safeStage}" width="10" height="10" patternUnits="userSpaceOnUse">
+          <circle cx="2.5" cy="2.5" r="1.65" fill="#ef3f37" opacity="${dotOpacity}" />
+        </pattern>
+      </defs>
+      <g class="fish-aura" opacity="${Math.min(0.9, safeStage / 20 + 0.18).toFixed(2)}">
+        <circle cx="160" cy="188" r="${72 + safeStage * 3}" />
+        <circle cx="160" cy="188" r="${44 + safeStage * 2}" />
+      </g>
+      ${energyLines}
+      <g class="fish-fill" clip-path="url(#fishBodyClip-${size}-${safeStage})">
+        <rect x="0" y="${fillY}" width="320" height="${fillHeight}" fill="url(#fishRedGlow-${size}-${safeStage})" />
+        <rect x="20" y="${fillY}" width="280" height="${fillHeight}" fill="url(#fishDots-${size}-${safeStage})" opacity="${Math.min(0.7, 0.14 + safeStage * 0.025).toFixed(2)}" />
+      </g>
+      <g class="fish-line-art">
+        <path class="fish-main" d="M160 30 C121 58 101 114 101 185 C101 253 124 309 160 338 C196 309 219 253 219 185 C219 114 199 58 160 30 Z"/>
+        <path d="M118 81 C139 95 181 95 202 81"/>
+        <path d="M122 101 C142 112 178 112 198 101"/>
+        <path d="M101 185 C74 164 50 158 27 171 C48 191 72 195 101 185 Z"/>
+        <path d="M219 185 C246 164 270 158 293 171 C272 191 248 195 219 185 Z"/>
+        <path d="M160 338 C137 336 116 349 101 357 C128 358 146 354 160 338 Z"/>
+        <path d="M160 338 C183 336 204 349 219 357 C192 358 174 354 160 338 Z"/>
+        <path d="M160 30 C158 68 158 276 160 338"/>
+        <circle cx="176" cy="64" r="7"/>
+        <circle cx="176" cy="64" r="2.5" class="fish-eye"/>
+        <g class="fish-scales">${scaleLines}</g>
+      </g>
+      <g class="fish-axis">
+        <path d="M160 8 V28"/><path d="M160 342 V356"/><path d="M92 185 H72"/><path d="M228 185 H248"/>
+      </g>
+    </svg>`;
   }
 
   function renderCompanionCard(companion, stats) {
-    const nextLevel = 500 - stats.levelPoints;
+    const nextPoints = companion.stage >= 20 ? 'Max' : `${Math.max(0, companion.nextStageAt - Math.max(0, Number(stats.total || 0))).toLocaleString('de-CH')} Pkt.`;
     const unlockedText = `${stats.unlockedBadges}/${GAMIFICATION_BADGES.length}`;
-    const evolutionRail = companion.evolution.map((label, index) => `<span class="${index + 1 <= companion.stage ? 'is-active' : ''}">${escapeHtml(label)}</span>`).join('');
-    return `<div class="companion-shell stage-${companion.stage}">
-      <div class="companion-evolution-card">
-        <div class="companion-stage-pill">${escapeHtml(companion.title)} · Stage ${companion.stage}</div>
-        <div class="companion-hero" aria-hidden="true">
-          <div class="companion-aura"></div>
-          <div class="companion-evolution-art">
-            <span class="evolution-ring ring-one"></span>
-            <span class="evolution-ring ring-two"></span>
-            <span class="evolution-wing wing-left"></span>
-            <span class="evolution-wing wing-right"></span>
-            <span class="evolution-core"></span>
-            <span class="evolution-crown"></span>
-            <span class="evolution-spark spark-one"></span>
-            <span class="evolution-spark spark-two"></span>
-            <span class="evolution-spark spark-three"></span>
-          </div>
+    const chapterIndex = Math.min(4, Math.floor((companion.stage - 1) / 4));
+    const stageTiles = companion.stageNames.map((name, index) => {
+      const stage = index + 1;
+      return `<article class="fish-stage-tile ${stage === companion.stage ? 'is-current' : stage < companion.stage ? 'is-done' : ''}" aria-label="Stufe ${stage}: ${escapeHtml(name)}">
+        ${renderCompanionFish(stage, `mini-${stage}`)}
+        <strong>${stage}</strong>
+        <span>${escapeHtml(name)}</span>
+      </article>`;
+    }).join('');
+    const chapterTiles = companion.chapters.map((chapter, index) => `<article class="fish-chapter ${index === chapterIndex ? 'is-current' : index < chapterIndex ? 'is-done' : ''}">
+      <small>Kapitel ${index + 1}</small>
+      <strong>${escapeHtml(chapter.title)}</strong>
+      <span>${escapeHtml(chapter.range)} · ${escapeHtml(chapter.detail)}</span>
+    </article>`).join('');
+    return `<div class="companion-shell fish-companion-shell stage-${companion.stage}">
+      <div class="fish-poster-card">
+        <div class="fish-poster-head">
+          <div><p class="eyebrow">Companion Evolution</p><h4>Stufe ${companion.stage}</h4><span>${escapeHtml(companion.stageName)} · ${escapeHtml(companion.chapter.title)}</span></div>
+          <b>${companion.stage}/20</b>
         </div>
-        <div class="companion-evolution-meta">
-          <small>Evolution</small>
-          <strong>${escapeHtml(companion.name)}</strong>
-          <span>${escapeHtml(companion.subtitle)}</span>
+        <div class="fish-poster-art">
+          ${renderCompanionFish(companion.stage, 'hero')}
         </div>
+        <div class="fish-progress-row"><span>${companion.stage}/20</span><i><b style="width:${companion.stageProgress}%"></b></i><em>${nextPoints}</em></div>
       </div>
-      <div class="companion-copy">
-        <p class="eyebrow">Companion</p>
-        <h4>${escapeHtml(companion.title)} mit Stil</h4>
-        <p>${escapeHtml(companion.mood)} · ${escapeHtml(companion.cue)}</p>
-        <div class="companion-traits">
+      <div class="fish-companion-copy">
+        <p class="eyebrow">Poster Companion</p>
+        <h4>Dein Fortschritt wird sichtbar.</h4>
+        <p>Der Fisch fuellt sich mit jeder Stufe weiter rot auf. Je staerker deine Konsistenz, desto dichter wird das Poster.</p>
+        <div class="companion-traits fish-traits">
           <span>${unlockedText} Badges</span>
           <span>${escapeHtml(companion.trait)}</span>
-          <span>Pfad Anfaenger → Champion</span>
+          <span>${escapeHtml(companion.mood)}</span>
         </div>
-        <div class="companion-evolution-rail">${evolutionRail}</div>
-      </div>
-      <div class="companion-stats">
-        <article><small>Level</small><strong>${stats.level}</strong></article>
-        <article><small>Bindung</small><strong>${companion.bond}%</strong></article>
-        <article><small>Energie</small><strong>${companion.charge}%</strong></article>
-      </div>
-      <div class="companion-bars">
-        <div><span>Naechstes Level</span><em>${nextLevel} Pkt.</em><i><b style="width:${stats.levelProgress}%"></b></i></div>
-        <div><span>Tagesenergie</span><em>${stats.dayScore.score}%</em><i><b style="width:${stats.dayScore.score}%"></b></i></div>
-        <div><span>Bindung</span><em>${companion.bond}%</em><i><b style="width:${companion.bond}%"></b></i></div>
-      </div>
-      <div class="companion-actions">
-        <button class="mini-btn" type="button" data-action="open-coach">Coach</button>
-        <button class="mini-btn primary" type="button" data-action="open-morning-routine">Routine</button>
+        <div class="fish-stats-grid">
+          <article><small>Bindung</small><strong>${companion.bond}%</strong></article>
+          <article><small>Energie</small><strong>${companion.charge}%</strong></article>
+          <article><small>Naechste Stufe</small><strong>${nextPoints}</strong></article>
+        </div>
+        <div class="fish-stage-grid" aria-label="20 Companion-Stufen">${stageTiles}</div>
+        <div class="fish-chapter-strip">${chapterTiles}</div>
+        <div class="companion-actions fish-actions">
+          <button class="mini-btn" type="button" data-action="open-coach">Coach</button>
+          <button class="mini-btn primary" type="button" data-action="open-morning-routine">Routine</button>
+        </div>
       </div>
     </div>`;
   }
