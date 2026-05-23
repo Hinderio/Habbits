@@ -505,7 +505,7 @@
             <div class="activity-finder-copy">
               <p class="eyebrow">Freizeit-Finder</p>
               <h4 id="activityFinderTitle">Was machen wir gegen Langeweile?</h4>
-              <p>Beantworte ein paar kurze Fragen. Die App filtert aus dem kuratierten Vorschlagspool passende Ausflüge, Events und Mini-Abenteuer.</p>
+              <p>Beantworte ein paar kurze Fragen. Die App filtert aus deinem editierbaren Vorschlagspool passende Ausflüge, Events und Mini-Abenteuer.</p>
             </div>
             <form id="activityFinderForm" class="activity-finder-form">
               <label><span>Worauf hast du Lust?</span><select name="mood"><option value="any">Egal</option><option value="active">Bewegung</option><option value="chill">Ruhig</option><option value="creative">Kreativ</option><option value="social">Sozial</option><option value="curious">Entdecken</option><option value="adventure">Mini-Abenteuer</option><option value="nightlife">Ausgang</option><option value="recovery">Recovery</option></select></label>
@@ -519,8 +519,34 @@
             </form>
             <div class="activity-finder-actions">
               <span id="activityFinderMeta" class="subtle">Lade Vorschläge...</span>
-              <button class="mini-btn" type="button" data-action="reset-leisure-filters">Filter zurücksetzen</button>
+              <div class="activity-finder-action-buttons">
+                <button class="mini-btn" type="button" data-action="reset-leisure-filters">Filter zurücksetzen</button>
+                <button class="mini-btn primary" type="button" data-action="toggle-activity-form">+ Vorschlag</button>
+              </div>
             </div>
+            <section id="activityCatalogFormPanel" class="activity-catalog-form-panel hidden" aria-hidden="true">
+              <div class="panel-head compact-head">
+                <div><p class="eyebrow">Freizeit-Katalog</p><h4 id="activityCatalogFormTitle">Eigenen Vorschlag erfassen</h4></div>
+                <button class="icon-btn" type="button" data-action="cancel-activity-edit" aria-label="Freizeit-Vorschlag schliessen">×</button>
+              </div>
+              <form id="activityCatalogForm" class="activity-catalog-form">
+                <label class="full"><span>Titel</span><input name="title" required placeholder="z. B. Spontaner Zugtrip an den See" /></label>
+                <label class="full"><span>Beschreibung</span><textarea name="summary" rows="3" placeholder="Was macht die Idee spannend?"></textarea></label>
+                <label><span>Kategorie-Label</span><input name="category_label" placeholder="z. B. Mini-Abenteuer" /></label>
+                <label><span>Kategorie-Key</span><input name="category" placeholder="z. B. adventure" /></label>
+                <label><span>Stimmung</span><select name="mood"><option value="active">Bewegung</option><option value="chill">Ruhig</option><option value="creative">Kreativ</option><option value="social">Sozial</option><option value="curious" selected>Entdecken</option><option value="adventure">Mini-Abenteuer</option><option value="nightlife">Ausgang</option><option value="recovery">Recovery</option></select></label>
+                <label><span>Zeit</span><select name="duration_band"><option value="15m">15 Min.</option><option value="30m">30 Min.</option><option value="1h" selected>1 Std.</option><option value="2h">2 Std.</option><option value="halfday">Halbtag</option><option value="day">Ganzer Tag</option><option value="evening">Abend</option></select></label>
+                <label><span>Mit wem</span><input name="people" placeholder="solo, duo, friends" /></label>
+                <label><span>Ort</span><select name="setting"><option value="outdoor">Draussen</option><option value="indoor">Drinnen</option><option value="mixed" selected>Flexibel</option></select></label>
+                <label><span>Budget</span><select name="budget"><option value="free">Gratis</option><option value="low" selected>Klein</option><option value="medium">Normal</option><option value="high">Premium</option></select></label>
+                <label><span>Energie</span><select name="energy"><option value="low">Low Energy</option><option value="medium" selected>Normal</option><option value="high">Aktiv</option></select></label>
+                <label><span>Transport</span><input name="transport" placeholder="walk, train, vespa" /></label>
+                <label><span>Story Points</span><select name="story_points"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="5">5</option><option value="8">8</option></select></label>
+                <label><span>Priorität</span><select name="priority"><option value="low">Niedrig</option><option value="medium" selected>Normal</option><option value="high">Hoch</option><option value="urgent">Kritisch</option></select></label>
+                <label class="full"><span>Tags</span><input name="tags" placeholder="jass, techno, kreativ" /></label>
+                <div class="form-actions full"><button id="activityCatalogSubmitBtn" class="pill primary" type="submit">Vorschlag speichern</button><button class="pill secondary" type="button" data-action="cancel-activity-edit">Abbrechen</button></div>
+              </form>
+            </section>
             <div id="activitySuggestionList" class="activity-suggestion-list"></div>
           </section>
           <div class="task-ideas-shell">
