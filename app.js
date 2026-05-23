@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v62-sync-cache-repair';
+  const APP_DATA_SCHEMA_VERSION = 'v63-gamification-evolution';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -16,6 +16,7 @@
   const CONSUMPTION_MODE_KEY = 'habitflow-consumption-mode';
   const LEISURE_FILTER_KEY = 'habitflow-leisure-filters-v1';
   const GAMIFICATION_LOCKED_KEY = 'habitflow-gamification-show-locked-v1';
+  const GAMIFICATION_BADGE_SHELF_KEY = 'habitflow-gamification-badge-shelf-v1';
   const ACTIVITY_CATALOG_URL = './data/activity-ideas.json';
   const ACTIVITY_REMOTE_SEED_KEY = 'habitflow-activity-remote-seeded-v1';
   const ACTIVITY_ARCHIVED_IDS_KEY = 'habitflow-activity-archived-ids-v1';
@@ -556,6 +557,7 @@
   let leisureFilters = loadLeisureFilters();
   let leisureResultOffset = 0;
   let gamificationShowLocked = localStorage.getItem(GAMIFICATION_LOCKED_KEY) === 'show';
+  let gamificationBadgeShelfOpen = localStorage.getItem(GAMIFICATION_BADGE_SHELF_KEY) === 'open';
   let leisurePullTimer = null;
 
   const els = {};
@@ -625,7 +627,10 @@
       gamificationPanel: $('#gamificationPanel'),
       companionCard: $('#companionCard'),
       badgeShelf: $('#badgeShelf'),
+      badgeShelfWrap: $('#badgeShelfWrap'),
+      badgeShelfSummary: $('#badgeShelfSummary'),
       badgeUnlockCount: $('#badgeUnlockCount'),
+      toggleBadgeShelfBtn: $('#toggleBadgeShelfBtn'),
       toggleLockedBadgesBtn: $('#toggleLockedBadgesBtn'),
       currentPause: $('#currentPause'),
       todayCigarettes: $('#todayCigarettes'),
@@ -795,6 +800,7 @@
     els.heroTaskBtn.addEventListener('click', () => { showScreen('tasks'); openTaskForm(); });
     if (els.heroCoachBtn) els.heroCoachBtn.addEventListener('click', openCoachModal);
     if (els.heroEmergencyBtn) els.heroEmergencyBtn.addEventListener('click', startEmergencyCravingFlow);
+    if (els.toggleBadgeShelfBtn) els.toggleBadgeShelfBtn.addEventListener('click', toggleBadgeShelf);
     if (els.toggleLockedBadgesBtn) els.toggleLockedBadgesBtn.addEventListener('click', toggleLockedBadges);
     if (els.morningRoutineModalCloseBtn) els.morningRoutineModalCloseBtn.addEventListener('click', closeMorningRoutineModal);
     if (els.morningRoutineModal) {
@@ -2414,16 +2420,39 @@
     stats.unlockedBadges = badgeStates.filter(badge => badge.unlocked).length;
     const visibleBadges = gamificationShowLocked ? badgeStates : badgeStates.filter(badge => badge.unlocked);
     const companion = companionProfile(stats);
-    if (els.badgeUnlockCount) els.badgeUnlockCount.textContent = `${stats.unlockedBadges}/${badgeStates.length} gesammelt`;
+    const hiddenCount = Math.max(0, badgeStates.length - stats.unlockedBadges);
+    if (els.badgeUnlockCount) els.badgeUnlockCount.textContent = `${stats.unlockedBadges}/${badgeStates.length} Badges`;
+    if (els.badgeShelfSummary) {
+      els.badgeShelfSummary.textContent = gamificationBadgeShelfOpen
+        ? (gamificationShowLocked
+          ? `${badgeStates.length} sichtbar · ${stats.unlockedBadges} gesammelt`
+          : `${stats.unlockedBadges} gesammelt · ${hiddenCount} verborgen`)
+        : `${stats.unlockedBadges} gesammelt · ruhig verborgen`;
+    }
+    if (els.toggleBadgeShelfBtn) {
+      els.toggleBadgeShelfBtn.textContent = gamificationBadgeShelfOpen ? 'Badges schliessen' : 'Badges ansehen';
+      els.toggleBadgeShelfBtn.setAttribute('aria-expanded', gamificationBadgeShelfOpen ? 'true' : 'false');
+    }
     if (els.toggleLockedBadgesBtn) {
       els.toggleLockedBadgesBtn.textContent = gamificationShowLocked ? 'Nicht erreichte ausblenden' : 'Nicht erreichte anzeigen';
       els.toggleLockedBadgesBtn.setAttribute('aria-pressed', gamificationShowLocked ? 'true' : 'false');
+      els.toggleLockedBadgesBtn.hidden = !gamificationBadgeShelfOpen;
+    }
+    if (els.badgeShelfWrap) {
+      els.badgeShelfWrap.classList.toggle('is-open', gamificationBadgeShelfOpen);
+      els.badgeShelfWrap.classList.toggle('is-collapsed', !gamificationBadgeShelfOpen);
     }
     els.badgeShelf.classList.toggle('show-locked', gamificationShowLocked);
     els.companionCard.innerHTML = renderCompanionCard(companion, stats);
     els.badgeShelf.innerHTML = visibleBadges.length
       ? visibleBadges.map(renderGamificationBadge).join('')
       : `<article class="badge-empty-state"><strong>Noch keine Badges gesammelt</strong><p>Starte mit einer kleinen Aktion. Nicht erreichte Badges kannst du bei Bedarf einblenden.</p></article>`;
+  }
+
+  function toggleBadgeShelf() {
+    gamificationBadgeShelfOpen = !gamificationBadgeShelfOpen;
+    localStorage.setItem(GAMIFICATION_BADGE_SHELF_KEY, gamificationBadgeShelfOpen ? 'open' : 'closed');
+    renderGamification();
   }
 
   function toggleLockedBadges() {
@@ -2588,9 +2617,9 @@
 
   function companionProfile(stats) {
     const stage = stats.unlockedBadges >= 40 || stats.level >= 12 ? 5 : stats.unlockedBadges >= 28 || stats.level >= 9 ? 4 : stats.unlockedBadges >= 16 || stats.level >= 6 ? 3 : stats.unlockedBadges >= 6 || stats.level >= 3 ? 2 : 1;
-    const names = { 1: 'Milo', 2: 'Milo Scout', 3: 'Milo Ranger', 4: 'Milo Prime', 5: 'Milo Nova' };
-    const titles = { 1: 'Starter', 2: 'Scout', 3: 'Ranger', 4: 'Guardian', 5: 'Nova Guardian' };
-    const faces = { 1: '•ᴗ•', 2: 'ᵔᴗᵔ', 3: '◕ᴗ◕', 4: '✦ᴗ✦', 5: '✦◡✦' };
+    const names = { 1: 'Milo Seed', 2: 'Milo Spark', 3: 'Milo Flow', 4: 'Milo Apex', 5: 'Milo Zenith' };
+    const titles = { 1: 'Anfaenger', 2: 'Aufbau', 3: 'Fokus', 4: 'Meister', 5: 'Champion' };
+    const subtitles = { 1: 'sanfter Start', 2: 'erste Dynamik', 3: 'stabile Form', 4: 'starke Kontrolle', 5: 'ruhige Meisterschaft' };
     const score = stats.dayScore.score;
     const mood = score >= 82 ? 'fokussiert' : score >= 62 ? 'stabil' : score >= 42 ? 'wachsam' : 'Recovery';
     const cue = stats.activeOverdue
@@ -2601,26 +2630,47 @@
     const bond = Math.min(100, 18 + stats.unlockedBadges * 3 + stats.momentumStreak * 10 + Math.min(25, stats.routineDays * 2));
     const charge = Math.min(100, Math.round((stats.levelProgress * 0.45) + (score * 0.35) + (bond * 0.2)));
     const trait = stats.activeOverdue ? 'ordnet Verzug' : stats.momentumStreak >= 7 ? 'haelt Streak' : stats.unlockedBadges >= 20 ? 'sammelt Mastery' : 'baut Momentum';
-    return { stage, name: names[stage], title: titles[stage], face: faces[stage], mood, cue, bond, charge, trait };
+    const evolution = ['Anfaenger', 'Aufbau', 'Fokus', 'Meister', 'Champion'];
+    return { stage, name: names[stage], title: titles[stage], subtitle: subtitles[stage], mood, cue, bond, charge, trait, evolution };
   }
 
   function renderCompanionCard(companion, stats) {
     const nextLevel = 500 - stats.levelPoints;
     const unlockedText = `${stats.unlockedBadges}/${GAMIFICATION_BADGES.length}`;
+    const evolutionRail = companion.evolution.map((label, index) => `<span class="${index + 1 <= companion.stage ? 'is-active' : ''}">${escapeHtml(label)}</span>`).join('');
     return `<div class="companion-shell stage-${companion.stage}">
-      <div class="companion-hero" aria-hidden="true">
-        <div class="companion-orbit"><span></span><span></span><span></span></div>
-        <div class="companion-avatar"><span class="companion-face">${escapeHtml(companion.face)}</span><b></b><i></i></div>
+      <div class="companion-evolution-card">
+        <div class="companion-stage-pill">${escapeHtml(companion.title)} · Stage ${companion.stage}</div>
+        <div class="companion-hero" aria-hidden="true">
+          <div class="companion-aura"></div>
+          <div class="companion-evolution-art">
+            <span class="evolution-ring ring-one"></span>
+            <span class="evolution-ring ring-two"></span>
+            <span class="evolution-wing wing-left"></span>
+            <span class="evolution-wing wing-right"></span>
+            <span class="evolution-core"></span>
+            <span class="evolution-crown"></span>
+            <span class="evolution-spark spark-one"></span>
+            <span class="evolution-spark spark-two"></span>
+            <span class="evolution-spark spark-three"></span>
+          </div>
+        </div>
+        <div class="companion-evolution-meta">
+          <small>Evolution</small>
+          <strong>${escapeHtml(companion.name)}</strong>
+          <span>${escapeHtml(companion.subtitle)}</span>
+        </div>
       </div>
       <div class="companion-copy">
         <p class="eyebrow">Companion</p>
-        <h4>${escapeHtml(companion.name)}</h4>
-        <p>${escapeHtml(companion.title)} · ${escapeHtml(companion.mood)} · ${escapeHtml(companion.cue)}</p>
+        <h4>${escapeHtml(companion.title)} mit Stil</h4>
+        <p>${escapeHtml(companion.mood)} · ${escapeHtml(companion.cue)}</p>
         <div class="companion-traits">
-          <span>Stage ${companion.stage}</span>
-          <span>${escapeHtml(companion.trait)}</span>
           <span>${unlockedText} Badges</span>
+          <span>${escapeHtml(companion.trait)}</span>
+          <span>Pfad Anfaenger → Champion</span>
         </div>
+        <div class="companion-evolution-rail">${evolutionRail}</div>
       </div>
       <div class="companion-stats">
         <article><small>Level</small><strong>${stats.level}</strong></article>
@@ -2643,7 +2693,7 @@
     return `<article class="gamification-badge ${badge.unlocked ? 'is-unlocked' : 'is-locked'}">
       <div class="badge-medal" aria-hidden="true"><span>${escapeHtml(badge.icon)}</span></div>
       <div class="badge-copy">
-        <div><strong>${escapeHtml(badge.title)}</strong><small>${badge.unlocked ? 'gesammelt' : 'noch offen'}</small></div>
+        <div><strong>${escapeHtml(badge.title)}</strong><small>${badge.unlocked ? 'freigeschaltet' : 'verborgen'}</small></div>
         <p>${escapeHtml(badge.description)}</p>
         <div class="badge-progress"><i style="width:${badge.progress}%"></i></div>
         <em>${escapeHtml(badge.progressLabel)}</em>

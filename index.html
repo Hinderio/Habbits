@@ -74,16 +74,19 @@
 
         <section class="panel glass gamification-panel" id="gamificationPanel">
           <div class="panel-head gamification-head">
-            <div><p class="eyebrow">Gamification</p><h3>Companion & Badges</h3></div>
-            <span id="badgeUnlockCount" class="badge muted">0 gesammelt</span>
+            <div><p class="eyebrow">Gamification</p><h3>Companion Evolution</h3></div>
+            <div class="gamification-head-actions">
+              <span id="badgeUnlockCount" class="badge muted">0 Badges</span>
+              <button id="toggleBadgeShelfBtn" class="mini-btn badge-shelf-toggle" type="button" aria-expanded="false">Badges ansehen</button>
+            </div>
           </div>
           <div class="gamification-layout">
             <article id="companionCard" class="companion-card" aria-live="polite"></article>
-            <div class="badge-shelf-wrap">
+            <div id="badgeShelfWrap" class="badge-shelf-wrap is-collapsed">
               <div class="badge-shelf-head">
                 <div>
                   <strong>Badge-Sammlung</strong>
-                  <span class="subtle">erreichte Badges direkt sichtbar</span>
+                  <span id="badgeShelfSummary" class="subtle">Ruhig gehalten - bei Bedarf einblenden</span>
                 </div>
                 <button id="toggleLockedBadgesBtn" class="mini-btn badge-locked-toggle" type="button" aria-pressed="false">Nicht erreichte anzeigen</button>
               </div>
