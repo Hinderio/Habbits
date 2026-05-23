@@ -16,6 +16,7 @@
   const GAMIFICATION_LOCKED_KEY = 'habitflow-gamification-show-locked-v1';
   const ACTIVITY_CATALOG_URL = './data/activity-ideas.json';
   const ACTIVITY_REMOTE_SEED_KEY = 'habitflow-activity-remote-seeded-v1';
+  const ACTIVITY_ARCHIVED_IDS_KEY = 'habitflow-activity-archived-ids-v1';
   const ACTIVITY_CATALOG_TABLE = 'activity_ideas';
   const LEISURE_RESULT_LIMIT = 12;
   const SUPABASE_CONFIG = window.HABITFLOW_SUPABASE_CONFIG || {};
@@ -1577,10 +1578,30 @@
       const response = await fetch(ACTIVITY_CATALOG_URL, { cache: 'force-cache' });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const payload = await response.json();
-      leisureSeedCatalog = Array.isArray(payload?.items) ? payload.items.map(normalizeLeisureActivity).filter(item => item.id && item.title) : [];
-      if (!state.activityIdeas?.length && leisureSeedCatalog.length) {
-        state.activityIdeas = leisureSeedCatalog.map(item => ({ ...item, synced: true }));
-        saveState({ skipRender: true });
+      const archivedIds = archivedLeisureActivityIds();
+      leisureSeedCatalog = Array.isArray(payload?.items)
+        ? payload.items.map(item => normalizeLeisureActivity({ ...item, is_archived: archivedIds.has(String(item?.id || '').trim()) })).filter(item => item.id && item.title)
+        : [];
+      if (leisureSeedCatalog.length) {
+        const byId = new Map((state.activityIdeas || []).map(item => [String(item.id || '').trim(), normalizeLeisureActivity(item)]).filter(([id]) => id));
+        let changed = false;
+        leisureSeedCatalog.forEach(seed => {
+          const local = byId.get(seed.id);
+          if (local) {
+            if (archivedIds.has(seed.id) && !local.is_archived) {
+              byId.set(seed.id, { ...local, is_archived: true, synced: false, updated_at: nowIso() });
+              changed = true;
+            }
+            return;
+          }
+          byId.set(seed.id, { ...seed, synced: true });
+          changed = true;
+        });
+        if (changed || !state.activityIdeas?.length) {
+          state.activityIdeas = Array.from(byId.values());
+          dedupeActivityIdeas(state);
+          saveState({ skipRender: true });
+        }
       }
       refreshLeisureCatalogFromState();
       leisureCatalogError = null;
@@ -1595,9 +1616,10 @@
   }
 
   function refreshLeisureCatalogFromState() {
+    const archivedIds = archivedLeisureActivityIds();
     leisureCatalog = (state.activityIdeas || [])
       .map(normalizeLeisureActivity)
-      .filter(item => item.id && item.title && !item.is_archived);
+      .filter(item => item.id && item.title && !item.is_archived && !archivedIds.has(item.id));
   }
 
   function applyTheme() {
@@ -5451,6 +5473,7 @@
       updated_at: now,
       synced: false
     });
+    forgetArchivedLeisureActivity(activity.id);
     const list = Array.isArray(state.activityIdeas) ? state.activityIdeas : [];
     const index = list.findIndex(item => item.id === activity.id);
     if (index >= 0) list[index] = activity;
@@ -5480,6 +5503,7 @@
     if (!activity) return;
     if (!confirm(`Freizeit-Vorschlag „${activity.title}“ wirklich löschen?`)) return;
     const now = nowIso();
+    rememberArchivedLeisureActivity(id);
     activity.is_archived = true;
     activity.updated_at = now;
     activity.synced = false;
@@ -5522,14 +5546,55 @@
   const mapRemoteLeisureActivity = item => normalizeLeisureActivity({ ...item, synced: true });
 
   function mergeActivityIdeas(localRows = [], remoteRows = []) {
+    const archivedIds = archivedLeisureActivityIds();
     const map = new Map(localRows.map(row => [row.id, normalizeLeisureActivity(row)]));
-    remoteRows.map(mapRemoteLeisureActivity).forEach(remote => {
+    remoteRows.map(mapRemoteLeisureActivity).forEach(remoteRow => {
+      const remote = archivedIds.has(remoteRow.id) && !remoteRow.is_archived
+        ? { ...remoteRow, is_archived: true, synced: false, updated_at: nowIso() }
+        : remoteRow;
       const local = map.get(remote.id);
+      if (local?.is_archived && !remote.is_archived) return;
       if (!local || new Date(remote.updated_at || remote.created_at || 0) >= new Date(local.updated_at || local.created_at || 0)) {
         map.set(remote.id, remote);
       }
     });
+    archivedIds.forEach(id => {
+      const item = map.get(id);
+      if (item && !item.is_archived) map.set(id, { ...item, is_archived: true, synced: false, updated_at: nowIso() });
+    });
     return Array.from(map.values());
+  }
+
+  function archivedLeisureActivityIds() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(ACTIVITY_ARCHIVED_IDS_KEY) || '[]');
+      if (Array.isArray(parsed)) return new Set(parsed.map(id => String(id || '').trim()).filter(Boolean));
+      if (parsed && typeof parsed === 'object') return new Set(Object.keys(parsed).filter(Boolean));
+      return new Set();
+    } catch {
+      return new Set();
+    }
+  }
+
+  function saveArchivedLeisureActivityIds(ids) {
+    localStorage.setItem(ACTIVITY_ARCHIVED_IDS_KEY, JSON.stringify(Array.from(ids).filter(Boolean)));
+  }
+
+  function rememberArchivedLeisureActivity(id) {
+    const normalized = String(id || '').trim();
+    if (!normalized) return;
+    const ids = archivedLeisureActivityIds();
+    if (ids.has(normalized)) return;
+    ids.add(normalized);
+    saveArchivedLeisureActivityIds(ids);
+  }
+
+  function forgetArchivedLeisureActivity(id) {
+    const normalized = String(id || '').trim();
+    if (!normalized) return;
+    const ids = archivedLeisureActivityIds();
+    if (!ids.delete(normalized)) return;
+    saveArchivedLeisureActivityIds(ids);
   }
 
   function activitySeededUsers() {
@@ -5638,7 +5703,10 @@
         if (seeded) markActivitySeededForUser(userId);
       } else {
         if (remoteRows.length) state.activityIdeas = mergeActivityIdeas(localRows, remoteRows);
-        if (unsyncedLocal.length) await upsertLeisureActivitiesRemote(unsyncedLocal);
+        const archivedIds = archivedLeisureActivityIds();
+        const pendingArchived = (state.activityIdeas || []).filter(item => archivedIds.has(item.id) && item.synced === false);
+        const rowsToPush = Array.from(new Map([...unsyncedLocal, ...pendingArchived].map(item => [item.id, item])).values());
+        if (rowsToPush.length) await upsertLeisureActivitiesRemote(rowsToPush);
         saveState({ skipRender: true });
       }
       refreshLeisureCatalogFromState();
