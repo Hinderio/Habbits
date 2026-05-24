@@ -516,20 +516,22 @@
   }
 
   const HABIT_CATEGORY_META = Object.freeze({
-    sport: { label: 'Sport', tone: '#509bb2', rgb: '80,155,178', icon: 'sport' },
-    nutrition: { label: 'Ernährung', tone: '#8ec8b1', rgb: '142,200,177', icon: 'bread' },
-    hydration: { label: 'Trinken', tone: '#56b5c8', rgb: '86,181,200', icon: 'water' },
-    mind: { label: 'Mind', tone: '#dfbf56', rgb: '223,191,86', icon: 'meditation' },
-    health: { label: 'Körper', tone: '#dd7b67', rgb: '221,123,103', icon: 'weight' },
-    routine: { label: 'Routine', tone: '#e3a45b', rgb: '227,164,91', icon: 'habits' },
-    tracking: { label: 'Tracking', tone: '#8ec8b1', rgb: '142,200,177', icon: 'number' }
+    sport: { label: 'Sport', tone: '#5098b8', rgb: '80,152,184', icon: 'sport' },
+    ergonomics: { label: 'Ergonomie', tone: '#58b8c8', rgb: '88,184,200', icon: 'standingDesk' },
+    nutrition: { label: 'Ernährung', tone: '#98c8a8', rgb: '152,200,168', icon: 'bread' },
+    hydration: { label: 'Trinken', tone: '#80c8c0', rgb: '128,200,192', icon: 'water' },
+    mind: { label: 'Mind', tone: '#e8b850', rgb: '232,184,80', icon: 'meditation' },
+    health: { label: 'Körper', tone: '#e08068', rgb: '224,128,104', icon: 'weight' },
+    routine: { label: 'Routine', tone: '#e09060', rgb: '224,144,96', icon: 'habits' },
+    tracking: { label: 'Tracking', tone: '#e8a060', rgb: '232,160,96', icon: 'number' }
   });
 
   function habitCategoryMeta(habit = {}) {
     const icon = habitIconKey(habit);
     const name = normalizeIconSearch(habit.name || '');
     if (isSystemMeditationHabit(habit) || icon === 'meditation' || name.includes('meditation') || name.includes('atem')) return HABIT_CATEGORY_META.mind;
-    if (['sport', 'jogging', 'hiking', 'walking', 'pushups', 'standingDesk'].includes(icon) || name.includes('sport') || name.includes('fitness') || name.includes('spazieren') || name.includes('wandern')) return HABIT_CATEGORY_META.sport;
+    if (icon === 'standingDesk' || name.includes('stehpult') || name.includes('stehschreibtisch') || name.includes('standing desk') || name.includes('ergonom') || name.includes('haltung') || name.includes('ruecken') || name.includes('rucken') || name.includes('nacken') || name.includes('arbeitsplatz') || name.includes('desk')) return HABIT_CATEGORY_META.ergonomics;
+    if (['sport', 'jogging', 'hiking', 'walking', 'pushups'].includes(icon) || name.includes('sport') || name.includes('fitness') || name.includes('spazieren') || name.includes('wandern')) return HABIT_CATEGORY_META.sport;
     if (icon === 'bread' || name.includes('ernaehr') || name.includes('ernahr') || name.includes('essen') || name.includes('brot') || name.includes('protein') || name.includes('gemuese') || name.includes('gemuse')) return HABIT_CATEGORY_META.nutrition;
     if (icon === 'water' || name.includes('wasser') || name.includes('trinken') || name.includes('hydr')) return HABIT_CATEGORY_META.hydration;
     if (icon === 'weight' || name.includes('gewicht') || name.includes('schlaf') || name.includes('gesund')) return HABIT_CATEGORY_META.health;
@@ -1484,7 +1486,7 @@
   }
 
   function isPhysicalHabit(habit = {}) {
-    return ['sport', 'jogging', 'hiking', 'walking', 'pushups', 'standingDesk'].includes(habitIconKey(habit));
+    return ['sport', 'jogging', 'hiking', 'walking', 'pushups'].includes(habitIconKey(habit));
   }
 
   function defaultHabitDna(habit = {}) {
