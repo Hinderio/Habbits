@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v69-supabase-storage-posters';
+  const APP_DATA_SCHEMA_VERSION = 'v70-current-stage-default-labels';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -53,7 +53,7 @@
     { file: 'stage-17.png', mood: 'Golden Hours', cue: 'Build', align: 'right' },
     { file: 'stage-18.png', mood: 'Above the Clouds', cue: 'Ascend', align: 'left' },
     { file: 'stage-19.png', mood: 'Summit Frame', cue: 'Apex', align: 'right' },
-    { file: 'stage-20.png', mood: 'Final Form', cue: 'Champion', align: 'left' }
+    { file: 'stage-20.png', mood: 'Final Form', cue: 'Champ', align: 'left' }
   ];
 
 
@@ -2450,6 +2450,9 @@
     stats.unlockedBadges = badgeStates.filter(badge => badge.unlocked).length;
     const visibleBadges = gamificationShowLocked ? badgeStates : badgeStates.filter(badge => badge.unlocked);
     const companion = companionProfile(stats);
+    if (!Number.isFinite(Number(selectedCompanionStage)) || Number(selectedCompanionStage) < 1 || Number(selectedCompanionStage) > 20) {
+      selectedCompanionStage = companion.stage;
+    }
     const hiddenCount = Math.max(0, badgeStates.length - stats.unlockedBadges);
     if (els.badgeUnlockCount) els.badgeUnlockCount.textContent = `${stats.unlockedBadges}/${badgeStates.length} Badges`;
     if (els.badgeShelfSummary) {
@@ -2534,8 +2537,9 @@
 
   function openCompanionPosterLightbox(stage) {
     const numericStage = Number(stage);
-    const safeStage = Number.isFinite(numericStage) ? Math.min(20, Math.max(1, numericStage)) : 1;
-    const label = ['Impuls','Funke','Anfang','Fokus','Takt','Form','Fluss','Stabil','Schub','Klar','Zug','Drive','Puls','Prime','Kontrolle','Apex','Zenith','Nova','Ascend','Champion'][safeStage - 1] || `Stufe ${safeStage}`;
+    const fallbackStage = Number.isFinite(Number(selectedCompanionStage)) ? Number(selectedCompanionStage) : 1;
+    const safeStage = Number.isFinite(numericStage) ? Math.min(20, Math.max(1, numericStage)) : Math.min(20, Math.max(1, fallbackStage));
+    const label = ['Impuls','Funke','Anfang','Fokus','Takt','Form','Fluss','Stabil','Schub','Klar','Zug','Drive','Puls','Prime','Control','Apex','Zenith','Nova','Ascend','Champ'][safeStage - 1] || `Stufe ${safeStage}`;
     const existing = document.querySelector('.poster-lightbox');
     if (existing) existing.remove();
     const overlay = document.createElement('div');
@@ -2711,15 +2715,15 @@
       'Impuls', 'Funke', 'Anfang', 'Fokus',
       'Takt', 'Form', 'Fluss', 'Stabil',
       'Schub', 'Klar', 'Zug', 'Drive',
-      'Puls', 'Prime', 'Kontrolle', 'Apex',
-      'Zenith', 'Nova', 'Ascend', 'Champion'
+      'Puls', 'Prime', 'Control', 'Apex',
+      'Zenith', 'Nova', 'Ascend', 'Champ'
     ];
     const chapters = [
       { title: 'Erwachen', range: '1-4', detail: 'Fundament legen' },
       { title: 'Aufbau', range: '5-8', detail: 'Gewohnheiten formen' },
       { title: 'Fokus', range: '9-12', detail: 'Disziplin staerken' },
-      { title: 'Mastery', range: '13-16', detail: 'Kontrolle meistern' },
-      { title: 'Champion', range: '17-20', detail: 'Bestversion leben' }
+      { title: 'Mastery', range: '13-16', detail: 'Control meistern' },
+      { title: 'Champ', range: '17-20', detail: 'Bestversion leben' }
     ];
     const stagePoints = Math.max(0, Number(stats.total || 0));
     const pointStage = Math.floor(stagePoints / 250) + 1;
@@ -2829,7 +2833,7 @@
       <span>${escapeHtml(chapter.range)} · ${escapeHtml(chapter.detail)}</span>
     </article>`).join('');
     const progressHeadline = currentCompanion.stage >= 20
-      ? 'Champion-Modus aktiv.'
+      ? 'Champ-Modus aktiv.'
       : `Noch ${nextPoints} bis Stufe ${Math.min(20, currentCompanion.stage + 1)}.`;
     const progressInsight = currentCompanion.stage >= 20
       ? 'Jetzt geht es darum, dieses Niveau ruhig und sauber zu halten.'
