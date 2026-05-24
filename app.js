@@ -516,13 +516,13 @@
   }
 
   const HABIT_CATEGORY_META = Object.freeze({
-    sport: { label: 'Sport', tone: '#95cbaa', rgb: '149,203,170', icon: 'sport' },
-    nutrition: { label: 'Ernährung', tone: '#bfc385', rgb: '191,195,133', icon: 'bread' },
-    hydration: { label: 'Trinken', tone: '#77d4cf', rgb: '119,212,207', icon: 'water' },
-    mind: { label: 'Mind', tone: '#edbb65', rgb: '237,187,101', icon: 'meditation' },
-    health: { label: 'Körper', tone: '#ef936b', rgb: '239,147,107', icon: 'weight' },
-    routine: { label: 'Routine', tone: '#f2a865', rgb: '242,168,101', icon: 'habits' },
-    tracking: { label: 'Tracking', tone: '#ed7975', rgb: '237,121,117', icon: 'number' }
+    sport: { label: 'Sport', tone: '#4f90b8', rgb: '79,144,184', icon: 'sport' },
+    nutrition: { label: 'Ernährung', tone: '#b7cf73', rgb: '183,207,115', icon: 'bread' },
+    hydration: { label: 'Trinken', tone: '#20b7c7', rgb: '32,183,199', icon: 'water' },
+    mind: { label: 'Mind', tone: '#9864a2', rgb: '152,100,162', icon: 'meditation' },
+    health: { label: 'Körper', tone: '#ee7a68', rgb: '238,122,104', icon: 'weight' },
+    routine: { label: 'Routine', tone: '#e9b842', rgb: '233,184,66', icon: 'habits' },
+    tracking: { label: 'Tracking', tone: '#2ba8a3', rgb: '43,168,163', icon: 'number' }
   });
 
   function habitCategoryMeta(habit = {}) {
