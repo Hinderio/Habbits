@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v81-fitness-progress-lines';
+  const APP_DATA_SCHEMA_VERSION = 'v82-fitness-slalom-responsive';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -28,15 +28,35 @@
     { name: 'Gossau SG', km: 22 },
     { name: 'St. Gallen', km: 33 },
     { name: 'Mörschwil', km: 39 },
-    { name: 'Rorschach', km: 46 }
+    { name: 'Rorschach', km: 46 },
+    { name: 'Arbon', km: 58 },
+    { name: 'Romanshorn', km: 68 },
+    { name: 'Kreuzlingen', km: 80 },
+    { name: 'Frauenfeld', km: 96 },
+    { name: 'Winterthur', km: 118 },
+    { name: 'Bülach', km: 132 },
+    { name: 'Zürich', km: 145 },
+    { name: 'Horgen', km: 158 },
+    { name: 'Zug', km: 173 },
+    { name: 'Rotkreuz', km: 186 },
+    { name: 'Luzern', km: 200 }
   ]);
   const FITNESS_MOUNTAIN_MILESTONES = Object.freeze([
     { name: 'Napf', meters: 1408, region: 'Emmental' },
     { name: 'Kronberg', meters: 1663, region: 'Appenzell' },
     { name: 'Säntis', meters: 2502, region: 'Alpstein' },
     { name: 'Pizol', meters: 2844, region: 'St. Galler Alpen' },
+    { name: 'Titlis', meters: 3238, region: 'Urner Alpen' },
+    { name: 'Tödi', meters: 3614, region: 'Glarner Alpen' },
+    { name: 'Finsteraarhorn', meters: 4274, region: 'Berner Alpen' },
     { name: 'Matterhorn', meters: 4478, region: 'Wallis' },
-    { name: 'Mont Blanc', meters: 4808, region: 'Alpen-Klassiker' }
+    { name: 'Dufourspitze', meters: 4634, region: 'Monte Rosa' },
+    { name: 'Mont Blanc', meters: 4808, region: 'Alpen-Klassiker' },
+    { name: 'Elbrus', meters: 5642, region: 'Kaukasus' },
+    { name: 'Kilimanjaro', meters: 5895, region: 'Tansania' },
+    { name: 'Denali', meters: 6190, region: 'Alaska' },
+    { name: 'Aconcagua', meters: 6961, region: 'Anden' },
+    { name: 'Mount Everest', meters: 8849, region: 'Himalaya' }
   ]);
   const HALF_WHITE_BREAD_KCAL_PER_100G = 255;
   const ACTIVITY_CATALOG_URL = './data/activity-ideas.json';
@@ -5876,6 +5896,34 @@
     };
   }
 
+  function buildTownJourneyRows(segmentKm = 50) {
+    const maxKm = Math.max(segmentKm, FITNESS_TOWN_MILESTONES.at(-1)?.km || segmentKm);
+    const rowCount = Math.max(1, Math.ceil(maxKm / segmentKm));
+    return Array.from({ length: rowCount }, (_, index) => {
+      const startKm = index * segmentKm;
+      const endKm = Math.min(maxKm, startKm + segmentKm);
+      const towns = FITNESS_TOWN_MILESTONES.filter(town => (index === 0 ? town.km >= startKm : town.km > startKm) && town.km <= endKm);
+      return {
+        index,
+        startKm,
+        endKm,
+        spanKm: Math.max(1, endKm - startKm),
+        reversed: index % 2 === 1,
+        towns
+      };
+    });
+  }
+
+  function townDisplayPercent(row, km) {
+    const raw = clampNumber(((km - row.startKm) / row.spanKm) * 100, 0, 100);
+    return row.reversed ? 100 - raw : raw;
+  }
+
+  function townLocalProgress(row, currentKm = 0) {
+    const raw = clampNumber(((currentKm - row.startKm) / row.spanKm) * 100, 0, 100);
+    return row.reversed ? 100 - raw : raw;
+  }
+
   function buildMountainCollection(sessions = []) {
     const totalAscent = Math.round(sum(sessions.map(session => Number(session.ascent || 0))));
     const mountains = FITNESS_MOUNTAIN_MILESTONES.map(mountain => ({
@@ -5885,18 +5933,54 @@
       progressPercent: clampNumber((totalAscent / mountain.meters) * 100, 0, 100)
     }));
     const nextMountain = mountains.find(mountain => !mountain.unlocked) || null;
-    const montBlanc = mountains.find(mountain => mountain.name === 'Mont Blanc') || mountains.at(-1) || null;
+    const summitGoal = mountains.at(-1) || null;
+    const montBlanc = mountains.find(mountain => mountain.name === 'Mont Blanc') || null;
     return {
       totalAscent,
       mountains,
       collectedCount: mountains.filter(mountain => mountain.unlocked).length,
       nextMountain,
       montBlanc,
+      summitGoal,
+      summitRemaining: Math.max(0, (summitGoal?.meters || 0) - totalAscent),
       montBlancRemaining: Math.max(0, (montBlanc?.meters || 0) - totalAscent)
     };
   }
 
   function renderFitnessTownLine(type = 'jogging', totalDistance = 0) {
+    const meta = fitnessActivityMeta(type);
+    const progress = buildTownProgress(totalDistance);
+    const rows = buildTownJourneyRows(40);
+    return `<div class="fitness-destination-line">
+      <div class="fitness-destination-slalom" aria-label="Motivationslinie mit Ortschaften ab Wil SG">
+        ${rows.map((row, rowIndex) => {
+          const active = progress.current > row.startKm;
+          const completed = progress.current >= row.endKm;
+          const localProgress = townLocalProgress(row, progress.current);
+          const connector = rowIndex < rows.length - 1
+            ? `<span class="fitness-destination-connector ${row.reversed ? 'is-left' : 'is-right'}"><i></i></span>`
+            : '';
+          return `<div class="fitness-destination-row ${row.reversed ? 'is-reverse' : ''} ${active ? 'is-active' : ''} ${completed ? 'is-complete' : ''}">
+            <div class="fitness-destination-row-range"><span>${row.startKm} km</span><span>${row.endKm} km</span></div>
+            <div class="fitness-destination-rail">
+              <span class="fitness-destination-base"></span>
+              <span class="fitness-destination-fill ${row.reversed ? 'is-reverse' : ''}" style="width:${clampNumber(((Math.min(progress.current, row.endKm) - row.startKm) / row.spanKm) * 100, 0, 100)}%"></span>
+              ${row.towns.map((town, townIndex) => {
+                const position = townDisplayPercent(row, town.km);
+                const reached = progress.current >= town.km - 0.01;
+                const lane = (townIndex + rowIndex) % 2 === 0 ? 'lane-top' : 'lane-bottom';
+                return `<span class="fitness-destination-stop ${reached ? 'is-reached' : ''} ${lane}" style="left:${position}%"><i style="--stop-color:${meta.color}"></i><strong>${escapeHtml(town.name)}</strong><small>${town.km} km</small></span>`;
+              }).join('')}
+              ${active ? `<span class="fitness-destination-marker" style="left:${localProgress}%"><span class="fitness-destination-pin" style="background:${meta.color}"></span><small>${formatKmValue(progress.current)}</small></span>` : ''}
+              ${connector}
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }
+
+  function renderMountainSummary(type = 'jogging', totalDistance = 0) {
     const meta = fitnessActivityMeta(type);
     const progress = buildTownProgress(totalDistance);
     return `<div class="fitness-destination-line">
@@ -5920,7 +6004,7 @@
     return `<div class="fitness-ascent-panel">
       <div class="fitness-ascent-head"><strong>${formatMetersValue(collection.totalAscent)} Höhenmeter gesammelt</strong><span>${collection.collectedCount}/${collection.mountains.length} Berge freigeschaltet</span></div>
       <div class="fitness-ascent-track"><span style="width:${clampNumber((collection.totalAscent / Math.max(1, collection.montBlanc?.meters || 1)) * 100, 0, 100)}%"></span></div>
-      <div class="fitness-ascent-copy"><strong>${collection.montBlancRemaining > 0 ? `Noch ${formatMetersValue(collection.montBlancRemaining)} bis zum Mont Blanc` : 'Mont Blanc gesammelt'}</strong><small>${collection.nextMountain ? `Nächster Berg: ${collection.nextMountain.name} · noch ${formatMetersValue(collection.nextMountain.remaining)}` : 'Alle definierten Berge freigeschaltet.'}</small></div>
+      <div class="fitness-ascent-copy"><strong>${collection.summitRemaining > 0 ? `Noch ${formatMetersValue(collection.summitRemaining)} bis ${collection.summitGoal?.name || 'zum Gipfelziel'}` : `${collection.summitGoal?.name || 'Gipfelziel'} gesammelt`}</strong><small>${collection.nextMountain ? `Nächster Berg: ${collection.nextMountain.name} · noch ${formatMetersValue(collection.nextMountain.remaining)}` : 'Alle definierten Berge freigeschaltet.'}</small></div>
     </div>`;
   }
 
@@ -5951,7 +6035,7 @@
         <div>
           <p class="eyebrow">${escapeHtml(meta.label)}</p>
           <h3>${formatKmValue(summary.totalDistance)}</h3>
-          <span class="subtle">Wil SG → mögliche nächste Orte im Osten</span>
+          <span class="subtle">Wil SG → motivierende Ortschaften bis 200 km</span>
         </div>
         <span class="fitness-journey-pill" style="--journey-color:${meta.color}">${summary.totalSessions} Session${summary.totalSessions === 1 ? '' : 's'}</span>
       </div>
@@ -5986,7 +6070,7 @@
       return `<div class="fitness-peaks-panel">
         <div class="fitness-stats-grid fitness-peaks-summary">
           <article class="fitness-stat-card"><small>Gesammelte Berge</small><strong>${mountainCollection.collectedCount}</strong><span>automatisch freigeschaltet</span></article>
-          <article class="fitness-stat-card"><small>Mont Blanc</small><strong>${mountainCollection.montBlancRemaining > 0 ? `noch ${formatMetersValue(mountainCollection.montBlancRemaining)}` : 'erreicht'}</strong><span>${formatMetersValue(mountainCollection.montBlanc?.meters || 0)} Gesamtziel</span></article>
+          <article class="fitness-stat-card"><small>${escapeHtml(mountainCollection.summitGoal?.name || 'Gipfelziel')}</small><strong>${mountainCollection.summitRemaining > 0 ? `noch ${formatMetersValue(mountainCollection.summitRemaining)}` : 'erreicht'}</strong><span>${formatMetersValue(mountainCollection.summitGoal?.meters || 0)} Gesamtziel</span></article>
           <article class="fitness-stat-card"><small>Nächster Gipfel</small><strong>${escapeHtml(mountainCollection.nextMountain?.name || 'Alles geschafft')}</strong><span>${mountainCollection.nextMountain ? `${formatMetersValue(mountainCollection.nextMountain.remaining)} fehlen` : 'alle Meilensteine gesammelt'}</span></article>
         </div>
         ${renderMountainCollectionCards(mountainCollection)}
