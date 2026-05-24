@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v72-dashboard-fab-photo-polish';
+  const APP_DATA_SCHEMA_VERSION = 'v73-calendar-appointments-focus';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -6667,6 +6667,25 @@
     </article>`;
   }
 
+  function renderCalendarAppointmentChips(appointments) {
+    const visibleAppointments = appointments.slice(0, 2);
+    const chips = visibleAppointments.map(appointment => {
+      const type = appointmentTypeMeta(appointment.appointment_type);
+      const startsAt = appointment?.starts_at ? new Date(appointment.starts_at) : null;
+      const time = startsAt && !Number.isNaN(startsAt.getTime())
+        ? startsAt.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' })
+        : 'Zeit offen';
+      return `<span class="day-chip appointment calendar-event-chip type-${normalizeAppointmentType(appointment.appointment_type)}">
+        <b>${escapeHtml(time)} · ${escapeHtml(type.short || type.label)}</b>
+        <em>${escapeHtml(appointment.title || type.label || 'Termin')}</em>
+      </span>`;
+    });
+    if (appointments.length > visibleAppointments.length) {
+      chips.push(`<span class="day-chip appointment-more">+${appointments.length - visibleAppointments.length} weitere</span>`);
+    }
+    return chips.join('');
+  }
+
   function renderCalendar() {
     const year = calendarCursor.getFullYear();
     const month = calendarCursor.getMonth();
@@ -6682,23 +6701,11 @@
       const date = new Date(start);
       date.setDate(start.getDate() + i);
       const key = toDateKey(date);
-      const cigarettes = cigarettesOnDate(key).length;
-      const routineLog = morningRoutineCompletedLog(key);
-      const tasks = state.tasks.filter(t => toDateKey(t.due_at || t.completed_at || t.created_at) === key);
       const appointments = appointmentsOnDate(key);
-      const alcohol = alcoholForDate(key)?.consumed;
-      const alcoholUnits = alcoholUnitsOnDate(key).length;
-      const points = calendarPointsOnDate(key);
-      const chips = [];
-      if (cigarettes) chips.push(`<span class="day-chip smoke">${cigarettes} Zig.</span>`);
-      if (routineLog) chips.push('<span class="day-chip habit">Routine</span>');
-      if (appointments.length) chips.push(`<span class="day-chip appointment">${appointments.length} Termin</span>`);
-      if (tasks.length) chips.push(`<span class="day-chip task">${tasks.length} Task</span>`);
-      if (alcoholUnits) chips.push(`<span class="day-chip alcohol">${alcoholUnits} Alk.</span>`);
-      else if (alcohol) chips.push('<span class="day-chip alcohol">Alk.</span>');
-      cells.push(`<button class="calendar-day ${date.getMonth() !== month ? 'is-muted' : ''} ${key === toDateKey(new Date()) ? 'is-today' : ''} ${key === selectedCalendarDate ? 'is-selected' : ''}" type="button" data-action="select-day" data-day="${key}">
-        <span class="calendar-day-head"><strong>${date.getDate()}</strong>${points ? `<em class="day-points">${points > 0 ? '+' : ''}${points}</em>` : ''}</span>
-        <span class="day-chips">${chips.join('')}</span>
+      const chips = renderCalendarAppointmentChips(appointments);
+      cells.push(`<button class="calendar-day ${date.getMonth() !== month ? 'is-muted' : ''} ${key === toDateKey(new Date()) ? 'is-today' : ''} ${key === selectedCalendarDate ? 'is-selected' : ''} ${appointments.length ? 'has-appointments' : ''}" type="button" data-action="select-day" data-day="${key}">
+        <span class="calendar-day-head"><strong>${date.getDate()}</strong>${appointments.length ? `<em class="day-appointment-count">${appointments.length}</em>` : ''}</span>
+        <span class="day-chips">${chips}</span>
       </button>`);
     }
     els.calendarGrid.innerHTML = cells.join('');
