@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v64-fish-companion-evolution';
+  const APP_DATA_SCHEMA_VERSION = 'v65-motion-poster-companion';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -2670,63 +2670,80 @@
   function renderCompanionFish(stage, size = 'hero') {
     const numericStage = Number(stage || 1);
     const safeStage = Number.isFinite(numericStage) ? Math.min(20, Math.max(1, numericStage)) : 1;
-    const fillHeight = Math.round((safeStage / 20) * 320);
-    const fillY = 340 - fillHeight;
-    const dotOpacity = Math.min(0.85, 0.12 + safeStage * 0.035).toFixed(2);
     const scaleClass = String(size).startsWith('mini') ? 'is-mini' : 'is-hero';
-    const scaleLines = safeStage >= 5 ? Array.from({ length: Math.min(12, safeStage) }, (_, index) => {
-      const y = 132 + index * 8;
-      const width = Math.max(16, 62 - index * 2.6);
-      return `<path d="M${160 - width / 2} ${y} C ${148 - width / 3} ${y + 5}, ${148 - width / 3} ${y + 9}, ${160 - width / 2 + 2} ${y + 13}" />`;
+    const isMini = scaleClass === 'is-mini';
+    const lineCount = isMini ? Math.max(7, Math.round(8 + safeStage * 0.42)) : Math.max(15, Math.round(18 + safeStage * 1.05));
+    const startY = isMini ? 52 : 46;
+    const endY = isMini ? 300 : 304;
+    const step = (endY - startY) / Math.max(1, lineCount - 1);
+    const scanlines = Array.from({ length: lineCount }, (_, index) => {
+      const y = startY + index * step + Math.sin((index + safeStage) * 0.48) * (isMini ? 0.5 : 1.3);
+      const left = 54 + (((index * 17) + safeStage * 5) % 26) - 13;
+      const right = 264 - (((index * 11) + safeStage * 3) % 30) + 8;
+      const width = isMini ? (index % 3 === 0 ? 2.05 : 1.55) : (index % 4 === 0 ? 2.7 : index % 2 === 0 ? 1.85 : 1.35);
+      const opacity = Math.min(1, 0.34 + safeStage * 0.024 + (index / lineCount) * 0.16);
+      const fragments = [`<path class="motion-scanline" d="M${left.toFixed(1)} ${y.toFixed(1)} H${right.toFixed(1)}" style="stroke-width:${width.toFixed(2)};opacity:${opacity.toFixed(2)}" />`];
+      if (!isMini && safeStage >= 8 && index % 4 === 1) {
+        const fx = 84 + ((index * 23) % 126);
+        const fw = 18 + ((index * 9) % 16);
+        fragments.push(`<path class="motion-scanline" d="M${fx.toFixed(1)} ${(y + 2.8).toFixed(1)} H${(fx + fw).toFixed(1)}" style="stroke-width:1.10;opacity:${Math.min(0.92, opacity + 0.06).toFixed(2)}" />`);
+      }
+      return fragments.join('');
+    }).join('');
+    const glitchFragments = Array.from({ length: !isMini && safeStage >= 6 ? Math.min(14, safeStage - 2) : 0 }, (_, index) => {
+      const y = 72 + index * 15.5 + Math.sin(index * 1.1) * 4;
+      const x = 54 + ((index * 31 + safeStage * 7) % 188);
+      const width = 24 + ((index * 17 + safeStage * 9) % 44);
+      const height = index % 3 === 0 ? 2.6 : 1.55;
+      return `<rect class="motion-fragment" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${width.toFixed(1)}" height="${height.toFixed(1)}" rx="1.2" />`;
+    }).join('');
+    const detailMarkers = Array.from({ length: safeStage >= 10 ? Math.min(9, Math.floor((safeStage - 6) / 2)) : 0 }, (_, index) => {
+      const x1 = 106 + index * 14;
+      const x2 = x1 + 26 + (index % 3) * 4;
+      const y1 = 116 + index * 18;
+      const y2 = y1 + 10 + (index % 2) * 8;
+      return `<path class="motion-detail" d="M${x1} ${y1} L${x2} ${y2}" />`;
+    }).join('');
+    const orbitLines = !isMini && safeStage >= 12 ? `
+      <g class="motion-orbits" opacity="${Math.min(0.42, 0.14 + safeStage * 0.012).toFixed(2)}">
+        <path d="M44 94 C84 62 134 50 182 54" />
+        <path d="M42 280 C108 320 198 328 264 280" />
+        <path d="M208 34 C250 58 276 106 280 152" />
+      </g>` : '';
+    const motionTrails = !isMini && safeStage >= 14 ? Array.from({ length: Math.min(6, safeStage - 12) }, (_, index) => {
+      const x1 = 38 - index * 3;
+      const x2 = 104 + index * 8;
+      const y = 106 + index * 24;
+      return `<path class="motion-trail" d="M${x1} ${y} H${x2}" style="opacity:${(0.24 + index * 0.06).toFixed(2)}" />`;
     }).join('') : '';
-    const energyLines = safeStage >= 13
-      ? `<g class="fish-energy-lines"><path d="M160 18 V350"/><path d="M92 72 C128 116 130 250 95 314"/><path d="M228 72 C192 116 190 250 225 314"/></g>`
-      : '';
-    return `<svg class="companion-fish-svg ${scaleClass}" viewBox="0 0 320 360" role="img" aria-label="Companion Fisch Stufe ${safeStage} von 20">
+    return `<svg class="companion-motion-svg ${scaleClass}" viewBox="0 0 320 360" role="img" aria-label="Companion Poster Stufe ${safeStage} von 20">
       <defs>
-        <clipPath id="fishFillClip-${size}-${safeStage}">
-          <rect x="0" y="${fillY}" width="320" height="${fillHeight}" rx="0" />
+        <clipPath id="motionBodyClip-${size}-${safeStage}">
+          <circle cx="231" cy="70" r="23" />
+          <path d="M198 101 C180 110 167 129 154 152 C145 169 137 184 128 198 C119 211 112 225 108 241 C116 237 124 232 132 225 C144 216 155 204 167 191 C182 175 191 164 206 155 C214 150 223 145 234 142 C225 132 219 121 213 111 C210 107 205 103 198 101 Z" />
+          <path d="M177 161 C154 173 136 191 117 223 C102 247 87 269 57 304 C73 306 96 293 116 274 C141 251 160 227 178 198 Z" />
+          <path d="M204 162 C225 170 240 183 254 205 C265 222 278 236 298 247 C294 232 286 216 279 199 C273 184 267 169 259 156 C250 141 235 132 217 130 Z" />
+          <path d="M183 192 C174 205 169 219 166 235 C162 257 160 276 154 297 C149 314 141 331 131 344 C144 343 157 335 167 323 C178 310 185 293 191 276 C196 260 200 244 204 228 C208 212 213 199 223 188 Z" />
+          <path d="M148 236 C136 249 126 263 118 280 C111 294 103 307 91 323 C101 323 112 319 121 312 C131 304 139 295 146 284 C155 270 162 256 170 242 Z" />
         </clipPath>
-        <clipPath id="fishBodyClip-${size}-${safeStage}">
-          <path d="M160 30 C121 58 101 114 101 185 C101 253 124 309 160 338 C196 309 219 253 219 185 C219 114 199 58 160 30 Z"/>
-          <path d="M101 185 C74 164 50 158 27 171 C48 191 72 195 101 185 Z"/>
-          <path d="M219 185 C246 164 270 158 293 171 C272 191 248 195 219 185 Z"/>
-          <path d="M160 338 C137 336 116 349 101 357 C128 358 146 354 160 338 Z"/>
-          <path d="M160 338 C183 336 204 349 219 357 C192 358 174 354 160 338 Z"/>
-        </clipPath>
-        <radialGradient id="fishRedGlow-${size}-${safeStage}" cx="50%" cy="68%" r="55%">
-          <stop offset="0" stop-color="#ff6f61" stop-opacity="0.95" />
-          <stop offset="0.58" stop-color="#ef3f37" stop-opacity="0.66" />
-          <stop offset="1" stop-color="#ef3f37" stop-opacity="0" />
-        </radialGradient>
-        <pattern id="fishDots-${size}-${safeStage}" width="10" height="10" patternUnits="userSpaceOnUse">
-          <circle cx="2.5" cy="2.5" r="1.65" fill="#ef3f37" opacity="${dotOpacity}" />
-        </pattern>
       </defs>
-      <g class="fish-aura" opacity="${Math.min(0.9, safeStage / 20 + 0.18).toFixed(2)}">
-        <circle cx="160" cy="188" r="${72 + safeStage * 3}" />
-        <circle cx="160" cy="188" r="${44 + safeStage * 2}" />
+      <g class="motion-aura" opacity="${(!isMini && safeStage >= 11) ? Math.min(0.38, 0.11 + safeStage * 0.012).toFixed(2) : '0'}">
+        <circle cx="160" cy="182" r="${isMini ? 0 : 98 + safeStage * 1.2}" />
+        <circle cx="160" cy="182" r="${isMini ? 0 : 64 + safeStage * 0.8}" />
       </g>
-      ${energyLines}
-      <g class="fish-fill" clip-path="url(#fishBodyClip-${size}-${safeStage})">
-        <rect x="0" y="${fillY}" width="320" height="${fillHeight}" fill="url(#fishRedGlow-${size}-${safeStage})" />
-        <rect x="20" y="${fillY}" width="280" height="${fillHeight}" fill="url(#fishDots-${size}-${safeStage})" opacity="${Math.min(0.7, 0.14 + safeStage * 0.025).toFixed(2)}" />
+      ${orbitLines}
+      ${motionTrails}
+      <g clip-path="url(#motionBodyClip-${size}-${safeStage})">
+        ${scanlines}
+        ${glitchFragments}
+        ${detailMarkers}
       </g>
-      <g class="fish-line-art">
-        <path class="fish-main" d="M160 30 C121 58 101 114 101 185 C101 253 124 309 160 338 C196 309 219 253 219 185 C219 114 199 58 160 30 Z"/>
-        <path d="M118 81 C139 95 181 95 202 81"/>
-        <path d="M122 101 C142 112 178 112 198 101"/>
-        <path d="M101 185 C74 164 50 158 27 171 C48 191 72 195 101 185 Z"/>
-        <path d="M219 185 C246 164 270 158 293 171 C272 191 248 195 219 185 Z"/>
-        <path d="M160 338 C137 336 116 349 101 357 C128 358 146 354 160 338 Z"/>
-        <path d="M160 338 C183 336 204 349 219 357 C192 358 174 354 160 338 Z"/>
-        <path d="M160 30 C158 68 158 276 160 338"/>
-        <circle cx="176" cy="64" r="7"/>
-        <circle cx="176" cy="64" r="2.5" class="fish-eye"/>
-        <g class="fish-scales">${scaleLines}</g>
-      </g>
-      <g class="fish-axis">
-        <path d="M160 8 V28"/><path d="M160 342 V356"/><path d="M92 185 H72"/><path d="M228 185 H248"/>
+      <g class="motion-core-shapes">
+        <circle cx="231" cy="70" r="${isMini ? 7.5 : 11.5}" />
+        <path d="M184 108 C173 120 164 137 158 149 C170 145 184 142 198 141 C205 140 214 139 221 138 C215 127 207 116 196 107 Z" />
+        <path d="M178 160 C165 171 153 188 141 212 C154 205 168 197 181 188 C192 180 202 173 212 167 C204 160 193 157 178 160 Z" />
+        <path d="M151 236 C145 245 140 257 136 268 C146 260 154 250 162 238 C158 236 155 235 151 236 Z" />
+        <path d="M202 189 C194 205 189 223 185 241 C194 228 203 214 215 200 C211 195 207 191 202 189 Z" />
       </g>
     </svg>`;
   }
@@ -2754,15 +2771,15 @@
           <div><p class="eyebrow">Companion Evolution</p><h4>Stufe ${companion.stage}</h4><span>${escapeHtml(companion.stageName)} · ${escapeHtml(companion.chapter.title)}</span></div>
           <b>${companion.stage}/20</b>
         </div>
-        <div class="fish-poster-art">
+        <div class="fish-poster-art motion-poster-art">
           ${renderCompanionFish(companion.stage, 'hero')}
         </div>
         <div class="fish-progress-row"><span>${companion.stage}/20</span><i><b style="width:${companion.stageProgress}%"></b></i><em>${nextPoints}</em></div>
       </div>
       <div class="fish-companion-copy">
         <p class="eyebrow">Poster Companion</p>
-        <h4>Dein Fortschritt wird sichtbar.</h4>
-        <p>Der Fisch fuellt sich mit jeder Stufe weiter rot auf. Je staerker deine Konsistenz, desto dichter wird das Poster.</p>
+        <h4>Dein Fortschritt wird als Bewegung sichtbar.</h4>
+        <p>Die Form bleibt minimalistisch und fuellt sich nicht. Stattdessen wird sie mit jeder Stufe dichter, praeziser und praesenter - von ersten Fragmenten bis zum klaren Poster-Moment.</p>
         <div class="companion-traits fish-traits">
           <span>${unlockedText} Badges</span>
           <span>${escapeHtml(companion.trait)}</span>
