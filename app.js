@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v75-calendar-task-dots';
+  const APP_DATA_SCHEMA_VERSION = 'v76-context-aware-gradient-charts';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -3353,25 +3353,42 @@
 
   function getTrendMetricConfig(keys) {
     if (selectedTrendMetric === 'cigarettes') {
-      return { title: 'Zigaretten pro Tag', label: 'Zigaretten', data: keys.map(k => cigarettesOnDate(k).length), beginAtZero: true };
+      return {
+        title: 'Zigaretten pro Tag',
+        label: 'Zigaretten',
+        data: keys.map(k => cigarettesOnDate(k).length),
+        beginAtZero: true,
+        toneMode: 'lowerBetter',
+        toneScale: 'cigarettes'
+      };
     }
     if (selectedTrendMetric === 'alcohol') {
-      return { title: 'Alkohol-Einheiten', label: 'Einheiten', data: keys.map(k => alcoholUnitsOnDate(k).length), beginAtZero: true };
+      return {
+        title: 'Alkohol-Einheiten',
+        label: 'Einheiten',
+        data: keys.map(k => alcoholUnitsOnDate(k).length),
+        beginAtZero: true,
+        toneMode: 'lowerBetter',
+        toneScale: 'alcohol'
+      };
     }
     if (selectedTrendMetric.startsWith('habit:')) {
       const habitId = selectedTrendMetric.slice(6);
       const habit = state.habits.find(h => h.id === habitId && !h.is_archived);
       if (habit) {
+        const data = keys.map(k => habitValueForDay(habit, k).value);
         return {
           title: `${habit.name} Verlauf`,
           label: habit.unit || typeLabel(habit.type),
-          data: keys.map(k => habitValueForDay(habit, k).value),
-          beginAtZero: habit.type !== 'weight'
+          data,
+          beginAtZero: habit.type !== 'weight',
+          toneMode: habit.direction === 'decrease' ? 'lowerBetter' : 'higherBetter',
+          toneTarget: Number(habit.target || 0) || null
         };
       }
     }
     selectedTrendMetric = 'points';
-    return { title: 'Punkteentwicklung', label: 'Punkte', data: keys.map(k => pointsOnDate(k)), beginAtZero: true };
+    return { title: 'Punkteentwicklung', label: 'Punkte', data: keys.map(k => pointsOnDate(k)), beginAtZero: true, toneMode: 'score' };
   }
 
   function renderHabitHeatmap() {
@@ -6783,11 +6800,56 @@
     const trend = getTrendMetricConfig(keys);
     const pointsData = keys.map(k => pointsOnDate(k));
     if (els.trendChartTitle) els.trendChartTitle.textContent = trend.title;
-    charts.trend = drawChart(charts.trend, els.trendChart, labels, trend.data, trend.label, { beginAtZero: trend.beginAtZero });
-    charts.points = drawChart(charts.points, els.pointsChart, labels, pointsData, 'Punkte', { beginAtZero: true });
+    charts.trend = drawChart(charts.trend, els.trendChart, labels, trend.data, trend.label, {
+      beginAtZero: trend.beginAtZero,
+      toneMode: trend.toneMode,
+      toneScale: trend.toneScale,
+      toneTarget: trend.toneTarget
+    });
+    charts.points = drawChart(charts.points, els.pointsChart, labels, pointsData, 'Punkte', { beginAtZero: true, toneMode: 'score' });
   }
-  function chartToneForValue(value) {
+
+  function chartToneForValue(value, options = {}) {
     const numeric = Number(value || 0);
+    const mode = options.toneMode || 'score';
+    const absMax = Math.max(1, ...((options.data || []).map(v => Math.abs(Number(v || 0)))));
+    const maxPositive = Math.max(1, ...((options.data || []).map(v => Math.max(0, Number(v || 0)))));
+    const target = Number(options.toneTarget || 0) || null;
+
+    if (mode === 'lowerBetter') {
+      if (numeric <= 0) return '#9db0c3';
+      if (options.toneScale === 'cigarettes') {
+        if (numeric <= 2) return '#42d67d';
+        if (numeric <= 5) return '#8fdc74';
+        if (numeric <= 9) return '#ffbd6a';
+        if (numeric <= 13) return '#ff9f7a';
+        return '#ff7070';
+      }
+      if (options.toneScale === 'alcohol') {
+        if (numeric <= 1) return '#42d67d';
+        if (numeric <= 3) return '#ffbd6a';
+        if (numeric <= 5) return '#ff9f7a';
+        return '#ff7070';
+      }
+      const limit = target || maxPositive;
+      const ratio = numeric / Math.max(1, limit);
+      if (ratio <= .6) return '#42d67d';
+      if (ratio <= 1) return '#8fdc74';
+      if (ratio <= 1.5) return '#ffbd6a';
+      if (ratio <= 2) return '#ff9f7a';
+      return '#ff7070';
+    }
+
+    if (mode === 'higherBetter') {
+      if (numeric <= 0) return '#9db0c3';
+      const limit = target || maxPositive;
+      const ratio = numeric / Math.max(1, limit);
+      if (ratio >= 1) return '#42d67d';
+      if (ratio >= .7) return '#8fdc74';
+      if (ratio >= .35) return '#ffbd6a';
+      return '#ff9f7a';
+    }
+
     if (numeric < -80) return '#ff7070';
     if (numeric < 0) return '#ff9f7a';
     if (numeric >= 180) return '#42d67d';
@@ -6796,32 +6858,51 @@
     return '#9db0c3';
   }
 
-  function chartSegmentTone(ctx) {
+  function chartSegmentTone(ctx, options = {}) {
     const left = Number(ctx?.p0?.parsed?.y || 0);
     const right = Number(ctx?.p1?.parsed?.y || 0);
-    return chartToneForValue((left + right) / 2);
+    return chartToneForValue((left + right) / 2, options);
   }
 
-  function chartFillGradient(ctx) {
+  function chartFillGradient(ctx, options = {}) {
     const chart = ctx.chart;
     const area = chart.chartArea;
     const yScale = chart.scales?.y;
-    if (!area || !yScale) return 'rgba(74,215,209,.12)';
+    if (!area || !yScale) return 'rgba(74,215,209,.22)';
     const gradient = chart.ctx.createLinearGradient(0, area.top, 0, area.bottom);
+    const mode = options.toneMode || 'score';
+
+    if (mode === 'lowerBetter') {
+      gradient.addColorStop(0, 'rgba(255,112,112,.46)');
+      gradient.addColorStop(.34, 'rgba(255,189,106,.38)');
+      gradient.addColorStop(.68, 'rgba(143,220,116,.30)');
+      gradient.addColorStop(1, 'rgba(66,214,125,.25)');
+      return gradient;
+    }
+
+    if (mode === 'higherBetter') {
+      gradient.addColorStop(0, 'rgba(66,214,125,.44)');
+      gradient.addColorStop(.45, 'rgba(143,220,116,.32)');
+      gradient.addColorStop(.78, 'rgba(255,189,106,.30)');
+      gradient.addColorStop(1, 'rgba(255,112,112,.24)');
+      return gradient;
+    }
+
     const zeroPixel = Math.max(area.top, Math.min(area.bottom, yScale.getPixelForValue(0)));
     const zeroStop = (zeroPixel - area.top) / Math.max(1, area.bottom - area.top);
-    gradient.addColorStop(0, 'rgba(66,214,125,.28)');
-    gradient.addColorStop(Math.max(0, zeroStop - .015), 'rgba(66,214,125,.10)');
-    gradient.addColorStop(Math.min(1, zeroStop + .015), 'rgba(255,112,112,.08)');
-    gradient.addColorStop(1, 'rgba(255,112,112,.24)');
+    gradient.addColorStop(0, 'rgba(66,214,125,.48)');
+    gradient.addColorStop(Math.max(0, zeroStop - .02), 'rgba(143,220,116,.26)');
+    gradient.addColorStop(Math.min(1, zeroStop + .02), 'rgba(255,112,112,.20)');
+    gradient.addColorStop(1, 'rgba(255,112,112,.44)');
     return gradient;
   }
 
-  function chartPointTone(ctx) {
-    return chartToneForValue(ctx?.parsed?.y);
+  function chartPointTone(ctx, options = {}) {
+    return chartToneForValue(ctx?.parsed?.y, options);
   }
 
-  function buildChartDataset(label, data) {
+  function buildChartDataset(label, data, options = {}) {
+    const toneOptions = { ...options, data };
     return {
       label,
       data,
@@ -6831,18 +6912,18 @@
       pointRadius: 3.2,
       pointHoverRadius: 5,
       borderWidth: 3,
-      borderColor: chartSegmentTone,
-      backgroundColor: chartFillGradient,
-      pointBackgroundColor: chartPointTone,
-      pointBorderColor: chartPointTone,
+      borderColor: ctx => chartSegmentTone(ctx, toneOptions),
+      backgroundColor: ctx => chartFillGradient(ctx, toneOptions),
+      pointBackgroundColor: ctx => chartPointTone(ctx, toneOptions),
+      pointBorderColor: ctx => chartPointTone(ctx, toneOptions),
       pointBorderWidth: 2,
-      segment: { borderColor: chartSegmentTone }
+      segment: { borderColor: ctx => chartSegmentTone(ctx, toneOptions) }
     };
   }
 
   function drawChart(existing, canvas, labels, data, label, options = {}) {
     if (!canvas) return existing;
-    const dataset = buildChartDataset(label, data);
+    const dataset = buildChartDataset(label, data, options);
     if (existing) {
       existing.data.labels = labels;
       Object.assign(existing.data.datasets[0], dataset);
