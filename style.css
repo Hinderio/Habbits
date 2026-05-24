@@ -1666,3 +1666,43 @@ body:not(.light) .fish-poster-card:before{background:repeating-linear-gradient(1
   .poster-lightbox .companion-photo-poster{width:min(92vw,520px);max-height:78vh;border-radius:26px}
   .poster-lightbox-close{top:14px;right:14px;width:42px;height:42px}
 }
+
+
+/* v71 Photo poster polish: remove idle badge space, remove glow, brighten poster */
+.badge-shelf-wrap.is-collapsed{
+  display:none !important;
+  max-height:0 !important;
+  min-height:0 !important;
+  padding:0 !important;
+  margin:0 !important;
+  border:0 !important;
+  opacity:0 !important;
+}
+.badge-shelf-wrap.is-open{
+  display:grid !important;
+}
+.poster-photo-glow{
+  display:none !important;
+  background:none !important;
+}
+.poster-photo-shade{
+  background:linear-gradient(180deg,rgba(255,255,255,.10),rgba(9,17,29,.035) 34%,rgba(9,17,29,.54) 100%) !important;
+}
+.companion-photo-poster.is-mini .poster-photo-shade{
+  background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(9,17,29,.06) 45%,rgba(9,17,29,.42) 100%) !important;
+}
+.poster-photo-stripes{
+  background:repeating-linear-gradient(135deg,rgba(255,255,255,.058) 0 2px,transparent 2px 12px) !important;
+  mix-blend-mode:soft-light !important;
+  opacity:1 !important;
+}
+.companion-photo-poster.is-mini .poster-photo-stripes{
+  opacity:.75 !important;
+}
+.poster-lightbox .poster-photo-shade{
+  background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(9,17,29,.03) 34%,rgba(9,17,29,.46) 100%) !important;
+}
+@media (max-width:760px){
+  .gamification-layout{gap:0 !important;}
+  .badge-shelf-wrap.is-collapsed{display:none !important;}
+}

@@ -582,7 +582,7 @@
   let leisureFilters = loadLeisureFilters();
   let leisureResultOffset = 0;
   let gamificationShowLocked = localStorage.getItem(GAMIFICATION_LOCKED_KEY) === 'show';
-  let gamificationBadgeShelfOpen = localStorage.getItem(GAMIFICATION_BADGE_SHELF_KEY) === 'open';
+  let gamificationBadgeShelfOpen = false;
   let selectedCompanionStage = null;
   let leisurePullTimer = null;
 
