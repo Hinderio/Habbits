@@ -2064,11 +2064,11 @@ body.light .consumption-focus-card.is-warm{background:linear-gradient(135deg,rgb
   body.light #screen-smoking .craving-coach-card{background:linear-gradient(180deg,rgba(255,255,255,.88),rgba(232,249,249,.88));border-color:rgba(13,151,149,.13)}
 }
 
-/* v84: solid reference-color Habit tiles with safe spacing */
+/* v85: solid Habit tiles, spacing + readable details */
 #screen-habits .panel:has(#habitCards){overflow:visible}
 #screen-habits .habit-card-grid{
   grid-template-columns:repeat(auto-fit,minmax(min(100%,154px),1fr));
-  gap:8px;
+  gap:10px;
   align-items:stretch;
   justify-items:stretch;
   border-radius:0;
@@ -2230,11 +2230,11 @@ body.light .consumption-focus-card.is-warm{background:linear-gradient(135deg,rgb
 #screen-habits .habit-detail-actions{align-items:flex-start}
 #screen-habits .habit-detail-actions>.badge{justify-content:flex-start;text-align:left;white-space:normal;line-height:1.35;max-width:560px}
 @media (max-width:980px){
-  #screen-habits .habit-card-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,148px),1fr))}
+  #screen-habits .habit-card-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,148px),1fr));gap:9px}
   #screen-habits .habit-detail-grid{grid-template-columns:1fr}
 }
 @media (max-width:760px){
-  #screen-habits .habit-card-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+  #screen-habits .habit-card-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
   #screen-habits .habit-card-open{padding:16px 12px 14px;gap:9px}
   #screen-habits .habit-card-art{width:64px;height:64px}
   #screen-habits .habit-card-art .ui-icon{width:42px;height:42px}
@@ -2249,4 +2249,243 @@ body.light .consumption-focus-card.is-warm{background:linear-gradient(135deg,rgb
   #screen-habits .habit-detail-actions{flex-direction:column}
   #screen-habits .habit-detail-actions .list-actions{justify-content:flex-start}
 }
-@media (max-width:420px){#screen-habits .habit-card-grid{grid-template-columns:1fr 1fr;gap:6px}#screen-habits .habit-card{border-radius:22px}}
+@media (max-width:420px){#screen-habits .habit-card-grid{grid-template-columns:1fr 1fr;gap:7px}#screen-habits .habit-card{border-radius:22px}}
+
+/* v85: Habit details modal lives outside #screen-habits, so these styles must be unscoped */
+.history-modal-card:has(.habit-detail-shell){
+  width:min(980px,100%);
+}
+.history-modal-content .habit-detail-shell{
+  display:grid;
+  gap:18px;
+  color:var(--text);
+}
+.history-modal-content .habit-detail-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:18px;
+  padding:2px 0 14px;
+  border-bottom:1px solid rgba(var(--habit-tone-rgb),.24);
+}
+.history-modal-content .habit-detail-head .badge{
+  position:static!important;
+  flex:0 0 auto;
+  margin-top:2px;
+}
+.history-modal-content .habit-detail-title-row{
+  display:flex;
+  align-items:center;
+  gap:16px;
+  min-width:0;
+}
+.history-modal-content .habit-detail-title-row>div{
+  min-width:0;
+  display:grid;
+  gap:4px;
+}
+.history-modal-content .habit-detail-title-row h2{
+  margin:0;
+  font-size:clamp(2rem,4.6vw,3.55rem);
+  line-height:.96;
+  letter-spacing:-.065em;
+  overflow-wrap:anywhere;
+}
+.history-modal-content .habit-detail-title-row .subtle{
+  max-width:760px;
+  font-size:1rem;
+  line-height:1.45;
+}
+.history-modal-content .habit-card-art.is-large{
+  width:76px;
+  height:76px;
+  flex:0 0 76px;
+  display:grid;
+  place-items:center;
+  border-radius:24px;
+  background:rgba(var(--habit-tone-rgb),.14)!important;
+  border:1px solid rgba(var(--habit-tone-rgb),.18)!important;
+  color:var(--habit-tone);
+  box-shadow:none!important;
+}
+.history-modal-content .habit-card-art.is-large .ui-icon{
+  width:42px;
+  height:42px;
+  color:currentColor;
+  stroke-width:1.8;
+}
+.history-modal-content .habit-detail-grid{
+  display:grid;
+  grid-template-columns:minmax(0,1.1fr) minmax(260px,.9fr);
+  gap:14px;
+  align-items:stretch;
+}
+.history-modal-content .habit-detail-primary,
+.history-modal-content .habit-detail-stats{
+  min-width:0;
+  border-radius:26px;
+  background:var(--card);
+  border:1px solid rgba(var(--habit-tone-rgb),.24);
+  padding:16px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
+}
+.history-modal-content .habit-detail-primary{
+  display:grid;
+  gap:13px;
+  align-content:start;
+}
+.history-modal-content .habit-detail-log-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+}
+.history-modal-content .habit-detail-log-head small,
+.history-modal-content .habit-detail-stats small{
+  display:block;
+  margin:0 0 5px;
+  color:var(--muted);
+  font-size:.7rem;
+  font-weight:950;
+  line-height:1;
+  text-transform:uppercase;
+  letter-spacing:.13em;
+}
+.history-modal-content .habit-detail-log-head strong{
+  display:block;
+  font-size:2rem;
+  line-height:1;
+  letter-spacing:-.055em;
+}
+.history-modal-content .habit-detail-log-head span{
+  flex:0 0 auto;
+  border-radius:999px;
+  padding:8px 11px;
+  background:rgba(var(--habit-tone-rgb),.12);
+  border:1px solid rgba(var(--habit-tone-rgb),.2);
+  color:var(--text);
+  font-size:.78rem;
+  font-weight:900;
+  white-space:nowrap;
+}
+.history-modal-content .habit-detail-primary .habit-log-row,
+.history-modal-content .habit-detail-primary .habit-quick-log-row{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:10px;
+  align-items:stretch;
+}
+.history-modal-content .habit-detail-primary .habit-quick-log-row input{
+  min-height:50px;
+  margin:0;
+  color:var(--text);
+  background:var(--input, rgba(255,255,255,.06));
+  border-color:rgba(var(--habit-tone-rgb),.26);
+}
+.history-modal-content .habit-detail-primary .mini-btn{
+  min-height:50px;
+  border-radius:16px;
+}
+.history-modal-content .habit-detail-primary .mini-btn.primary,
+.history-modal-content .habit-detail-done{
+  background:var(--habit-tone);
+  color:#fff;
+  border-color:var(--habit-tone);
+}
+.history-modal-content .habit-detail-primary>.meta{
+  margin:0;
+  line-height:1.4;
+}
+.history-modal-content .habit-detail-shell .habit-progress-track{
+  display:block;
+  width:100%;
+  height:9px;
+  margin:0;
+  border-radius:999px;
+  overflow:hidden;
+  background:rgba(127,151,176,.18);
+}
+.history-modal-content .habit-detail-shell .habit-progress-track i{
+  display:block;
+  height:100%;
+  border-radius:inherit;
+  background:var(--habit-tone);
+}
+.history-modal-content .habit-detail-stats{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:10px;
+}
+.history-modal-content .habit-detail-stats div{
+  min-width:0;
+  min-height:96px;
+  padding:13px;
+  border-radius:20px;
+  background:rgba(255,255,255,.045);
+  border:1px solid rgba(255,255,255,.075);
+  display:grid;
+  align-content:space-between;
+  gap:10px;
+}
+.history-modal-content .habit-detail-stats strong{
+  display:block;
+  min-width:0;
+  font-size:1.35rem;
+  line-height:1;
+  letter-spacing:-.04em;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.history-modal-content .habit-card-actions-row.habit-detail-actions{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:12px;
+}
+.history-modal-content .habit-detail-actions>.badge{
+  position:static!important;
+  justify-content:flex-start;
+  text-align:left;
+  white-space:normal;
+  line-height:1.38;
+  max-width:620px;
+}
+.history-modal-content .habit-detail-actions .list-actions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+body.light .history-modal-content .habit-detail-primary,
+body.light .history-modal-content .habit-detail-stats{
+  background:rgba(255,255,255,.78);
+  border-color:rgba(var(--habit-tone-rgb),.24);
+}
+body.light .history-modal-content .habit-detail-stats div{
+  background:rgba(255,255,255,.62);
+  border-color:rgba(17,36,58,.08);
+}
+body.light .history-modal-content .habit-card-art.is-large{
+  background:rgba(var(--habit-tone-rgb),.16)!important;
+  border-color:rgba(var(--habit-tone-rgb),.2)!important;
+}
+@media (max-width:980px){
+  .history-modal-content .habit-detail-grid{grid-template-columns:1fr}
+}
+@media (max-width:760px){
+  .history-modal-card:has(.habit-detail-shell){width:100%}
+  .history-modal-content .habit-detail-shell{gap:14px}
+  .history-modal-content .habit-detail-head{flex-direction:column;gap:12px;padding-bottom:12px}
+  .history-modal-content .habit-detail-title-row{align-items:flex-start;gap:12px}
+  .history-modal-content .habit-card-art.is-large{width:62px;height:62px;flex-basis:62px;border-radius:20px}
+  .history-modal-content .habit-card-art.is-large .ui-icon{width:34px;height:34px}
+  .history-modal-content .habit-detail-title-row h2{font-size:2rem;line-height:1}
+  .history-modal-content .habit-detail-title-row .subtle{font-size:.92rem}
+  .history-modal-content .habit-detail-stats{grid-template-columns:1fr}
+  .history-modal-content .habit-detail-stats div{min-height:auto}
+  .history-modal-content .habit-detail-primary .habit-log-row,
+  .history-modal-content .habit-detail-primary .habit-quick-log-row{grid-template-columns:1fr}
+  .history-modal-content .habit-detail-actions .list-actions{justify-content:flex-start}
+}

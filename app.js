@@ -451,7 +451,7 @@
     sport: '<path d="M7 20 10 11l4 3 3 6"/><path d="m10 11 3-4 4 2"/><path d="M14 4h.01"/><path d="M4 14h4"/>',
     meditation: '<path d="M12 5a2 2 0 1 0 0 .01"/><path d="M8 20c1.5-2 2.7-3 4-3s2.5 1 4 3"/><path d="M5 15c2.5-2 4.8-3 7-3s4.5 1 7 3"/>',
     standingDesk: '<path d="M5 10h14"/><path d="M7 10v10"/><path d="M17 10v10"/><path d="M9 20h6"/><rect x="8" y="4" width="8" height="5" rx="1.5"/><path d="M12 9v3"/>',
-    pushups: '<path d="M5 9a1.7 1.7 0 1 0 0 .01"/><path d="M7 10h6l4 3"/><path d="M9 14h7"/><path d="M7 11l-2 6"/><path d="M16 13l3 5"/><path d="M4 18h16"/>',
+    pushups: '<path d="M6.2 7.2a1.7 1.7 0 1 0 0 .01"/><path d="M8 8.8h5.2l4.2 3.2"/><path d="M5.4 12.8h12.8"/><path d="M8.1 9.2 5.8 16"/><path d="M16.8 12.2 19.4 18"/><path d="M4.2 18.5h15.6"/><path d="M6.8 15.5h10.6"/>',
     bread: '<path d="M5 20V10a7 7 0 0 1 14 0v10H5Z"/><path d="M8 20v-8a4 4 0 0 1 8 0v8"/><path d="M9 15h.01"/><path d="M15 15h.01"/>',
     jogging: '<path d="M13 4a1.8 1.8 0 1 0 0 .01"/><path d="m11 8 3 2 3-1"/><path d="m14 10-3 4"/><path d="m11 14 4 6"/><path d="M10 14 6 19"/><path d="M4 9h3"/><path d="M3 13h4"/>',
     hiking: '<path d="m3 20 6-10 4 6 3-5 5 9H3Z"/><path d="M9 10 12 4l4 7"/><path d="M15 20v-7"/><path d="M12 16h6"/>',
@@ -504,8 +504,8 @@
     if (iconRaw.includes('💧') || name.includes('wasser')) return 'water';
     if (iconRaw.includes('⚖') || name.includes('gewicht')) return 'weight';
     if (iconRaw.includes('🧘') || name.includes('meditation')) return 'meditation';
-    if (name.includes('stehpult') || name.includes('standing desk') || name.includes('stehschreibtisch')) return 'standingDesk';
-    if (name.includes('liegestutz') || name.includes('liegestuetz') || name.includes('pushup') || name.includes('push-up')) return 'pushups';
+    if (name.includes('stehpult') || name.includes('steh pult') || name.includes('standing desk') || name.includes('stand desk') || name.includes('stehschreibtisch') || name.includes('schreibtisch') || name.includes('ergonom')) return 'standingDesk';
+    if (name.includes('liegestutz') || name.includes('liegestuetz') || name.includes('liegestutze') || name.includes('liegestutzen') || name.includes('pushup') || name.includes('push-up') || name.includes('push up')) return 'pushups';
     if (name.includes('brot') || name.includes('bread')) return 'bread';
     if (name.includes('joggen') || name.includes('jogging')) return 'jogging';
     if (name.includes('wandern') || name.includes('hiking')) return 'hiking';
@@ -4914,6 +4914,7 @@
         : todayEntries.reduce((sum, e) => sum + Number(e.value_num || 0), 0);
       const unit = habit.unit || defaultUnit(habit.type);
       const category = habitCategoryMeta(habit);
+      const iconKey = habitIconKey(habit);
       const habitPause = activePauseNow('habit', habit.id);
       const fulfilled = habitFulfillmentState(habit, { periodValue, todayEntries, todayValue });
       const progress = habitProgressPercent(habit, periodValue, todayEntries);
@@ -4929,7 +4930,7 @@
 
       return `<article class="habit-card ${isSystemHabit ? 'is-meditation-habit' : ''} ${editingHabitId === habit.id ? 'is-editing' : ''} ${fulfilled ? 'is-complete' : ''} ${habitPause ? 'is-paused' : ''}" style="${habitCategoryStyle(category)}">
         <button class="habit-card-open" type="button" data-action="open-habit-detail" data-id="${habit.id}" aria-label="Details für ${escapeHtml(habit.name)} öffnen">
-          <span class="habit-card-art" aria-hidden="true">${svgIcon(category.icon || habitIconKey(habit), 'ui-icon')}</span>
+          <span class="habit-card-art" aria-hidden="true">${svgIcon(iconKey, 'ui-icon')}</span>
           <span class="habit-card-main">
             <span class="habit-category-pill">${escapeHtml(category.label)}</span>
             <strong>${escapeHtml(habit.name)}</strong>
@@ -4974,6 +4975,7 @@
       : todayEntries.reduce((total, entry) => total + Number(entry.value_num || 0), 0);
     const unit = normalizedHabit.unit || defaultUnit(normalizedHabit.type);
     const category = habitCategoryMeta(normalizedHabit);
+    const iconKey = habitIconKey(normalizedHabit);
     const dna = buildHabitDna(normalizedHabit);
     const habitPause = activePauseNow('habit', normalizedHabit.id);
     const fulfilled = habitFulfillmentState(normalizedHabit, { periodValue, todayEntries, todayValue });
@@ -4989,7 +4991,7 @@
     return `<div class="habit-detail-shell" style="${habitCategoryStyle(category)}">
       <div class="history-modal-head habit-detail-head">
         <div class="habit-detail-title-row">
-          <span class="habit-card-art is-large" aria-hidden="true">${svgIcon(category.icon || habitIconKey(normalizedHabit), 'ui-icon')}</span>
+          <span class="habit-card-art is-large" aria-hidden="true">${svgIcon(iconKey, 'ui-icon')}</span>
           <div>
             <p class="eyebrow">${escapeHtml(category.label)} · Habit Details</p>
             <h2 id="historyModalTitle">${escapeHtml(normalizedHabit.name)}</h2>
