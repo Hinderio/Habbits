@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v67-photo-progress-poster';
+  const APP_DATA_SCHEMA_VERSION = 'v68-photo-poster-interactions';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -32,26 +32,26 @@
   ];
 
   const COMPANION_STAGE_POSTERS = [
-    { src: './assets/companion-posters/stage-01.png', mood: 'Opening Frame', cue: 'Foundation', align: 'left' },
-    { src: './assets/companion-posters/stage-02.png', mood: 'Clean Lines', cue: 'Momentum', align: 'right' },
-    { src: './assets/companion-posters/stage-03.png', mood: 'Street Focus', cue: 'Intent', align: 'left' },
-    { src: './assets/companion-posters/stage-04.png', mood: 'Poolside Calm', cue: 'Warmup', align: 'left' },
-    { src: './assets/companion-posters/stage-05.png', mood: 'Alpine Air', cue: 'Breath', align: 'right' },
-    { src: './assets/companion-posters/stage-06.png', mood: 'Sharp Turn', cue: 'Change', align: 'left' },
-    { src: './assets/companion-posters/stage-07.png', mood: 'Snowline', cue: 'Clarity', align: 'left' },
-    { src: './assets/companion-posters/stage-08.png', mood: 'Coastal Motion', cue: 'Flow', align: 'right' },
-    { src: './assets/companion-posters/stage-09.png', mood: 'Stadium Energy', cue: 'Drive', align: 'left' },
-    { src: './assets/companion-posters/stage-10.png', mood: 'Cloud Focus', cue: 'Lift', align: 'left' },
-    { src: './assets/companion-posters/stage-11.png', mood: 'Stage Heat', cue: 'Pulse', align: 'right' },
-    { src: './assets/companion-posters/stage-12.png', mood: 'Design in Motion', cue: 'Precision', align: 'left' },
-    { src: './assets/companion-posters/stage-13.png', mood: 'Glacier Quiet', cue: 'Discipline', align: 'right' },
-    { src: './assets/companion-posters/stage-14.png', mood: 'Palm Rhythm', cue: 'Balance', align: 'left' },
-    { src: './assets/companion-posters/stage-15.png', mood: 'Tropical Light', cue: 'Focus', align: 'right' },
-    { src: './assets/companion-posters/stage-16.png', mood: 'Water Control', cue: 'Control', align: 'left' },
-    { src: './assets/companion-posters/stage-17.png', mood: 'Golden Hours', cue: 'Build', align: 'right' },
-    { src: './assets/companion-posters/stage-18.png', mood: 'Above the Clouds', cue: 'Ascend', align: 'left' },
-    { src: './assets/companion-posters/stage-19.png', mood: 'Summit Frame', cue: 'Apex', align: 'right' },
-    { src: './assets/companion-posters/stage-20.png', mood: 'Final Form', cue: 'Champion', align: 'left' }
+    { src: './assets/companion-posters/stage-01.jpg', mood: 'Opening Frame', cue: 'Foundation', align: 'left' },
+    { src: './assets/companion-posters/stage-02.jpg', mood: 'Clean Lines', cue: 'Momentum', align: 'right' },
+    { src: './assets/companion-posters/stage-03.jpg', mood: 'Street Focus', cue: 'Intent', align: 'left' },
+    { src: './assets/companion-posters/stage-04.jpg', mood: 'Poolside Calm', cue: 'Warmup', align: 'left' },
+    { src: './assets/companion-posters/stage-05.jpg', mood: 'Alpine Air', cue: 'Breath', align: 'right' },
+    { src: './assets/companion-posters/stage-06.jpg', mood: 'Sharp Turn', cue: 'Change', align: 'left' },
+    { src: './assets/companion-posters/stage-07.jpg', mood: 'Snowline', cue: 'Clarity', align: 'left' },
+    { src: './assets/companion-posters/stage-08.jpg', mood: 'Coastal Motion', cue: 'Flow', align: 'right' },
+    { src: './assets/companion-posters/stage-09.jpg', mood: 'Stadium Energy', cue: 'Drive', align: 'left' },
+    { src: './assets/companion-posters/stage-10.jpg', mood: 'Cloud Focus', cue: 'Lift', align: 'left' },
+    { src: './assets/companion-posters/stage-11.jpg', mood: 'Stage Heat', cue: 'Pulse', align: 'right' },
+    { src: './assets/companion-posters/stage-12.jpg', mood: 'Design in Motion', cue: 'Precision', align: 'left' },
+    { src: './assets/companion-posters/stage-13.jpg', mood: 'Glacier Quiet', cue: 'Discipline', align: 'right' },
+    { src: './assets/companion-posters/stage-14.jpg', mood: 'Palm Rhythm', cue: 'Balance', align: 'left' },
+    { src: './assets/companion-posters/stage-15.jpg', mood: 'Tropical Light', cue: 'Focus', align: 'right' },
+    { src: './assets/companion-posters/stage-16.jpg', mood: 'Water Control', cue: 'Control', align: 'left' },
+    { src: './assets/companion-posters/stage-17.jpg', mood: 'Golden Hours', cue: 'Build', align: 'right' },
+    { src: './assets/companion-posters/stage-18.jpg', mood: 'Above the Clouds', cue: 'Ascend', align: 'left' },
+    { src: './assets/companion-posters/stage-19.jpg', mood: 'Summit Frame', cue: 'Apex', align: 'right' },
+    { src: './assets/companion-posters/stage-20.jpg', mood: 'Final Form', cue: 'Champion', align: 'left' }
   ];
 
 
@@ -581,6 +581,7 @@
   let leisureResultOffset = 0;
   let gamificationShowLocked = localStorage.getItem(GAMIFICATION_LOCKED_KEY) === 'show';
   let gamificationBadgeShelfOpen = localStorage.getItem(GAMIFICATION_BADGE_SHELF_KEY) === 'open';
+  let selectedCompanionStage = null;
   let leisurePullTimer = null;
 
   const els = {};
@@ -825,6 +826,10 @@
     if (els.heroEmergencyBtn) els.heroEmergencyBtn.addEventListener('click', startEmergencyCravingFlow);
     if (els.toggleBadgeShelfBtn) els.toggleBadgeShelfBtn.addEventListener('click', toggleBadgeShelf);
     if (els.toggleLockedBadgesBtn) els.toggleLockedBadgesBtn.addEventListener('click', toggleLockedBadges);
+    if (els.companionCard) {
+      els.companionCard.addEventListener('click', handleCompanionCardClick);
+      els.companionCard.addEventListener('keydown', handleCompanionCardKeydown);
+    }
     if (els.morningRoutineModalCloseBtn) els.morningRoutineModalCloseBtn.addEventListener('click', closeMorningRoutineModal);
     if (els.morningRoutineModal) {
       els.morningRoutineModal.addEventListener('click', event => {
@@ -2466,7 +2471,8 @@
       els.badgeShelfWrap.classList.toggle('is-collapsed', !gamificationBadgeShelfOpen);
     }
     els.badgeShelf.classList.toggle('show-locked', gamificationShowLocked);
-    els.companionCard.innerHTML = renderCompanionCard(companion, stats);
+    const displayCompanion = companionPreviewProfile(companion, selectedCompanionStage);
+    els.companionCard.innerHTML = renderCompanionCard(displayCompanion, stats, companion);
     els.badgeShelf.innerHTML = visibleBadges.length
       ? visibleBadges.map(renderGamificationBadge).join('')
       : `<article class="badge-empty-state"><strong>Noch keine Badges gesammelt</strong><p>Starte mit einer kleinen Aktion. Nicht erreichte Badges kannst du bei Bedarf einblenden.</p></article>`;
@@ -2482,6 +2488,66 @@
     gamificationShowLocked = !gamificationShowLocked;
     localStorage.setItem(GAMIFICATION_LOCKED_KEY, gamificationShowLocked ? 'show' : 'hide');
     renderGamification();
+  }
+
+  function handleCompanionCardClick(event) {
+    const stageButton = event.target.closest('[data-companion-stage]');
+    if (stageButton) {
+      const stage = Number(stageButton.dataset.companionStage);
+      if (Number.isFinite(stage)) {
+        selectedCompanionStage = Math.min(20, Math.max(1, stage));
+        renderGamification();
+      }
+      return;
+    }
+    const posterTrigger = event.target.closest('[data-open-companion-poster]');
+    if (posterTrigger) {
+      const stage = Number(posterTrigger.dataset.openCompanionPoster);
+      openCompanionPosterLightbox(Number.isFinite(stage) ? stage : selectedCompanionStage);
+    }
+  }
+
+  function handleCompanionCardKeydown(event) {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const target = event.target.closest('[data-companion-stage], [data-open-companion-poster]');
+    if (!target) return;
+    event.preventDefault();
+    target.click();
+  }
+
+  function companionPreviewProfile(companion, previewStage) {
+    const numericStage = Number(previewStage);
+    const safeStage = Number.isFinite(numericStage) ? Math.min(20, Math.max(1, numericStage)) : companion.stage;
+    const chapterIndex = Math.min(4, Math.floor((safeStage - 1) / 4));
+    return {
+      ...companion,
+      stage: safeStage,
+      stageName: companion.stageNames[safeStage - 1] || companion.stageName,
+      chapter: companion.chapters[chapterIndex] || companion.chapter,
+      stageProgress: safeStage < companion.stage ? 100 : safeStage === companion.stage ? companion.stageProgress : 0,
+      isPreview: safeStage !== companion.stage,
+      actualStage: companion.stage
+    };
+  }
+
+  function openCompanionPosterLightbox(stage) {
+    const numericStage = Number(stage);
+    const safeStage = Number.isFinite(numericStage) ? Math.min(20, Math.max(1, numericStage)) : 1;
+    const label = ['Impuls','Funke','Anfang','Fokus','Takt','Form','Fluss','Stabil','Schub','Klar','Zug','Drive','Puls','Prime','Kontrolle','Apex','Zenith','Nova','Ascend','Champion'][safeStage - 1] || `Stufe ${safeStage}`;
+    const existing = document.querySelector('.poster-lightbox');
+    if (existing) existing.remove();
+    const overlay = document.createElement('div');
+    overlay.className = 'poster-lightbox';
+    overlay.innerHTML = `<button class="poster-lightbox-close" type="button" aria-label="Poster schliessen">×</button><div class="poster-lightbox-inner">${renderCompanionFish(safeStage, 'lightbox', label)}</div>`;
+    const close = () => overlay.remove();
+    overlay.addEventListener('click', event => {
+      if (event.target === overlay || event.target.closest('.poster-lightbox-close')) close();
+    });
+    overlay.addEventListener('keydown', event => {
+      if (event.key === 'Escape') close();
+    });
+    document.body.appendChild(overlay);
+    overlay.querySelector('.poster-lightbox-close')?.focus();
   }
 
   function buildGamificationStats() {
@@ -2699,7 +2765,9 @@
     const posterMood = poster?.mood || 'Progress';
     const posterCue = poster?.cue || 'HabitFlow';
     const alignClass = poster?.align === 'right' ? 'is-right' : 'is-left';
-    return `<div class="companion-photo-poster ${isMini ? 'is-mini' : 'is-hero'} ${alignClass}" role="img" aria-label="Fortschrittsfoto Stufe ${safeStage}: ${escapeHtml(posterLabel)}">
+    const isInteractive = !isMini && size === 'hero';
+    const interactionAttrs = isInteractive ? ` data-open-companion-poster="${safeStage}" role="button" tabindex="0"` : ' role="img"';
+    return `<div class="companion-photo-poster ${isMini ? 'is-mini' : 'is-hero'} ${alignClass}"${interactionAttrs} aria-label="Fortschrittsfoto Stufe ${safeStage}: ${escapeHtml(posterLabel)}">
       <div class="poster-photo-media" style="background-image:url('${poster.src}');"></div>
       <div class="poster-photo-shade"></div>
       <div class="poster-photo-stripes" aria-hidden="true"></div>
@@ -2716,28 +2784,41 @@
     </div>`;
   }
 
-  function renderCompanionCard(companion, stats) {
-    const nextPoints = companion.stage >= 20 ? 'Max' : `${Math.max(0, companion.nextStageAt - Math.max(0, Number(stats.total || 0))).toLocaleString('de-CH')} Pkt.`;
+  function renderCompanionCard(companion, stats, currentCompanion = companion) {
+    const nextPoints = currentCompanion.stage >= 20 ? 'Max' : `${Math.max(0, currentCompanion.nextStageAt - Math.max(0, Number(stats.total || 0))).toLocaleString('de-CH')} Pkt.`;
     const unlockedText = `${stats.unlockedBadges}/${GAMIFICATION_BADGES.length}`;
     const chapterIndex = Math.min(4, Math.floor((companion.stage - 1) / 4));
     const stageTiles = companion.stageNames.map((name, index) => {
       const stage = index + 1;
-      return `<article class="fish-stage-tile ${stage === companion.stage ? 'is-current' : stage < companion.stage ? 'is-done' : ''}" aria-label="Stufe ${stage}: ${escapeHtml(name)}">
+      const tileState = stage === companion.stage ? 'is-current' : stage < currentCompanion.stage ? 'is-done' : '';
+      const actualState = stage === currentCompanion.stage ? 'is-actual' : '';
+      return `<button class="fish-stage-tile ${tileState} ${actualState}" type="button" data-companion-stage="${stage}" aria-label="Stufe ${stage} anzeigen: ${escapeHtml(name)}">
         ${renderCompanionFish(stage, `mini-${stage}`, name)}
         <strong>${stage}</strong>
         <span>${escapeHtml(name)}</span>
-      </article>`;
+      </button>`;
     }).join('');
-    const chapterTiles = companion.chapters.map((chapter, index) => `<article class="fish-chapter ${index === chapterIndex ? 'is-current' : index < chapterIndex ? 'is-done' : ''}">
+    const chapterTiles = companion.chapters.map((chapter, index) => `<article class="fish-chapter ${index === chapterIndex ? 'is-current' : index < Math.floor((currentCompanion.stage - 1) / 4) ? 'is-done' : ''}">
       <small>Kapitel ${index + 1}</small>
       <strong>${escapeHtml(chapter.title)}</strong>
       <span>${escapeHtml(chapter.range)} · ${escapeHtml(chapter.detail)}</span>
     </article>`).join('');
+    const progressHeadline = currentCompanion.stage >= 20
+      ? 'Champion-Modus aktiv.'
+      : `Noch ${nextPoints} bis Stufe ${Math.min(20, currentCompanion.stage + 1)}.`;
+    const progressInsight = currentCompanion.stage >= 20
+      ? 'Jetzt geht es darum, dieses Niveau ruhig und sauber zu halten.'
+      : 'Eine kleine saubere Aktion heute bringt dein naechstes Poster sichtbar naeher.';
+    const momentumInsight = stats.activeOverdue
+      ? `${stats.activeOverdue} offene Aufgabe(n) ziehen Energie. Eine davon zu beruhigen wirkt sofort auf dein Momentum.`
+      : stats.momentumStreak >= 3
+        ? `${stats.momentumStreak} Tage Momentum stehen bereits. Genau diese Konstanz macht die Evolution stark.`
+        : 'Ein Log, eine Routine oder eine erledigte Aufgabe reicht, um den Tag in Bewegung zu bringen.';
     return `<div class="companion-shell fish-companion-shell stage-${companion.stage}">
       <div class="fish-poster-card">
         <div class="fish-poster-head">
           <div><p class="eyebrow">Progress Poster</p><h4>Stufe ${companion.stage}</h4><span>${escapeHtml(companion.stageName)} · ${escapeHtml(companion.chapter.title)}</span></div>
-          <b>${companion.stage}/20</b>
+          <b>${companion.isPreview ? 'Vorschau' : `${companion.stage}/20`}</b>
         </div>
         <div class="fish-poster-art motion-poster-art">
           ${renderCompanionFish(companion.stage, 'hero', companion.stageName)}
@@ -2746,8 +2827,8 @@
       </div>
       <div class="fish-companion-copy">
         <p class="eyebrow">Photo Evolution</p>
-        <h4>Dein Fortschritt wird jetzt mit echten Fotos erzählt.</h4>
-        <p>Jede Stufe zeigt ein eigenes, echtes Bild im magazinartigen Poster-Look - mit diagonalen Streifen, klaren Overlays und einem leichten Nike-Run-Club-Vibe. So wirkt die Entwicklung persönlicher, hochwertiger und deutlich ikonischer.</p>
+        <h4>${escapeHtml(progressHeadline)}</h4>
+        <p>${escapeHtml(progressInsight)} ${escapeHtml(momentumInsight)}</p>
         <div class="companion-traits fish-traits">
           <span>${unlockedText} Badges</span>
           <span>${escapeHtml(companion.trait)}</span>
