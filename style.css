@@ -2718,6 +2718,14 @@ body.light .fitness-destination-connector i{border-color:rgba(17,36,58,.08)}
 
 /* v94: habit pause label + jogging time inputs */
 #screen-habits .habit-card-pause-note{position:absolute;top:38px;right:12px;max-width:118px;padding:5px 8px;border-radius:999px;background:rgba(255,255,255,.86);color:var(--habit-tone);font-size:.56rem;font-weight:900;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#screen-habits .habit-log-row.is-jogging-time{grid-template-columns:minmax(0,1fr) minmax(82px,.55fr) auto}
-.fitness-journey-log-grid.is-jogging{grid-template-columns:minmax(0,.9fr) minmax(0,.75fr) auto}
+#screen-habits .habit-log-row.is-jogging-time{grid-template-columns:minmax(0,1fr) minmax(72px,.42fr) minmax(72px,.42fr) auto}
+.fitness-journey-log-grid.is-jogging{grid-template-columns:minmax(0,.9fr) minmax(72px,.45fr) minmax(72px,.45fr) auto}
 @media (max-width:760px){#screen-habits .habit-log-row.is-jogging-time,.fitness-journey-log-grid.is-jogging{grid-template-columns:1fr}#screen-habits .habit-log-row.is-jogging-time .mini-btn,.fitness-journey-log-grid.is-jogging .mini-btn{width:100%}#screen-habits .habit-card-pause-note{top:35px;right:9px;max-width:92px;font-size:.52rem}}
+
+
+/* v95: show progress marker only on the current segment + minute/second run inputs */
+.fitness-destination-row .fitness-destination-marker{z-index:4}
+#screen-habits .habit-log-row.is-jogging-time input[placeholder="Sek."],
+.fitness-journey-log-grid.is-jogging input[placeholder="Sek."]{text-align:center}
+#screen-habits .habit-log-row.is-jogging-time input[placeholder="Min."],
+.fitness-journey-log-grid.is-jogging input[placeholder="Min."]{text-align:center}
