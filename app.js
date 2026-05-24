@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v79-visible-fitness-tab';
+  const APP_DATA_SCHEMA_VERSION = 'v80-fitness-km-quicklog-spacing';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -580,9 +580,10 @@
   }
 
   function effectiveHabitUnit(habit = {}) {
+    if (isFitnessDistanceHabit(habit)) return 'km';
     const raw = String(habit.unit || '').trim();
     if (raw && raw !== 'x') return raw;
-    return isFitnessDistanceHabit(habit) ? 'km' : defaultUnit(habit.type);
+    return defaultUnit(habit.type);
   }
 
   function clampNumber(value, min, max) {
@@ -863,6 +864,7 @@
       habitSubmitBtn: $('#habitSubmitBtn'),
       cancelHabitEditBtn: $('#cancelHabitEditBtn'),
       habitCards: $('#habitCards'),
+      habitFitnessQuickLog: $('#habitFitnessQuickLog'),
       habitDnaOverview: $('#habitDnaOverview'),
       habitPauseList: $('#habitPauseList'),
       habitPlayfulStats: $('#habitPlayfulStats'),
@@ -3653,7 +3655,7 @@
   function habitValueForDay(habit, key) {
     const entries = entriesForHabitOnDate(habit.id, key).sort((a, b) => new Date(a.occurred_at) - new Date(b.occurred_at));
     if (!entries.length) return { value: null, label: 'kein Eintrag', logged: false, ratio: 0 };
-    if (habit.type === 'boolean') {
+    if (habit.type === 'boolean' && !isFitnessDistanceHabit(habit)) {
       const done = entries.some(e => e.value_bool);
       return { value: done ? 1 : 0, label: done ? 'Ja' : 'Nein', logged: true, ratio: done ? 1 : .25 };
     }
@@ -5028,7 +5030,7 @@
 
   function habitFulfillmentState(habit, { periodValue = {}, todayEntries = [], todayValue = 0 } = {}) {
     const hasTodayLog = todayEntries.length > 0;
-    if (habit.type === 'boolean') return todayEntries.some(entry => entry.value_bool);
+    if (habit.type === 'boolean' && !isFitnessDistanceHabit(habit)) return todayEntries.some(entry => entry.value_bool);
     if (!habit.target) return hasTodayLog;
     const target = Number(habit.target || 0);
     if (!Number.isFinite(target) || target <= 0) return hasTodayLog;
@@ -5050,7 +5052,7 @@
   }
 
   function renderHabitQuickLogControl(habit, { inputId = '', todayValue = 0, buttonLabel = 'Loggen', context = 'card' } = {}) {
-    if (habit.type === 'boolean') {
+    if (habit.type === 'boolean' && !isFitnessDistanceHabit(habit)) {
       const done = Boolean(todayValue);
       return `<button class="mini-btn primary habit-quick-check" type="button" data-action="log-habit" data-id="${habit.id}">${done ? 'Heute erledigt' : 'Heute abhaken'}</button>`;
     }
@@ -5074,9 +5076,11 @@
     syncHabitsExperienceUi();
     pruneExpandedHabitCardIds(activeHabits.map(habit => habit.id));
     renderHabitDnaOverview(activeHabits);
+    renderHabitFitnessQuickLog(activeHabits);
     renderHabitPlayfulStats(activeHabits);
     if (!activeHabits.length) {
       els.habitCards.innerHTML = '<div class="empty-state">Lege deine erste flexible Gewohnheit an. Unterstützt werden Gewicht, Zahlen, Ja/Nein und Dauer.</div>';
+      if (els.habitFitnessQuickLog) els.habitFitnessQuickLog.innerHTML = '';
       return;
     }
 
@@ -5084,7 +5088,7 @@
       const periodMeta = habitTargetPeriodMeta(habit);
       const periodValue = habitValueForPeriod(habit);
       const todayEntries = entriesForHabitOnDate(habit.id, toDateKey(new Date()));
-      const todayValue = habit.type === 'boolean'
+      const todayValue = habit.type === 'boolean' && !isFitnessDistanceHabit(habit)
         ? todayEntries.some(e => e.value_bool)
         : todayEntries.reduce((sum, e) => sum + Number(e.value_num || 0), 0);
       const unit = effectiveHabitUnit(habit);
@@ -5101,7 +5105,7 @@
       const inputId = `habit-card-input-${habit.id}`;
       const quickControl = isSystemHabit
         ? `<button class="mini-btn primary habit-quick-check" type="button" data-action="open-habit-detail" data-id="${habit.id}">Techniken öffnen</button>`
-        : renderHabitQuickLogControl(habit, { inputId, todayValue, buttonLabel: habit.type === 'boolean' ? 'Abhaken' : 'Loggen' });
+        : renderHabitQuickLogControl(habit, { inputId, todayValue, buttonLabel: habit.type === 'boolean' && !isFitnessDistanceHabit(habit) ? 'Abhaken' : 'Loggen' });
 
       return `<article class="habit-card ${isSystemHabit ? 'is-meditation-habit' : ''} ${editingHabitId === habit.id ? 'is-editing' : ''} ${fulfilled ? 'is-complete' : ''} ${habitPause ? 'is-paused' : ''}" style="${habitCategoryStyle(category)}">
         <button class="habit-card-open" type="button" data-action="open-habit-detail" data-id="${habit.id}" aria-label="Details für ${escapeHtml(habit.name)} öffnen">
@@ -5145,7 +5149,7 @@
     const periodMeta = habitTargetPeriodMeta(normalizedHabit);
     const periodValue = habitValueForPeriod(normalizedHabit);
     const todayEntries = entriesForHabitOnDate(normalizedHabit.id, toDateKey(new Date()));
-    const todayValue = normalizedHabit.type === 'boolean'
+    const todayValue = normalizedHabit.type === 'boolean' && !isFitnessDistanceHabit(normalizedHabit)
       ? todayEntries.some(entry => entry.value_bool)
       : todayEntries.reduce((total, entry) => total + Number(entry.value_num || 0), 0);
     const unit = effectiveHabitUnit(normalizedHabit);
@@ -5213,7 +5217,7 @@
 
   function aggregateHabitEntriesValue(habit, entries = []) {
     if (!entries.length) return 0;
-    if (habit.type === 'boolean') return entries.some(entry => entry.value_bool) ? 1 : 0;
+    if (habit.type === 'boolean' && !isFitnessDistanceHabit(habit)) return entries.some(entry => entry.value_bool) ? 1 : 0;
     if (habit.type === 'weight') return Number(entries.sort((a, b) => new Date(a.occurred_at) - new Date(b.occurred_at)).at(-1)?.value_num || 0);
     return sum(entries.map(entry => Number(entry.value_num || 0)));
   }
@@ -6016,6 +6020,30 @@
     </div>`;
   }
 
+  function renderHabitFitnessQuickLog(activeHabits = []) {
+    if (!els.habitFitnessQuickLog) return;
+    const fitnessHabits = activeHabits
+      .filter(habit => !isSystemMeditationHabit(habit))
+      .filter(isFitnessDistanceHabit)
+      .sort((a, b) => fitnessHabitType(a).localeCompare(fitnessHabitType(b), 'de') || String(a.name).localeCompare(String(b.name), 'de'));
+    if (!fitnessHabits.length) {
+      els.habitFitnessQuickLog.innerHTML = '';
+      return;
+    }
+    els.habitFitnessQuickLog.innerHTML = `<div class="habit-fitness-quick-head"><div><p class="eyebrow">Fitness Kilometer</p><strong>Joggen & Wandern direkt für die Karte loggen</strong></div><span>Wert in km</span></div><div class="habit-fitness-quick-grid">
+      ${fitnessHabits.map(habit => {
+        const type = fitnessHabitType(habit);
+        const todayEntries = entriesForHabitOnDate(habit.id, toDateKey(new Date()));
+        const todayKm = todayEntries.reduce((total, entry) => total + Number(entry.value_num || 0), 0);
+        const inputId = `habit-fitness-km-${habit.id}`;
+        return `<article class="habit-fitness-quick-card is-${type}">
+          <div class="habit-fitness-quick-title"><span class="habit-fitness-quick-icon" aria-hidden="true">${svgIcon(type, 'ui-icon')}</span><div><strong>${escapeHtml(habit.name)}</strong><small>${todayKm ? `${formatKmValue(todayKm)} heute` : 'Noch keine km heute'}</small></div></div>
+          <div class="habit-log-row habit-fitness-quick-row"><input id="${escapeHtml(inputId)}" type="number" step="0.01" min="0" inputmode="decimal" placeholder="km eingeben" aria-label="Kilometer für ${escapeHtml(habit.name)} eingeben" /><button class="mini-btn primary" type="button" data-action="log-habit" data-id="${habit.id}" data-input-id="${escapeHtml(inputId)}">km loggen</button></div>
+        </article>`;
+      }).join('')}
+    </div>`;
+  }
+
   function renderMeditationHabitControl(habit) {
     const expanded = expandedMeditationHabitId === habit.id;
     const sessionsToday = entriesForHabitOnDate(habit.id, toDateKey(new Date()));
@@ -6076,7 +6104,7 @@
   function renderHabitEntryCard(habit, entry) {
     const isEditing = editingHabitEntryId === entry.id;
     if (isEditing) return renderHabitEntryEditCard(habit, entry);
-    const value = habit.type === 'boolean' ? Boolean(entry.value_bool) : Number(entry.value_num || 0);
+    const value = habit.type === 'boolean' && !isFitnessDistanceHabit(habit) ? Boolean(entry.value_bool) : Number(entry.value_num || 0);
     const title = isSystemMeditationHabit(habit) ? (entry.note || 'Meditation') : formatHabitValue(habit, value);
     const note = !isSystemMeditationHabit(habit) && entry.note ? ` · ${entry.note}` : '';
     return `<article class="habit-entry-card">
@@ -6093,9 +6121,9 @@
 
   function renderHabitEntryEditCard(habit, entry) {
     const [dateValue = '', timeValue = ''] = toDateTimeLocalValue(entry.occurred_at).split('T');
-    const valueInput = habit.type === 'boolean'
+    const valueInput = habit.type === 'boolean' && !isFitnessDistanceHabit(habit)
       ? `<label><span>Status</span><select id="habit-entry-bool-${entry.id}"><option value="true" ${entry.value_bool ? 'selected' : ''}>Ja</option><option value="false" ${!entry.value_bool ? 'selected' : ''}>Nein</option></select></label>`
-      : `<label><span>Wert</span><input id="habit-entry-value-${entry.id}" type="number" step="0.01" value="${Number(entry.value_num || 0)}" /></label>`;
+      : `<label><span>${isFitnessDistanceHabit(habit) ? 'Kilometer' : 'Wert'}</span><input id="habit-entry-value-${entry.id}" type="number" step="0.01" value="${Number(entry.value_num || 0)}" /></label>`;
     return `<article class="habit-entry-card is-editing">
       <div class="habit-entry-edit-grid">
         <label><span>Datum</span><input id="habit-entry-date-${entry.id}" type="date" value="${dateValue}" /></label>
@@ -6146,13 +6174,13 @@
       return;
     }
 
-    if (habit.type === 'boolean') {
+    if (habit.type === 'boolean' && !isFitnessDistanceHabit(habit)) {
       entry.value_bool = $(`#habit-entry-bool-${cssEscape(id)}`)?.value !== 'false';
       entry.value_num = null;
     } else {
       const value = Number($(`#habit-entry-value-${cssEscape(id)}`)?.value || 0);
-      if (!Number.isFinite(value) || value === 0) {
-        toast('Bitte einen gültigen Wert eintragen.');
+      if (!Number.isFinite(value) || value <= 0) {
+        toast(isFitnessDistanceHabit(habit) ? 'Bitte Kilometer grösser als 0 eingeben.' : 'Bitte einen gültigen Wert eintragen.');
         return;
       }
       entry.value_num = value;
@@ -8331,14 +8359,15 @@ async function deleteAlcoholLog(id) {
     if (pause && !confirm(`${habit.name} ist gerade pausiert. Trotzdem loggen?`)) return;
     let valueNum = null;
     let valueBool = null;
-    if (habit.type === 'boolean') {
+    const requiresNumericDistance = isFitnessDistanceHabit(habit);
+    if (habit.type === 'boolean' && !requiresNumericDistance) {
       valueBool = true;
     } else {
       const inputSelector = inputId ? `#${cssEscape(inputId)}` : `#habit-input-${cssEscape(habit.id)}`;
       const input = $(inputSelector);
       valueNum = Number(input?.value || 0);
-      if (!Number.isFinite(valueNum) || valueNum === 0) {
-        toast(isFitnessDistanceHabit(habit) ? 'Bitte Kilometer grösser als 0 eingeben.' : 'Bitte einen gültigen Wert eintragen.');
+      if (!Number.isFinite(valueNum) || valueNum <= 0) {
+        toast(requiresNumericDistance ? 'Bitte Kilometer grösser als 0 eingeben.' : 'Bitte einen gültigen Wert eintragen.');
         return;
       }
       input.value = '';
@@ -9175,7 +9204,7 @@ async function deleteAlcoholLog(id) {
   }
 
   function habitPoints(habit, entry) {
-    if (habit.type === 'boolean') return 12;
+    if (habit.type === 'boolean' && !isFitnessDistanceHabit(habit)) return 12;
     const value = Math.abs(Number(entry.value_num || 0));
     if (habit.target) {
       const ratio = Math.min(1, value / Math.abs(Number(habit.target)));
@@ -9220,8 +9249,8 @@ async function deleteAlcoholLog(id) {
     const endKey = toDateKey(endDate);
     const keys = meta.days === 1 ? [endKey] : daysBack(meta.days);
     const entries = visibleHabitEntries(habit.id).filter(e => e.habit_id === habit.id && keys.includes(toDateKey(e.occurred_at)));
-    if (!entries.length) return { value: habit.type === 'boolean' ? 0 : 0, label: formatHabitValue(habit, 0), entries };
-    if (habit.type === 'boolean') {
+    if (!entries.length) return { value: habit.type === 'boolean' && !isFitnessDistanceHabit(habit) ? 0 : 0, label: formatHabitValue(habit, 0), entries };
+    if (habit.type === 'boolean' && !isFitnessDistanceHabit(habit)) {
       const value = new Set(entries.filter(e => e.value_bool).map(e => toDateKey(e.occurred_at))).size;
       return { value, label: `${value}/${keys.length} Tage`, entries };
     }
@@ -9356,6 +9385,10 @@ async function deleteAlcoholLog(id) {
   }
 
   function formatHabitValue(habit, value) {
+    if (isFitnessDistanceHabit(habit)) {
+      const n = Number(value || 0);
+      return `${Number.isInteger(n) ? n : n.toFixed(2)} km`;
+    }
     if (habit.type === 'boolean') return value ? 'Ja' : 'Nein';
     const n = Number(value || 0);
     return `${Number.isInteger(n) ? n : n.toFixed(2)} ${effectiveHabitUnit(habit)}`.trim();
