@@ -2064,16 +2064,17 @@ body.light .consumption-focus-card.is-warm{background:linear-gradient(135deg,rgb
   body.light #screen-smoking .craving-coach-card{background:linear-gradient(180deg,rgba(255,255,255,.88),rgba(232,249,249,.88));border-color:rgba(13,151,149,.13)}
 }
 
-/* v83: solid reference-color Habit tiles, no transparent card UI */
-#screen-habits .panel:has(#habitCards){overflow:hidden}
+/* v84: solid reference-color Habit tiles with safe spacing */
+#screen-habits .panel:has(#habitCards){overflow:visible}
 #screen-habits .habit-card-grid{
   grid-template-columns:repeat(auto-fit,minmax(min(100%,154px),1fr));
-  gap:0;
+  gap:8px;
   align-items:stretch;
-  border-radius:30px;
-  overflow:hidden;
-  border:1px solid #203142;
-  background:#203142;
+  justify-items:stretch;
+  border-radius:0;
+  overflow:visible;
+  border:0;
+  background:transparent;
 }
 #screen-habits .habit-card{
   --habit-tone:#5098b8;
@@ -2084,13 +2085,14 @@ body.light .consumption-focus-card.is-warm{background:linear-gradient(135deg,rgb
   display:block;
   position:relative;
   overflow:hidden;
-  border-radius:0;
+  border-radius:26px;
   background:var(--habit-tone) !important;
   border:0 !important;
   box-shadow:none;
   color:#fff;
   opacity:1 !important;
   filter:none !important;
+  isolation:isolate;
 }
 #screen-habits .habit-card:before{content:none !important}
 #screen-habits .habit-card.is-meditation-habit,
@@ -2120,7 +2122,7 @@ body.light .consumption-focus-card.is-warm{background:linear-gradient(135deg,rgb
   gap:12px;
   cursor:pointer;
 }
-#screen-habits .habit-card-open:focus-visible{outline:4px solid #fff;outline-offset:-8px}
+#screen-habits .habit-card-open:focus-visible{outline:4px solid #fff;outline-offset:-8px;border-radius:26px}
 #screen-habits .habit-card-status-badge{
   position:absolute;
   top:12px;
@@ -2232,7 +2234,7 @@ body.light .consumption-focus-card.is-warm{background:linear-gradient(135deg,rgb
   #screen-habits .habit-detail-grid{grid-template-columns:1fr}
 }
 @media (max-width:760px){
-  #screen-habits .habit-card-grid{grid-template-columns:repeat(2,minmax(0,1fr));border-radius:24px}
+  #screen-habits .habit-card-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
   #screen-habits .habit-card-open{padding:16px 12px 14px;gap:9px}
   #screen-habits .habit-card-art{width:64px;height:64px}
   #screen-habits .habit-card-art .ui-icon{width:42px;height:42px}
@@ -2247,4 +2249,4 @@ body.light .consumption-focus-card.is-warm{background:linear-gradient(135deg,rgb
   #screen-habits .habit-detail-actions{flex-direction:column}
   #screen-habits .habit-detail-actions .list-actions{justify-content:flex-start}
 }
-@media (max-width:420px){#screen-habits .habit-card-grid{grid-template-columns:1fr 1fr}}
+@media (max-width:420px){#screen-habits .habit-card-grid{grid-template-columns:1fr 1fr;gap:6px}#screen-habits .habit-card{border-radius:22px}}

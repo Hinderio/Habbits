@@ -528,9 +528,27 @@
 
   function habitCategoryMeta(habit = {}) {
     const icon = habitIconKey(habit);
-    const name = normalizeIconSearch(habit.name || '');
+    const name = normalizeIconSearch([habit.name, habit.title, habit.label, habit.category, habit.category_label].filter(Boolean).join(' '));
+    const rawIcon = normalizeIconSearch(habit.icon || '');
+    const isErgonomic = icon === 'standingDesk'
+      || rawIcon.includes('standing')
+      || rawIcon.includes('desk')
+      || name.includes('stehpult')
+      || name.includes('steh pult')
+      || name.includes('stehschreibtisch')
+      || name.includes('standing desk')
+      || name.includes('stand desk')
+      || name.includes('standup desk')
+      || name.includes('ergonom')
+      || name.includes('haltung')
+      || name.includes('ruecken')
+      || name.includes('rucken')
+      || name.includes('nacken')
+      || name.includes('arbeitsplatz')
+      || name.includes('schreibtisch')
+      || name.includes('desk');
     if (isSystemMeditationHabit(habit) || icon === 'meditation' || name.includes('meditation') || name.includes('atem')) return HABIT_CATEGORY_META.mind;
-    if (icon === 'standingDesk' || name.includes('stehpult') || name.includes('stehschreibtisch') || name.includes('standing desk') || name.includes('ergonom') || name.includes('haltung') || name.includes('ruecken') || name.includes('rucken') || name.includes('nacken') || name.includes('arbeitsplatz') || name.includes('desk')) return HABIT_CATEGORY_META.ergonomics;
+    if (isErgonomic) return HABIT_CATEGORY_META.ergonomics;
     if (['sport', 'jogging', 'hiking', 'walking', 'pushups'].includes(icon) || name.includes('sport') || name.includes('fitness') || name.includes('spazieren') || name.includes('wandern')) return HABIT_CATEGORY_META.sport;
     if (icon === 'bread' || name.includes('ernaehr') || name.includes('ernahr') || name.includes('essen') || name.includes('brot') || name.includes('protein') || name.includes('gemuese') || name.includes('gemuse')) return HABIT_CATEGORY_META.nutrition;
     if (icon === 'water' || name.includes('wasser') || name.includes('trinken') || name.includes('hydr')) return HABIT_CATEGORY_META.hydration;
