@@ -1581,3 +1581,45 @@ body:not(.light) .fish-poster-card,body:not(.light) .fish-stats-grid article,bod
 body:not(.light) .fish-poster-card:before{background:repeating-linear-gradient(135deg,rgba(17,36,58,.015) 0 2px,transparent 2px 12px)}
 body:not(.light) .fish-poster-card:after{border-color:rgba(17,36,58,.06)}
 body:not(.light) .fish-stage-tile.is-current{background:linear-gradient(180deg,rgba(255,255,255,.98),rgba(238,246,248,.92))}
+
+/* Photo-based progress poster companion */
+.companion-photo-poster{position:relative;isolation:isolate;width:100%;overflow:hidden;border-radius:24px;background:#dfe7eb;box-shadow:0 22px 44px rgba(17,36,58,.14)}
+.companion-photo-poster:after{content:"";position:absolute;inset:12px;border:1px solid rgba(255,255,255,.34);border-radius:18px;pointer-events:none;z-index:3}
+.companion-photo-poster.is-hero{aspect-ratio:4/5;max-width:min(100%,360px);margin:0 auto}
+.companion-photo-poster.is-mini{aspect-ratio:1/1.24;border-radius:14px;box-shadow:0 8px 16px rgba(17,36,58,.08)}
+.poster-photo-media,.poster-photo-shade,.poster-photo-stripes,.poster-photo-glow{position:absolute;inset:0}
+.poster-photo-media{background-size:cover;background-position:center center;transform:scale(1.01)}
+.companion-photo-poster.is-right .poster-photo-media{background-position:62% center}
+.poster-photo-shade{background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(9,17,29,.1) 36%,rgba(9,17,29,.68) 100%);z-index:1}
+.poster-photo-stripes{background:repeating-linear-gradient(-34deg,rgba(255,255,255,.18) 0 10px,transparent 10px 28px);mix-blend-mode:screen;opacity:.42;z-index:2}
+.poster-photo-glow{background:radial-gradient(circle at 16% 18%,rgba(255,255,255,.32),transparent 26%),linear-gradient(135deg,rgba(74,215,209,.16),transparent 46%);z-index:2}
+.poster-photo-copy{position:absolute;left:18px;right:78px;bottom:18px;display:grid;gap:4px;z-index:4;color:#fff;text-shadow:0 6px 18px rgba(0,0,0,.34)}
+.poster-photo-copy small,.poster-photo-copy span,.poster-photo-signature{display:block;text-transform:uppercase;letter-spacing:.14em;font-weight:900}
+.poster-photo-copy small{font-size:.68rem;opacity:.9}
+.poster-photo-copy strong{font-size:clamp(1.35rem,4vw,2.15rem);line-height:.94;letter-spacing:-.05em}
+.poster-photo-copy span{font-size:.62rem;opacity:.8}
+.poster-photo-index,.poster-photo-signature,.poster-photo-mini-index{position:absolute;z-index:4}
+.poster-photo-index{top:18px;right:18px;display:grid;place-items:center;min-width:54px;height:42px;padding:0 12px;border-radius:15px;background:rgba(255,255,255,.16);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);color:#fff;font-size:1.02rem;font-weight:950;letter-spacing:-.04em;box-shadow:inset 0 1px 0 rgba(255,255,255,.18)}
+.poster-photo-signature{top:18px;left:18px;padding:8px 10px;border-radius:999px;background:rgba(8,17,27,.24);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);font-size:.56rem;color:#fff}
+.poster-photo-mini-index{top:8px;right:8px;display:grid;place-items:center;min-width:28px;height:22px;padding:0 6px;border-radius:999px;background:rgba(255,255,255,.8);color:#11243a;font-size:.62rem;font-weight:950;letter-spacing:-.03em}
+.companion-photo-poster.is-mini .poster-photo-stripes{opacity:.26}
+.companion-photo-poster.is-mini .poster-photo-shade{background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(9,17,29,.14) 45%,rgba(9,17,29,.52) 100%)}
+.companion-photo-poster.is-mini .poster-photo-glow{background:linear-gradient(135deg,rgba(255,255,255,.14),transparent 38%)}
+.fish-stage-tile{padding:7px 5px 8px;align-content:start;gap:5px}
+.fish-stage-tile .companion-photo-poster{width:100%}
+.fish-stage-tile strong{margin-top:1px}
+.fish-stage-tile span{max-width:100%}
+.fish-poster-art{min-height:auto}
+.motion-poster-art{padding-inline:0}
+body:not(.light) .companion-photo-poster{background:#132331;box-shadow:0 24px 54px rgba(0,0,0,.26)}
+body:not(.light) .companion-photo-poster:after{border-color:rgba(255,255,255,.18)}
+body:not(.light) .poster-photo-index{background:rgba(255,255,255,.12)}
+body:not(.light) .poster-photo-signature{background:rgba(255,255,255,.1)}
+@media (max-width:760px){
+  .companion-photo-poster.is-hero{max-width:100%;aspect-ratio:4/5}
+  .poster-photo-copy{left:14px;right:68px;bottom:14px;gap:3px}
+  .poster-photo-copy strong{font-size:1.3rem}
+  .poster-photo-index{top:14px;right:14px;min-width:46px;height:36px;font-size:.92rem}
+  .poster-photo-signature{top:14px;left:14px}
+  .fish-stage-tile{flex:0 0 76px;min-height:108px}
+}

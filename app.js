@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v66-sports-silhouette-companion';
+  const APP_DATA_SCHEMA_VERSION = 'v67-photo-progress-poster';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -29,6 +29,29 @@
     { key: 'body-scan', title: 'Body Scan', subtitle: 'Körper wahrnehmen und Spannung lösen', minutes: 10, pattern: 'ruhig scannen' },
     { key: 'urge-surf', title: 'Craving-Welle', subtitle: 'Drang beobachten, ohne sofort zu handeln', minutes: 4, pattern: 'wahrnehmen · warten · wählen' },
     { key: 'gratitude', title: 'Dankbarkeits-Minute', subtitle: 'Kurzer mentaler Reset mit positiver Ankerung', minutes: 3, pattern: '3 Dinge benennen' }
+  ];
+
+  const COMPANION_STAGE_POSTERS = [
+    { src: './assets/companion-posters/stage-01.png', mood: 'Opening Frame', cue: 'Foundation', align: 'left' },
+    { src: './assets/companion-posters/stage-02.png', mood: 'Clean Lines', cue: 'Momentum', align: 'right' },
+    { src: './assets/companion-posters/stage-03.png', mood: 'Street Focus', cue: 'Intent', align: 'left' },
+    { src: './assets/companion-posters/stage-04.png', mood: 'Poolside Calm', cue: 'Warmup', align: 'left' },
+    { src: './assets/companion-posters/stage-05.png', mood: 'Alpine Air', cue: 'Breath', align: 'right' },
+    { src: './assets/companion-posters/stage-06.png', mood: 'Sharp Turn', cue: 'Change', align: 'left' },
+    { src: './assets/companion-posters/stage-07.png', mood: 'Snowline', cue: 'Clarity', align: 'left' },
+    { src: './assets/companion-posters/stage-08.png', mood: 'Coastal Motion', cue: 'Flow', align: 'right' },
+    { src: './assets/companion-posters/stage-09.png', mood: 'Stadium Energy', cue: 'Drive', align: 'left' },
+    { src: './assets/companion-posters/stage-10.png', mood: 'Cloud Focus', cue: 'Lift', align: 'left' },
+    { src: './assets/companion-posters/stage-11.png', mood: 'Stage Heat', cue: 'Pulse', align: 'right' },
+    { src: './assets/companion-posters/stage-12.png', mood: 'Design in Motion', cue: 'Precision', align: 'left' },
+    { src: './assets/companion-posters/stage-13.png', mood: 'Glacier Quiet', cue: 'Discipline', align: 'right' },
+    { src: './assets/companion-posters/stage-14.png', mood: 'Palm Rhythm', cue: 'Balance', align: 'left' },
+    { src: './assets/companion-posters/stage-15.png', mood: 'Tropical Light', cue: 'Focus', align: 'right' },
+    { src: './assets/companion-posters/stage-16.png', mood: 'Water Control', cue: 'Control', align: 'left' },
+    { src: './assets/companion-posters/stage-17.png', mood: 'Golden Hours', cue: 'Build', align: 'right' },
+    { src: './assets/companion-posters/stage-18.png', mood: 'Above the Clouds', cue: 'Ascend', align: 'left' },
+    { src: './assets/companion-posters/stage-19.png', mood: 'Summit Frame', cue: 'Apex', align: 'right' },
+    { src: './assets/companion-posters/stage-20.png', mood: 'Final Form', cue: 'Champion', align: 'left' }
   ];
 
 
@@ -2667,172 +2690,30 @@
     };
   }
 
-  function renderCompanionFish(stage, size = 'hero') {
+  function renderCompanionFish(stage, size = 'hero', stageLabel = '') {
     const numericStage = Number(stage || 1);
     const safeStage = Number.isFinite(numericStage) ? Math.min(20, Math.max(1, numericStage)) : 1;
-    const scaleClass = String(size).startsWith('mini') ? 'is-mini' : 'is-hero';
-    const isMini = scaleClass === 'is-mini';
-    const poses = [
-      {
-        title: 'Startschritt',
-        segments: [[164, 98, 159, 166, 32], [161, 105, 126, 128, 18], [126, 128, 92, 150, 15], [167, 108, 203, 120, 18], [203, 120, 232, 134, 15], [157, 166, 136, 222, 22], [136, 222, 124, 286, 18], [164, 168, 195, 212, 22], [195, 212, 219, 266, 18]],
-        circles: [[170, 69, 18], [160, 107, 14], [159, 165, 13]], ellipses: [], extras: []
-      },
-      {
-        title: 'Jog Flow',
-        segments: [[160, 98, 156, 164, 32], [157, 104, 124, 130, 17], [124, 130, 100, 165, 15], [163, 106, 196, 126, 17], [196, 126, 225, 160, 15], [154, 165, 129, 215, 22], [129, 215, 118, 276, 18], [161, 167, 191, 203, 22], [191, 203, 221, 242, 18]],
-        circles: [[168, 68, 18], [157, 106, 14], [158, 165, 13]], ellipses: [], extras: []
-      },
-      {
-        title: 'Sprint Lean',
-        segments: [[170, 94, 152, 160, 34], [160, 105, 123, 129, 18], [123, 129, 88, 148, 15], [166, 108, 200, 122, 18], [200, 122, 231, 136, 15], [153, 163, 128, 205, 23], [128, 205, 108, 266, 19], [160, 167, 196, 195, 23], [196, 195, 233, 214, 18]],
-        circles: [[177, 66, 18], [160, 104, 14], [156, 163, 13]], ellipses: [], extras: []
-      },
-      {
-        title: 'Boxer Jab',
-        segments: [[162, 98, 160, 168, 32], [158, 107, 127, 121, 18], [127, 121, 93, 116, 18], [166, 108, 197, 128, 18], [197, 128, 229, 152, 15], [157, 169, 142, 223, 22], [142, 223, 136, 286, 18], [164, 171, 184, 220, 22], [184, 220, 200, 283, 18]],
-        circles: [[163, 68, 18], [160, 107, 14], [160, 169, 13], [88, 116, 10]], ellipses: [], extras: []
-      },
-      {
-        title: 'Court Ready',
-        segments: [[160, 98, 162, 168, 32], [159, 109, 132, 136, 17], [132, 136, 118, 173, 15], [165, 107, 188, 78, 17], [188, 78, 205, 48, 14], [158, 169, 144, 224, 22], [144, 224, 140, 286, 18], [164, 170, 178, 222, 22], [178, 222, 185, 282, 18], [208, 47, 214, 18, 7]],
-        circles: [[160, 69, 18], [160, 108, 14], [161, 169, 13], [224, 38, 10]], ellipses: [], extras: []
-      },
-      {
-        title: 'Hoop Rise',
-        segments: [[160, 102, 162, 173, 34], [160, 112, 145, 73, 17], [145, 73, 143, 42, 14], [166, 110, 185, 79, 17], [185, 79, 200, 42, 14], [158, 174, 148, 231, 22], [148, 231, 142, 292, 18], [164, 175, 176, 231, 22], [176, 231, 182, 292, 18]],
-        circles: [[160, 72, 18], [160, 111, 14], [161, 173, 13], [142, 22, 12]], ellipses: [], extras: []
-      },
-      {
-        title: 'Goal Strike',
-        segments: [[154, 100, 172, 168, 32], [160, 111, 130, 132, 17], [130, 132, 100, 145, 14], [167, 110, 199, 116, 17], [199, 116, 230, 122, 14], [160, 170, 136, 219, 22], [136, 219, 111, 258, 18], [168, 168, 204, 206, 22], [204, 206, 249, 168, 18]],
-        circles: [[150, 70, 18], [159, 109, 14], [163, 169, 13], [264, 171, 14]], ellipses: [], extras: []
-      },
-      {
-        title: 'Volley Jump',
-        segments: [[162, 98, 156, 168, 32], [156, 108, 126, 81, 17], [126, 81, 102, 57, 14], [164, 106, 192, 80, 17], [192, 80, 210, 55, 14], [154, 168, 136, 221, 22], [136, 221, 118, 270, 18], [161, 170, 187, 219, 22], [187, 219, 212, 259, 18]],
-        circles: [[162, 68, 18], [158, 107, 14], [157, 168, 13], [221, 36, 12]], ellipses: [], extras: []
-      },
-      {
-        title: 'Golf Swing',
-        segments: [[166, 98, 176, 172, 33], [169, 108, 145, 128, 17], [145, 128, 121, 156, 15], [173, 108, 198, 130, 17], [198, 130, 227, 159, 15], [171, 173, 154, 229, 22], [154, 229, 148, 290, 18], [178, 173, 190, 231, 22], [190, 231, 199, 292, 18], [225, 158, 255, 113, 6]],
-        circles: [[164, 68, 18], [170, 108, 14], [174, 172, 13], [260, 106, 4]], ellipses: [], extras: []
-      },
-      {
-        title: 'Hurdle Lift',
-        segments: [[158, 99, 163, 168, 33], [158, 109, 126, 117, 17], [126, 117, 94, 116, 14], [164, 109, 193, 122, 17], [193, 122, 220, 142, 14], [158, 169, 126, 198, 22], [126, 198, 87, 191, 18], [165, 169, 192, 213, 22], [192, 213, 214, 272, 18]],
-        circles: [[160, 68, 18], [160, 109, 14], [161, 169, 13]], ellipses: [], extras: [[58, 202, 262, 202, 5]]
-      },
-      {
-        title: 'Power Throw',
-        segments: [[160, 100, 177, 170, 33], [166, 110, 186, 76, 17], [186, 76, 202, 43, 14], [164, 113, 132, 124, 17], [132, 124, 103, 135, 14], [166, 170, 148, 224, 22], [148, 224, 142, 285, 18], [174, 171, 199, 219, 22], [199, 219, 219, 278, 18]],
-        circles: [[158, 69, 18], [165, 110, 14], [170, 170, 13], [215, 31, 10]], ellipses: [], extras: []
-      },
-      {
-        title: 'High Kick',
-        segments: [[160, 100, 166, 169, 33], [162, 110, 133, 132, 17], [133, 132, 108, 164, 14], [167, 110, 197, 95, 17], [197, 95, 224, 63, 14], [162, 170, 147, 227, 22], [147, 227, 147, 289, 18], [168, 170, 203, 198, 22], [203, 198, 248, 158, 18]],
-        circles: [[161, 68, 18], [163, 110, 14], [165, 170, 13]], ellipses: [], extras: []
-      },
-      {
-        title: 'Breakthrough',
-        segments: [[154, 99, 175, 166, 34], [163, 109, 129, 136, 18], [129, 136, 100, 170, 15], [170, 110, 205, 109, 18], [205, 109, 239, 111, 15], [159, 168, 130, 215, 23], [130, 215, 107, 278, 18], [168, 168, 204, 195, 23], [204, 195, 243, 222, 18]],
-        circles: [[150, 69, 18], [162, 109, 14], [163, 167, 13]], ellipses: [], extras: []
-      },
-      {
-        title: 'Air Control',
-        segments: [[161, 98, 168, 166, 33], [165, 108, 141, 76, 17], [141, 76, 127, 44, 14], [169, 107, 195, 79, 17], [195, 79, 219, 53, 14], [164, 167, 144, 220, 22], [144, 220, 131, 274, 18], [170, 167, 203, 197, 22], [203, 197, 236, 167, 18]],
-        circles: [[161, 68, 18], [164, 108, 14], [166, 167, 13], [236, 145, 12]], ellipses: [], extras: []
-      },
-      {
-        title: 'Bicycle Kick',
-        segments: [[161, 139, 190, 181, 33], [171, 151, 139, 128, 16], [139, 128, 107, 116, 14], [183, 152, 202, 118, 16], [202, 118, 218, 84, 14], [173, 180, 139, 153, 21], [139, 153, 97, 129, 17], [183, 182, 218, 214, 21], [218, 214, 251, 247, 17]],
-        circles: [[159, 118, 17], [172, 151, 13], [176, 181, 13], [223, 59, 12]], ellipses: [], extras: []
-      },
-      {
-        title: 'Aerial Twist',
-        segments: [[158, 108, 179, 171, 34], [165, 119, 136, 88, 17], [136, 88, 107, 58, 14], [173, 118, 204, 90, 17], [204, 90, 233, 70, 14], [165, 170, 141, 218, 22], [141, 218, 113, 257, 18], [172, 171, 208, 188, 22], [208, 188, 248, 197, 18]],
-        circles: [[156, 77, 18], [166, 118, 14], [171, 170, 13]], ellipses: [], extras: []
-      },
-      {
-        title: 'Sky Strike',
-        segments: [[164, 100, 166, 168, 33], [164, 111, 136, 87, 17], [136, 87, 110, 61, 14], [168, 111, 197, 136, 17], [197, 136, 231, 155, 14], [162, 169, 140, 224, 22], [140, 224, 115, 274, 18], [168, 169, 204, 192, 22], [204, 192, 245, 151, 18]],
-        circles: [[164, 69, 18], [165, 111, 14], [165, 169, 13], [245, 130, 12]], ellipses: [], extras: []
-      },
-      {
-        title: 'Poster Stage',
-        segments: [[157, 114, 181, 176, 34], [165, 125, 136, 99, 17], [136, 99, 105, 84, 14], [174, 124, 202, 95, 17], [202, 95, 218, 62, 14], [165, 176, 142, 220, 22], [142, 220, 122, 270, 18], [176, 176, 213, 192, 22], [213, 192, 250, 174, 18]],
-        circles: [[154, 83, 18], [166, 124, 14], [168, 176, 13], [224, 41, 12]], ellipses: [], extras: []
-      },
-      {
-        title: 'Victory Leap',
-        segments: [[160, 102, 162, 171, 33], [160, 112, 131, 85, 17], [131, 85, 104, 54, 14], [166, 111, 196, 84, 17], [196, 84, 223, 57, 14], [159, 171, 139, 219, 22], [139, 219, 117, 267, 18], [165, 171, 196, 205, 22], [196, 205, 228, 236, 18]],
-        circles: [[160, 70, 18], [160, 111, 14], [162, 171, 13]], ellipses: [], extras: []
-      },
-      {
-        title: 'Champion Burst',
-        segments: [[150, 100, 178, 164, 34], [160, 112, 126, 137, 18], [126, 137, 91, 167, 15], [168, 110, 203, 97, 18], [203, 97, 237, 82, 15], [157, 167, 127, 214, 23], [127, 214, 103, 277, 18], [168, 165, 207, 194, 23], [207, 194, 247, 224, 18]],
-        circles: [[146, 71, 18], [160, 110, 14], [160, 166, 13]], ellipses: [], extras: [[74, 89, 114, 103, 6], [70, 119, 120, 133, 6], [67, 149, 122, 163, 6]]
-      }
-    ];
-    const pose = poses[safeStage - 1] || poses[0];
-    const precision = value => Number(value).toFixed(1);
-    const segmentMarkup = (segment, className = '') => {
-      const [x1, y1, x2, y2, width] = segment;
-      const dx = x2 - x1;
-      const dy = y2 - y1;
-      const length = Math.hypot(dx, dy);
-      const angle = Math.atan2(dy, dx) * 180 / Math.PI;
-      const cx = (x1 + x2) / 2;
-      const cy = (y1 + y2) / 2;
-      return `<rect class="${className}" x="${precision(cx - length / 2)}" y="${precision(cy - width / 2)}" width="${precision(length)}" height="${precision(width)}" rx="${precision(width / 2)}" transform="rotate(${precision(angle)} ${precision(cx)} ${precision(cy)})" />`;
-    };
-    const circleMarkup = (circle, options = {}) => `<circle class="${options.className || ''}" cx="${precision(circle[0])}" cy="${precision(circle[1])}" r="${precision(circle[2])}"${options.fill ? ` fill="${options.fill}"` : ''}${options.stroke ? ` stroke="${options.stroke}"` : ''}${options.strokeWidth ? ` stroke-width="${options.strokeWidth}"` : ''} />`;
-    const ellipseMarkup = (ellipse, options = {}) => `<ellipse class="${options.className || ''}" cx="${precision(ellipse[0])}" cy="${precision(ellipse[1])}" rx="${precision(ellipse[2])}" ry="${precision(ellipse[3])}" transform="rotate(${precision(ellipse[4] || 0)} ${precision(ellipse[0])} ${precision(ellipse[1])})"${options.fill ? ` fill="${options.fill}"` : ''}${options.stroke ? ` stroke="${options.stroke}"` : ''}${options.strokeWidth ? ` stroke-width="${options.strokeWidth}"` : ''} />`;
-    const shapeMarkup = options => [
-      ...(pose.segments || []).map(segment => {
-        const markup = segmentMarkup(segment, options.className || '');
-        return options.fill ? markup.replace('/>', ` fill="${options.fill}" />`) : markup;
-      }),
-      ...(pose.circles || []).map(circle => circleMarkup(circle, options)),
-      ...(pose.ellipses || []).map(ellipse => ellipseMarkup(ellipse, options)),
-      ...(pose.extras || []).map(extra => {
-        const markup = segmentMarkup(extra, options.className || '');
-        return options.fill ? markup.replace('/>', ` fill="${options.fill}" />`) : markup;
-      })
-    ].join('');
-    const density = Math.min(1, 0.42 + safeStage * 0.028);
-    const stripeOpacity = Math.min(0.34, 0.16 + safeStage * 0.008).toFixed(2);
-    const motionCount = isMini ? Math.max(0, Math.min(2, safeStage - 10)) : Math.max(0, Math.min(7, Math.floor((safeStage - 4) / 2)));
-    const motionLines = Array.from({ length: motionCount }, (_, index) => {
-      const y = 96 + index * 24 + (index % 2) * 5;
-      const x1 = 42 - index * 6;
-      const x2 = 124 + index * 12;
-      return `<path class="sport-motion-line" d="M${x1} ${y} H${x2}" style="opacity:${(0.16 + index * 0.07).toFixed(2)}" />`;
-    }).join('');
-    const rings = !isMini && safeStage >= 12 ? `<g class="sport-energy-rings" opacity="${Math.min(0.32, 0.08 + safeStage * 0.012).toFixed(2)}"><circle cx="160" cy="182" r="${84 + safeStage * 1.1}" /><circle cx="160" cy="182" r="${56 + safeStage * 0.7}" /></g>` : '';
-    const impactMarks = !isMini && safeStage >= 15 ? Array.from({ length: Math.min(5, safeStage - 13) }, (_, index) => {
-      const x = 208 + index * 10;
-      const y = 42 + index * 16;
-      return `<path class="sport-impact" d="M${x} ${y} l10 -10 M${x + 4} ${y + 8} h12" style="opacity:${(0.22 + index * 0.06).toFixed(2)}" />`;
-    }).join('') : '';
-    return `<svg class="companion-sport-svg ${scaleClass}" viewBox="0 0 320 360" role="img" aria-label="Companion Sport-Silhouette Stufe ${safeStage} von 20">
-      <defs>
-        <pattern id="sportStripes-${size}-${safeStage}" width="18" height="18" patternUnits="userSpaceOnUse" patternTransform="rotate(-32)">
-          <rect width="18" height="18" fill="transparent" />
-          <rect x="0" y="0" width="7.5" height="18" fill="#ffffff" fill-opacity="${stripeOpacity}" />
-        </pattern>
-      </defs>
-      <g class="sport-poster-noise" opacity="${isMini ? '0' : '0.75'}">
-        <circle cx="66" cy="48" r="1.2" /><circle cx="86" cy="78" r="1" /><circle cx="244" cy="54" r="1.4" /><circle cx="274" cy="92" r="1.1" />
-        <circle cx="52" cy="246" r="1.2" /><circle cx="266" cy="248" r="1.1" /><circle cx="230" cy="300" r="1.3" /><circle cx="106" cy="316" r="1.1" />
-      </g>
-      ${rings}
-      ${motionLines}
-      ${impactMarks}
-      <g class="sport-silhouette-base" style="opacity:${density.toFixed(2)}">${shapeMarkup({ className: 'sport-solid-segment', fill: 'rgba(20,40,96,0.96)' })}</g>
-      <g class="sport-silhouette-stripes" style="opacity:${Math.min(0.88, 0.48 + safeStage * 0.02).toFixed(2)}">${shapeMarkup({ className: 'sport-striped-segment', fill: `url(#sportStripes-${size}-${safeStage})` })}</g>
-      <g class="sport-silhouette-overlay">${shapeMarkup({ className: 'sport-outline-segment', stroke: 'rgba(18,34,88,0.14)', strokeWidth: '1', fill: 'transparent' })}</g>
-    </svg>`;
+    const poster = COMPANION_STAGE_POSTERS[safeStage - 1] || COMPANION_STAGE_POSTERS[0];
+    const isMini = String(size).startsWith('mini');
+    const posterLabel = stageLabel || `Stufe ${safeStage}`;
+    const posterMood = poster?.mood || 'Progress';
+    const posterCue = poster?.cue || 'HabitFlow';
+    const alignClass = poster?.align === 'right' ? 'is-right' : 'is-left';
+    return `<div class="companion-photo-poster ${isMini ? 'is-mini' : 'is-hero'} ${alignClass}" role="img" aria-label="Fortschrittsfoto Stufe ${safeStage}: ${escapeHtml(posterLabel)}">
+      <div class="poster-photo-media" style="background-image:url('${poster.src}');"></div>
+      <div class="poster-photo-shade"></div>
+      <div class="poster-photo-stripes" aria-hidden="true"></div>
+      <div class="poster-photo-glow" aria-hidden="true"></div>
+      ${isMini
+        ? `<span class="poster-photo-mini-index">${String(safeStage).padStart(2, '0')}</span>`
+        : `<span class="poster-photo-signature">${escapeHtml(posterCue)}</span>
+           <b class="poster-photo-index">${String(safeStage).padStart(2, '0')}</b>
+           <div class="poster-photo-copy">
+             <small>${escapeHtml(posterMood)}</small>
+             <strong>${escapeHtml(posterLabel)}</strong>
+             <span>HabitFlow Progress Poster</span>
+           </div>`}
+    </div>`;
   }
 
   function renderCompanionCard(companion, stats) {
@@ -2842,7 +2723,7 @@
     const stageTiles = companion.stageNames.map((name, index) => {
       const stage = index + 1;
       return `<article class="fish-stage-tile ${stage === companion.stage ? 'is-current' : stage < companion.stage ? 'is-done' : ''}" aria-label="Stufe ${stage}: ${escapeHtml(name)}">
-        ${renderCompanionFish(stage, `mini-${stage}`)}
+        ${renderCompanionFish(stage, `mini-${stage}`, name)}
         <strong>${stage}</strong>
         <span>${escapeHtml(name)}</span>
       </article>`;
@@ -2855,18 +2736,18 @@
     return `<div class="companion-shell fish-companion-shell stage-${companion.stage}">
       <div class="fish-poster-card">
         <div class="fish-poster-head">
-          <div><p class="eyebrow">Companion Evolution</p><h4>Stufe ${companion.stage}</h4><span>${escapeHtml(companion.stageName)} · ${escapeHtml(companion.chapter.title)}</span></div>
+          <div><p class="eyebrow">Progress Poster</p><h4>Stufe ${companion.stage}</h4><span>${escapeHtml(companion.stageName)} · ${escapeHtml(companion.chapter.title)}</span></div>
           <b>${companion.stage}/20</b>
         </div>
         <div class="fish-poster-art motion-poster-art">
-          ${renderCompanionFish(companion.stage, 'hero')}
+          ${renderCompanionFish(companion.stage, 'hero', companion.stageName)}
         </div>
         <div class="fish-progress-row"><span>${companion.stage}/20</span><i><b style="width:${companion.stageProgress}%"></b></i><em>${nextPoints}</em></div>
       </div>
       <div class="fish-companion-copy">
-        <p class="eyebrow">Poster Companion</p>
-        <h4>Dein Fortschritt wird als Sport-Poster sichtbar.</h4>
-        <p>Jede Stufe zeigt eine neue Sport-Silhouette. Die Figuren bleiben minimalistisch, werden aber von Level zu Level dynamischer, mutiger und intensiver - inklusive der diagonalen Poster-Streifen.</p>
+        <p class="eyebrow">Photo Evolution</p>
+        <h4>Dein Fortschritt wird jetzt mit echten Fotos erzählt.</h4>
+        <p>Jede Stufe zeigt ein eigenes, echtes Bild im magazinartigen Poster-Look - mit diagonalen Streifen, klaren Overlays und einem leichten Nike-Run-Club-Vibe. So wirkt die Entwicklung persönlicher, hochwertiger und deutlich ikonischer.</p>
         <div class="companion-traits fish-traits">
           <span>${unlockedText} Badges</span>
           <span>${escapeHtml(companion.trait)}</span>

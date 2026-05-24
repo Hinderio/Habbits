@@ -1,5 +1,5 @@
-const CACHE_NAME = 'habitflow-v66-sports-silhouette-companion';
-const ASSETS = ['./', './index.html', './style.css', './app.js', './supabase-config.js', './supabase-schema.js', './manifest.json', './icons/coach-clean.svg', './data/activity-ideas.json'];
+const CACHE_NAME = 'habitflow-v67-photo-progress-poster';
+const ASSETS = ['./', './index.html', './style.css', './app.js', './supabase-config.js', './supabase-schema.js', './manifest.json', './icons/coach-clean.svg', './data/activity-ideas.json', './assets/companion-posters/stage-01.png', './assets/companion-posters/stage-02.png', './assets/companion-posters/stage-03.png', './assets/companion-posters/stage-04.png', './assets/companion-posters/stage-05.png', './assets/companion-posters/stage-06.png', './assets/companion-posters/stage-07.png', './assets/companion-posters/stage-08.png', './assets/companion-posters/stage-09.png', './assets/companion-posters/stage-10.png', './assets/companion-posters/stage-11.png', './assets/companion-posters/stage-12.png', './assets/companion-posters/stage-13.png', './assets/companion-posters/stage-14.png', './assets/companion-posters/stage-15.png', './assets/companion-posters/stage-16.png', './assets/companion-posters/stage-17.png', './assets/companion-posters/stage-18.png', './assets/companion-posters/stage-19.png', './assets/companion-posters/stage-20.png'];
 const NETWORK_FIRST_PATHS = new Set(['/', '/index.html', '/app.js', '/style.css', '/supabase-config.js', '/supabase-schema.js', '/manifest.json']);
 
 self.addEventListener('install', event => {
