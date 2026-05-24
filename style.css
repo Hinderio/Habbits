@@ -2628,3 +2628,51 @@ body:not(.light) .habit-fitness-quick-row input{background:rgba(255,255,255,.07)
   .habit-fitness-quick-row{grid-template-columns:1fr}
   .habit-fitness-quick-row .mini-btn{width:100%}
 }
+
+/* v92: fitness journey lines + mountain collection */
+.fitness-journey-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:16px}
+.fitness-journey-card{display:grid;gap:14px;padding:18px;border-radius:28px;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.06)}
+.fitness-journey-card.is-jogging{background:linear-gradient(135deg,rgba(37,193,120,.11),rgba(255,255,255,.05))}
+.fitness-journey-card.is-hiking{background:linear-gradient(135deg,rgba(244,182,63,.13),rgba(255,255,255,.05))}
+.fitness-journey-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.fitness-journey-head h3{margin:2px 0 4px;font-size:2rem;letter-spacing:-.05em}
+.fitness-journey-pill{display:inline-flex;align-items:center;justify-content:center;min-height:34px;padding:8px 12px;border-radius:999px;background:color-mix(in srgb, var(--journey-color) 18%, rgba(255,255,255,.6));color:var(--text);font-weight:900}
+.fitness-journey-copy{display:grid;gap:4px}
+.fitness-journey-copy strong{font-size:1rem;letter-spacing:-.02em}
+.fitness-journey-copy span,.fitness-journey-footer span,.fitness-journey-log small{color:var(--muted);line-height:1.4}
+.fitness-journey-footer{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.fitness-destination-line{padding:14px 0 6px}
+.fitness-destination-rail{position:relative;height:92px}
+.fitness-destination-rail::before{content:"";position:absolute;left:0;right:0;top:34px;height:8px;border-radius:999px;background:rgba(255,255,255,.08)}
+.fitness-destination-fill{position:absolute;left:0;top:34px;height:8px;border-radius:999px;background:linear-gradient(90deg,var(--primary),var(--accent));box-shadow:0 0 0 1px rgba(255,255,255,.1) inset}
+.fitness-destination-stop{position:absolute;top:20px;transform:translateX(-50%);display:grid;justify-items:center;gap:4px;min-width:68px;text-align:center}
+.fitness-destination-stop i{width:14px;height:14px;border-radius:50%;display:block;background:rgba(255,255,255,.86);border:3px solid rgba(17,36,58,.14);box-shadow:0 0 0 2px rgba(255,255,255,.45)}
+.fitness-destination-stop.is-reached i{background:var(--stop-color);border-color:#fff}
+.fitness-destination-stop strong{font-size:.78rem;letter-spacing:-.02em}
+.fitness-destination-stop small{font-size:.72rem;color:var(--muted)}
+.fitness-destination-marker{position:absolute;top:0;transform:translateX(-50%);display:grid;justify-items:center;gap:4px;max-width:78px}
+.fitness-destination-pin{width:18px;height:18px;border-radius:999px;display:block;box-shadow:0 0 0 3px rgba(255,255,255,.9),0 8px 18px rgba(17,36,58,.16)}
+.fitness-destination-marker small{font-size:.72rem;font-weight:900;color:var(--text);background:rgba(255,255,255,.9);padding:4px 7px;border-radius:999px;box-shadow:0 6px 14px rgba(17,36,58,.09)}
+.fitness-journey-log{display:grid;gap:10px;padding:14px;border-radius:22px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.08)}
+.fitness-journey-log.is-disabled{opacity:.8}
+.fitness-journey-log strong{display:block;margin-bottom:3px}
+.fitness-journey-log-grid{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+.fitness-journey-log-grid.is-hiking{grid-template-columns:minmax(0,.9fr) minmax(0,.9fr) auto}
+.fitness-journey-log-grid input{min-height:46px;border-radius:16px;background:rgba(255,255,255,.78);border:1px solid rgba(17,36,58,.08);color:var(--text)}
+.fitness-journey-log-grid .mini-btn{min-height:46px;border-radius:16px;white-space:nowrap}
+.fitness-ascent-panel{display:grid;gap:10px;padding:14px 14px 12px;border-radius:22px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.08)}
+.fitness-ascent-head,.fitness-ascent-copy{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.fitness-ascent-track{height:10px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden}
+.fitness-ascent-track span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#f4b63f,#ffd976)}
+.fitness-ascent-copy strong{font-size:.96rem;letter-spacing:-.02em}
+.fitness-peak-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.fitness-peak-card{display:grid;grid-template-columns:auto 1fr;gap:10px 12px;align-items:center;padding:14px;border-radius:22px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.06)}
+.fitness-peak-card span{grid-column:2;color:var(--muted);font-size:.84rem}
+.fitness-peak-badge{width:38px;height:38px;border-radius:14px;display:grid;place-items:center;font-weight:900;background:rgba(255,255,255,.08);color:var(--muted)}
+.fitness-peak-card.is-unlocked .fitness-peak-badge{background:linear-gradient(135deg,#25c178,#7ce3a7);color:#062016}
+.fitness-peak-card strong{display:block;font-size:1rem;letter-spacing:-.02em}
+.fitness-peak-card small{display:block;color:var(--muted);font-size:.8rem;margin-top:3px}
+body.light .fitness-journey-card,body.light .fitness-journey-log,body.light .fitness-ascent-panel,body.light .fitness-peak-card{background:rgba(255,255,255,.74);border-color:rgba(17,36,58,.08)}
+body:not(.light) .fitness-journey-log-grid input{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.1)}
+@media (max-width:760px){.fitness-journey-log-grid,.fitness-journey-log-grid.is-hiking{grid-template-columns:1fr}.fitness-journey-log-grid .mini-btn{width:100%}.fitness-destination-rail{height:104px}.fitness-destination-stop strong{font-size:.72rem}.fitness-ascent-head,.fitness-ascent-copy,.fitness-journey-footer{flex-direction:column}.fitness-peak-grid{grid-template-columns:1fr 1fr}}
+@media (max-width:540px){.fitness-journey-card{padding:16px;border-radius:24px}.fitness-journey-head h3{font-size:1.72rem}.fitness-destination-rail{overflow-x:auto;overflow-y:visible;min-width:560px;padding-bottom:2px}.fitness-destination-line{overflow-x:auto;padding-bottom:8px}.fitness-peak-grid{grid-template-columns:1fr}}

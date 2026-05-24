@@ -478,7 +478,7 @@
               <label><span>Emotionale Hürde</span><select name="dna_emotional_hurdle"><option value="consistency" selected>Dranbleiben</option><option value="resistance">Innerer Widerstand</option><option value="stress">Stress / Druck</option><option value="perfectionism">Perfektionismus</option><option value="boredom">Langeweile</option><option value="tiredness">Müdigkeit</option></select></label>
               <label><span>Auslöser</span><select name="dna_trigger"><option value="routine" selected>Routine</option><option value="wakeup">Nach dem Aufstehen</option><option value="coffee">Nach Kaffee</option><option value="workstart">Arbeitsstart</option><option value="meal">Nach dem Essen</option><option value="afterwork">Feierabend</option><option value="workout">Nach Bewegung</option><option value="bedtime">Vor dem Schlafen</option></select></label>
               <label><span>Belohnung</span><select name="dna_reward"><option value="progress" selected>Fortschritt</option><option value="pride">Stolz</option><option value="calm">Ruhe</option><option value="clarity">Klarheit</option><option value="energy">Energie</option><option value="relief">Erleichterung</option></select></label>
-              <div class="full form-inline-hint"><span class="form-inline-icon" data-icon="jogging"></span><div><strong>Fitness-ready:</strong><span>Wenn du ein Habit wie Joggen oder Wandern mit Icon <em>jogging</em> oder <em>hiking</em> anlegst, interpretiert die App den Log als Strecke in km und zeigt automatisch eine Karte im Fitness Tab.</span></div></div>
+              <div class="full form-inline-hint"><span class="form-inline-icon" data-icon="jogging"></span><div><strong>Fitness-ready:</strong><span>Wenn du ein Habit wie Joggen oder Wandern mit Icon <em>jogging</em> oder <em>hiking</em> anlegst, interpretiert die App den Log als Strecke in km und zeigt automatisch die Motivationslinien im Fitness-Tab.</span></div></div>
               <div class="form-actions full"><button id="habitSubmitBtn" class="pill primary" type="submit">Habit erstellen</button><button id="cancelHabitEditBtn" class="pill secondary hidden" type="button">Abbrechen</button></div>
             </form>
           </section>
@@ -489,7 +489,6 @@
           <section class="panel glass">
             <div class="panel-head"><div><p class="eyebrow">Heute</p><h3>Solide Kategorie-Tiles</h3></div><span class="subtle">antippen öffnet Details</span></div>
             <div id="habitCards" class="habit-card-grid"></div>
-            <div id="habitFitnessQuickLog" class="habit-fitness-quick-log" aria-live="polite"></div>
           </section>
           <section class="panel glass habit-story-panel">
             <div class="panel-head"><div><p class="eyebrow">Spielerische Stats</p><h3>Habits mit Story statt nur Zahlen</h3></div><span class="subtle">automatisch berechnet</span></div>
@@ -504,7 +503,7 @@
           <span class="badge muted">Joggen · Wandern</span>
         </div>
         <section class="panel glass fitness-screen-panel">
-          <div class="panel-head"><div><p class="eyebrow">Fitness Tab</p><h3>Karte, Sessions & Eastbound Routen</h3></div><span class="subtle">Start 47.459945 / 9.032719</span></div>
+          <div class="panel-head"><div><p class="eyebrow">Fitness Tab</p><h3>Horizontlinien, Orte & Berg-Sammlung</h3></div><span class="subtle">Wil SG als Motivations-Startpunkt</span></div>
           <div id="fitnessHubContent"></div>
         </section>
       </section>
