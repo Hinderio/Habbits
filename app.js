@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v65-motion-poster-companion';
+  const APP_DATA_SCHEMA_VERSION = 'v66-sports-silhouette-companion';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -2672,79 +2672,166 @@
     const safeStage = Number.isFinite(numericStage) ? Math.min(20, Math.max(1, numericStage)) : 1;
     const scaleClass = String(size).startsWith('mini') ? 'is-mini' : 'is-hero';
     const isMini = scaleClass === 'is-mini';
-    const lineCount = isMini ? Math.max(7, Math.round(8 + safeStage * 0.42)) : Math.max(15, Math.round(18 + safeStage * 1.05));
-    const startY = isMini ? 52 : 46;
-    const endY = isMini ? 300 : 304;
-    const step = (endY - startY) / Math.max(1, lineCount - 1);
-    const scanlines = Array.from({ length: lineCount }, (_, index) => {
-      const y = startY + index * step + Math.sin((index + safeStage) * 0.48) * (isMini ? 0.5 : 1.3);
-      const left = 54 + (((index * 17) + safeStage * 5) % 26) - 13;
-      const right = 264 - (((index * 11) + safeStage * 3) % 30) + 8;
-      const width = isMini ? (index % 3 === 0 ? 2.05 : 1.55) : (index % 4 === 0 ? 2.7 : index % 2 === 0 ? 1.85 : 1.35);
-      const opacity = Math.min(1, 0.34 + safeStage * 0.024 + (index / lineCount) * 0.16);
-      const fragments = [`<path class="motion-scanline" d="M${left.toFixed(1)} ${y.toFixed(1)} H${right.toFixed(1)}" style="stroke-width:${width.toFixed(2)};opacity:${opacity.toFixed(2)}" />`];
-      if (!isMini && safeStage >= 8 && index % 4 === 1) {
-        const fx = 84 + ((index * 23) % 126);
-        const fw = 18 + ((index * 9) % 16);
-        fragments.push(`<path class="motion-scanline" d="M${fx.toFixed(1)} ${(y + 2.8).toFixed(1)} H${(fx + fw).toFixed(1)}" style="stroke-width:1.10;opacity:${Math.min(0.92, opacity + 0.06).toFixed(2)}" />`);
+    const poses = [
+      {
+        title: 'Startschritt',
+        segments: [[164, 98, 159, 166, 32], [161, 105, 126, 128, 18], [126, 128, 92, 150, 15], [167, 108, 203, 120, 18], [203, 120, 232, 134, 15], [157, 166, 136, 222, 22], [136, 222, 124, 286, 18], [164, 168, 195, 212, 22], [195, 212, 219, 266, 18]],
+        circles: [[170, 69, 18], [160, 107, 14], [159, 165, 13]], ellipses: [], extras: []
+      },
+      {
+        title: 'Jog Flow',
+        segments: [[160, 98, 156, 164, 32], [157, 104, 124, 130, 17], [124, 130, 100, 165, 15], [163, 106, 196, 126, 17], [196, 126, 225, 160, 15], [154, 165, 129, 215, 22], [129, 215, 118, 276, 18], [161, 167, 191, 203, 22], [191, 203, 221, 242, 18]],
+        circles: [[168, 68, 18], [157, 106, 14], [158, 165, 13]], ellipses: [], extras: []
+      },
+      {
+        title: 'Sprint Lean',
+        segments: [[170, 94, 152, 160, 34], [160, 105, 123, 129, 18], [123, 129, 88, 148, 15], [166, 108, 200, 122, 18], [200, 122, 231, 136, 15], [153, 163, 128, 205, 23], [128, 205, 108, 266, 19], [160, 167, 196, 195, 23], [196, 195, 233, 214, 18]],
+        circles: [[177, 66, 18], [160, 104, 14], [156, 163, 13]], ellipses: [], extras: []
+      },
+      {
+        title: 'Boxer Jab',
+        segments: [[162, 98, 160, 168, 32], [158, 107, 127, 121, 18], [127, 121, 93, 116, 18], [166, 108, 197, 128, 18], [197, 128, 229, 152, 15], [157, 169, 142, 223, 22], [142, 223, 136, 286, 18], [164, 171, 184, 220, 22], [184, 220, 200, 283, 18]],
+        circles: [[163, 68, 18], [160, 107, 14], [160, 169, 13], [88, 116, 10]], ellipses: [], extras: []
+      },
+      {
+        title: 'Court Ready',
+        segments: [[160, 98, 162, 168, 32], [159, 109, 132, 136, 17], [132, 136, 118, 173, 15], [165, 107, 188, 78, 17], [188, 78, 205, 48, 14], [158, 169, 144, 224, 22], [144, 224, 140, 286, 18], [164, 170, 178, 222, 22], [178, 222, 185, 282, 18], [208, 47, 214, 18, 7]],
+        circles: [[160, 69, 18], [160, 108, 14], [161, 169, 13], [224, 38, 10]], ellipses: [], extras: []
+      },
+      {
+        title: 'Hoop Rise',
+        segments: [[160, 102, 162, 173, 34], [160, 112, 145, 73, 17], [145, 73, 143, 42, 14], [166, 110, 185, 79, 17], [185, 79, 200, 42, 14], [158, 174, 148, 231, 22], [148, 231, 142, 292, 18], [164, 175, 176, 231, 22], [176, 231, 182, 292, 18]],
+        circles: [[160, 72, 18], [160, 111, 14], [161, 173, 13], [142, 22, 12]], ellipses: [], extras: []
+      },
+      {
+        title: 'Goal Strike',
+        segments: [[154, 100, 172, 168, 32], [160, 111, 130, 132, 17], [130, 132, 100, 145, 14], [167, 110, 199, 116, 17], [199, 116, 230, 122, 14], [160, 170, 136, 219, 22], [136, 219, 111, 258, 18], [168, 168, 204, 206, 22], [204, 206, 249, 168, 18]],
+        circles: [[150, 70, 18], [159, 109, 14], [163, 169, 13], [264, 171, 14]], ellipses: [], extras: []
+      },
+      {
+        title: 'Volley Jump',
+        segments: [[162, 98, 156, 168, 32], [156, 108, 126, 81, 17], [126, 81, 102, 57, 14], [164, 106, 192, 80, 17], [192, 80, 210, 55, 14], [154, 168, 136, 221, 22], [136, 221, 118, 270, 18], [161, 170, 187, 219, 22], [187, 219, 212, 259, 18]],
+        circles: [[162, 68, 18], [158, 107, 14], [157, 168, 13], [221, 36, 12]], ellipses: [], extras: []
+      },
+      {
+        title: 'Golf Swing',
+        segments: [[166, 98, 176, 172, 33], [169, 108, 145, 128, 17], [145, 128, 121, 156, 15], [173, 108, 198, 130, 17], [198, 130, 227, 159, 15], [171, 173, 154, 229, 22], [154, 229, 148, 290, 18], [178, 173, 190, 231, 22], [190, 231, 199, 292, 18], [225, 158, 255, 113, 6]],
+        circles: [[164, 68, 18], [170, 108, 14], [174, 172, 13], [260, 106, 4]], ellipses: [], extras: []
+      },
+      {
+        title: 'Hurdle Lift',
+        segments: [[158, 99, 163, 168, 33], [158, 109, 126, 117, 17], [126, 117, 94, 116, 14], [164, 109, 193, 122, 17], [193, 122, 220, 142, 14], [158, 169, 126, 198, 22], [126, 198, 87, 191, 18], [165, 169, 192, 213, 22], [192, 213, 214, 272, 18]],
+        circles: [[160, 68, 18], [160, 109, 14], [161, 169, 13]], ellipses: [], extras: [[58, 202, 262, 202, 5]]
+      },
+      {
+        title: 'Power Throw',
+        segments: [[160, 100, 177, 170, 33], [166, 110, 186, 76, 17], [186, 76, 202, 43, 14], [164, 113, 132, 124, 17], [132, 124, 103, 135, 14], [166, 170, 148, 224, 22], [148, 224, 142, 285, 18], [174, 171, 199, 219, 22], [199, 219, 219, 278, 18]],
+        circles: [[158, 69, 18], [165, 110, 14], [170, 170, 13], [215, 31, 10]], ellipses: [], extras: []
+      },
+      {
+        title: 'High Kick',
+        segments: [[160, 100, 166, 169, 33], [162, 110, 133, 132, 17], [133, 132, 108, 164, 14], [167, 110, 197, 95, 17], [197, 95, 224, 63, 14], [162, 170, 147, 227, 22], [147, 227, 147, 289, 18], [168, 170, 203, 198, 22], [203, 198, 248, 158, 18]],
+        circles: [[161, 68, 18], [163, 110, 14], [165, 170, 13]], ellipses: [], extras: []
+      },
+      {
+        title: 'Breakthrough',
+        segments: [[154, 99, 175, 166, 34], [163, 109, 129, 136, 18], [129, 136, 100, 170, 15], [170, 110, 205, 109, 18], [205, 109, 239, 111, 15], [159, 168, 130, 215, 23], [130, 215, 107, 278, 18], [168, 168, 204, 195, 23], [204, 195, 243, 222, 18]],
+        circles: [[150, 69, 18], [162, 109, 14], [163, 167, 13]], ellipses: [], extras: []
+      },
+      {
+        title: 'Air Control',
+        segments: [[161, 98, 168, 166, 33], [165, 108, 141, 76, 17], [141, 76, 127, 44, 14], [169, 107, 195, 79, 17], [195, 79, 219, 53, 14], [164, 167, 144, 220, 22], [144, 220, 131, 274, 18], [170, 167, 203, 197, 22], [203, 197, 236, 167, 18]],
+        circles: [[161, 68, 18], [164, 108, 14], [166, 167, 13], [236, 145, 12]], ellipses: [], extras: []
+      },
+      {
+        title: 'Bicycle Kick',
+        segments: [[161, 139, 190, 181, 33], [171, 151, 139, 128, 16], [139, 128, 107, 116, 14], [183, 152, 202, 118, 16], [202, 118, 218, 84, 14], [173, 180, 139, 153, 21], [139, 153, 97, 129, 17], [183, 182, 218, 214, 21], [218, 214, 251, 247, 17]],
+        circles: [[159, 118, 17], [172, 151, 13], [176, 181, 13], [223, 59, 12]], ellipses: [], extras: []
+      },
+      {
+        title: 'Aerial Twist',
+        segments: [[158, 108, 179, 171, 34], [165, 119, 136, 88, 17], [136, 88, 107, 58, 14], [173, 118, 204, 90, 17], [204, 90, 233, 70, 14], [165, 170, 141, 218, 22], [141, 218, 113, 257, 18], [172, 171, 208, 188, 22], [208, 188, 248, 197, 18]],
+        circles: [[156, 77, 18], [166, 118, 14], [171, 170, 13]], ellipses: [], extras: []
+      },
+      {
+        title: 'Sky Strike',
+        segments: [[164, 100, 166, 168, 33], [164, 111, 136, 87, 17], [136, 87, 110, 61, 14], [168, 111, 197, 136, 17], [197, 136, 231, 155, 14], [162, 169, 140, 224, 22], [140, 224, 115, 274, 18], [168, 169, 204, 192, 22], [204, 192, 245, 151, 18]],
+        circles: [[164, 69, 18], [165, 111, 14], [165, 169, 13], [245, 130, 12]], ellipses: [], extras: []
+      },
+      {
+        title: 'Poster Stage',
+        segments: [[157, 114, 181, 176, 34], [165, 125, 136, 99, 17], [136, 99, 105, 84, 14], [174, 124, 202, 95, 17], [202, 95, 218, 62, 14], [165, 176, 142, 220, 22], [142, 220, 122, 270, 18], [176, 176, 213, 192, 22], [213, 192, 250, 174, 18]],
+        circles: [[154, 83, 18], [166, 124, 14], [168, 176, 13], [224, 41, 12]], ellipses: [], extras: []
+      },
+      {
+        title: 'Victory Leap',
+        segments: [[160, 102, 162, 171, 33], [160, 112, 131, 85, 17], [131, 85, 104, 54, 14], [166, 111, 196, 84, 17], [196, 84, 223, 57, 14], [159, 171, 139, 219, 22], [139, 219, 117, 267, 18], [165, 171, 196, 205, 22], [196, 205, 228, 236, 18]],
+        circles: [[160, 70, 18], [160, 111, 14], [162, 171, 13]], ellipses: [], extras: []
+      },
+      {
+        title: 'Champion Burst',
+        segments: [[150, 100, 178, 164, 34], [160, 112, 126, 137, 18], [126, 137, 91, 167, 15], [168, 110, 203, 97, 18], [203, 97, 237, 82, 15], [157, 167, 127, 214, 23], [127, 214, 103, 277, 18], [168, 165, 207, 194, 23], [207, 194, 247, 224, 18]],
+        circles: [[146, 71, 18], [160, 110, 14], [160, 166, 13]], ellipses: [], extras: [[74, 89, 114, 103, 6], [70, 119, 120, 133, 6], [67, 149, 122, 163, 6]]
       }
-      return fragments.join('');
+    ];
+    const pose = poses[safeStage - 1] || poses[0];
+    const precision = value => Number(value).toFixed(1);
+    const segmentMarkup = (segment, className = '') => {
+      const [x1, y1, x2, y2, width] = segment;
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const length = Math.hypot(dx, dy);
+      const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+      const cx = (x1 + x2) / 2;
+      const cy = (y1 + y2) / 2;
+      return `<rect class="${className}" x="${precision(cx - length / 2)}" y="${precision(cy - width / 2)}" width="${precision(length)}" height="${precision(width)}" rx="${precision(width / 2)}" transform="rotate(${precision(angle)} ${precision(cx)} ${precision(cy)})" />`;
+    };
+    const circleMarkup = (circle, options = {}) => `<circle class="${options.className || ''}" cx="${precision(circle[0])}" cy="${precision(circle[1])}" r="${precision(circle[2])}"${options.fill ? ` fill="${options.fill}"` : ''}${options.stroke ? ` stroke="${options.stroke}"` : ''}${options.strokeWidth ? ` stroke-width="${options.strokeWidth}"` : ''} />`;
+    const ellipseMarkup = (ellipse, options = {}) => `<ellipse class="${options.className || ''}" cx="${precision(ellipse[0])}" cy="${precision(ellipse[1])}" rx="${precision(ellipse[2])}" ry="${precision(ellipse[3])}" transform="rotate(${precision(ellipse[4] || 0)} ${precision(ellipse[0])} ${precision(ellipse[1])})"${options.fill ? ` fill="${options.fill}"` : ''}${options.stroke ? ` stroke="${options.stroke}"` : ''}${options.strokeWidth ? ` stroke-width="${options.strokeWidth}"` : ''} />`;
+    const shapeMarkup = options => [
+      ...(pose.segments || []).map(segment => {
+        const markup = segmentMarkup(segment, options.className || '');
+        return options.fill ? markup.replace('/>', ` fill="${options.fill}" />`) : markup;
+      }),
+      ...(pose.circles || []).map(circle => circleMarkup(circle, options)),
+      ...(pose.ellipses || []).map(ellipse => ellipseMarkup(ellipse, options)),
+      ...(pose.extras || []).map(extra => {
+        const markup = segmentMarkup(extra, options.className || '');
+        return options.fill ? markup.replace('/>', ` fill="${options.fill}" />`) : markup;
+      })
+    ].join('');
+    const density = Math.min(1, 0.42 + safeStage * 0.028);
+    const stripeOpacity = Math.min(0.34, 0.16 + safeStage * 0.008).toFixed(2);
+    const motionCount = isMini ? Math.max(0, Math.min(2, safeStage - 10)) : Math.max(0, Math.min(7, Math.floor((safeStage - 4) / 2)));
+    const motionLines = Array.from({ length: motionCount }, (_, index) => {
+      const y = 96 + index * 24 + (index % 2) * 5;
+      const x1 = 42 - index * 6;
+      const x2 = 124 + index * 12;
+      return `<path class="sport-motion-line" d="M${x1} ${y} H${x2}" style="opacity:${(0.16 + index * 0.07).toFixed(2)}" />`;
     }).join('');
-    const glitchFragments = Array.from({ length: !isMini && safeStage >= 6 ? Math.min(14, safeStage - 2) : 0 }, (_, index) => {
-      const y = 72 + index * 15.5 + Math.sin(index * 1.1) * 4;
-      const x = 54 + ((index * 31 + safeStage * 7) % 188);
-      const width = 24 + ((index * 17 + safeStage * 9) % 44);
-      const height = index % 3 === 0 ? 2.6 : 1.55;
-      return `<rect class="motion-fragment" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${width.toFixed(1)}" height="${height.toFixed(1)}" rx="1.2" />`;
-    }).join('');
-    const detailMarkers = Array.from({ length: safeStage >= 10 ? Math.min(9, Math.floor((safeStage - 6) / 2)) : 0 }, (_, index) => {
-      const x1 = 106 + index * 14;
-      const x2 = x1 + 26 + (index % 3) * 4;
-      const y1 = 116 + index * 18;
-      const y2 = y1 + 10 + (index % 2) * 8;
-      return `<path class="motion-detail" d="M${x1} ${y1} L${x2} ${y2}" />`;
-    }).join('');
-    const orbitLines = !isMini && safeStage >= 12 ? `
-      <g class="motion-orbits" opacity="${Math.min(0.42, 0.14 + safeStage * 0.012).toFixed(2)}">
-        <path d="M44 94 C84 62 134 50 182 54" />
-        <path d="M42 280 C108 320 198 328 264 280" />
-        <path d="M208 34 C250 58 276 106 280 152" />
-      </g>` : '';
-    const motionTrails = !isMini && safeStage >= 14 ? Array.from({ length: Math.min(6, safeStage - 12) }, (_, index) => {
-      const x1 = 38 - index * 3;
-      const x2 = 104 + index * 8;
-      const y = 106 + index * 24;
-      return `<path class="motion-trail" d="M${x1} ${y} H${x2}" style="opacity:${(0.24 + index * 0.06).toFixed(2)}" />`;
+    const rings = !isMini && safeStage >= 12 ? `<g class="sport-energy-rings" opacity="${Math.min(0.32, 0.08 + safeStage * 0.012).toFixed(2)}"><circle cx="160" cy="182" r="${84 + safeStage * 1.1}" /><circle cx="160" cy="182" r="${56 + safeStage * 0.7}" /></g>` : '';
+    const impactMarks = !isMini && safeStage >= 15 ? Array.from({ length: Math.min(5, safeStage - 13) }, (_, index) => {
+      const x = 208 + index * 10;
+      const y = 42 + index * 16;
+      return `<path class="sport-impact" d="M${x} ${y} l10 -10 M${x + 4} ${y + 8} h12" style="opacity:${(0.22 + index * 0.06).toFixed(2)}" />`;
     }).join('') : '';
-    return `<svg class="companion-motion-svg ${scaleClass}" viewBox="0 0 320 360" role="img" aria-label="Companion Poster Stufe ${safeStage} von 20">
+    return `<svg class="companion-sport-svg ${scaleClass}" viewBox="0 0 320 360" role="img" aria-label="Companion Sport-Silhouette Stufe ${safeStage} von 20">
       <defs>
-        <clipPath id="motionBodyClip-${size}-${safeStage}">
-          <circle cx="231" cy="70" r="23" />
-          <path d="M198 101 C180 110 167 129 154 152 C145 169 137 184 128 198 C119 211 112 225 108 241 C116 237 124 232 132 225 C144 216 155 204 167 191 C182 175 191 164 206 155 C214 150 223 145 234 142 C225 132 219 121 213 111 C210 107 205 103 198 101 Z" />
-          <path d="M177 161 C154 173 136 191 117 223 C102 247 87 269 57 304 C73 306 96 293 116 274 C141 251 160 227 178 198 Z" />
-          <path d="M204 162 C225 170 240 183 254 205 C265 222 278 236 298 247 C294 232 286 216 279 199 C273 184 267 169 259 156 C250 141 235 132 217 130 Z" />
-          <path d="M183 192 C174 205 169 219 166 235 C162 257 160 276 154 297 C149 314 141 331 131 344 C144 343 157 335 167 323 C178 310 185 293 191 276 C196 260 200 244 204 228 C208 212 213 199 223 188 Z" />
-          <path d="M148 236 C136 249 126 263 118 280 C111 294 103 307 91 323 C101 323 112 319 121 312 C131 304 139 295 146 284 C155 270 162 256 170 242 Z" />
-        </clipPath>
+        <pattern id="sportStripes-${size}-${safeStage}" width="18" height="18" patternUnits="userSpaceOnUse" patternTransform="rotate(-32)">
+          <rect width="18" height="18" fill="transparent" />
+          <rect x="0" y="0" width="7.5" height="18" fill="#ffffff" fill-opacity="${stripeOpacity}" />
+        </pattern>
       </defs>
-      <g class="motion-aura" opacity="${(!isMini && safeStage >= 11) ? Math.min(0.38, 0.11 + safeStage * 0.012).toFixed(2) : '0'}">
-        <circle cx="160" cy="182" r="${isMini ? 0 : 98 + safeStage * 1.2}" />
-        <circle cx="160" cy="182" r="${isMini ? 0 : 64 + safeStage * 0.8}" />
+      <g class="sport-poster-noise" opacity="${isMini ? '0' : '0.75'}">
+        <circle cx="66" cy="48" r="1.2" /><circle cx="86" cy="78" r="1" /><circle cx="244" cy="54" r="1.4" /><circle cx="274" cy="92" r="1.1" />
+        <circle cx="52" cy="246" r="1.2" /><circle cx="266" cy="248" r="1.1" /><circle cx="230" cy="300" r="1.3" /><circle cx="106" cy="316" r="1.1" />
       </g>
-      ${orbitLines}
-      ${motionTrails}
-      <g clip-path="url(#motionBodyClip-${size}-${safeStage})">
-        ${scanlines}
-        ${glitchFragments}
-        ${detailMarkers}
-      </g>
-      <g class="motion-core-shapes">
-        <circle cx="231" cy="70" r="${isMini ? 7.5 : 11.5}" />
-        <path d="M184 108 C173 120 164 137 158 149 C170 145 184 142 198 141 C205 140 214 139 221 138 C215 127 207 116 196 107 Z" />
-        <path d="M178 160 C165 171 153 188 141 212 C154 205 168 197 181 188 C192 180 202 173 212 167 C204 160 193 157 178 160 Z" />
-        <path d="M151 236 C145 245 140 257 136 268 C146 260 154 250 162 238 C158 236 155 235 151 236 Z" />
-        <path d="M202 189 C194 205 189 223 185 241 C194 228 203 214 215 200 C211 195 207 191 202 189 Z" />
-      </g>
+      ${rings}
+      ${motionLines}
+      ${impactMarks}
+      <g class="sport-silhouette-base" style="opacity:${density.toFixed(2)}">${shapeMarkup({ className: 'sport-solid-segment', fill: 'rgba(20,40,96,0.96)' })}</g>
+      <g class="sport-silhouette-stripes" style="opacity:${Math.min(0.88, 0.48 + safeStage * 0.02).toFixed(2)}">${shapeMarkup({ className: 'sport-striped-segment', fill: `url(#sportStripes-${size}-${safeStage})` })}</g>
+      <g class="sport-silhouette-overlay">${shapeMarkup({ className: 'sport-outline-segment', stroke: 'rgba(18,34,88,0.14)', strokeWidth: '1', fill: 'transparent' })}</g>
     </svg>`;
   }
 
@@ -2778,8 +2865,8 @@
       </div>
       <div class="fish-companion-copy">
         <p class="eyebrow">Poster Companion</p>
-        <h4>Dein Fortschritt wird als Bewegung sichtbar.</h4>
-        <p>Die Form bleibt minimalistisch und fuellt sich nicht. Stattdessen wird sie mit jeder Stufe dichter, praeziser und praesenter - von ersten Fragmenten bis zum klaren Poster-Moment.</p>
+        <h4>Dein Fortschritt wird als Sport-Poster sichtbar.</h4>
+        <p>Jede Stufe zeigt eine neue Sport-Silhouette. Die Figuren bleiben minimalistisch, werden aber von Level zu Level dynamischer, mutiger und intensiver - inklusive der diagonalen Poster-Streifen.</p>
         <div class="companion-traits fish-traits">
           <span>${unlockedText} Badges</span>
           <span>${escapeHtml(companion.trait)}</span>

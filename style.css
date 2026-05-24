@@ -1536,7 +1536,7 @@ body.light .evolution-core{border-color:rgba(17,36,58,.08)}
 @media (max-width:1080px){.companion-shell{grid-template-columns:1fr}.companion-evolution-card{grid-template-columns:1fr}.companion-hero{height:154px}}
 @media (max-width:760px){.gamification-head{flex-direction:column}.gamification-head-actions{width:100%;justify-content:space-between}.companion-shell{grid-template-columns:1fr;padding:16px;gap:14px}.companion-evolution-card{padding:14px;border-radius:24px}.companion-hero{height:122px}.companion-evolution-art{width:108px;height:108px}.evolution-core{width:50px;height:50px;border-radius:20px}.evolution-core:before,.evolution-core:after{top:18px}.evolution-core:before{left:15px}.evolution-core:after{right:15px}.evolution-wing{top:30px;height:50px}.companion-copy h4{font-size:1.18rem}.companion-copy p:not(.eyebrow){font-size:.87rem}.companion-evolution-rail{grid-template-columns:repeat(2,minmax(0,1fr))}.companion-evolution-rail span:last-child{grid-column:1/-1}.badge-shelf-wrap.is-collapsed{max-height:98px;padding:13px}.badge-shelf-wrap.is-open{padding-top:13px}.badge-shelf-head{flex-direction:column;align-items:flex-start}.badge-shelf-head .badge-locked-toggle{min-height:36px}}
 
-/* Gamification v65: abstract motion poster companion */
+/* Gamification v66: sport silhouette poster companion */
 .fish-companion-shell{display:grid;grid-template-columns:minmax(260px,.78fr) minmax(360px,1.22fr);align-items:stretch;gap:18px;padding:20px;border-radius:32px;background:radial-gradient(circle at 24% 16%,rgba(74,215,209,.12),transparent 33%),radial-gradient(circle at 86% 84%,rgba(17,36,58,.08),transparent 32%),rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08);box-shadow:0 26px 60px rgba(12,29,49,.12),inset 0 1px 0 rgba(255,255,255,.08)}
 .fish-poster-card{position:relative;overflow:hidden;display:grid;grid-template-rows:auto 1fr auto;gap:12px;min-height:490px;padding:20px;border-radius:28px;background:linear-gradient(180deg,rgba(255,255,255,.94),rgba(246,248,250,.88));border:1px solid rgba(17,36,58,.07);box-shadow:inset 0 1px 0 rgba(255,255,255,.72)}
 .fish-poster-card:before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(17,36,58,.012) 0 2px,transparent 2px 12px);opacity:.9;pointer-events:none}
@@ -1551,3 +1551,33 @@ body.light .evolution-core{border-color:rgba(17,36,58,.08)}
 body:not(.light) .fish-poster-card,body:not(.light) .fish-stats-grid article,body:not(.light) .fish-stage-tile,body:not(.light) .fish-chapter{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.08)}body:not(.light) .fish-poster-card:before{background:repeating-linear-gradient(135deg,rgba(255,255,255,.03) 0 2px,transparent 2px 13px)}body:not(.light) .fish-poster-head b{background:rgba(255,255,255,.08);color:var(--text)}body:not(.light) .motion-aura circle{stroke:rgba(74,215,209,.18)}body:not(.light) .motion-aura circle+circle{stroke:rgba(255,255,255,.08)}body:not(.light) .motion-orbits path{stroke:rgba(255,255,255,.1)}body:not(.light) .motion-trail{stroke:rgba(255,255,255,.16)}body:not(.light) .motion-scanline{stroke:rgba(255,255,255,.92)}body:not(.light) .motion-fragment,body:not(.light) .motion-core-shapes path,body:not(.light) .motion-core-shapes circle{fill:rgba(255,255,255,.95)}body:not(.light) .motion-detail{stroke:rgba(255,255,255,.28)}body:not(.light) .fish-progress-row i{background:rgba(255,255,255,.08)}body:not(.light) .fish-poster-card:after{border-color:rgba(255,255,255,.06)}body:not(.light) .fish-stage-tile.is-current{background:rgba(255,255,255,.08)}
 @media (max-width:1180px){.fish-companion-shell{grid-template-columns:1fr}.fish-poster-card{min-height:auto}.fish-poster-art{min-height:280px}.fish-stage-grid{grid-template-columns:repeat(5,minmax(0,1fr))}}
 @media (max-width:760px){.gamification-head{align-items:flex-start}.fish-companion-shell{padding:14px;border-radius:28px;gap:12px}.fish-poster-card{padding:15px;border-radius:24px;min-height:auto}.fish-poster-head h4{font-size:2.1rem}.fish-poster-art{min-height:238px}.companion-motion-svg.is-hero{max-width:248px}.fish-companion-copy h4{font-size:1.25rem}.fish-stats-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.fish-stats-grid article{padding:9px;border-radius:15px}.fish-stats-grid strong{font-size:.88rem}.fish-stage-grid{display:flex;overflow-x:auto;gap:8px;margin:0 -14px;padding:2px 14px 8px;scroll-snap-type:x mandatory;scrollbar-width:none}.fish-stage-grid::-webkit-scrollbar{display:none}.fish-stage-tile{flex:0 0 72px;min-height:92px;scroll-snap-align:start}.fish-chapter-strip{display:flex;overflow-x:auto;gap:8px;margin:0 -14px;padding:0 14px 4px;scrollbar-width:none}.fish-chapter-strip::-webkit-scrollbar{display:none}.fish-chapter{min-width:165px}.fish-actions{display:grid;grid-template-columns:1fr 1fr}.fish-actions .mini-btn{width:100%}}
+
+/* v66 companion silhouette overrides */
+.fish-poster-art{position:relative;z-index:1;display:grid;place-items:center;min-height:330px}
+.motion-poster-art{padding-inline:8px}
+.companion-sport-svg{display:block;width:100%;height:auto;overflow:visible}
+.companion-sport-svg.is-hero{max-width:min(100%,342px);filter:drop-shadow(0 18px 24px rgba(17,36,58,.08))}
+.companion-sport-svg.is-mini{width:46px;height:58px;margin:0 auto 3px}
+.sport-poster-noise circle{fill:rgba(17,36,58,.16)}
+.sport-energy-rings circle{fill:none;stroke:rgba(74,215,209,.18);stroke-width:1.1}
+.sport-energy-rings circle+circle{stroke:rgba(17,36,58,.1)}
+.sport-motion-line{fill:none;stroke:rgba(17,36,58,.18);stroke-width:1.6;stroke-linecap:round}
+.sport-impact{fill:none;stroke:rgba(17,36,58,.18);stroke-width:1.6;stroke-linecap:round}
+.sport-silhouette-base circle,.sport-silhouette-base ellipse,.sport-silhouette-base rect{}
+.sport-silhouette-stripes circle,.sport-silhouette-stripes ellipse,.sport-silhouette-stripes rect{}
+.sport-silhouette-overlay circle,.sport-silhouette-overlay ellipse,.sport-silhouette-overlay rect{}
+.fish-stage-tile .sport-poster-noise,.fish-stage-tile .sport-energy-rings,.fish-stage-tile .sport-motion-line,.fish-stage-tile .sport-impact{display:none}.fish-stage-tile .sport-silhouette-overlay{display:none}
+body:not(.light) .sport-poster-noise circle{fill:rgba(255,255,255,.12)}
+body:not(.light) .sport-energy-rings circle{stroke:rgba(74,215,209,.14)}
+body:not(.light) .sport-energy-rings circle+circle{stroke:rgba(255,255,255,.06)}
+body:not(.light) .sport-motion-line,body:not(.light) .sport-impact{stroke:rgba(255,255,255,.16)}
+body:not(.light) .sport-silhouette-base circle,body:not(.light) .sport-silhouette-base ellipse,body:not(.light) .sport-silhouette-base rect{}
+body:not(.light) .sport-silhouette-stripes circle,body:not(.light) .sport-silhouette-stripes ellipse,body:not(.light) .sport-silhouette-stripes rect{}
+body:not(.light) .sport-silhouette-overlay circle,body:not(.light) .sport-silhouette-overlay ellipse,body:not(.light) .sport-silhouette-overlay rect{}
+@media (max-width:760px){.companion-sport-svg.is-hero{max-width:248px}}
+
+
+body:not(.light) .fish-poster-card,body:not(.light) .fish-stats-grid article,body:not(.light) .fish-stage-tile,body:not(.light) .fish-chapter{background:linear-gradient(180deg,rgba(255,255,255,.94),rgba(244,247,250,.9));border-color:rgba(17,36,58,.08);color:var(--text)}
+body:not(.light) .fish-poster-card:before{background:repeating-linear-gradient(135deg,rgba(17,36,58,.015) 0 2px,transparent 2px 12px)}
+body:not(.light) .fish-poster-card:after{border-color:rgba(17,36,58,.06)}
+body:not(.light) .fish-stage-tile.is-current{background:linear-gradient(180deg,rgba(255,255,255,.98),rgba(238,246,248,.92))}
