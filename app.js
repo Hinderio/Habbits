@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v73-calendar-appointments-focus';
+  const APP_DATA_SCHEMA_VERSION = 'v74-risk-average-gradient-charts';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -3032,13 +3032,17 @@
     const currentBucket = dayPartKey(hour);
     const currentBucketCount = recentCigs.filter(c => dayPartKey(new Date(c.smoked_at).getHours()) === currentBucket).length;
     const weekdayCount = recentCigs.filter(c => new Date(c.smoked_at).getDay() === now.getDay()).length;
+    const historyDays = Math.max(1, keys.length);
+    const sameWeekdaySamples = Math.max(1, keys.filter(key => new Date(`${key}T12:00:00`).getDay() === now.getDay()).length);
+    const currentBucketAverage = currentBucketCount / historyDays;
+    const weekdayAverage = weekdayCount / sameWeekdaySamples;
     const alcoholToday = alcoholUnitsOnDate(toDateKey(now)).length || alcoholForDate(toDateKey(now))?.consumed;
     const activeTasks = state.tasks.filter(isActiveTask).length;
     const last = getLastCigarette();
     const pauseMinutes = last ? Math.max(0, Math.round((Date.now() - new Date(last.smoked_at).getTime()) / 60000)) : 999;
     let risk = 24;
-    risk += Math.min(28, currentBucketCount * 4);
-    risk += Math.min(16, weekdayCount * 2);
+    risk += Math.min(28, currentBucketAverage * 10);
+    risk += Math.min(16, weekdayAverage * 4);
     if ([5,6].includes(now.getDay()) && hour >= 17) risk += 12;
     if (alcoholToday) risk += 18;
     if (activeTasks >= 3) risk += 8;
@@ -3047,7 +3051,8 @@
     risk = Math.max(5, Math.min(95, Math.round(risk)));
     const windowLabel = `${dayPartLabel(currentBucket)} · ${forecastWindowLabel(hour)}`;
     const reasonBits = [];
-    if (currentBucketCount) reasonBits.push(`${currentBucketCount} Rauchmoment(e) in diesem Zeitfenster`);
+    if (currentBucketCount) reasonBits.push(`Ø ${currentBucketAverage.toFixed(1)} Rauchmoment(e) pro Tag in diesem Zeitfenster`);
+    if (weekdayCount) reasonBits.push(`Ø ${weekdayAverage.toFixed(1)} am gleichen Wochentag`);
     if (alcoholToday) reasonBits.push('Alkohol-Kontext aktiv');
     if (activeTasks >= 3) reasonBits.push(`${activeTasks} offene Aufgaben`);
     if (!reasonBits.length) reasonBits.push('wenig akute Risikosignale');
@@ -6758,26 +6763,81 @@
     charts.trend = drawChart(charts.trend, els.trendChart, labels, trend.data, trend.label, { beginAtZero: trend.beginAtZero });
     charts.points = drawChart(charts.points, els.pointsChart, labels, pointsData, 'Punkte', { beginAtZero: true });
   }
+  function chartToneForValue(value) {
+    const numeric = Number(value || 0);
+    if (numeric < -80) return '#ff7070';
+    if (numeric < 0) return '#ff9f7a';
+    if (numeric >= 180) return '#42d67d';
+    if (numeric >= 60) return '#8fdc74';
+    if (numeric > 0) return '#ffbd6a';
+    return '#9db0c3';
+  }
+
+  function chartSegmentTone(ctx) {
+    const left = Number(ctx?.p0?.parsed?.y || 0);
+    const right = Number(ctx?.p1?.parsed?.y || 0);
+    return chartToneForValue((left + right) / 2);
+  }
+
+  function chartFillGradient(ctx) {
+    const chart = ctx.chart;
+    const area = chart.chartArea;
+    const yScale = chart.scales?.y;
+    if (!area || !yScale) return 'rgba(74,215,209,.12)';
+    const gradient = chart.ctx.createLinearGradient(0, area.top, 0, area.bottom);
+    const zeroPixel = Math.max(area.top, Math.min(area.bottom, yScale.getPixelForValue(0)));
+    const zeroStop = (zeroPixel - area.top) / Math.max(1, area.bottom - area.top);
+    gradient.addColorStop(0, 'rgba(66,214,125,.28)');
+    gradient.addColorStop(Math.max(0, zeroStop - .015), 'rgba(66,214,125,.10)');
+    gradient.addColorStop(Math.min(1, zeroStop + .015), 'rgba(255,112,112,.08)');
+    gradient.addColorStop(1, 'rgba(255,112,112,.24)');
+    return gradient;
+  }
+
+  function chartPointTone(ctx) {
+    return chartToneForValue(ctx?.parsed?.y);
+  }
+
+  function buildChartDataset(label, data) {
+    return {
+      label,
+      data,
+      tension: .42,
+      fill: true,
+      spanGaps: true,
+      pointRadius: 3.2,
+      pointHoverRadius: 5,
+      borderWidth: 3,
+      borderColor: chartSegmentTone,
+      backgroundColor: chartFillGradient,
+      pointBackgroundColor: chartPointTone,
+      pointBorderColor: chartPointTone,
+      pointBorderWidth: 2,
+      segment: { borderColor: chartSegmentTone }
+    };
+  }
+
   function drawChart(existing, canvas, labels, data, label, options = {}) {
     if (!canvas) return existing;
+    const dataset = buildChartDataset(label, data);
     if (existing) {
       existing.data.labels = labels;
-      existing.data.datasets[0].data = data;
-      existing.data.datasets[0].label = label;
+      Object.assign(existing.data.datasets[0], dataset);
       existing.options.scales.y.beginAtZero = options.beginAtZero !== false;
       existing.update();
       return existing;
     }
     return new Chart(canvas, {
       type: 'line',
-      data: { labels, datasets: [{ label, data, tension: .42, fill: true, spanGaps: true, pointRadius: 3 }] },
+      data: { labels, datasets: [dataset] },
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        interaction: { intersect: false, mode: 'index' },
         plugins: { legend: { display: false } },
         scales: {
           x: { grid: { display: false }, ticks: { color: getComputedStyle(document.documentElement).getPropertyValue('--muted') || '#9db0c3' } },
-          y: { beginAtZero: options.beginAtZero !== false, ticks: { precision: 0, color: getComputedStyle(document.documentElement).getPropertyValue('--muted') || '#9db0c3' }, grid: { color: 'rgba(255,255,255,.07)' } }
+          y: { beginAtZero: options.beginAtZero !== false, ticks: { precision: 0, color: getComputedStyle(document.documentElement).getPropertyValue('--muted') || '#9db0c3' }, grid: { color: 'rgba(148,163,184,.16)' } }
         }
       }
     });
