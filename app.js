@@ -515,6 +515,32 @@
     return ICON_PATHS[habit.type] ? habit.type : 'number';
   }
 
+  const HABIT_CATEGORY_META = Object.freeze({
+    sport: { label: 'Sport', tone: '#8fb99c', rgb: '143,185,156', icon: 'sport' },
+    nutrition: { label: 'Ernährung', tone: '#d3b77f', rgb: '211,183,127', icon: 'bread' },
+    hydration: { label: 'Trinken', tone: '#7fb7c5', rgb: '127,183,197', icon: 'water' },
+    mind: { label: 'Mind', tone: '#b6a2d9', rgb: '182,162,217', icon: 'meditation' },
+    health: { label: 'Körper', tone: '#c98f91', rgb: '201,143,145', icon: 'weight' },
+    routine: { label: 'Routine', tone: '#9eb1c5', rgb: '158,177,197', icon: 'habits' },
+    tracking: { label: 'Tracking', tone: '#98b7ad', rgb: '152,183,173', icon: 'number' }
+  });
+
+  function habitCategoryMeta(habit = {}) {
+    const icon = habitIconKey(habit);
+    const name = normalizeIconSearch(habit.name || '');
+    if (isSystemMeditationHabit(habit) || icon === 'meditation' || name.includes('meditation') || name.includes('atem')) return HABIT_CATEGORY_META.mind;
+    if (['sport', 'jogging', 'hiking', 'walking', 'pushups', 'standingDesk'].includes(icon) || name.includes('sport') || name.includes('fitness') || name.includes('spazieren') || name.includes('wandern')) return HABIT_CATEGORY_META.sport;
+    if (icon === 'bread' || name.includes('ernaehr') || name.includes('ernahr') || name.includes('essen') || name.includes('brot') || name.includes('protein') || name.includes('gemuese') || name.includes('gemuse')) return HABIT_CATEGORY_META.nutrition;
+    if (icon === 'water' || name.includes('wasser') || name.includes('trinken') || name.includes('hydr')) return HABIT_CATEGORY_META.hydration;
+    if (icon === 'weight' || name.includes('gewicht') || name.includes('schlaf') || name.includes('gesund')) return HABIT_CATEGORY_META.health;
+    if (['duration', 'boolean'].includes(habit.type) || name.includes('routine') || name.includes('lesen') || name.includes('journ')) return HABIT_CATEGORY_META.routine;
+    return HABIT_CATEGORY_META.tracking;
+  }
+
+  function habitCategoryStyle(meta = HABIT_CATEGORY_META.tracking) {
+    return `--habit-tone:${meta.tone};--habit-tone-rgb:${meta.rgb};`;
+  }
+
   var state = loadState();
   runLocalCacheRepair();
   let settings = loadSettings();
@@ -956,16 +982,26 @@
       if (action === 'archive-task') archiveTask(id);
       if (action === 'edit-appointment') editAppointment(id);
       if (action === 'delete-appointment') deleteAppointment(id);
-      if (action === 'edit-habit') editHabit(id);
+      if (action === 'edit-habit') {
+        editHabit(id);
+        if (actionEl.closest('#historyModal')) closeHistoryModal();
+      }
       if (action === 'delete-habit') deleteHabit(id);
-      if (action === 'archive-habit') archiveHabit(id);
-      if (action === 'open-pause-modal') openPauseModal({ scope: actionEl.dataset.scope || 'smoke', targetId: actionEl.dataset.targetId || id || null });
+      if (action === 'archive-habit') {
+        archiveHabit(id);
+        if (actionEl.closest('#historyModal')) closeHistoryModal();
+      }
+      if (action === 'open-pause-modal') {
+        if (actionEl.closest('#historyModal')) closeHistoryModal();
+        openPauseModal({ scope: actionEl.dataset.scope || 'smoke', targetId: actionEl.dataset.targetId || id || null });
+      }
       if (action === 'close-pause-modal') closePauseModal();
       if (action === 'delete-pause') deletePausePeriod(id);
       if (action === 'end-pause-now') endPauseNow(id);
       if (action === 'toggle-habit-card') toggleHabitCard(id);
+      if (action === 'open-habit-detail') openHistoryModal('habit-detail', id);
       if (action === 'toggle-habit-dna') toggleHabitDna(id);
-      if (action === 'log-habit') logHabit(id);
+      if (action === 'log-habit') logHabit(id, actionEl.dataset.inputId);
       if (action === 'start-morning-routine') startMorningRoutine();
       if (action === 'next-morning-step') advanceMorningRoutine();
       if (action === 'finish-morning-routine') finishMorningRoutine();
@@ -1765,7 +1801,7 @@
 
   function collectHabitInputDrafts() {
     const drafts = new Map();
-    $$('#habitCards input[id^="habit-input-"]').forEach(input => {
+    $$('#habitCards input[id^="habit-card-input-"], #habitCards input[id^="habit-input-"]').forEach(input => {
       drafts.set(input.id, input.value);
     });
     return drafts;
@@ -3153,7 +3189,7 @@
   function openHistoryModal(mode, id = null) {
     if (!els.historyModal || !els.historyModalContent) return;
     historyModalMode = mode;
-    historyModalHabitId = mode === 'habit' ? id : null;
+    historyModalHabitId = ['habit', 'habit-detail'].includes(mode) ? id : null;
     if (mode !== 'smoke') editingSmokeId = null;
     if (mode !== 'habit') editingHabitEntryId = null;
     els.historyModal.classList.remove('hidden');
@@ -3206,6 +3242,15 @@
         <span class="badge muted">${count} Einheit${count === 1 ? '' : 'en'}</span>
       </div>
       ${renderAlcoholUnitHistoryList()}`;
+      return;
+    }
+    if (historyModalMode === 'habit-detail') {
+      const habit = state.habits.find(item => item.id === historyModalHabitId);
+      if (!habit) {
+        els.historyModalContent.innerHTML = `<div class="history-modal-head"><p class="eyebrow">Habits</p><h2 id="historyModalTitle">Details</h2></div><div class="empty-state">Habit nicht gefunden.</div>`;
+        return;
+      }
+      els.historyModalContent.innerHTML = renderHabitDetailModal(habit);
       return;
     }
     if (historyModalMode === 'habit') {
@@ -3490,6 +3535,7 @@
     const points = habitPoints(meditationHabit, entry);
     addPoints('habit', entry.id, points, `${technique.title} abgeschlossen`, occurredAt);
     saveState();
+    renderHistoryModal();
     toast(`${technique.title} geloggt · +${points} Punkte`);
     syncWithSupabase({ silent: true });
   }
@@ -4792,8 +4838,42 @@
     showScreen('smoking');
   }
 
+  function habitFulfillmentState(habit, { periodValue = {}, todayEntries = [], todayValue = 0 } = {}) {
+    const hasTodayLog = todayEntries.length > 0;
+    if (habit.type === 'boolean') return todayEntries.some(entry => entry.value_bool);
+    if (!habit.target) return hasTodayLog;
+    const target = Number(habit.target || 0);
+    if (!Number.isFinite(target) || target <= 0) return hasTodayLog;
+    const currentValue = Number(periodValue.value ?? todayValue ?? 0);
+    if (!Number.isFinite(currentValue)) return false;
+    if (habit.direction === 'decrease') return hasTodayLog && currentValue <= target;
+    return currentValue >= target;
+  }
+
+  function habitProgressPercent(habit, periodValue = {}, todayEntries = []) {
+    const target = Number(habit.target || 0);
+    const currentValue = Number(periodValue.value || 0);
+    if (!target || !Number.isFinite(target)) return todayEntries.length ? 100 : 0;
+    if (habit.direction === 'decrease') {
+      if (!todayEntries.length && !currentValue) return 0;
+      return currentValue <= target ? 100 : Math.max(8, Math.min(96, (target / Math.max(currentValue, 0.01)) * 100));
+    }
+    return Math.max(todayEntries.length ? 8 : 0, Math.min(100, Math.abs(currentValue / target) * 100));
+  }
+
+  function renderHabitQuickLogControl(habit, { inputId = '', todayValue = 0, buttonLabel = 'Loggen', context = 'card' } = {}) {
+    if (habit.type === 'boolean') {
+      const done = Boolean(todayValue);
+      return `<button class="mini-btn primary habit-quick-check" type="button" data-action="log-habit" data-id="${habit.id}">${done ? 'Heute erledigt' : 'Heute abhaken'}</button>`;
+    }
+    const unit = habit.unit || defaultUnit(habit.type);
+    const safeInputId = inputId || `habit-input-${habit.id}`;
+    const placeholder = context === 'detail' ? `Wert ${unit ? `in ${unit}` : 'eintragen'}` : (unit ? unit : 'Wert');
+    return `<div class="habit-log-row habit-quick-log-row"><input id="${escapeHtml(safeInputId)}" type="number" step="0.01" inputmode="decimal" placeholder="${escapeHtml(placeholder)}" /><button class="mini-btn primary" type="button" data-action="log-habit" data-id="${habit.id}" data-input-id="${escapeHtml(safeInputId)}">${escapeHtml(buttonLabel)}</button></div>`;
+  }
+
   function renderHabits() {
-    const activeInput = document.activeElement?.closest?.('#habitCards input[id^="habit-input-"]') || null;
+    const activeInput = document.activeElement?.closest?.('#habitCards input[id^="habit-card-input-"]') || null;
     const activeInputId = activeInput?.id || '';
     const activeInputSelection = activeInput ? { start: activeInput.selectionStart, end: activeInput.selectionEnd } : null;
     const habitInputDrafts = collectHabitInputDrafts();
@@ -4812,46 +4892,37 @@
       const todayValue = habit.type === 'boolean'
         ? todayEntries.some(e => e.value_bool)
         : todayEntries.reduce((sum, e) => sum + Number(e.value_num || 0), 0);
-      const progress = habit.target ? Math.min(100, Math.abs(Number(periodValue.value || 0) / Number(habit.target)) * 100) : 0;
       const unit = habit.unit || defaultUnit(habit.type);
-      const isSystemHabit = isSystemMeditationHabit(habit);
+      const category = habitCategoryMeta(habit);
       const habitPause = activePauseNow('habit', habit.id);
-      const isExpanded = expandedHabitCardIds.has(habit.id) || editingHabitId === habit.id || editingHabitEntryId && state.habitEntries.some(entry => entry.id === editingHabitEntryId && entry.habit_id === habit.id);
+      const fulfilled = habitFulfillmentState(habit, { periodValue, todayEntries, todayValue });
+      const progress = habitProgressPercent(habit, periodValue, todayEntries);
+      const isSystemHabit = isSystemMeditationHabit(habit);
       const dna = buildHabitDna(habit);
-      const control = isSystemHabit
-        ? renderMeditationHabitControl(habit)
-        : habit.type === 'boolean'
-          ? `<button class="pill primary" type="button" data-action="log-habit" data-id="${habit.id}">${todayValue ? 'Heute erledigt' : 'Heute abhaken'}</button>`
-          : `<div class="habit-log-row"><input id="habit-input-${habit.id}" type="number" step="0.01" placeholder="Wert ${unit ? `(${escapeHtml(unit)})` : ''}" /><button class="pill primary" type="button" data-action="log-habit" data-id="${habit.id}">Loggen</button></div>`;
-      const habitActions = isSystemHabit
-        ? `<button class="mini-btn" type="button" data-action="edit-habit" data-id="${habit.id}">Bearbeiten</button><button class="mini-btn" type="button" data-action="open-pause-modal" data-scope="habit" data-target-id="${habit.id}">Pausieren</button><span class="badge muted">System</span>`
-        : `<button class="mini-btn" type="button" data-action="edit-habit" data-id="${habit.id}">Bearbeiten</button><button class="mini-btn" type="button" data-action="open-pause-modal" data-scope="habit" data-target-id="${habit.id}">Pausieren</button><button class="mini-btn" type="button" data-action="archive-habit" data-id="${habit.id}">Archiv</button><button class="mini-btn danger" type="button" data-action="delete-habit" data-id="${habit.id}">Löschen</button>`;
       const todayLabel = formatHabitValue(habit, todayValue);
-      const completionLabel = `${Math.round(dna.completionRate * 100)}% Treffer`;
-      const targetLabel = habit.target ? `${periodMeta.short}: ${periodValue.label} / Ziel ${habit.target}${unit ? ` ${unit}` : ''}` : 'ohne Zielwert';
-      const activityLabel = habitPause ? 'pausiert' : (todayEntries.length ? `${todayEntries.length} Log${todayEntries.length === 1 ? '' : 's'} heute` : 'heute offen');
-      const detailsId = `habit-details-${escapeHtml(habit.id)}`;
+      const targetLabel = habit.target ? `${periodMeta.short}: ${periodValue.label} / ${habit.target}${unit ? ` ${unit}` : ''}` : 'ohne Zielwert';
+      const activityLabel = habitPause ? 'Pausiert' : fulfilled ? 'Erfüllt' : (todayEntries.length ? `${todayEntries.length} Log${todayEntries.length === 1 ? '' : 's'} heute` : 'Heute offen');
+      const inputId = `habit-card-input-${habit.id}`;
+      const quickControl = isSystemHabit
+        ? `<button class="mini-btn primary habit-quick-check" type="button" data-action="open-habit-detail" data-id="${habit.id}">Techniken öffnen</button>`
+        : renderHabitQuickLogControl(habit, { inputId, todayValue, buttonLabel: habit.type === 'boolean' ? 'Abhaken' : 'Loggen' });
 
-      return `<article class="habit-card ${isSystemHabit ? 'is-meditation-habit' : ''} ${editingHabitId === habit.id ? 'is-editing' : ''} ${isExpanded ? 'is-expanded' : 'is-collapsed'}">
-        <button class="habit-card-summary" type="button" data-action="toggle-habit-card" data-id="${habit.id}" aria-expanded="${isExpanded}" aria-controls="${detailsId}">
-          <span class="habit-title"><span class="habit-icon">${svgIcon(habitIconKey(habit), 'ui-icon')}</span><span><strong>${escapeHtml(habit.name)}</strong><small>${habit.typeLabel || typeLabel(habit.type)}${unit ? ` · ${escapeHtml(unit)}` : ''} · ${escapeHtml(periodMeta.label)}</small></span></span>
-          <span class="habit-card-status">
-            <span class="habit-card-value">Heute: <strong>${escapeHtml(todayLabel)}</strong></span>
-            <span class="habit-expand-indicator" aria-hidden="true">${isExpanded ? '−' : '+'}</span>
+      return `<article class="habit-card ${isSystemHabit ? 'is-meditation-habit' : ''} ${editingHabitId === habit.id ? 'is-editing' : ''} ${fulfilled ? 'is-complete' : ''} ${habitPause ? 'is-paused' : ''}" style="${habitCategoryStyle(category)}">
+        <button class="habit-card-open" type="button" data-action="open-habit-detail" data-id="${habit.id}" aria-label="Details für ${escapeHtml(habit.name)} öffnen">
+          <span class="habit-card-art" aria-hidden="true">${svgIcon(category.icon || habitIconKey(habit), 'ui-icon')}</span>
+          <span class="habit-card-main">
+            <span class="habit-category-pill">${escapeHtml(category.label)}</span>
+            <strong>${escapeHtml(habit.name)}</strong>
+            <small>${habit.typeLabel || typeLabel(habit.type)}${unit ? ` · ${escapeHtml(unit)}` : ''} · ${escapeHtml(periodMeta.label)}</small>
           </span>
-          <span class="habit-card-compact-meta">
-            <span>${escapeHtml(activityLabel)}</span>
-            <span>${escapeHtml(completionLabel)}</span>
-            <span>${escapeHtml(targetLabel)}</span>
-          </span>
+          <span class="habit-card-status-badge">${escapeHtml(activityLabel)}</span>
+          <span class="habit-card-value-row"><span>Heute</span><strong>${escapeHtml(todayLabel)}</strong></span>
+          <span class="habit-progress-track" aria-hidden="true"><i style="width:${progress}%"></i></span>
+          <span class="habit-card-meta-row"><span>${Math.round(dna.completionRate * 100)}% Treffer</span><span>${escapeHtml(targetLabel)}</span></span>
         </button>
-        <div id="${detailsId}" class="habit-card-details">
-          <div class="habit-card-actions-row"><span class="badge ${habitPause ? 'warning-badge' : dna.riskMeta.tone === 'high' ? 'danger-badge' : dna.riskMeta.tone === 'mid' ? 'warning-badge' : 'muted'}">${habitPause ? 'Pausiert' : `Risiko ${escapeHtml(dna.riskMeta.label)}`}</span><div class="list-actions">${habitActions}</div></div>
-          ${control}
-          <div class="meta">Heute: <strong>${escapeHtml(todayLabel)}</strong>${habit.target ? ` · ${periodMeta.short}: <strong>${escapeHtml(periodValue.label)}</strong> / Ziel ${habit.target} ${escapeHtml(unit)}` : ''}</div>
-          ${habit.target ? `<div class="habit-progress-track"><i style="width:${progress}%"></i></div>` : ''}
-          ${renderHabitDnaVisual(dna)}
-          ${renderHabitEntryList(habit)}
+        <div class="habit-card-quick">
+          ${quickControl}
+          <button class="mini-btn habit-card-more" type="button" data-action="open-habit-detail" data-id="${habit.id}">Details</button>
         </div>
       </article>`;
     }).join('');
@@ -4871,6 +4942,59 @@
         });
       }
     }
+  }
+
+  function renderHabitDetailModal(habit) {
+    const normalizedHabit = normalizeHabit(habit);
+    const periodMeta = habitTargetPeriodMeta(normalizedHabit);
+    const periodValue = habitValueForPeriod(normalizedHabit);
+    const todayEntries = entriesForHabitOnDate(normalizedHabit.id, toDateKey(new Date()));
+    const todayValue = normalizedHabit.type === 'boolean'
+      ? todayEntries.some(entry => entry.value_bool)
+      : todayEntries.reduce((total, entry) => total + Number(entry.value_num || 0), 0);
+    const unit = normalizedHabit.unit || defaultUnit(normalizedHabit.type);
+    const category = habitCategoryMeta(normalizedHabit);
+    const dna = buildHabitDna(normalizedHabit);
+    const habitPause = activePauseNow('habit', normalizedHabit.id);
+    const fulfilled = habitFulfillmentState(normalizedHabit, { periodValue, todayEntries, todayValue });
+    const progress = habitProgressPercent(normalizedHabit, periodValue, todayEntries);
+    const totalLogs = visibleHabitEntries(normalizedHabit.id).filter(entry => entry.habit_id === normalizedHabit.id).length;
+    const inputId = `habit-detail-input-${normalizedHabit.id}`;
+    const control = isSystemMeditationHabit(normalizedHabit)
+      ? renderMeditationHabitControl(normalizedHabit)
+      : renderHabitQuickLogControl(normalizedHabit, { inputId, todayValue, buttonLabel: 'Jetzt loggen', context: 'detail' });
+    const actions = isSystemMeditationHabit(normalizedHabit)
+      ? `<button class="mini-btn" type="button" data-action="edit-habit" data-id="${normalizedHabit.id}">Bearbeiten</button><button class="mini-btn" type="button" data-action="open-pause-modal" data-scope="habit" data-target-id="${normalizedHabit.id}">Pausieren</button>`
+      : `<button class="mini-btn" type="button" data-action="edit-habit" data-id="${normalizedHabit.id}">Bearbeiten</button><button class="mini-btn" type="button" data-action="open-pause-modal" data-scope="habit" data-target-id="${normalizedHabit.id}">Pausieren</button><button class="mini-btn" type="button" data-action="archive-habit" data-id="${normalizedHabit.id}">Archiv</button><button class="mini-btn danger" type="button" data-action="delete-habit" data-id="${normalizedHabit.id}">Löschen</button>`;
+    return `<div class="habit-detail-shell" style="${habitCategoryStyle(category)}">
+      <div class="history-modal-head habit-detail-head">
+        <div class="habit-detail-title-row">
+          <span class="habit-card-art is-large" aria-hidden="true">${svgIcon(category.icon || habitIconKey(normalizedHabit), 'ui-icon')}</span>
+          <div>
+            <p class="eyebrow">${escapeHtml(category.label)} · Habit Details</p>
+            <h2 id="historyModalTitle">${escapeHtml(normalizedHabit.name)}</h2>
+            <p class="subtle">Schnell loggen, Ziel prüfen und Muster ansehen – ohne die Übersicht zu überladen.</p>
+          </div>
+        </div>
+        <span class="badge ${habitPause ? 'warning-badge' : fulfilled ? 'muted habit-detail-done' : dna.riskMeta.tone === 'high' ? 'danger-badge' : dna.riskMeta.tone === 'mid' ? 'warning-badge' : 'muted'}">${habitPause ? 'Pausiert' : fulfilled ? 'Heute erfüllt' : `Risiko ${escapeHtml(dna.riskMeta.label)}`}</span>
+      </div>
+      <div class="habit-detail-grid">
+        <article class="habit-detail-primary">
+          <div class="habit-detail-log-head"><div><small>Heute</small><strong>${escapeHtml(formatHabitValue(normalizedHabit, todayValue))}</strong></div><span>${todayEntries.length} Log${todayEntries.length === 1 ? '' : 's'}</span></div>
+          ${control}
+          <div class="meta">${normalizedHabit.target ? `${escapeHtml(periodMeta.short)}: <strong>${escapeHtml(periodValue.label)}</strong> / Ziel ${normalizedHabit.target} ${escapeHtml(unit)}` : 'Kein Zielwert definiert – jeder Log zählt als Momentum.'}</div>
+          <div class="habit-progress-track"><i style="width:${progress}%"></i></div>
+        </article>
+        <article class="habit-detail-stats">
+          <div><small>Kategorie</small><strong>${escapeHtml(category.label)}</strong></div>
+          <div><small>Treffer</small><strong>${Math.round(dna.completionRate * 100)}%</strong></div>
+          <div><small>Logs total</small><strong>${totalLogs}</strong></div>
+        </article>
+      </div>
+      ${renderHabitDnaVisual(dna)}
+      <div class="habit-card-actions-row habit-detail-actions"><span class="badge muted">${escapeHtml(dna.summary)}</span><div class="list-actions">${actions}</div></div>
+      ${renderHabitEntryList(normalizedHabit)}
+    </div>`;
   }
 
   function timeBucketForHour(hour) {
@@ -5346,6 +5470,7 @@
     if (!isSystemMeditationHabit(habit)) return;
     expandedMeditationHabitId = expandedMeditationHabitId === habit.id ? null : habit.id;
     renderHabits();
+    renderHistoryModal();
   }
 
   function editHabitEntry(id) {
@@ -7549,7 +7674,7 @@ async function deleteAlcoholLog(id) {
     syncWithSupabase({ silent: true, pullFirst: false });
   }
 
-  function logHabit(habitId) {
+  function logHabit(habitId, inputId = '') {
     const habit = state.habits.find(h => h.id === habitId);
     if (!habit) return;
     const pause = activePauseNow('habit', habit.id);
@@ -7559,7 +7684,8 @@ async function deleteAlcoholLog(id) {
     if (habit.type === 'boolean') {
       valueBool = true;
     } else {
-      const input = $(`#habit-input-${cssEscape(habit.id)}`);
+      const inputSelector = inputId ? `#${cssEscape(inputId)}` : `#habit-input-${cssEscape(habit.id)}`;
+      const input = $(inputSelector);
       valueNum = Number(input?.value || 0);
       if (!Number.isFinite(valueNum) || valueNum === 0) {
         toast('Bitte einen gültigen Wert eintragen.');
@@ -7573,6 +7699,7 @@ async function deleteAlcoholLog(id) {
     const points = habitPoints(habit, entry);
     addPoints('habit', entry.id, points, `${habit.name} geloggt`, occurredAt);
     saveState();
+    renderHistoryModal();
     toast(`${habit.name} geloggt · +${points} Punkte`);
     syncWithSupabase({ silent: true });
   }
