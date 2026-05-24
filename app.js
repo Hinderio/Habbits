@@ -2840,7 +2840,50 @@
     return `./assets/companion-posters/${fileName}`;
   }
 
-  function renderCompanionFish(stage, size = 'hero', stageLabel = '') {
+  function renderPosterProgressOverlay(stats = {}, companion = {}) {
+    const total = Math.max(0, Number(stats.total || 0));
+    const stage = Math.max(1, Math.min(20, Number(companion.stage || 1)));
+    const stageFloor = stage <= 1 ? 0 : (stage - 1) * 250;
+    const targetPoints = stage >= 20
+      ? Math.max(total, stageFloor + 250)
+      : Math.max(stageFloor + 250, Number(companion.nextStageAt || stage * 250));
+    const span = Math.max(1, targetPoints - stageFloor);
+    const chartMin = Math.max(0, stageFloor - Math.max(20, span * 0.08));
+    const chartMax = targetPoints + Math.max(24, span * 0.12);
+    const range = Math.max(1, chartMax - chartMin);
+    const keys = daysBack(16);
+    const totalWindowDelta = sum(keys.map(key => pointsOnDate(key)));
+    let runningTotal = total - totalWindowDelta;
+    const chartTop = 8;
+    const chartBottom = 92;
+    const xStep = keys.length > 1 ? 100 / (keys.length - 1) : 100;
+    const points = keys.map((key, index) => {
+      runningTotal += pointsOnDate(key);
+      const clamped = Math.max(chartMin, Math.min(chartMax, runningTotal));
+      const normalized = (clamped - chartMin) / range;
+      const x = Number((index * xStep).toFixed(2));
+      const y = Number((chartBottom - (normalized * (chartBottom - chartTop))).toFixed(2));
+      return { x, y };
+    });
+    if (!points.length) return '';
+    const polyline = points.map(point => `${point.x},${point.y}`).join(' ');
+    const areaPath = `M ${points[0].x} ${chartBottom} ` + points.map(point => `L ${point.x} ${point.y}`).join(' ') + ` L ${points[points.length - 1].x} ${chartBottom} Z`;
+    const targetNormalized = (targetPoints - chartMin) / range;
+    const targetY = Number((chartBottom - (Math.max(0, Math.min(1, targetNormalized)) * (chartBottom - chartTop))).toFixed(2));
+    const currentPoint = points[points.length - 1];
+    const nextStageLabel = stage >= 20 ? 'Max Level' : `Stufe ${Math.min(20, stage + 1)}`;
+    return `<div class="poster-progress-overlay" aria-hidden="true">
+      <svg class="poster-progress-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <line class="poster-progress-target-line" x1="0" y1="${targetY}" x2="100" y2="${targetY}"></line>
+        <path class="poster-progress-area" d="${areaPath}"></path>
+        <polyline class="poster-progress-line" points="${polyline}"></polyline>
+        <circle class="poster-progress-dot" cx="${currentPoint.x}" cy="${currentPoint.y}" r="1.8"></circle>
+      </svg>
+      <span class="poster-progress-goal-pill">${escapeHtml(nextStageLabel)}</span>
+    </div>`;
+  }
+
+  function renderCompanionFish(stage, size = 'hero', stageLabel = '', overlayMarkup = '') {
     const numericStage = Number(stage || 1);
     const safeStage = Number.isFinite(numericStage) ? Math.min(20, Math.max(1, numericStage)) : 1;
     const poster = COMPANION_STAGE_POSTERS[safeStage - 1] || COMPANION_STAGE_POSTERS[0];
@@ -2857,6 +2900,7 @@
       <div class="poster-photo-shade"></div>
       <div class="poster-photo-stripes" aria-hidden="true"></div>
       <div class="poster-photo-glow" aria-hidden="true"></div>
+      ${!isMini && overlayMarkup ? overlayMarkup : ''}
       ${isMini
         ? `<span class="poster-photo-mini-index">${String(safeStage).padStart(2, '0')}</span>`
         : `<span class="poster-photo-signature">${escapeHtml(posterCue)}</span>
@@ -2906,7 +2950,7 @@
           <b>${companion.isPreview ? 'Vorschau' : `${companion.stage}/20`}</b>
         </div>
         <div class="fish-poster-art motion-poster-art">
-          ${renderCompanionFish(companion.stage, 'hero', companion.stageName)}
+          ${renderCompanionFish(companion.stage, 'hero', companion.stageName, renderPosterProgressOverlay(stats, companion))}
         </div>
         <div class="fish-progress-row"><span>${companion.stage}/20</span><i><b style="width:${companion.stageProgress}%"></b></i><em>${nextPoints}</em></div>
       </div>

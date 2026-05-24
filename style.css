@@ -1594,6 +1594,13 @@ body:not(.light) .fish-stage-tile.is-current{background:linear-gradient(180deg,r
 .poster-photo-stripes{background:repeating-linear-gradient(-34deg,rgba(255,255,255,.18) 0 10px,transparent 10px 28px);mix-blend-mode:screen;opacity:.42;z-index:2}
 .poster-photo-glow{background:radial-gradient(circle at 16% 18%,rgba(255,255,255,.32),transparent 26%),linear-gradient(135deg,rgba(74,215,209,.16),transparent 46%);z-index:2}
 .poster-photo-copy{position:absolute;left:18px;right:78px;bottom:18px;display:grid;gap:4px;z-index:4;color:#fff;text-shadow:0 6px 18px rgba(0,0,0,.34)}
+.poster-progress-overlay{position:absolute;inset:56px 18px 92px 18px;z-index:3;pointer-events:none}
+.poster-progress-svg{display:block;width:100%;height:100%;overflow:visible}
+.poster-progress-target-line{stroke:rgba(255,255,255,.62);stroke-width:.6;stroke-dasharray:2.8 3.4}
+.poster-progress-area{fill:rgba(255,255,255,.08)}
+.poster-progress-line{fill:none;stroke:#fff;stroke-width:1.35;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 2px 8px rgba(0,0,0,.32))}
+.poster-progress-dot{fill:#fff;filter:drop-shadow(0 2px 8px rgba(0,0,0,.34))}
+.poster-progress-goal-pill{position:absolute;top:0;right:0;transform:translateY(-50%);padding:5px 10px;border-radius:999px;background:rgba(255,255,255,.16);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.22);color:#fff;font-size:.58rem;font-weight:950;letter-spacing:.12em;text-transform:uppercase;text-shadow:0 3px 12px rgba(0,0,0,.25)}
 .poster-photo-copy small,.poster-photo-copy span,.poster-photo-signature{display:block;text-transform:uppercase;letter-spacing:.14em;font-weight:900}
 .poster-photo-copy small{font-size:.68rem;opacity:.9}
 .poster-photo-copy strong{font-size:clamp(1.35rem,4vw,2.15rem);line-height:.94;letter-spacing:-.05em}
@@ -1619,6 +1626,8 @@ body:not(.light) .poster-photo-signature{background:rgba(255,255,255,.1)}
   .companion-photo-poster.is-hero{max-width:100%;aspect-ratio:4/5}
   .poster-photo-copy{left:14px;right:68px;bottom:14px;gap:3px}
   .poster-photo-copy strong{font-size:1.3rem}
+  .poster-progress-overlay{inset:50px 14px 82px 14px}
+  .poster-progress-goal-pill{padding:4px 8px;font-size:.52rem}
   .poster-photo-index{top:14px;right:14px;min-width:46px;height:36px;font-size:.92rem}
   .poster-photo-signature{top:14px;left:14px}
   .fish-stage-tile{flex:0 0 76px;min-height:108px}
