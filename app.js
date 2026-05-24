@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v76-context-aware-gradient-charts';
+  const APP_DATA_SCHEMA_VERSION = 'v77-consumption-ux-upgrade';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -3586,8 +3586,31 @@
     if (!els.smokeHistory) return;
     const metrics = smokeCostMetrics();
     const smokeCount = visibleCigarettes().length;
-    const todayCount = cigarettesOnDate(toDateKey(new Date())).length;
-    els.smokeHistory.innerHTML = `<div class="history-launch-grid">
+    const todayKey = toDateKey(new Date());
+    const todayCount = cigarettesOnDate(todayKey).length;
+    const last = getLastCigarette();
+    const pauseMinutes = last ? Math.max(0, Math.floor((Date.now() - new Date(last.smoked_at).getTime()) / 60000)) : null;
+    const nextGoal = getNextPauseGoalMinutes(pauseMinutes);
+    const trigger = topSmokeTrigger(14);
+    const cigarettes7 = visibleCigarettes().filter(c => daysBack(7).includes(toDateKey(c.smoked_at))).length;
+    const avgPause = averagePauseText(7);
+    const bestPause = bestPauseMinutes();
+    const recentLogs = [...visibleCigarettes()]
+      .sort((a, b) => new Date(b.smoked_at) - new Date(a.smoked_at))
+      .slice(0, 3);
+    const recentMarkup = recentLogs.length
+      ? recentLogs.map(cigarette => {
+          const points = Number(cigarette.points || 0);
+          const pointClass = points < 0 ? 'is-danger' : points > 0 ? 'is-positive' : '';
+          return `<li><span>${escapeHtml(formatDateTime(cigarette.smoked_at))}</span><strong class="${pointClass}">${points > 0 ? '+' : ''}${points} Pkt.</strong></li>`;
+        }).join('')
+      : '<li><span>Noch keine Logs</span><strong>bereit</strong></li>';
+    const focusText = pauseMinutes == null
+      ? 'Ersten ehrlichen Referenzpunkt setzen.'
+      : pauseMinutes >= nextGoal
+        ? 'Pause halten und nicht verhandeln.'
+        : `${formatDuration(nextGoal)} als naechste saubere Marke.`;
+    els.smokeHistory.innerHTML = `<div class="history-launch-grid consumption-history-actions">
       <button class="history-open-card" type="button" data-action="open-smoke-history">
         <span class="history-open-icon">${svgIcon('smoke', 'ui-icon')}</span>
         <span class="history-open-copy"><strong>Zigarettenverlauf öffnen</strong><small>${smokeCount ? `${smokeCount} Eintrag${smokeCount === 1 ? '' : 'e'} · ${todayCount} heute` : 'Noch keine Einträge · Verlauf erscheint im Pop-up'}</small></span>
@@ -3598,6 +3621,23 @@
         <span class="history-open-copy"><strong>Kosten ansehen</strong><small>${metrics.totalCount ? `${formatCurrencyChf(metrics.totalCost)} gesamt · ${formatCurrencyChf(metrics.todayCost)} heute` : '0,40 CHF pro Zigarette · Einsparung direkt sichtbar'}</small></span>
         <span class="history-open-arrow">›</span>
       </button>
+    </div>
+    <div class="consumption-side-dashboard" aria-label="Rauch-Kommando">
+      <article class="consumption-focus-card">
+        <small>Naechste saubere Aktion</small>
+        <strong>${escapeHtml(focusText)}</strong>
+        <span>${trigger ? `${escapeHtml(trigger.label)} ist dein haeufigster Trigger der letzten 14 Tage.` : 'Trigger nach dem naechsten Log erfassen und Muster schaerfen.'}</span>
+      </article>
+      <div class="consumption-side-metrics">
+        <article><small>Heute</small><strong>${todayCount}×</strong><span>erfasst</span></article>
+        <article><small>7 Tage</small><strong>${cigarettes7}×</strong><span>sichtbar</span></article>
+        <article><small>Ø Pause</small><strong>${escapeHtml(avgPause)}</strong><span>letzte 7 Tage</span></article>
+        <article><small>Beste</small><strong>${bestPause == null ? '–' : escapeHtml(formatDuration(bestPause))}</strong><span>bisher</span></article>
+      </div>
+      <div class="consumption-recent-card">
+        <div><small>Letzte Logs</small><strong>kurzer Check</strong></div>
+        <ul>${recentMarkup}</ul>
+      </div>
     </div>`;
   }
 
@@ -3648,12 +3688,40 @@
     if (!els.alcoholUnitHistory) return;
     const units = [...visibleAlcoholUnits()]
       .sort((a, b) => sortDate(b.occurred_at || b.created_at) - sortDate(a.occurred_at || a.created_at));
-    const todayCount = units.filter(unit => toDateKey(unit.occurred_at || unit.created_at) === toDateKey(new Date())).length;
-    els.alcoholUnitHistory.innerHTML = `<button class="history-open-card" type="button" data-action="open-alcohol-history">
-      <span class="history-open-icon">${svgIcon('alcohol', 'ui-icon')}</span>
-      <span class="history-open-copy"><strong>Alkoholverlauf öffnen</strong><small>${units.length ? `${units.length} Einheit${units.length === 1 ? '' : 'en'} · ${todayCount} heute` : 'Noch keine Einheiten · Verlauf erscheint im Pop-up'}</small></span>
-      <span class="history-open-arrow">›</span>
-    </button>`;
+    const todayKey = toDateKey(new Date());
+    const todayUnits = units.filter(unit => toDateKey(unit.occurred_at || unit.created_at) === todayKey);
+    const todayCount = todayUnits.length;
+    const units7 = units.filter(unit => daysBack(7).includes(toDateKey(unit.occurred_at || unit.created_at))).length;
+    const activeDays7 = new Set(units.filter(unit => daysBack(7).includes(toDateKey(unit.occurred_at || unit.created_at))).map(unit => toDateKey(unit.occurred_at || unit.created_at))).size;
+    const todayPoints = sum(todayUnits.map(unit => alcoholPointsForUnit(unit.id)));
+    const lastUnit = units[0] || null;
+    const recentMarkup = units.slice(0, 3).length
+      ? units.slice(0, 3).map(unit => `<li><span>${escapeHtml(formatDateTime(unit.occurred_at || unit.created_at))}</span><strong>${escapeHtml(alcoholTypeLabel(unit.drink_type))}</strong></li>`).join('')
+      : '<li><span>Noch keine Logs</span><strong>bereit</strong></li>';
+    els.alcoholUnitHistory.innerHTML = `<div class="history-launch-grid consumption-history-actions">
+      <button class="history-open-card" type="button" data-action="open-alcohol-history">
+        <span class="history-open-icon">${svgIcon('alcohol', 'ui-icon')}</span>
+        <span class="history-open-copy"><strong>Alkoholverlauf öffnen</strong><small>${units.length ? `${units.length} Einheit${units.length === 1 ? '' : 'en'} · ${todayCount} heute` : 'Noch keine Einheiten · Verlauf erscheint im Pop-up'}</small></span>
+        <span class="history-open-arrow">›</span>
+      </button>
+    </div>
+    <div class="consumption-side-dashboard" aria-label="Alkohol-Kommando">
+      <article class="consumption-focus-card is-warm">
+        <small>Naechste saubere Aktion</small>
+        <strong>${todayCount ? 'Wasser-Puffer setzen und Fenster bewusst schliessen.' : 'Heute erst bewusst entscheiden, dann erfassen.'}</strong>
+        <span>${units7 ? `${units7} Einheiten in 7 Tagen · Fokus auf Dichte und klare Konsumfenster.` : 'Noch kein Wochenmuster. Die ersten ehrlichen Logs reichen.'}</span>
+      </article>
+      <div class="consumption-side-metrics">
+        <article><small>Heute</small><strong>${todayCount}×</strong><span>${formatSignedPoints(todayPoints)} Pkt.</span></article>
+        <article><small>7 Tage</small><strong>${units7}×</strong><span>${activeDays7} Tage</span></article>
+        <article><small>Letzter Log</small><strong>${lastUnit ? escapeHtml(alcoholTypeLabel(lastUnit.drink_type)) : '–'}</strong><span>${lastUnit ? escapeHtml(compactDuration(Math.max(0, Math.floor((Date.now() - sortDate(lastUnit.occurred_at || lastUnit.created_at)) / 60000)))) : 'keiner'}</span></article>
+        <article><small>Modus</small><strong>${units7 >= 8 ? 'Senken' : units7 >= 4 ? 'Wachsam' : 'Ruhig'}</strong><span>7-Tage Blick</span></article>
+      </div>
+      <div class="consumption-recent-card">
+        <div><small>Letzte Logs</small><strong>kurzer Check</strong></div>
+        <ul>${recentMarkup}</ul>
+      </div>
+    </div>`;
   }
 
   function renderAlcoholUnitHistoryList() {

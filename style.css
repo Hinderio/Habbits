@@ -2013,3 +2013,53 @@ body:not(.light) .calendar-task-dot-more{background:rgba(255,255,255,.08)}
   .calendar-task-dot-more{height:14px;min-width:18px;font-size:.5rem;padding:0 5px}
   .calendar-day.is-selected{box-shadow:inset 0 0 0 1px rgba(74,215,209,.58)!important}
 }
+
+/* v77: Konsum UX upgrade - desktop side command center + mobile craving actions */
+#screen-smoking .smoking-layout{grid-template-columns:minmax(0,1.08fr) minmax(420px,.92fr);align-items:stretch}
+#screen-smoking .consumption-history-panel{height:100%;display:flex;flex-direction:column;gap:14px}
+#screen-smoking .consumption-history-panel .panel-head{margin-bottom:4px}
+#screen-smoking .history-launch-area,
+#screen-smoking .alcohol-history-list{display:flex;flex-direction:column;gap:14px;flex:1}
+#screen-smoking .consumption-history-actions{grid-template-columns:1fr;gap:10px}
+.consumption-side-dashboard{display:grid;gap:12px;flex:1;align-content:start}
+.consumption-focus-card{padding:16px;border-radius:24px;background:linear-gradient(135deg,rgba(74,215,209,.13),rgba(255,255,255,.045));border:1px solid rgba(74,215,209,.16);display:grid;gap:7px}
+.consumption-focus-card.is-warm{background:linear-gradient(135deg,rgba(255,184,77,.14),rgba(255,255,255,.045));border-color:rgba(255,184,77,.18)}
+.consumption-focus-card small,
+.consumption-side-metrics small,
+.consumption-recent-card small{display:block;color:var(--muted);font-size:.68rem;font-weight:950;letter-spacing:.12em;text-transform:uppercase}
+.consumption-focus-card strong{font-size:1.05rem;line-height:1.28;letter-spacing:-.025em}
+.consumption-focus-card span{color:var(--muted);font-size:.9rem;line-height:1.42;font-weight:760}
+.consumption-side-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.consumption-side-metrics article{min-height:96px;padding:14px;border-radius:22px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.07);display:grid;align-content:space-between;gap:4px}
+.consumption-side-metrics strong{font-size:1.35rem;letter-spacing:-.06em;line-height:1}
+.consumption-side-metrics span{color:var(--muted);font-size:.8rem;font-weight:780;line-height:1.25}
+.consumption-recent-card{padding:14px;border-radius:22px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.065);display:grid;gap:10px}
+.consumption-recent-card>div{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.consumption-recent-card>div strong{font-size:.92rem;letter-spacing:-.02em}
+.consumption-recent-card ul{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.consumption-recent-card li{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 10px;border-radius:15px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.055)}
+.consumption-recent-card li span{min-width:0;color:var(--muted);font-size:.78rem;font-weight:780;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.consumption-recent-card li strong{font-size:.78rem;font-weight:950;white-space:nowrap}
+.consumption-recent-card li strong.is-positive{color:#6ee7a7}
+.consumption-recent-card li strong.is-danger{color:#ff8b8b}
+#screen-smoking .craving-actions .mini-btn{display:inline-flex;align-items:center;justify-content:center;text-align:center}
+body.light .consumption-focus-card,
+body.light .consumption-side-metrics article,
+body.light .consumption-recent-card,
+body.light .consumption-recent-card li{background:rgba(255,255,255,.72);border-color:rgba(17,36,58,.075)}
+body.light .consumption-focus-card{background:linear-gradient(135deg,rgba(74,215,209,.14),rgba(255,255,255,.78))}
+body.light .consumption-focus-card.is-warm{background:linear-gradient(135deg,rgba(255,184,77,.16),rgba(255,255,255,.78))}
+@media (max-width:980px){
+  #screen-smoking .smoking-layout{grid-template-columns:1fr}
+}
+@media (max-width:760px){
+  #screen-smoking .consumption-history-panel{height:auto}
+  .consumption-side-dashboard{display:none}
+  #screen-smoking .craving-coach-card{display:grid;gap:12px;padding:16px;border-radius:26px;background:linear-gradient(180deg,rgba(255,255,255,.72),rgba(232,249,249,.72));border-color:rgba(13,151,149,.13)}
+  #screen-smoking .craving-coach-head{display:flex;flex-direction:row;align-items:flex-start;justify-content:space-between;margin-bottom:0}
+  #screen-smoking .craving-coach-card p:not(.eyebrow){font-size:.96rem;line-height:1.45;margin:0}
+  #screen-smoking .craving-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:0}
+  #screen-smoking .craving-actions .mini-btn{min-height:46px;width:100%;padding:10px 6px;border-radius:17px;font-size:.88rem;font-weight:950;white-space:nowrap}
+  #screen-smoking .craving-actions .mini-btn.primary{box-shadow:0 12px 24px rgba(74,215,209,.16)}
+  body.light #screen-smoking .craving-coach-card{background:linear-gradient(180deg,rgba(255,255,255,.88),rgba(232,249,249,.88));border-color:rgba(13,151,149,.13)}
+}
