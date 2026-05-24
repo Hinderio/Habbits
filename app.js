@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v68-photo-poster-interactions';
+  const APP_DATA_SCHEMA_VERSION = 'v69-supabase-storage-posters';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -22,6 +22,8 @@
   const ACTIVITY_ARCHIVED_IDS_KEY = 'habitflow-activity-archived-ids-v1';
   const ACTIVITY_CATALOG_TABLE = 'activity_ideas';
   const LEISURE_RESULT_LIMIT = 12;
+  const COMPANION_POSTER_BUCKET = 'companion-posters';
+  const COMPANION_POSTER_EXTENSION = 'png';
   const SUPABASE_CONFIG = window.HABITFLOW_SUPABASE_CONFIG || {};
   const MEDITATION_TECHNIQUES = [
     { key: '7-3-11', title: '7-3-11 Atemtechnik', subtitle: 'Runterfahren mit langer Ausatmung', minutes: 6, pattern: '7 ein · 3 halten · 11 aus' },
@@ -32,26 +34,26 @@
   ];
 
   const COMPANION_STAGE_POSTERS = [
-    { src: './assets/companion-posters/stage-01.jpg', mood: 'Opening Frame', cue: 'Foundation', align: 'left' },
-    { src: './assets/companion-posters/stage-02.jpg', mood: 'Clean Lines', cue: 'Momentum', align: 'right' },
-    { src: './assets/companion-posters/stage-03.jpg', mood: 'Street Focus', cue: 'Intent', align: 'left' },
-    { src: './assets/companion-posters/stage-04.jpg', mood: 'Poolside Calm', cue: 'Warmup', align: 'left' },
-    { src: './assets/companion-posters/stage-05.jpg', mood: 'Alpine Air', cue: 'Breath', align: 'right' },
-    { src: './assets/companion-posters/stage-06.jpg', mood: 'Sharp Turn', cue: 'Change', align: 'left' },
-    { src: './assets/companion-posters/stage-07.jpg', mood: 'Snowline', cue: 'Clarity', align: 'left' },
-    { src: './assets/companion-posters/stage-08.jpg', mood: 'Coastal Motion', cue: 'Flow', align: 'right' },
-    { src: './assets/companion-posters/stage-09.jpg', mood: 'Stadium Energy', cue: 'Drive', align: 'left' },
-    { src: './assets/companion-posters/stage-10.jpg', mood: 'Cloud Focus', cue: 'Lift', align: 'left' },
-    { src: './assets/companion-posters/stage-11.jpg', mood: 'Stage Heat', cue: 'Pulse', align: 'right' },
-    { src: './assets/companion-posters/stage-12.jpg', mood: 'Design in Motion', cue: 'Precision', align: 'left' },
-    { src: './assets/companion-posters/stage-13.jpg', mood: 'Glacier Quiet', cue: 'Discipline', align: 'right' },
-    { src: './assets/companion-posters/stage-14.jpg', mood: 'Palm Rhythm', cue: 'Balance', align: 'left' },
-    { src: './assets/companion-posters/stage-15.jpg', mood: 'Tropical Light', cue: 'Focus', align: 'right' },
-    { src: './assets/companion-posters/stage-16.jpg', mood: 'Water Control', cue: 'Control', align: 'left' },
-    { src: './assets/companion-posters/stage-17.jpg', mood: 'Golden Hours', cue: 'Build', align: 'right' },
-    { src: './assets/companion-posters/stage-18.jpg', mood: 'Above the Clouds', cue: 'Ascend', align: 'left' },
-    { src: './assets/companion-posters/stage-19.jpg', mood: 'Summit Frame', cue: 'Apex', align: 'right' },
-    { src: './assets/companion-posters/stage-20.jpg', mood: 'Final Form', cue: 'Champion', align: 'left' }
+    { file: 'stage-01.png', mood: 'Opening Frame', cue: 'Foundation', align: 'left' },
+    { file: 'stage-02.png', mood: 'Clean Lines', cue: 'Momentum', align: 'right' },
+    { file: 'stage-03.png', mood: 'Street Focus', cue: 'Intent', align: 'left' },
+    { file: 'stage-04.png', mood: 'Poolside Calm', cue: 'Warmup', align: 'left' },
+    { file: 'stage-05.png', mood: 'Alpine Air', cue: 'Breath', align: 'right' },
+    { file: 'stage-06.png', mood: 'Sharp Turn', cue: 'Change', align: 'left' },
+    { file: 'stage-07.png', mood: 'Snowline', cue: 'Clarity', align: 'left' },
+    { file: 'stage-08.png', mood: 'Coastal Motion', cue: 'Flow', align: 'right' },
+    { file: 'stage-09.png', mood: 'Stadium Energy', cue: 'Drive', align: 'left' },
+    { file: 'stage-10.png', mood: 'Cloud Focus', cue: 'Lift', align: 'left' },
+    { file: 'stage-11.png', mood: 'Stage Heat', cue: 'Pulse', align: 'right' },
+    { file: 'stage-12.png', mood: 'Design in Motion', cue: 'Precision', align: 'left' },
+    { file: 'stage-13.png', mood: 'Glacier Quiet', cue: 'Discipline', align: 'right' },
+    { file: 'stage-14.png', mood: 'Palm Rhythm', cue: 'Balance', align: 'left' },
+    { file: 'stage-15.png', mood: 'Tropical Light', cue: 'Focus', align: 'right' },
+    { file: 'stage-16.png', mood: 'Water Control', cue: 'Control', align: 'left' },
+    { file: 'stage-17.png', mood: 'Golden Hours', cue: 'Build', align: 'right' },
+    { file: 'stage-18.png', mood: 'Above the Clouds', cue: 'Ascend', align: 'left' },
+    { file: 'stage-19.png', mood: 'Summit Frame', cue: 'Apex', align: 'right' },
+    { file: 'stage-20.png', mood: 'Final Form', cue: 'Champion', align: 'left' }
   ];
 
 
@@ -2756,6 +2758,28 @@
     };
   }
 
+  function companionPosterFileName(stage) {
+    const numericStage = Number(stage || 1);
+    const safeStage = Number.isFinite(numericStage) ? Math.min(20, Math.max(1, numericStage)) : 1;
+    return `stage-${String(safeStage).padStart(2, '0')}.${COMPANION_POSTER_EXTENSION}`;
+  }
+
+  function companionPosterUrl(stage) {
+    const numericStage = Number(stage || 1);
+    const safeStage = Number.isFinite(numericStage) ? Math.min(20, Math.max(1, numericStage)) : 1;
+    const poster = COMPANION_STAGE_POSTERS[safeStage - 1] || {};
+    const fileName = poster.file || companionPosterFileName(safeStage);
+    const configuredUrl = String(SUPABASE_CONFIG.url || SUPABASE_CONFIG.supabaseUrl || '').trim().replace(/\/$/, '');
+    try {
+      const storageUrl = supabaseClient?.storage?.from?.(COMPANION_POSTER_BUCKET)?.getPublicUrl?.(fileName)?.data?.publicUrl;
+      if (storageUrl) return storageUrl;
+    } catch (error) {
+      console.warn('Companion poster URL konnte nicht via Supabase Storage Client erzeugt werden.', error);
+    }
+    if (configuredUrl) return `${configuredUrl}/storage/v1/object/public/${COMPANION_POSTER_BUCKET}/${fileName}`;
+    return `./assets/companion-posters/${fileName}`;
+  }
+
   function renderCompanionFish(stage, size = 'hero', stageLabel = '') {
     const numericStage = Number(stage || 1);
     const safeStage = Number.isFinite(numericStage) ? Math.min(20, Math.max(1, numericStage)) : 1;
@@ -2764,11 +2788,12 @@
     const posterLabel = stageLabel || `Stufe ${safeStage}`;
     const posterMood = poster?.mood || 'Progress';
     const posterCue = poster?.cue || 'HabitFlow';
+    const posterUrl = companionPosterUrl(safeStage);
     const alignClass = poster?.align === 'right' ? 'is-right' : 'is-left';
     const isInteractive = !isMini && size === 'hero';
     const interactionAttrs = isInteractive ? ` data-open-companion-poster="${safeStage}" role="button" tabindex="0"` : ' role="img"';
     return `<div class="companion-photo-poster ${isMini ? 'is-mini' : 'is-hero'} ${alignClass}"${interactionAttrs} aria-label="Fortschrittsfoto Stufe ${safeStage}: ${escapeHtml(posterLabel)}">
-      <div class="poster-photo-media" style="background-image:url('${poster.src}');"></div>
+      <div class="poster-photo-media" style="background-image:url(&quot;${escapeHtml(posterUrl)}&quot;);"></div>
       <div class="poster-photo-shade"></div>
       <div class="poster-photo-stripes" aria-hidden="true"></div>
       <div class="poster-photo-glow" aria-hidden="true"></div>
