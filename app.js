@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v74-risk-average-gradient-charts';
+  const APP_DATA_SCHEMA_VERSION = 'v75-calendar-task-dots';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -6691,6 +6691,26 @@
     return chips.join('');
   }
 
+  function calendarTasksOnDate(key) {
+    return state.tasks
+      .map(normalizeTask)
+      .filter(task => isActiveTask(task) && toDateKey(task.due_at) === key)
+      .sort((a, b) => taskPriorityMeta(b).rank - taskPriorityMeta(a).rank || compareTasks(a, b));
+  }
+
+  function renderCalendarTaskDots(tasks) {
+    if (!tasks.length) return '';
+    const visible = tasks.slice(0, 7);
+    const dots = visible.map(task => {
+      const priority = normalizeTaskPriority(task.priority);
+      const label = taskPriorityMeta(task).label;
+      const title = `${label}: ${task.title || 'Aufgabe'}`;
+      return `<span class="calendar-task-dot priority-${priority}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"></span>`;
+    }).join('');
+    const more = tasks.length > visible.length ? `<span class="calendar-task-dot-more" aria-label="${tasks.length - visible.length} weitere Aufgaben">+${tasks.length - visible.length}</span>` : '';
+    return `<span class="calendar-task-dots" aria-label="${tasks.length} Aufgabe(n) an diesem Tag">${dots}${more}</span>`;
+  }
+
   function renderCalendar() {
     const year = calendarCursor.getFullYear();
     const month = calendarCursor.getMonth();
@@ -6707,10 +6727,13 @@
       date.setDate(start.getDate() + i);
       const key = toDateKey(date);
       const appointments = appointmentsOnDate(key);
+      const tasks = calendarTasksOnDate(key);
       const chips = renderCalendarAppointmentChips(appointments);
-      cells.push(`<button class="calendar-day ${date.getMonth() !== month ? 'is-muted' : ''} ${key === toDateKey(new Date()) ? 'is-today' : ''} ${key === selectedCalendarDate ? 'is-selected' : ''} ${appointments.length ? 'has-appointments' : ''}" type="button" data-action="select-day" data-day="${key}">
+      const taskDots = renderCalendarTaskDots(tasks);
+      cells.push(`<button class="calendar-day ${date.getMonth() !== month ? 'is-muted' : ''} ${key === toDateKey(new Date()) ? 'is-today' : ''} ${key === selectedCalendarDate ? 'is-selected' : ''} ${appointments.length ? 'has-appointments' : ''} ${tasks.length ? 'has-task-dots' : ''}" type="button" data-action="select-day" data-day="${key}">
         <span class="calendar-day-head"><strong>${date.getDate()}</strong>${appointments.length ? `<em class="day-appointment-count">${appointments.length}</em>` : ''}</span>
         <span class="day-chips">${chips}</span>
+        ${taskDots}
       </button>`);
     }
     els.calendarGrid.innerHTML = cells.join('');
