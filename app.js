@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v77-consumption-ux-upgrade';
+  const APP_DATA_SCHEMA_VERSION = 'v79-visible-fitness-tab';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -17,6 +17,11 @@
   const LEISURE_FILTER_KEY = 'habitflow-leisure-filters-v1';
   const GAMIFICATION_LOCKED_KEY = 'habitflow-gamification-show-locked-v1';
   const GAMIFICATION_BADGE_SHELF_KEY = 'habitflow-gamification-badge-shelf-v1';
+  const HABITS_EXPERIENCE_KEY = 'habitflow-habits-experience-v1';
+  const FITNESS_FILTER_KEY = 'habitflow-fitness-filter-v1';
+  const FITNESS_DETAIL_TAB_KEY = 'habitflow-fitness-detail-tab-v1';
+  const FITNESS_ROUTE_START = Object.freeze({ lat: 47.459945, lng: 9.032719 });
+  const HALF_WHITE_BREAD_KCAL_PER_100G = 255;
   const ACTIVITY_CATALOG_URL = './data/activity-ideas.json';
   const ACTIVITY_REMOTE_SEED_KEY = 'habitflow-activity-remote-seeded-v1';
   const ACTIVITY_ARCHIVED_IDS_KEY = 'habitflow-activity-archived-ids-v1';
@@ -561,6 +566,89 @@
     return `--habit-tone:${meta.tone};--habit-tone-rgb:${meta.rgb};`;
   }
 
+  function isFitnessDistanceHabit(habit = {}) {
+    const icon = habitIconKey(habit);
+    const name = String(habit.name || '').trim().toLowerCase();
+    return ['jogging', 'hiking'].includes(icon) || name.includes('jogg') || name.includes('wander');
+  }
+
+  function fitnessHabitType(habit = {}) {
+    const icon = habitIconKey(habit);
+    const name = String(habit.name || '').trim().toLowerCase();
+    if (icon === 'hiking' || name.includes('wander')) return 'hiking';
+    return 'jogging';
+  }
+
+  function effectiveHabitUnit(habit = {}) {
+    const raw = String(habit.unit || '').trim();
+    if (raw && raw !== 'x') return raw;
+    return isFitnessDistanceHabit(habit) ? 'km' : defaultUnit(habit.type);
+  }
+
+  function clampNumber(value, min, max) {
+    return Math.max(min, Math.min(max, Number(value)));
+  }
+
+  function hashString(value = '') {
+    return Math.abs(String(value).split('').reduce((hash, char) => ((hash << 5) - hash) + char.charCodeAt(0), 0));
+  }
+
+  function seededUnit(seed, index = 1) {
+    const raw = Math.sin((Number(seed) + 1) * (index + 1) * 12.9898) * 43758.5453;
+    return raw - Math.floor(raw);
+  }
+
+  function formatKmValue(value) {
+    const numeric = Number(value || 0);
+    return `${numeric.toFixed(numeric >= 10 ? 1 : 2)} km`;
+  }
+
+  function switchHabitsExperiencePane(pane = 'overview') {
+    activeHabitsPane = pane === 'fitness' ? 'fitness' : 'overview';
+    localStorage.setItem(HABITS_EXPERIENCE_KEY, activeHabitsPane);
+    syncHabitsExperienceUi();
+    if (activeHabitsPane === 'fitness') renderFitnessHub();
+  }
+
+  function syncHabitsExperienceUi() {
+    const hasEmbeddedSwitcher = Boolean(els.habitsPaneButtons?.length);
+    if (!hasEmbeddedSwitcher) activeHabitsPane = 'overview';
+    const overviewActive = activeHabitsPane !== 'fitness';
+    els.habitsPaneButtons?.forEach(btn => {
+      const active = btn.dataset.habitsPane === (overviewActive ? 'overview' : 'fitness');
+      btn.classList.toggle('is-active', active);
+      btn.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    if (els.habitsOverviewPane) {
+      els.habitsOverviewPane.hidden = !overviewActive;
+      els.habitsOverviewPane.classList.toggle('hidden', !overviewActive);
+      els.habitsOverviewPane.setAttribute('aria-hidden', overviewActive ? 'false' : 'true');
+    }
+    if (els.fitnessHubPane) {
+      els.fitnessHubPane.hidden = overviewActive;
+      els.fitnessHubPane.classList.toggle('hidden', overviewActive);
+      els.fitnessHubPane.setAttribute('aria-hidden', overviewActive ? 'true' : 'false');
+    }
+  }
+
+  function setFitnessFilter(filter = 'all') {
+    selectedFitnessFilter = ['all', 'jogging', 'hiking'].includes(filter) ? filter : 'all';
+    localStorage.setItem(FITNESS_FILTER_KEY, selectedFitnessFilter);
+    selectedFitnessEntryId = null;
+    renderFitnessHub();
+  }
+
+  function setFitnessDetailTab(tab = 'summary') {
+    selectedFitnessDetailTab = ['summary', 'stats', 'splits'].includes(tab) ? tab : 'summary';
+    localStorage.setItem(FITNESS_DETAIL_TAB_KEY, selectedFitnessDetailTab);
+    renderFitnessHub();
+  }
+
+  function selectFitnessEntry(id) {
+    selectedFitnessEntryId = id || null;
+    renderFitnessHub();
+  }
+
   var state = loadState();
   runLocalCacheRepair();
   let settings = loadSettings();
@@ -620,6 +708,10 @@
   let expandedHabitDnaIds = loadExpandedHabitDnaIds();
   let expandedHabitCardIds = loadExpandedHabitCardIds();
   let activeConsumptionMode = localStorage.getItem(CONSUMPTION_MODE_KEY) === 'alcohol' ? 'alcohol' : 'smoke';
+  let activeHabitsPane = localStorage.getItem(HABITS_EXPERIENCE_KEY) === 'fitness' ? 'fitness' : 'overview';
+  let selectedFitnessFilter = ['all', 'jogging', 'hiking'].includes(localStorage.getItem(FITNESS_FILTER_KEY)) ? localStorage.getItem(FITNESS_FILTER_KEY) : 'all';
+  let selectedFitnessDetailTab = ['summary', 'stats', 'splits'].includes(localStorage.getItem(FITNESS_DETAIL_TAB_KEY)) ? localStorage.getItem(FITNESS_DETAIL_TAB_KEY) : 'summary';
+  let selectedFitnessEntryId = null;
   let leisureSeedCatalog = [];
   let leisureCatalog = [];
   let leisureCatalogSyncInFlight = false;
@@ -758,6 +850,11 @@
       cravingTipMeta: $('#cravingTipMeta'),
       meditationTechniqueGrid: $('#meditationTechniqueGrid'),
       meditationHistory: $('#meditationHistory'),
+      habitsPaneButtons: $$('[data-habits-pane]'),
+      habitsOverviewTabBtn: $('#habitsOverviewTabBtn'),
+      habitsFitnessTabBtn: $('#habitsFitnessTabBtn'),
+      habitsOverviewPane: $('#habitsOverviewPane'),
+      fitnessHubPane: $('#fitnessHubPane'),
       habitFormPanel: $('#habitFormPanel'),
       habitFormToggleBtn: $('#habitFormToggleBtn'),
       habitFormCloseBtn: $('#habitFormCloseBtn'),
@@ -768,6 +865,8 @@
       habitCards: $('#habitCards'),
       habitDnaOverview: $('#habitDnaOverview'),
       habitPauseList: $('#habitPauseList'),
+      habitPlayfulStats: $('#habitPlayfulStats'),
+      fitnessHubContent: $('#fitnessHubContent'),
       pauseModal: $('#pauseModal'),
       pauseModalCloseBtn: $('#pauseModalCloseBtn'),
       pauseModalTitle: $('#pauseModalTitle'),
@@ -866,7 +965,11 @@
     if (els.authForm) els.authForm.addEventListener('submit', handleAuthForm);
     if (els.authResetBtn) els.authResetBtn.addEventListener('click', requestPasswordRecoveryEmail);
 
-    els.navButtons.forEach(btn => btn.addEventListener('click', () => showScreen(btn.dataset.target)));
+    els.navButtons.forEach(btn => btn.addEventListener('click', () => {
+      const target = btn.dataset.target || 'dashboard';
+      if (target === 'habits') activeHabitsPane = 'overview';
+      showScreen(target);
+    }));
     els.heroSmokeBtn.addEventListener('click', () => recordCigarette());
     if (els.heroMorningRoutineBtn) els.heroMorningRoutineBtn.addEventListener('click', openMorningRoutineFromHero);
     els.heroTaskBtn.addEventListener('click', () => { showScreen('tasks'); openTaskForm(); });
@@ -911,6 +1014,7 @@
       localStorage.setItem(TREND_METRIC_KEY, selectedTrendMetric);
       renderCharts();
     });
+    if (els.habitsPaneButtons?.length) els.habitsPaneButtons.forEach(btn => btn.addEventListener('click', () => switchHabitsExperiencePane(btn.dataset.habitsPane || 'overview')));
     if (els.habitFormToggleBtn) els.habitFormToggleBtn.addEventListener('click', () => openHabitForm());
     if (els.habitFormCloseBtn) els.habitFormCloseBtn.addEventListener('click', () => closeHabitForm({ clearForm: !editingHabitId }));
     if (els.taskFormToggleBtn) els.taskFormToggleBtn.addEventListener('click', toggleTaskForm);
@@ -1021,6 +1125,9 @@
       if (action === 'toggle-habit-card') toggleHabitCard(id);
       if (action === 'open-habit-detail') openHistoryModal('habit-detail', id);
       if (action === 'toggle-habit-dna') toggleHabitDna(id);
+      if (action === 'set-fitness-filter') setFitnessFilter(actionEl.dataset.filter || 'all');
+      if (action === 'select-fitness-entry') selectFitnessEntry(id);
+      if (action === 'set-fitness-detail-tab') setFitnessDetailTab(actionEl.dataset.tab || 'summary');
       if (action === 'log-habit') logHabit(id, actionEl.dataset.inputId);
       if (action === 'start-morning-routine') startMorningRoutine();
       if (action === 'next-morning-step') advanceMorningRoutine();
@@ -1940,6 +2047,10 @@
         renderCharts();
       });
     }
+    if (targetScreen === 'fitness') {
+      activeHabitsPane = 'overview';
+      renderFitnessHub();
+    }
   }
 
   function openHabitForm() {
@@ -2106,6 +2217,7 @@
     renderSection('smoking', renderSmoking);
     renderSection('meditation', renderMeditation);
     renderSection('habits', renderHabits);
+    renderSection('fitness-hub', renderFitnessHub);
     renderSection('tasks', renderTasks);
     renderSection('coach', renderCoach);
     renderSection('calendar', renderCalendar);
@@ -2845,19 +2957,28 @@
 
   function renderPosterProgressOverlay(stats = {}, companion = {}) {
     const total = Math.max(0, Number(stats.total || 0));
-    const companionStage = Math.max(1, Math.min(20, Number(companion.stage || 1)));
     const pointStep = 250;
     const pointFloor = Math.floor(total / pointStep) * pointStep;
     const targetPoints = pointFloor + pointStep;
-    const chartMin = pointFloor;
-    const chartMax = targetPoints;
-    const range = Math.max(1, chartMax - chartMin);
     const keys = daysBack(21);
-    const totalWindowDelta = sum(keys.map(key => pointsOnDate(key)));
-    let runningTotal = total - totalWindowDelta;
+    const dailyDeltas = keys.map(key => Number(pointsOnDate(key) || 0));
+    const windowDelta = sum(dailyDeltas);
+    let runningTotal = total - windowDelta;
+    const values = dailyDeltas.map(delta => {
+      runningTotal += delta;
+      return Math.max(0, Number(runningTotal || 0));
+    });
+    if (!values.length) return '';
+
+    const rawMin = Math.min(...values, pointFloor, total);
+    const rawMax = Math.max(...values, targetPoints, total);
+    const rawSpan = Math.max(1, rawMax - rawMin);
+    const chartMin = Math.max(0, rawMin - Math.max(35, rawSpan * 0.12));
+    const chartMax = rawMax + Math.max(35, rawSpan * 0.12);
+    const range = Math.max(1, chartMax - chartMin);
     const chartTop = 10;
     const chartBottom = 90;
-    const xStep = keys.length > 1 ? 100 / (keys.length - 1) : 100;
+    const xStep = values.length > 1 ? 100 / (values.length - 1) : 100;
     const mapPoint = (value, x) => {
       const normalized = Math.max(0, Math.min(1, (value - chartMin) / range));
       return {
@@ -2865,37 +2986,26 @@
         y: Number((chartBottom - (normalized * (chartBottom - chartTop))).toFixed(2))
       };
     };
-    let points = keys.map((key, index) => {
-      runningTotal += pointsOnDate(key);
-      return mapPoint(runningTotal, index * xStep);
-    });
-    const visibleMovement = points.length > 1 ? Math.max(...points.map(point => point.y)) - Math.min(...points.map(point => point.y)) : 0;
-    if (visibleMovement < 4) {
-      const progress = Math.max(0.04, Math.min(0.96, (total - pointFloor) / range));
-      points = [
-        mapPoint(pointFloor, 0),
-        mapPoint(pointFloor + range * progress * 0.18, 22),
-        mapPoint(pointFloor + range * progress * 0.42, 48),
-        mapPoint(pointFloor + range * progress * 0.72, 74),
-        mapPoint(pointFloor + range * progress, 100)
-      ];
-    }
-    if (!points.length) return '';
+    const points = values.map((value, index) => mapPoint(value, index * xStep));
+    const targetPoint = mapPoint(targetPoints, 0);
+    const currentPoint = points[points.length - 1];
     const polyline = points.map(point => `${point.x},${point.y}`).join(' ');
     const areaPath = `M ${points[0].x} ${chartBottom} ` + points.map(point => `L ${point.x} ${point.y}`).join(' ') + ` L ${points[points.length - 1].x} ${chartBottom} Z`;
-    const targetY = chartTop;
-    const currentPoint = points[points.length - 1];
-    const nextStageLabel = companionStage >= 20 ? 'Max' : `+${Math.max(0, Math.round(targetPoints - total)).toLocaleString('de-CH')} Pkt.`;
+    const nextPoints = Math.max(0, Math.round(targetPoints - total));
+    const nextStageLabel = nextPoints ? `+${nextPoints.toLocaleString('de-CH')} Pkt.` : 'Ziel erreicht';
+    const windowLabel = `${windowDelta >= 0 ? '+' : ''}${Math.round(windowDelta).toLocaleString('de-CH')} / 21T`;
     return `<div class="poster-progress-overlay" aria-hidden="true">
       <svg class="poster-progress-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
-        <line class="poster-progress-target-line" x1="0" y1="${targetY}" x2="100" y2="${targetY}"></line>
+        <line class="poster-progress-target-line" x1="0" y1="${targetPoint.y}" x2="100" y2="${targetPoint.y}"></line>
         <path class="poster-progress-area" d="${areaPath}"></path>
         <polyline class="poster-progress-line" points="${polyline}"></polyline>
         <circle class="poster-progress-dot" cx="${currentPoint.x}" cy="${currentPoint.y}" r="2.15"></circle>
       </svg>
-      <span class="poster-progress-goal-pill">${escapeHtml(nextStageLabel)}</span>
+      <span class="poster-progress-goal-pill" style="top:${targetPoint.y}%">${escapeHtml(nextStageLabel)}</span>
+      <span class="poster-progress-window-pill">${escapeHtml(windowLabel)}</span>
     </div>`;
   }
+
 
   function renderCompanionFish(stage, size = 'hero', stageLabel = '', overlayMarkup = '') {
     const numericStage = Number(stage || 1);
@@ -3547,7 +3657,7 @@
       const done = entries.some(e => e.value_bool);
       return { value: done ? 1 : 0, label: done ? 'Ja' : 'Nein', logged: true, ratio: done ? 1 : .25 };
     }
-    const unit = habit.unit || defaultUnit(habit.type);
+    const unit = effectiveHabitUnit(habit);
     let value;
     if (habit.type === 'weight') {
       value = Number(entries[entries.length - 1].value_num || 0);
@@ -4700,7 +4810,7 @@
 
   function coachHabitBody(habit, loggedCount, totalCount) {
     if (!habit) return totalCount ? `${loggedCount}/${totalCount} Habits sind heute bereits geloggt. Halte den Rhythmus ruhig weiter.` : 'Noch keine aktiven Habits vorhanden. Lege einen kleinen, messbaren Habit an.';
-    const unit = habit.unit || defaultUnit(habit.type);
+    const unit = effectiveHabitUnit(habit);
     const target = habit.target ? ` Ziel: ${habit.target}${unit ? ` ${unit}` : ''}.` : '';
     return `Heute fehlt noch „${habit.name}“. Logge eine kleine saubere Einheit statt perfekt zu planen.${target}`;
   }
@@ -4944,10 +5054,15 @@
       const done = Boolean(todayValue);
       return `<button class="mini-btn primary habit-quick-check" type="button" data-action="log-habit" data-id="${habit.id}">${done ? 'Heute erledigt' : 'Heute abhaken'}</button>`;
     }
-    const unit = habit.unit || defaultUnit(habit.type);
+    const unit = effectiveHabitUnit(habit);
     const safeInputId = inputId || `habit-input-${habit.id}`;
-    const placeholder = context === 'detail' ? `Wert ${unit ? `in ${unit}` : 'eintragen'}` : (unit ? unit : 'Wert');
-    return `<div class="habit-log-row habit-quick-log-row"><input id="${escapeHtml(safeInputId)}" type="number" step="0.01" inputmode="decimal" placeholder="${escapeHtml(placeholder)}" /><button class="mini-btn primary" type="button" data-action="log-habit" data-id="${habit.id}" data-input-id="${escapeHtml(safeInputId)}">${escapeHtml(buttonLabel)}</button></div>`;
+    const fitnessHabit = isFitnessDistanceHabit(habit);
+    const placeholder = fitnessHabit
+      ? 'Kilometer eingeben'
+      : (context === 'detail' ? `Wert ${unit ? `in ${unit}` : 'eintragen'}` : (unit ? unit : 'Wert'));
+    const actionLabel = fitnessHabit ? 'Strecke loggen' : buttonLabel;
+    const helper = fitnessHabit ? `<small class="habit-quick-log-hint">Für die Fitness-Karte bitte die Distanz in km loggen.</small>` : '';
+    return `<div class="habit-quick-log-stack"><div class="habit-log-row habit-quick-log-row"><input id="${escapeHtml(safeInputId)}" type="number" step="0.01" inputmode="decimal" placeholder="${escapeHtml(placeholder)}" /><button class="mini-btn primary" type="button" data-action="log-habit" data-id="${habit.id}" data-input-id="${escapeHtml(safeInputId)}">${escapeHtml(actionLabel)}</button></div>${helper}</div>`;
   }
 
   function renderHabits() {
@@ -4956,8 +5071,10 @@
     const activeInputSelection = activeInput ? { start: activeInput.selectionStart, end: activeInput.selectionEnd } : null;
     const habitInputDrafts = collectHabitInputDrafts();
     const activeHabits = state.habits.filter(h => !h.is_archived).map(normalizeHabit);
+    syncHabitsExperienceUi();
     pruneExpandedHabitCardIds(activeHabits.map(habit => habit.id));
     renderHabitDnaOverview(activeHabits);
+    renderHabitPlayfulStats(activeHabits);
     if (!activeHabits.length) {
       els.habitCards.innerHTML = '<div class="empty-state">Lege deine erste flexible Gewohnheit an. Unterstützt werden Gewicht, Zahlen, Ja/Nein und Dauer.</div>';
       return;
@@ -4970,7 +5087,7 @@
       const todayValue = habit.type === 'boolean'
         ? todayEntries.some(e => e.value_bool)
         : todayEntries.reduce((sum, e) => sum + Number(e.value_num || 0), 0);
-      const unit = habit.unit || defaultUnit(habit.type);
+      const unit = effectiveHabitUnit(habit);
       const category = habitCategoryMeta(habit);
       const iconKey = habitIconKey(habit);
       const habitPause = activePauseNow('habit', habit.id);
@@ -5031,7 +5148,7 @@
     const todayValue = normalizedHabit.type === 'boolean'
       ? todayEntries.some(entry => entry.value_bool)
       : todayEntries.reduce((total, entry) => total + Number(entry.value_num || 0), 0);
-    const unit = normalizedHabit.unit || defaultUnit(normalizedHabit.type);
+    const unit = effectiveHabitUnit(normalizedHabit);
     const category = habitCategoryMeta(normalizedHabit);
     const iconKey = habitIconKey(normalizedHabit);
     const dna = buildHabitDna(normalizedHabit);
@@ -5449,6 +5566,454 @@
         ${breakdown.length ? breakdown.map(item => `<article class="habit-entry-card"><div class="habit-entry-main"><strong>${new Date(item.key).toLocaleDateString('de-CH', { weekday: 'short', day: '2-digit', month: '2-digit' })}</strong><span>${item.count} Zigaretten · ${formatCurrencyChf(item.cost)}</span></div><span class="badge muted">${formatCurrencyChf(item.cost)}</span></article>`).join('') : '<div class="habit-entry-list is-empty"><span>Noch keine Zigaretten erfasst – Kostenübersicht erscheint automatisch.</span></div>'}
       </div>
     </section>`;
+  }
+
+
+  function habitSuccessDateKeys(habit, entries = []) {
+    const filtered = habit.type === 'boolean'
+      ? entries.filter(entry => entry.value_bool)
+      : entries.filter(entry => Number(entry.value_num || 0) > 0 || habit.type === 'weight');
+    return [...new Set(filtered.map(entry => toDateKey(entry.occurred_at)))].sort();
+  }
+
+  function habitCurrentSuccessStreak(habit, entries = []) {
+    const keys = new Set(habitSuccessDateKeys(habit, entries));
+    if (!keys.size) return 0;
+    let streak = 0;
+    const cursor = new Date();
+    cursor.setHours(0, 0, 0, 0);
+    while (keys.has(toDateKey(cursor))) {
+      streak += 1;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    if (streak) return streak;
+    const lastKey = [...keys].at(-1);
+    if (!lastKey) return 0;
+    streak = 1;
+    const lastDate = new Date(lastKey);
+    lastDate.setHours(0, 0, 0, 0);
+    while (true) {
+      lastDate.setDate(lastDate.getDate() - 1);
+      if (!keys.has(toDateKey(lastDate))) break;
+      streak += 1;
+    }
+    return streak;
+  }
+
+  function formatMetricNumber(value, fractionDigits = 1) {
+    const numeric = Number(value || 0);
+    if (Number.isInteger(numeric)) return String(numeric);
+    return numeric.toFixed(fractionDigits);
+  }
+
+  function buildHabitStoryMetric(habit) {
+    const entries = visibleHabitEntries(habit.id)
+      .filter(entry => entry.habit_id === habit.id)
+      .sort((a, b) => new Date(a.occurred_at) - new Date(b.occurred_at));
+    const iconKey = habitIconKey(habit);
+    const unit = effectiveHabitUnit(habit);
+    const streak = habitCurrentSuccessStreak(habit, entries);
+    const successDays = habitSuccessDateKeys(habit, entries).length;
+    const base = {
+      id: habit.id,
+      iconKey,
+      eyebrow: habitCategoryMeta(habit).label,
+      title: habit.name,
+      badge: streak ? `${streak} Tage Serie` : `${entries.length} Logs`,
+      main: 'Noch kein Log',
+      detail: 'Sobald du startest, erscheinen hier kleine Story-Stats.',
+      meta: habit.target ? `Ziel: ${habit.target} ${unit}` : 'Jeder Log baut Momentum auf.'
+    };
+    if (!entries.length) return base;
+
+    if (iconKey === 'bread' || String(habit.name || '').toLowerCase().includes('brot')) {
+      const kcalPerBreadDay = HALF_WHITE_BREAD_KCAL_PER_100G * 2;
+      const kcalSaved = successDays * kcalPerBreadDay;
+      return {
+        ...base,
+        title: 'Brotfreier Tag',
+        badge: `${successDays} brotfreie Tage`,
+        main: `${kcalSaved.toLocaleString('de-CH')} kcal`,
+        detail: `≈ ${kcalPerBreadDay} kcal pro Tag weniger als bei 200 g Halbweissbrot.`,
+        meta: successDays ? `${successDays} Tage ohne Brot geloggt.` : 'Der nächste brotfreie Tag wird hier sichtbar.'
+      };
+    }
+
+    if (habit.type === 'duration') {
+      const totalMinutes = sum(entries.map(entry => Number(entry.value_num || 0)));
+      return {
+        ...base,
+        main: formatDuration(totalMinutes),
+        detail: `${Math.max(1, Math.round(totalMinutes / 25))} Fokus-Sprints à 25 Minuten als grobe Entsprechung.`,
+        meta: `${entries.length} Sessions · ${successDays} aktive Tage.`
+      };
+    }
+
+    if (habit.type === 'weight') {
+      const first = Number(entries[0]?.value_num || 0);
+      const latest = Number(entries.at(-1)?.value_num || 0);
+      const delta = latest - first;
+      return {
+        ...base,
+        main: `${formatMetricNumber(latest, 1)} ${unit}`,
+        detail: delta ? `Seit Start ${delta > 0 ? '+' : ''}${formatMetricNumber(delta, 1)} ${unit}.` : 'Gewicht aktuell stabil im Verlauf.',
+        meta: `${entries.length} Wiegepunkt${entries.length === 1 ? '' : 'e'} gespeichert.`
+      };
+    }
+
+    if (habit.type === 'boolean') {
+      return {
+        ...base,
+        main: `${successDays} Check-ins`,
+        detail: streak ? `Laufende Serie: ${streak} Tag${streak === 1 ? '' : 'e'}.` : 'Der nächste Check-in startet eine neue Serie.',
+        meta: `${entries.length} Einträge insgesamt.`
+      };
+    }
+
+    const totalValue = sum(entries.map(entry => Number(entry.value_num || 0)));
+    const averageValue = totalValue / Math.max(entries.length, 1);
+    return {
+      ...base,
+      main: `${formatMetricNumber(totalValue, 1)} ${unit}`.trim(),
+      detail: `Ø ${formatMetricNumber(averageValue, 1)} ${unit} pro Log – aktuell ${streak ? `${streak} Tage am Stück` : 'sauber dokumentiert'}.`,
+      meta: `${entries.length} Logs · ${successDays} aktive Tage.`
+    };
+  }
+
+  function renderHabitPlayfulStats(activeHabits = []) {
+    if (!els.habitPlayfulStats) return;
+    const cards = activeHabits
+      .filter(habit => !isSystemMeditationHabit(habit))
+      .filter(habit => !isFitnessDistanceHabit(habit))
+      .map(buildHabitStoryMetric)
+      .sort((a, b) => {
+        if (a.title === 'Brotfreier Tag') return -1;
+        if (b.title === 'Brotfreier Tag') return 1;
+        return String(a.title).localeCompare(String(b.title), 'de');
+      });
+    if (!cards.length) {
+      els.habitPlayfulStats.innerHTML = `<div class="empty-state">Weitere Alltags-Habits wie Wasser, Brotfreier Tag oder Lesen zeigen hier automatisch kleine Story-Statistiken.</div>`;
+      return;
+    }
+    els.habitPlayfulStats.innerHTML = cards.map(card => `<article class="habit-story-card">
+      <div class="habit-story-icon" aria-hidden="true">${svgIcon(card.iconKey, 'ui-icon')}</div>
+      <div class="habit-story-copy">
+        <div class="habit-story-head"><p class="eyebrow">${escapeHtml(card.eyebrow)}</p><span class="badge muted">${escapeHtml(card.badge)}</span></div>
+        <h4>${escapeHtml(card.title)}</h4>
+        <strong>${escapeHtml(card.main)}</strong>
+        <p>${escapeHtml(card.detail)}</p>
+        <small>${escapeHtml(card.meta)}</small>
+      </div>
+    </article>`).join('');
+  }
+
+  function fitnessActivityMeta(type = 'jogging') {
+    return type === 'hiking'
+      ? { key: 'hiking', label: 'Wandern', shortLabel: 'Hike', color: '#f4b63f', accent: '#f9d27a', icon: 'hiking', caloriesPerKm: 54, minPace: 10.6, maxPace: 13.4, ascentPerKm: 35 }
+      : { key: 'jogging', label: 'Joggen', shortLabel: 'Run', color: '#25c178', accent: '#7ce3a7', icon: 'jogging', caloriesPerKm: 68, minPace: 5.05, maxPace: 6.35, ascentPerKm: 12 };
+  }
+
+  function formatMinutesClock(totalMinutes = 0) {
+    const safeMinutes = Math.max(0, Number(totalMinutes || 0));
+    const mins = Math.floor(safeMinutes);
+    let secs = Math.round((safeMinutes - mins) * 60);
+    let wholeMins = mins;
+    if (secs === 60) {
+      wholeMins += 1;
+      secs = 0;
+    }
+    return `${String(wholeMins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  }
+
+  function formatDurationLabel(totalMinutes = 0) {
+    const minutes = Math.max(0, Math.round(Number(totalMinutes || 0)));
+    const hours = Math.floor(minutes / 60);
+    const rest = minutes % 60;
+    if (hours) return `${hours}h ${String(rest).padStart(2, '0')}m`;
+    return `${minutes} Min.`;
+  }
+
+  function buildFitnessSession(habit, entry) {
+    const distanceKm = Number(entry.value_num || 0);
+    if (!Number.isFinite(distanceKm) || distanceKm <= 0) return null;
+    const type = fitnessHabitType(habit);
+    const meta = fitnessActivityMeta(type);
+    const seed = hashString(`${habit.id}-${entry.id}-${entry.occurred_at}-${distanceKm}`);
+    const averagePace = meta.minPace + seededUnit(seed, 1) * (meta.maxPace - meta.minPace);
+    const durationMinutes = distanceKm * averagePace;
+    const calories = Math.round(distanceKm * meta.caloriesPerKm * (0.94 + seededUnit(seed, 2) * 0.18));
+    const ascent = Math.round(distanceKm * meta.ascentPerKm * (0.78 + seededUnit(seed, 3) * 0.55));
+    const splits = [];
+    let remaining = distanceKm;
+    let kilometer = 1;
+    while (remaining > 0.001 && kilometer <= 30) {
+      const splitDistance = Math.min(1, remaining);
+      const variance = (seededUnit(seed, 20 + kilometer) - 0.5) * (type === 'hiking' ? 1.3 : 0.55);
+      const splitPace = Math.max(type === 'hiking' ? 9.5 : 4.2, averagePace + variance);
+      const splitMinutes = splitPace * splitDistance;
+      splits.push({
+        label: splitDistance >= 0.99 ? `km ${kilometer}` : `km ${kilometer - 1}–${formatMetricNumber(distanceKm, 1)}`,
+        distance: splitDistance,
+        pace: splitPace,
+        durationMinutes: splitMinutes
+      });
+      remaining -= splitDistance;
+      kilometer += 1;
+    }
+    return {
+      id: entry.id,
+      habitId: habit.id,
+      habitName: habit.name,
+      entry,
+      type,
+      meta,
+      distanceKm,
+      durationMinutes,
+      calories,
+      ascent,
+      averagePace,
+      splits,
+      date: new Date(entry.occurred_at),
+      dateLabel: new Date(entry.occurred_at).toLocaleDateString('de-CH', { weekday: 'short', day: '2-digit', month: '2-digit' }),
+      timeLabel: new Date(entry.occurred_at).toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' }),
+      paceLabel: `${formatMinutesClock(averagePace)} min/km`,
+      durationLabel: formatDurationLabel(durationMinutes),
+      mapSvg: null
+    };
+  }
+
+  function buildFitnessSessions(filter = 'all') {
+    const habitById = new Map(state.habits.map(habit => [habit.id, normalizeHabit(habit)]));
+    return visibleHabitEntries()
+      .map(entry => ({ entry, habit: habitById.get(entry.habit_id) }))
+      .filter(item => item.habit && !item.habit.is_archived && isFitnessDistanceHabit(item.habit))
+      .map(item => buildFitnessSession(item.habit, item.entry))
+      .filter(Boolean)
+      .filter(session => filter === 'all' ? true : session.type === filter)
+      .sort((a, b) => new Date(b.entry.occurred_at) - new Date(a.entry.occurred_at));
+  }
+
+  function ensureSelectedFitnessSession(sessions = []) {
+    if (!sessions.length) {
+      selectedFitnessEntryId = null;
+      return null;
+    }
+    const selected = sessions.find(session => session.id === selectedFitnessEntryId) || sessions[0];
+    selectedFitnessEntryId = selected?.id || null;
+    return selected || null;
+  }
+
+  function summarizeFitnessSessions(sessions = []) {
+    const now = Date.now();
+    const last7 = sessions.filter(session => now - session.date.getTime() <= 7 * DAY_MS);
+    const last30 = sessions.filter(session => now - session.date.getTime() <= 30 * DAY_MS);
+    const totalDistance = sum(sessions.map(session => session.distanceKm));
+    const averagePace = sessions.length ? sum(sessions.map(session => session.averagePace)) / sessions.length : 0;
+    return {
+      totalDistance,
+      totalSessions: sessions.length,
+      weekDistance: sum(last7.map(session => session.distanceKm)),
+      monthDistance: sum(last30.map(session => session.distanceKm)),
+      totalCalories: sum(sessions.map(session => session.calories)),
+      averagePace,
+      longestDistance: Math.max(0, ...sessions.map(session => session.distanceKm)),
+      totalAscent: sum(sessions.map(session => session.ascent))
+    };
+  }
+
+  function buildFitnessRoadNetwork(seed) {
+    const roads = [];
+    for (let row = 0; row < 6; row += 1) {
+      const baseY = 10 + row * 9 + (seededUnit(seed, row) - 0.5) * 3;
+      const points = [];
+      for (let col = 0; col < 7; col += 1) {
+        const x = 2 + col * 16 + (seededUnit(seed, row * 7 + col + 4) - 0.5) * 3;
+        const y = baseY + (seededUnit(seed, row * 7 + col + 20) - 0.5) * 4;
+        points.push(`${formatMetricNumber(x, 1)},${formatMetricNumber(y, 1)}`);
+      }
+      roads.push(points.join(' '));
+    }
+    for (let col = 0; col < 6; col += 1) {
+      const baseX = 8 + col * 15 + (seededUnit(seed, col + 60) - 0.5) * 3;
+      const points = [];
+      for (let row = 0; row < 6; row += 1) {
+        const x = baseX + (seededUnit(seed, col * 6 + row + 80) - 0.5) * 3;
+        const y = 4 + row * 11 + (seededUnit(seed, col * 6 + row + 100) - 0.5) * 4;
+        points.push(`${formatMetricNumber(x, 1)},${formatMetricNumber(y, 1)}`);
+      }
+      roads.push(points.join(' '));
+    }
+    return roads;
+  }
+
+  function buildFitnessRoutePoints(distanceKm = 1, seed = 1) {
+    const points = [{ x: 12, y: 38 }];
+    let x = 12;
+    let y = 38;
+    let remaining = clampNumber(distanceKm * 8.8, 18, 94);
+    let guard = 0;
+    while (remaining > 1.5 && guard < 24) {
+      guard += 1;
+      let dx = 5 + seededUnit(seed, guard) * 7 + (x < 45 ? 2.5 : 0);
+      if (x > 86) dx = Math.max(1.5, 2 + seededUnit(seed, guard + 40) * 4.5);
+      if (x + dx > 94) dx = 94 - x;
+      const dySwing = x > 76 ? 10 : 14;
+      const dy = (seededUnit(seed, guard + 70) - 0.5) * dySwing;
+      const nextX = clampNumber(x + dx, 10, 94);
+      const nextY = clampNumber(y + dy, 8, 58);
+      points.push({ x: nextX, y: nextY });
+      remaining -= Math.hypot(nextX - x, nextY - y);
+      x = nextX;
+      y = nextY;
+      if (remaining > 10 && seededUnit(seed, guard + 120) > 0.7) {
+        const branchY = clampNumber(y + (seededUnit(seed, guard + 121) > 0.5 ? 1 : -1) * (4 + seededUnit(seed, guard + 122) * 8), 8, 58);
+        points.push({ x: clampNumber(x + 1.8, 10, 94), y: branchY });
+        remaining -= Math.abs(branchY - y) + 1.8;
+        y = branchY;
+      }
+      if (x >= 92 && remaining > 5) {
+        const backX = clampNumber(x - (4 + seededUnit(seed, guard + 140) * 10), 74, 92);
+        const backY = clampNumber(y + (seededUnit(seed, guard + 141) - 0.5) * 10, 8, 58);
+        points.push({ x: backX, y: backY });
+        remaining -= Math.hypot(backX - x, backY - y);
+        x = backX;
+        y = backY;
+      }
+    }
+    if (points.at(-1).x < 82) {
+      const finalX = clampNumber(84 + seededUnit(seed, 200) * 10, 82, 95);
+      const finalY = clampNumber(points.at(-1).y + (seededUnit(seed, 201) - 0.5) * 8, 10, 56);
+      points.push({ x: finalX, y: finalY });
+    }
+    return points.map(point => ({ x: Number(formatMetricNumber(point.x, 1)), y: Number(formatMetricNumber(point.y, 1)) }));
+  }
+
+  function buildFitnessRouteSvg(session) {
+    const seed = hashString(`${session.id}-${session.distanceKm}-${session.type}`);
+    const roads = buildFitnessRoadNetwork(seed);
+    const routePoints = buildFitnessRoutePoints(session.distanceKm, seed);
+    const routeAttr = routePoints.map(point => `${point.x},${point.y}`).join(' ');
+    const dots = routePoints.filter((_, index) => index > 0 && index < routePoints.length - 1 && index % 2 === 0);
+    const start = routePoints[0];
+    const end = routePoints.at(-1);
+    return `<div class="fitness-map-shell">
+      <svg class="fitness-route-map" viewBox="0 0 100 66" role="img" aria-label="${escapeHtml(session.meta.label)} Route über ein stilisiertes Strassennetz Richtung Osten">
+        <rect x="0" y="0" width="100" height="66" rx="8" fill="rgba(248, 248, 250, 0.95)"></rect>
+        <g>
+          ${roads.map(polyline => `<polyline points="${polyline}" fill="none" stroke="rgba(196, 201, 208, 0.55)" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"></polyline>`).join('')}
+        </g>
+        <text x="48" y="11" text-anchor="middle" fill="rgba(120, 108, 77, 0.82)" font-size="6.5" font-weight="600" letter-spacing="0.8">OSTKORRIDOR</text>
+        <text x="7" y="61" fill="rgba(104, 109, 119, 0.75)" font-size="4.1">Start ${FITNESS_ROUTE_START.lat.toFixed(4)} / ${FITNESS_ROUTE_START.lng.toFixed(4)}</text>
+        <polyline points="${routeAttr}" fill="none" stroke="rgba(255,255,255,0.96)" stroke-width="4.8" stroke-linecap="round" stroke-linejoin="round"></polyline>
+        <polyline points="${routeAttr}" fill="none" stroke="${session.meta.color}" stroke-width="2.9" stroke-linecap="round" stroke-linejoin="round"></polyline>
+        ${dots.map(point => `<circle cx="${point.x}" cy="${point.y}" r="1.2" fill="#fff" stroke="rgba(0,0,0,0.18)" stroke-width="0.35"></circle>`).join('')}
+        <circle cx="${start.x}" cy="${start.y}" r="2" fill="${session.meta.color}" stroke="#fff" stroke-width="1"></circle>
+        <g transform="translate(${end.x}, ${end.y})">
+          <circle cx="0" cy="0.7" r="3.6" fill="rgba(35,39,47,0.18)"></circle>
+          <path d="M0 -6 C3 -6 5 -3.6 5 -0.6 C5 1.6 3.7 3.8 0 7 C-3.7 3.8 -5 1.6 -5 -0.6 C-5 -3.6 -3 -6 0 -6Z" fill="rgba(40, 44, 52, 0.9)"></path>
+          <circle cx="0" cy="-1.1" r="1.8" fill="#fff"></circle>
+        </g>
+      </svg>
+      <div class="fitness-map-caption">
+        <div><strong>${escapeHtml(session.meta.label)} · ${formatKmValue(session.distanceKm)}</strong><span>ab ${FITNESS_ROUTE_START.lat.toFixed(6)} / ${FITNESS_ROUTE_START.lng.toFixed(6)} in Richtung Osten</span></div>
+        <span class="badge muted">Endpunkt klar sichtbar</span>
+      </div>
+    </div>`;
+  }
+
+  function renderFitnessDetailContent(selectedSession, visibleSessions, allSessions) {
+    const summary = summarizeFitnessSessions(visibleSessions);
+    if (selectedFitnessDetailTab === 'stats') {
+      const joggingCount = allSessions.filter(session => session.type === 'jogging').length;
+      const hikingCount = allSessions.filter(session => session.type === 'hiking').length;
+      return `<div class="fitness-stats-grid">
+        <article class="fitness-stat-card"><small>Letzte 7 Tage</small><strong>${formatKmValue(summary.weekDistance)}</strong><span>${visibleSessions.filter(session => Date.now() - session.date.getTime() <= 7 * DAY_MS).length} Sessions</span></article>
+        <article class="fitness-stat-card"><small>Letzte 30 Tage</small><strong>${formatKmValue(summary.monthDistance)}</strong><span>kumuliert</span></article>
+        <article class="fitness-stat-card"><small>Längste Session</small><strong>${formatKmValue(summary.longestDistance)}</strong><span>dein längster Eastbound-Track</span></article>
+        <article class="fitness-stat-card"><small>Ø Pace</small><strong>${formatMinutesClock(summary.averagePace)} min/km</strong><span>über aktuelle Auswahl</span></article>
+        <article class="fitness-stat-card"><small>Joggen vs. Wandern</small><strong>${joggingCount} / ${hikingCount}</strong><span>Run / Hike Sessions</span></article>
+        <article class="fitness-stat-card"><small>Gesamter Aufstieg</small><strong>${Math.round(summary.totalAscent)} m</strong><span>spielerisch berechnet</span></article>
+      </div>`;
+    }
+    if (selectedFitnessDetailTab === 'splits') {
+      const maxSplitPace = Math.max(...selectedSession.splits.map(split => split.pace), selectedSession.averagePace);
+      return `<div class="fitness-split-list">
+        ${selectedSession.splits.map(split => `<article class="fitness-split-row"><div class="fitness-split-copy"><strong>${escapeHtml(split.label)}</strong><span>${formatDurationLabel(split.durationMinutes)} · ${split.distance.toFixed(split.distance < 1 ? 1 : 0)} km</span></div><div class="fitness-split-bar"><i style="width:${Math.max(24, 100 - (split.pace / maxSplitPace) * 38)}%"></i></div><span class="fitness-split-pace">${formatMinutesClock(split.pace)}</span></article>`).join('')}
+      </div>`;
+    }
+    return `<div class="fitness-stats-grid">
+      <article class="fitness-stat-card"><small>Distanz</small><strong>${formatKmValue(selectedSession.distanceKm)}</strong><span>${escapeHtml(selectedSession.habitName)}</span></article>
+      <article class="fitness-stat-card"><small>Aktive Zeit</small><strong>${escapeHtml(selectedSession.durationLabel)}</strong><span>geschätzt aus deinem Pace-Profil</span></article>
+      <article class="fitness-stat-card"><small>Pace</small><strong>${escapeHtml(selectedSession.paceLabel)}</strong><span>Ø pro Kilometer</span></article>
+      <article class="fitness-stat-card"><small>Kalorien</small><strong>${selectedSession.calories} kcal</strong><span>spielerischer Richtwert</span></article>
+      <article class="fitness-stat-card"><small>Aufstieg</small><strong>${selectedSession.ascent} m</strong><span>für die Route generiert</span></article>
+      <article class="fitness-stat-card"><small>Startpunkt</small><strong>${FITNESS_ROUTE_START.lat.toFixed(3)} / ${FITNESS_ROUTE_START.lng.toFixed(3)}</strong><span>immer ostwärts auf dem Kartenstil</span></article>
+    </div>`;
+  }
+
+  function renderFitnessHub() {
+    if (!els.fitnessHubContent) return;
+    syncHabitsExperienceUi();
+    const allSessions = buildFitnessSessions('all');
+    const visibleSessions = buildFitnessSessions(selectedFitnessFilter);
+    if (!allSessions.length) {
+      els.fitnessHubContent.innerHTML = `<div class="fitness-empty-state">
+        <div class="fitness-empty-icon" aria-hidden="true">${svgIcon('jogging', 'ui-icon')}</div>
+        <div>
+          <strong>Noch keine Fitness-Logs vorhanden</strong>
+          <p>Lege ein Habit wie <em>Joggen</em> oder <em>Wandern</em> an, verwende idealerweise das Icon <em>jogging</em> oder <em>hiking</em> und logge dann die Distanz in km. Danach erscheint hier automatisch eine Route ab 47.459945 / 9.032719 in Richtung Osten.</p>
+        </div>
+        <div class="fitness-legend-row"><span class="fitness-legend-pill"><i style="background:#25c178"></i>Joggen</span><span class="fitness-legend-pill"><i style="background:#f4b63f"></i>Wandern</span></div>
+      </div>`;
+      return;
+    }
+    const heroSummary = summarizeFitnessSessions(allSessions);
+    if (selectedFitnessFilter !== 'all' && !visibleSessions.length) {
+      els.fitnessHubContent.innerHTML = `<div class="fitness-empty-state is-filtered"><div class="fitness-empty-icon" aria-hidden="true">${svgIcon(selectedFitnessFilter === 'hiking' ? 'hiking' : 'jogging', 'ui-icon')}</div><div><strong>Noch keine ${selectedFitnessFilter === 'hiking' ? 'Wander-' : 'Jogging-'}Sessions erfasst</strong><p>Wechsle auf <em>Alle</em> oder logge die nächste Distanz in km – dann landet sie direkt in diesem Bereich.</p></div><div class="fitness-filter-row">${[{ key: 'all', label: 'Alle' }, { key: 'jogging', label: 'Joggen' }, { key: 'hiking', label: 'Wandern' }].map(filter => `<button class="fitness-filter-btn ${selectedFitnessFilter === filter.key ? 'is-active' : ''}" type="button" data-action="set-fitness-filter" data-filter="${filter.key}">${filter.label}</button>`).join('')}</div></div>`;
+      return;
+    }
+    const activeSessions = visibleSessions.length ? visibleSessions : allSessions;
+    const selectedSession = ensureSelectedFitnessSession(activeSessions);
+    els.fitnessHubContent.innerHTML = `<div class="fitness-hub-shell">
+      <div class="fitness-kpi-grid">
+        <article class="fitness-kpi-card"><small>Gesamtdistanz</small><strong>${formatKmValue(heroSummary.totalDistance)}</strong><span>${heroSummary.totalSessions} Session${heroSummary.totalSessions === 1 ? '' : 's'} insgesamt</span></article>
+        <article class="fitness-kpi-card"><small>Diese Woche</small><strong>${formatKmValue(heroSummary.weekDistance)}</strong><span>ab Startpunkt in den Osten</span></article>
+        <article class="fitness-kpi-card"><small>Ø Pace</small><strong>${formatMinutesClock(heroSummary.averagePace)} min/km</strong><span>Run & Hike gemischt</span></article>
+        <article class="fitness-kpi-card"><small>Energie</small><strong>${Math.round(heroSummary.totalCalories)} kcal</strong><span>spielerisch geschätzter Verbrauch</span></article>
+      </div>
+      <section class="fitness-route-card">
+        <div class="fitness-route-head">
+          <div>
+            <p class="eyebrow">Route Explorer</p>
+            <h3>${escapeHtml(selectedSession.meta.label)} · ${formatKmValue(selectedSession.distanceKm)}</h3>
+            <span class="subtle">${escapeHtml(selectedSession.dateLabel)} · ${escapeHtml(selectedSession.timeLabel)} · ${escapeHtml(selectedSession.habitName)}</span>
+          </div>
+          <div class="fitness-filter-row">
+            ${[
+              { key: 'all', label: 'Alle' },
+              { key: 'jogging', label: 'Joggen' },
+              { key: 'hiking', label: 'Wandern' }
+            ].map(filter => `<button class="fitness-filter-btn ${selectedFitnessFilter === filter.key ? 'is-active' : ''}" type="button" data-action="set-fitness-filter" data-filter="${filter.key}">${filter.label}</button>`).join('')}
+          </div>
+        </div>
+        ${buildFitnessRouteSvg(selectedSession)}
+        <div class="fitness-session-strip">
+          ${activeSessions.slice(0, 10).map(session => `<button class="fitness-session-chip ${selectedSession.id === session.id ? 'is-active' : ''}" type="button" data-action="select-fitness-entry" data-id="${session.id}"><span class="fitness-session-chip-tone" style="background:${session.meta.color}"></span><strong>${escapeHtml(session.meta.label)}</strong><small>${escapeHtml(session.dateLabel)} · ${formatKmValue(session.distanceKm)}</small></button>`).join('')}
+        </div>
+      </section>
+      <section class="fitness-detail-card">
+        <div class="fitness-detail-tabs">
+          ${[
+            { key: 'summary', label: 'Summary' },
+            { key: 'stats', label: 'Stats' },
+            { key: 'splits', label: 'Splits' }
+          ].map(tab => `<button class="fitness-detail-tab ${selectedFitnessDetailTab === tab.key ? 'is-active' : ''}" type="button" data-action="set-fitness-detail-tab" data-tab="${tab.key}">${tab.label}</button>`).join('')}
+        </div>
+        <div class="fitness-detail-body">
+          ${renderFitnessDetailContent(selectedSession, activeSessions, allSessions)}
+        </div>
+      </section>
+    </div>`;
   }
 
   function renderMeditationHabitControl(habit) {
@@ -7713,6 +8278,11 @@ async function deleteAlcoholLog(id) {
       updated_at: nowIso(),
       synced: false
     };
+    if (isFitnessDistanceHabit(values)) {
+      values.type = 'number';
+      if (!values.icon || values.icon === 'number') values.icon = fitnessHabitType(values);
+      if (!values.unit || ['x', 'stück', 'minuten', 'min.', 'min'].includes(values.unit.toLowerCase())) values.unit = 'km';
+    }
     if (!values.name) return;
 
     if (editingHabitId) {
@@ -7768,7 +8338,7 @@ async function deleteAlcoholLog(id) {
       const input = $(inputSelector);
       valueNum = Number(input?.value || 0);
       if (!Number.isFinite(valueNum) || valueNum === 0) {
-        toast('Bitte einen gültigen Wert eintragen.');
+        toast(isFitnessDistanceHabit(habit) ? 'Bitte Kilometer grösser als 0 eingeben.' : 'Bitte einen gültigen Wert eintragen.');
         return;
       }
       input.value = '';
@@ -7780,7 +8350,8 @@ async function deleteAlcoholLog(id) {
     addPoints('habit', entry.id, points, `${habit.name} geloggt`, occurredAt);
     saveState();
     renderHistoryModal();
-    toast(`${habit.name} geloggt · +${points} Punkte`);
+    const toastLabel = isFitnessDistanceHabit(habit) && valueNum ? `${habit.name} · ${formatKmValue(valueNum)} geloggt` : `${habit.name} geloggt`;
+    toast(`${toastLabel} · +${points} Punkte`);
     syncWithSupabase({ silent: true });
   }
 
@@ -8787,7 +9358,7 @@ async function deleteAlcoholLog(id) {
   function formatHabitValue(habit, value) {
     if (habit.type === 'boolean') return value ? 'Ja' : 'Nein';
     const n = Number(value || 0);
-    return `${Number.isInteger(n) ? n : n.toFixed(2)} ${habit.unit || defaultUnit(habit.type)}`.trim();
+    return `${Number.isInteger(n) ? n : n.toFixed(2)} ${effectiveHabitUnit(habit)}`.trim();
   }
 
   function sum(values) {

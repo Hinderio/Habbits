@@ -457,13 +457,6 @@
           <div><p class="eyebrow">Flexible Habits</p><h3>Gewohnheiten, Meditation & Quick Logging</h3></div>
           <button id="habitFormToggleBtn" class="bubble-add-btn" type="button" aria-label="Habit-Formular öffnen"><span data-icon="plus"></span></button>
         </div>
-        <section class="panel glass habits-experience-panel">
-          <div class="panel-head habits-experience-head"><div><p class="eyebrow">Habit Experience</p><h3>Übersicht oder Fitness Fokus</h3></div><span class="subtle">Joggen & Wandern bekommen jetzt einen eigenen Bereich</span></div>
-          <div class="habits-experience-switch" role="tablist" aria-label="Habit Bereiche wechseln">
-            <button id="habitsOverviewTabBtn" class="pill secondary is-active" type="button" data-habits-pane="overview" aria-selected="true">Übersicht</button>
-            <button id="habitsFitnessTabBtn" class="pill secondary" type="button" data-habits-pane="fitness" aria-selected="false">Fitness</button>
-          </div>
-        </section>
         <div id="habitsOverviewPane" class="habits-pane">
           <section class="panel glass pause-overview-panel habit-pause-overview">
             <div class="panel-head"><div><p class="eyebrow">Pausen</p><h3>Habits flexibel aussetzen</h3></div><span class="subtle">pro Habit, auch rueckwirkend</span></div>
@@ -502,12 +495,17 @@
             <div id="habitPlayfulStats" class="habit-playful-grid"></div>
           </section>
         </div>
-        <div id="fitnessHubPane" class="habits-pane hidden" hidden aria-hidden="true">
-          <section class="panel glass">
-            <div class="panel-head"><div><p class="eyebrow">Fitness Tab</p><h3>Karte, Sessions & Eastbound Routen</h3></div><span class="subtle">Start 47.459945 / 9.032719</span></div>
-            <div id="fitnessHubContent"></div>
-          </section>
+      </section>
+
+      <section id="screen-fitness" class="screen" data-screen="fitness" hidden aria-hidden="true">
+        <div class="section-toolbar glass">
+          <div><p class="eyebrow">Fitness</p><h3>Routen, Kilometer & Trainings-Story</h3></div>
+          <span class="badge muted">Joggen · Wandern</span>
         </div>
+        <section class="panel glass fitness-screen-panel">
+          <div class="panel-head"><div><p class="eyebrow">Fitness Tab</p><h3>Karte, Sessions & Eastbound Routen</h3></div><span class="subtle">Start 47.459945 / 9.032719</span></div>
+          <div id="fitnessHubContent"></div>
+        </section>
       </section>
 
       <section id="screen-tasks" class="screen" data-screen="tasks" hidden aria-hidden="true">
@@ -738,6 +736,7 @@
       <button data-target="dashboard" class="nav-btn active" type="button"><span data-icon="dashboard"></span>Dashboard</button>
       <button data-target="smoking" class="nav-btn" type="button"><span data-icon="smoke"></span>Konsum</button>
       <button data-target="habits" class="nav-btn" type="button"><span data-icon="habits"></span>Habits</button>
+      <button data-target="fitness" class="nav-btn" type="button"><span data-icon="jogging"></span>Fitness</button>
       <button data-target="tasks" class="nav-btn" type="button"><span data-icon="tasks"></span>Tasks</button>
       <button data-target="calendar" class="nav-btn" type="button"><span data-icon="calendar"></span>Kalender</button>
       <button data-target="settings" class="nav-btn" type="button"><span data-icon="sync"></span>Sync</button>
