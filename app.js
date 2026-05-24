@@ -2845,28 +2845,19 @@
 
   function renderPosterProgressOverlay(stats = {}, companion = {}) {
     const total = Math.max(0, Number(stats.total || 0));
+    const companionStage = Math.max(1, Math.min(20, Number(companion.stage || 1)));
     const pointStep = 250;
     const pointFloor = Math.floor(total / pointStep) * pointStep;
     const targetPoints = pointFloor + pointStep;
-    const keys = daysBack(21);
-    const dailyDeltas = keys.map(key => Number(pointsOnDate(key) || 0));
-    const windowDelta = sum(dailyDeltas);
-    let runningTotal = total - windowDelta;
-    const values = dailyDeltas.map(delta => {
-      runningTotal += delta;
-      return Math.max(0, Number(runningTotal || 0));
-    });
-    if (!values.length) return '';
-
-    const rawMin = Math.min(...values, pointFloor, total);
-    const rawMax = Math.max(...values, targetPoints, total);
-    const rawSpan = Math.max(1, rawMax - rawMin);
-    const chartMin = Math.max(0, rawMin - Math.max(35, rawSpan * 0.12));
-    const chartMax = rawMax + Math.max(35, rawSpan * 0.12);
+    const chartMin = pointFloor;
+    const chartMax = targetPoints;
     const range = Math.max(1, chartMax - chartMin);
+    const keys = daysBack(21);
+    const totalWindowDelta = sum(keys.map(key => pointsOnDate(key)));
+    let runningTotal = total - totalWindowDelta;
     const chartTop = 10;
     const chartBottom = 90;
-    const xStep = values.length > 1 ? 100 / (values.length - 1) : 100;
+    const xStep = keys.length > 1 ? 100 / (keys.length - 1) : 100;
     const mapPoint = (value, x) => {
       const normalized = Math.max(0, Math.min(1, (value - chartMin) / range));
       return {
@@ -2874,26 +2865,37 @@
         y: Number((chartBottom - (normalized * (chartBottom - chartTop))).toFixed(2))
       };
     };
-    const points = values.map((value, index) => mapPoint(value, index * xStep));
-    const targetPoint = mapPoint(targetPoints, 0);
-    const currentPoint = points[points.length - 1];
+    let points = keys.map((key, index) => {
+      runningTotal += pointsOnDate(key);
+      return mapPoint(runningTotal, index * xStep);
+    });
+    const visibleMovement = points.length > 1 ? Math.max(...points.map(point => point.y)) - Math.min(...points.map(point => point.y)) : 0;
+    if (visibleMovement < 4) {
+      const progress = Math.max(0.04, Math.min(0.96, (total - pointFloor) / range));
+      points = [
+        mapPoint(pointFloor, 0),
+        mapPoint(pointFloor + range * progress * 0.18, 22),
+        mapPoint(pointFloor + range * progress * 0.42, 48),
+        mapPoint(pointFloor + range * progress * 0.72, 74),
+        mapPoint(pointFloor + range * progress, 100)
+      ];
+    }
+    if (!points.length) return '';
     const polyline = points.map(point => `${point.x},${point.y}`).join(' ');
     const areaPath = `M ${points[0].x} ${chartBottom} ` + points.map(point => `L ${point.x} ${point.y}`).join(' ') + ` L ${points[points.length - 1].x} ${chartBottom} Z`;
-    const nextPoints = Math.max(0, Math.round(targetPoints - total));
-    const nextStageLabel = nextPoints ? `+${nextPoints.toLocaleString('de-CH')} Pkt.` : 'Ziel erreicht';
-    const windowLabel = `${windowDelta >= 0 ? '+' : ''}${Math.round(windowDelta).toLocaleString('de-CH')} / 21T`;
+    const targetY = chartTop;
+    const currentPoint = points[points.length - 1];
+    const nextStageLabel = companionStage >= 20 ? 'Max' : `+${Math.max(0, Math.round(targetPoints - total)).toLocaleString('de-CH')} Pkt.`;
     return `<div class="poster-progress-overlay" aria-hidden="true">
       <svg class="poster-progress-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
-        <line class="poster-progress-target-line" x1="0" y1="${targetPoint.y}" x2="100" y2="${targetPoint.y}"></line>
+        <line class="poster-progress-target-line" x1="0" y1="${targetY}" x2="100" y2="${targetY}"></line>
         <path class="poster-progress-area" d="${areaPath}"></path>
         <polyline class="poster-progress-line" points="${polyline}"></polyline>
         <circle class="poster-progress-dot" cx="${currentPoint.x}" cy="${currentPoint.y}" r="2.15"></circle>
       </svg>
-      <span class="poster-progress-goal-pill" style="top:${targetPoint.y}%">${escapeHtml(nextStageLabel)}</span>
-      <span class="poster-progress-window-pill">${escapeHtml(windowLabel)}</span>
+      <span class="poster-progress-goal-pill">${escapeHtml(nextStageLabel)}</span>
     </div>`;
   }
-
 
   function renderCompanionFish(stage, size = 'hero', stageLabel = '', overlayMarkup = '') {
     const numericStage = Number(stage || 1);
