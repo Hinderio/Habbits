@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v86-weekly-review-supabase';
+  const APP_DATA_SCHEMA_VERSION = 'v87-weekly-review-supabase-dashboard-fix';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -3338,6 +3338,53 @@
     return key && keys.includes(key);
   }
 
+  function calculateDailyScore(key) {
+    const cigarettes = cigarettesOnDate(key).length;
+    const alcohol = alcoholUnitsOnDate(key).length;
+    const tasksDone = state.tasks.filter(t => t.status === 'done' && toDateKey(t.completed_at || t.updated_at || t.created_at) === key).length;
+    const habitLogs = visibleHabitEntries().filter(e => toDateKey(e.occurred_at) === key).length;
+    const last = getLastCigarette();
+    const pauseHours = last ? Math.max(0, (Date.now() - new Date(last.smoked_at).getTime()) / 36e5) : 8;
+    let score = 72;
+    score += Math.min(18, pauseHours * 2.2);
+    score += Math.min(14, habitLogs * 4);
+    score += Math.min(12, tasksDone * 5);
+    score -= Math.min(36, cigarettes * 8);
+    score -= Math.min(18, alcohol * 5);
+    score = Math.max(0, Math.min(100, Math.round(score)));
+    const label = score >= 82 ? 'starker Tag' : score >= 62 ? 'stabil' : score >= 42 ? 'achtsam bleiben' : 'Akutmodus empfohlen';
+    return { score, label };
+  }
+
+  function detectPrimaryPattern() {
+    const keys = daysBack(14);
+    const alcoholDays = new Set(visibleAlcoholUnits().filter(u => keys.includes(toDateKey(u.occurred_at))).map(u => toDateKey(u.occurred_at)));
+    const byHour = new Map();
+    visibleCigarettes().filter(c => keys.includes(toDateKey(c.smoked_at))).forEach(c => {
+      const h = new Date(c.smoked_at).getHours();
+      const bucket = h < 11 ? 'Morgen' : h < 16 ? 'Mittag' : h < 21 ? 'Abend' : 'Spätabend';
+      byHour.set(bucket, (byHour.get(bucket) || 0) + 1);
+    });
+    const alcoholSmoke = visibleCigarettes().filter(c => alcoholDays.has(toDateKey(c.smoked_at))).length;
+    const topTime = [...byHour.entries()].sort((a,b)=>b[1]-a[1])[0];
+    if (alcoholSmoke >= 3) return { body: `Alkohol-Tage erzeugen aktuell auffällig viele Rauchmomente (${alcoholSmoke} in 14 Tagen). Plane vor dem ersten Drink einen Delay-Schritt.` };
+    if (topTime) return { body: `${topTime[0]} ist dein stärkstes Rauchfenster (${topTime[1]}× in 14 Tagen). Der Coach priorisiert dort kurze Unterbrechungen.` };
+    return { body: 'Noch zu wenig Verlauf für robuste Muster. Die App sammelt weiter lokal und via Supabase synchronisiert.' };
+  }
+
+  function topSmokeTrigger(days = 14) {
+    const keys = daysBack(days);
+    const counts = new Map();
+    visibleCigarettes().filter(c => keys.includes(toDateKey(c.smoked_at))).forEach(c => {
+      const match = String(c.note || '').match(/trigger:([a-z_]+)/);
+      const key = match?.[1];
+      if (COACH_TRIGGER_META[key]) counts.set(key, (counts.get(key) || 0) + 1);
+    });
+    const top = [...counts.entries()].sort((a,b)=>b[1]-a[1])[0];
+    return top ? { key: top[0], count: top[1], label: COACH_TRIGGER_META[top[0]].label } : null;
+  }
+
+  
   function buildWeeklyReviewSnapshot(value = new Date()) {
     const start = startOfWeekDate(value);
     const startKey = toDateKey(start);
