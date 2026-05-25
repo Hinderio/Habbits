@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v104-idea-rating-bubbles';
+  const APP_DATA_SCHEMA_VERSION = 'v105-monthly-missions';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -22,6 +22,7 @@
   const FITNESS_FILTER_KEY = 'habitflow-fitness-filter-v1';
   const FITNESS_DETAIL_TAB_KEY = 'habitflow-fitness-detail-tab-v1';
   const FITNESS_MOBILE_SECTIONS_KEY = 'habitflow-fitness-mobile-sections-v1';
+  const MONTHLY_MISSION_FORM_KEY = 'habitflow-monthly-mission-form-v1';
   const TASK_RECURRENCE_MARKER_RE = /\n?\s*<!--hf-task-rec:([^>]+)-->/;
   const TASK_IDEA_META_MARKER_RE = /\n?\s*<!--hf-idea-meta:([^>]+)-->/;
   const FITNESS_ROUTE_START = Object.freeze({ lat: 47.459945, lng: 9.032719 });
@@ -332,13 +333,13 @@
     sport: '00000000-0000-4000-8000-000000000103',
     meditation: '00000000-0000-4000-8000-000000000104'
   });
-  const SYNC_TABLES = ['habit_definitions', 'habit_entries', 'cigarette_events', 'alcohol_logs', 'alcohol_events', 'tasks', 'task_ideas', 'appointments', 'points_ledger', 'pause_periods', 'weekly_reviews'];
+  const SYNC_TABLES = ['habit_definitions', 'habit_entries', 'cigarette_events', 'alcohol_logs', 'alcohol_events', 'tasks', 'task_ideas', 'appointments', 'points_ledger', 'pause_periods', 'weekly_reviews', 'monthly_missions'];
   const IDLE_SYNC_CHECK_MS = 60_000;
   const SAFETY_REMOTE_PULL_MS = 10 * 60_000;
   const REMOTE_PULL_DEBOUNCE_MS = 1_500;
   const SELF_WRITE_ECHO_GRACE_MS = 4_000;
   const REMOTE_DELETE_TOMBSTONE_TTL_DAYS = 14;
-  const OPTIONAL_SYNC_TABLES = new Set(['alcohol_events', 'appointments', 'task_ideas', 'pause_periods', 'weekly_reviews']);
+  const OPTIONAL_SYNC_TABLES = new Set(['alcohol_events', 'appointments', 'task_ideas', 'pause_periods', 'weekly_reviews', 'monthly_missions']);
   const BUILT_IN_DEFAULT_HABIT_NAMES = new Set(['gewicht', 'wasser', 'sport', 'meditation']);
   const PAUSE_SCOPE_META = {
     smoke: { label: 'Rauchen', eyebrow: 'Konsum-Pause', helper: 'Rauch-Logs im Zeitraum bleiben gespeichert, werden in Auswertungen aber pausiert betrachtet.' },
@@ -360,6 +361,32 @@
     high: { label: 'Hoch', short: 'Hoch', rank: 3, bonus: 25 },
     urgent: { label: 'Kritisch', short: 'Kritisch', rank: 4, bonus: 40 }
   };
+
+  const MONTHLY_MISSION_CATEGORIES = Object.freeze({
+    fitness: { label: 'Fitness', icon: 'jogging', tone: '#25c178', rgb: '37,193,120' },
+    consumption: { label: 'Konsum', icon: 'smoke', tone: '#4ad7d1', rgb: '74,215,209' },
+    focus: { label: 'Fokus', icon: 'tasks', tone: '#b79cff', rgb: '183,156,255' },
+    routine: { label: 'Routine', icon: 'habits', tone: '#f4b63f', rgb: '244,182,63' },
+    manual: { label: 'Manuell', icon: 'spark', tone: '#8ff0a7', rgb: '143,240,167' }
+  });
+  const MONTHLY_MISSION_METRICS = Object.freeze({
+    running_sessions: { label: 'Jogging-Sessions', unit: 'Läufe', category: 'fitness', source: 'Fitness Joggen' },
+    hiking_days: { label: 'Wandertage', unit: 'Tage', category: 'fitness', source: 'Fitness Wandern' },
+    smoke_free_evenings: { label: 'Rauchfreie Abende', unit: 'Abende', category: 'consumption', source: 'Konsum-Logs' },
+    alcohol_free_weekend_days: { label: 'Alkoholfreie Wochenendtage', unit: 'Tage', category: 'consumption', source: 'Alkohol-Logs' },
+    deep_work_sessions: { label: 'Deep-Work-Sessions', unit: 'Sessions', category: 'focus', source: 'Fokus-Habits & Tasks' },
+    completed_tasks: { label: 'Erledigte Aufgaben', unit: 'Tasks', category: 'focus', source: 'Aufgaben' },
+    morning_routines: { label: 'Morgenroutinen', unit: 'Routinen', category: 'routine', source: 'Morgenroutine' },
+    manual_count: { label: 'Manuell zählen', unit: 'Schritte', category: 'manual', source: 'Button' }
+  });
+  const MONTHLY_MISSION_PRESETS = Object.freeze([
+    { id: 'run-12', title: '12 Läufe', target: 12, metric: 'running_sessions', category: 'fitness' },
+    { id: 'hike-4', title: '4 Wandertage', target: 4, metric: 'hiking_days', category: 'fitness' },
+    { id: 'smoke-evenings-20', title: '20 rauchfreie Abende', target: 20, metric: 'smoke_free_evenings', category: 'consumption' },
+    { id: 'deep-work-8', title: '8 Deep-Work-Sessions', target: 8, metric: 'deep_work_sessions', category: 'focus' },
+    { id: 'tasks-25', title: '25 erledigte Aufgaben', target: 25, metric: 'completed_tasks', category: 'focus' },
+    { id: 'routine-20', title: '20 Morgenroutinen', target: 20, metric: 'morning_routines', category: 'routine' }
+  ]);
   const TASK_IDEA_CATEGORIES = {
     focus: { label: 'Fokus', short: 'Fokus' },
     health: { label: 'Gesundheit', short: 'Health' },
@@ -795,6 +822,7 @@
   let pauseModalContext = { scope: 'smoke', targetId: null };
   let remotePausePeriodsSupported = true;
   let remoteWeeklyReviewsSupported = true;
+  let remoteMonthlyMissionsSupported = true;
   let taskWeeklyCursor = startOfWeekDate(new Date());
   let taskTimelineScrollLeft = null;
   let taskTimelineDragState = null;
@@ -825,6 +853,7 @@
   let leisureResultOffset = 0;
   let gamificationShowLocked = localStorage.getItem(GAMIFICATION_LOCKED_KEY) === 'show';
   let gamificationBadgeShelfOpen = false;
+  let monthlyMissionFormOpen = localStorage.getItem(MONTHLY_MISSION_FORM_KEY) === 'open';
   let selectedCompanionStage = null;
   let leisurePullTimer = null;
 
@@ -1220,6 +1249,13 @@
       if (action === 'weekly-clear-task-date') clearTaskDueDate(id);
       if (action === 'save-weekly-review') saveWeeklyReviewSnapshot();
       if (action === 'open-weekly-reviews') openHistoryModal('weekly-reviews');
+      if (action === 'toggle-monthly-mission-form') toggleMonthlyMissionForm();
+      if (action === 'create-monthly-mission-preset') createMonthlyMissionFromPreset(id);
+      if (action === 'create-monthly-mission-custom') createCustomMonthlyMission();
+      if (action === 'increment-monthly-mission') incrementMonthlyMission(id);
+      if (action === 'decrement-monthly-mission') decrementMonthlyMission(id);
+      if (action === 'archive-monthly-mission') archiveMonthlyMission(id);
+      if (action === 'delete-monthly-mission') deleteMonthlyMission(id);
       if (action === 'edit-task') editTask(id);
       if (action === 'delete-task') deleteTask(id);
       if (action === 'archive-task') archiveTask(id);
@@ -1424,6 +1460,48 @@
     };
   }
 
+
+  function currentMonthKey(date = new Date()) {
+    const key = toDateKey(date);
+    return key ? key.slice(0, 7) : toDateKey(new Date()).slice(0, 7);
+  }
+
+  function monthKeyLabel(monthKey = currentMonthKey()) {
+    const date = new Date(`${monthKey || currentMonthKey()}-01T12:00:00`);
+    return Number.isNaN(date.getTime()) ? 'Aktueller Monat' : date.toLocaleDateString('de-CH', { month: 'long', year: 'numeric' });
+  }
+
+  function normalizeMonthlyMissionCategory(category, metric = '') {
+    const metricMeta = MONTHLY_MISSION_METRICS[metric] || null;
+    const key = category || metricMeta?.category || 'manual';
+    return MONTHLY_MISSION_CATEGORIES[key] ? key : 'manual';
+  }
+
+  function normalizeMonthlyMissionMetric(metric = '') {
+    return MONTHLY_MISSION_METRICS[metric] ? metric : 'manual_count';
+  }
+
+  function normalizeMonthlyMission(mission = {}) {
+    const metric = normalizeMonthlyMissionMetric(mission.metric);
+    const createdAt = validIsoOrFallback(mission.created_at || mission.createdAt || nowIso());
+    const rawTarget = Number(mission.target ?? 1);
+    const target = Math.max(1, Math.round(Number.isFinite(rawTarget) ? rawTarget : 1));
+    return {
+      id: mission.id || uid(),
+      month_key: mission.month_key || mission.monthKey || currentMonthKey(mission.created_at || new Date()),
+      title: String(mission.title || MONTHLY_MISSION_METRICS[metric]?.label || 'Monats-Mission').trim().slice(0, 80),
+      category: normalizeMonthlyMissionCategory(mission.category, metric),
+      metric,
+      target,
+      manual_count: Math.max(0, Math.round(Number(mission.manual_count ?? mission.manualCount ?? 0) || 0)),
+      is_archived: Boolean(mission.is_archived || mission.isArchived),
+      completed_at: mission.completed_at || mission.completedAt || null,
+      created_at: createdAt,
+      updated_at: validIsoOrFallback(mission.updated_at || mission.updatedAt || createdAt),
+      synced: mission.synced === true
+    };
+  }
+
   function defaultState() {
     const created = nowIso();
     return {
@@ -1445,6 +1523,7 @@
       recoverySessions: [],
       morningRoutineLogs: [],
       weeklyReviews: [],
+      monthlyMissions: [],
       deletedRemoteIds: createEmptyDeletedRemoteIds()
     };
   }
@@ -1492,6 +1571,7 @@
     next.recoverySessions = Array.isArray(next.recoverySessions) ? next.recoverySessions : [];
     next.morningRoutineLogs = Array.isArray(next.morningRoutineLogs) ? next.morningRoutineLogs : [];
     next.weeklyReviews = Array.isArray(next.weeklyReviews) ? next.weeklyReviews.map(normalizeWeeklyReview).filter(review => review.week_key) : [];
+    next.monthlyMissions = Array.isArray(next.monthlyMissions) ? next.monthlyMissions.map(normalizeMonthlyMission).filter(mission => mission.id && mission.month_key) : [];
     next.deletedRemoteIds = normalizeDeletedRemoteIds(next.deletedRemoteIds);
     ensureSystemHabits(next);
     dedupeStateCollections(next);
@@ -2098,6 +2178,7 @@
       if (table === 'task_ideas' && !remoteTaskIdeasSupported) return false;
       if (table === 'pause_periods' && !remotePausePeriodsSupported) return false;
       if (table === 'weekly_reviews' && !remoteWeeklyReviewsSupported) return false;
+      if (table === 'monthly_missions' && !remoteMonthlyMissionsSupported) return false;
       return Object.values(state.deletedRemoteIds?.[table] || {}).some(meta => !meta?.synced_at);
     });
   }
@@ -2109,6 +2190,7 @@
     dedupeActivityIdeas(nextState);
     dedupePausePeriods(nextState);
     dedupeWeeklyReviews(nextState);
+    dedupeMonthlyMissions(nextState);
   }
 
   function dedupeWeeklyReviews(nextState = state) {
@@ -2121,6 +2203,23 @@
       }
     });
     nextState.weeklyReviews = Array.from(byWeek.values()).sort((a, b) => String(b.week_key).localeCompare(String(a.week_key)));
+  }
+
+
+  function dedupeMonthlyMissions(nextState = state) {
+    if (!Array.isArray(nextState.monthlyMissions)) nextState.monthlyMissions = [];
+    const byId = new Map();
+    nextState.monthlyMissions.map(normalizeMonthlyMission).filter(mission => mission.id && mission.month_key).forEach(mission => {
+      const current = byId.get(mission.id);
+      if (!current || new Date(mission.updated_at || mission.created_at || 0) >= new Date(current.updated_at || current.created_at || 0)) {
+        byId.set(mission.id, mission);
+      }
+    });
+    nextState.monthlyMissions = Array.from(byId.values()).sort((a, b) => {
+      if (a.month_key !== b.month_key) return String(b.month_key).localeCompare(String(a.month_key));
+      if (Boolean(a.is_archived) !== Boolean(b.is_archived)) return a.is_archived ? 1 : -1;
+      return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
+    });
   }
 
   function dedupeActivityIdeas(nextState = state) {
@@ -3018,6 +3117,7 @@
     renderTrendOptions();
     renderInsights();
     renderWeeklyReview();
+    renderMonthlyMissions();
     renderBehaviorIntelligence();
     renderGamification();
     renderHabitHeatmap();
@@ -3581,6 +3681,276 @@
       <div class="weekly-review-highlights">${display.highlights.map(item => `<span>${escapeHtml(item)}</span>`).join('') || '<span>Noch keine Highlights gespeichert</span>'}</div>
       <div class="weekly-review-actions"><button class="pill primary" type="button" data-action="save-weekly-review">${saved ? 'Diese Woche aktualisieren' : 'Rückblick speichern'}</button><button class="pill secondary" type="button" data-action="open-weekly-reviews">Archiv & Vergleich</button><span class="subtle">${savedCount} gespeicherte Woche${savedCount === 1 ? '' : 'n'} · ${escapeHtml(syncHint)}</span></div>
       ${archivePreview}`;
+  }
+
+
+  function monthlyMissionMetricMeta(metric = 'manual_count') {
+    return MONTHLY_MISSION_METRICS[normalizeMonthlyMissionMetric(metric)] || MONTHLY_MISSION_METRICS.manual_count;
+  }
+
+  function monthlyMissionCategoryMeta(category = 'manual', metric = '') {
+    return MONTHLY_MISSION_CATEGORIES[normalizeMonthlyMissionCategory(category, metric)] || MONTHLY_MISSION_CATEGORIES.manual;
+  }
+
+  function monthMissionKeys(monthKey = currentMonthKey()) {
+    const start = new Date(`${monthKey || currentMonthKey()}-01T12:00:00`);
+    if (Number.isNaN(start.getTime())) return [];
+    const todayKey = toDateKey(new Date());
+    const keys = [];
+    const cursor = new Date(start);
+    while (cursor.getMonth() === start.getMonth() && cursor.getFullYear() === start.getFullYear()) {
+      const key = toDateKey(cursor);
+      if (key <= todayKey) keys.push(key);
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return keys;
+  }
+
+  function monthMissionTotalDays(monthKey = currentMonthKey()) {
+    const start = new Date(`${monthKey || currentMonthKey()}-01T12:00:00`);
+    if (Number.isNaN(start.getTime())) return 30;
+    return new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate();
+  }
+
+  function entryTextMatchesFocus(value = '') {
+    const raw = normalizeIconSearch(value);
+    return raw.includes('deep work') || raw.includes('deepwork') || raw.includes('fokus') || raw.includes('focus') || raw.includes('konzent') || raw.includes('arbeit') || raw.includes('lernen');
+  }
+
+  function countMonthlyMissionProgress(mission = {}) {
+    const normalized = normalizeMonthlyMission(mission);
+    const keys = monthMissionKeys(normalized.month_key);
+    const keySet = new Set(keys);
+    const inMonth = value => keySet.has(toDateKey(value));
+    switch (normalized.metric) {
+      case 'running_sessions':
+        return buildFitnessSessions('jogging').filter(session => inMonth(session.entry?.occurred_at || session.date)).length;
+      case 'hiking_days':
+        return new Set(buildFitnessSessions('hiking').filter(session => inMonth(session.entry?.occurred_at || session.date)).map(session => toDateKey(session.entry?.occurred_at || session.date))).size;
+      case 'smoke_free_evenings': {
+        const cigarettes = visibleCigarettes();
+        return keys.filter(key => !cigarettes.some(cigarette => {
+          if (toDateKey(cigarette.smoked_at) !== key) return false;
+          const hour = new Date(cigarette.smoked_at).getHours();
+          return Number.isFinite(hour) && hour >= 18;
+        })).length;
+      }
+      case 'alcohol_free_weekend_days': {
+        const units = visibleAlcoholUnits();
+        return keys.filter(key => {
+          const date = new Date(`${key}T12:00:00`);
+          const day = date.getDay();
+          if (![0, 6].includes(day)) return false;
+          const hasUnit = units.some(unit => toDateKey(unit.occurred_at || unit.created_at) === key);
+          const consumedLog = state.alcoholLogs.some(log => log.log_date === key && log.consumed);
+          return !hasUnit && !consumedLog;
+        }).length;
+      }
+      case 'deep_work_sessions': {
+        const focusHabitIds = new Set(state.habits.filter(habit => entryTextMatchesFocus(`${habit.name} ${habit.icon || ''}`)).map(habit => habit.id));
+        const focusHabitLogs = visibleHabitEntries().filter(entry => focusHabitIds.has(entry.habit_id) && inMonth(entry.occurred_at)).length;
+        const focusTasks = state.tasks.filter(task => task.status === 'done' && inMonth(task.completed_at || task.updated_at || task.created_at) && entryTextMatchesFocus(`${task.title} ${parseTaskRecurrenceFromDescription(task.description || '').description}`)).length;
+        return focusHabitLogs + focusTasks;
+      }
+      case 'completed_tasks':
+        return state.tasks.filter(task => task.status === 'done' && inMonth(task.completed_at || task.updated_at || task.created_at)).length;
+      case 'morning_routines':
+        return new Set((state.morningRoutineLogs || []).filter(log => inMonth(log.date_key || log.completed_at)).map(log => log.date_key || toDateKey(log.completed_at))).size;
+      case 'manual_count':
+      default:
+        return Math.max(0, Math.round(Number(normalized.manual_count || 0)));
+    }
+  }
+
+  function monthlyMissionState(mission = {}) {
+    const normalized = normalizeMonthlyMission(mission);
+    const progress = countMonthlyMissionProgress(normalized);
+    const target = Math.max(1, Number(normalized.target || 1));
+    const ratio = clampNumber((progress / target) * 100, 0, 100);
+    const elapsed = monthMissionKeys(normalized.month_key).length;
+    const totalDays = monthMissionTotalDays(normalized.month_key);
+    const expected = target * (elapsed / Math.max(1, totalDays));
+    const completed = progress >= target;
+    const tone = completed ? 'complete' : (progress + 0.01 >= expected * 0.9 ? 'track' : 'behind');
+    const label = completed ? 'geschafft' : (tone === 'track' ? 'auf Kurs' : 'knapp');
+    const remaining = Math.max(0, Math.ceil(target - progress));
+    return { mission: normalized, progress, target, ratio, elapsed, totalDays, expected, completed, tone, label, remaining };
+  }
+
+  function monthlyMissionStatusText(stateValue) {
+    if (stateValue.completed) return 'Mission abgeschlossen. Starkes Monats-Momentum.';
+    const unit = monthlyMissionMetricMeta(stateValue.mission.metric).unit || 'Schritte';
+    if (stateValue.tone === 'track') return `Noch ${stateValue.remaining} ${unit}. Du bist auf Kurs.`;
+    return `Noch ${stateValue.remaining} ${unit}. Ein kleiner Zusatzschritt bringt dich zurück auf Kurs.`;
+  }
+
+  function activeMonthlyMissions(monthKey = currentMonthKey()) {
+    return (state.monthlyMissions || [])
+      .map(normalizeMonthlyMission)
+      .filter(mission => mission.month_key === monthKey && !mission.is_archived)
+      .sort((a, b) => {
+        const aa = monthlyMissionState(a);
+        const bb = monthlyMissionState(b);
+        if (aa.completed !== bb.completed) return aa.completed ? 1 : -1;
+        if (aa.ratio !== bb.ratio) return bb.ratio - aa.ratio;
+        return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
+      });
+  }
+
+  function monthlyMissionSummary(missions = activeMonthlyMissions()) {
+    if (!missions.length) return { count: 0, completed: 0, average: 0 };
+    const states = missions.map(monthlyMissionState);
+    const average = Math.round(states.reduce((sum, item) => sum + item.ratio, 0) / Math.max(1, states.length));
+    return { count: missions.length, completed: states.filter(item => item.completed).length, average };
+  }
+
+  function renderMonthlyMissionCard(mission) {
+    const value = monthlyMissionState(mission);
+    const meta = monthlyMissionMetricMeta(value.mission.metric);
+    const category = monthlyMissionCategoryMeta(value.mission.category, value.mission.metric);
+    const manualControls = value.mission.metric === 'manual_count'
+      ? `<div class="monthly-mission-counter"><button class="mini-btn" type="button" data-action="decrement-monthly-mission" data-id="${escapeHtml(value.mission.id)}" aria-label="Manuellen Fortschritt reduzieren">−</button><button class="mini-btn primary" type="button" data-action="increment-monthly-mission" data-id="${escapeHtml(value.mission.id)}" aria-label="Manuellen Fortschritt erhöhen">+ Schritt</button></div>`
+      : '';
+    return `<article class="monthly-mission-card is-${escapeHtml(value.tone)}" style="--mission-tone:${category.tone};--mission-tone-rgb:${category.rgb};">
+      <div class="monthly-mission-card-head">
+        <span class="monthly-mission-icon">${svgIcon(category.icon, 'ui-icon')}</span>
+        <div><strong>${escapeHtml(value.mission.title)}</strong><small>${escapeHtml(category.label)} · ${escapeHtml(meta.source)}</small></div>
+        <em>${Math.round(value.ratio)}%</em>
+      </div>
+      <div class="monthly-mission-progress"><i style="width:${value.ratio}%"></i></div>
+      <div class="monthly-mission-meta"><span>${value.progress}/${value.target} ${escapeHtml(meta.unit)}</span><b>${escapeHtml(value.label)}</b></div>
+      <p>${escapeHtml(monthlyMissionStatusText(value))}</p>
+      <div class="monthly-mission-actions">
+        ${manualControls}
+        <button class="mini-btn" type="button" data-action="archive-monthly-mission" data-id="${escapeHtml(value.mission.id)}">Ausblenden</button>
+        <button class="mini-btn danger-mini" type="button" data-action="delete-monthly-mission" data-id="${escapeHtml(value.mission.id)}">Löschen</button>
+      </div>
+    </article>`;
+  }
+
+  function renderMonthlyMissions() {
+    if (!els.monthlyMissions) return;
+    const monthKey = currentMonthKey();
+    const missions = activeMonthlyMissions(monthKey);
+    const summary = monthlyMissionSummary(missions);
+    const syncHint = remoteMonthlyMissionsSupported && isAuthenticated()
+      ? 'Supabase bereit'
+      : remoteMonthlyMissionsSupported
+        ? 'lokal · Login für Sync'
+        : 'lokal · SQL optional aktualisieren';
+    if (els.monthlyMissionsSummary) els.monthlyMissionsSummary.textContent = missions.length ? `${summary.completed}/${summary.count} geschafft · ${summary.average}% Gesamt` : 'Noch keine Mission aktiv';
+    if (els.monthlyMissionMobileSummary) els.monthlyMissionMobileSummary.textContent = missions.length ? `${summary.count} aktiv · ${summary.average}%` : 'Vorlagen wählen';
+    const visibleMissions = missions.slice(0, 3);
+    const hiddenCount = Math.max(0, missions.length - visibleMissions.length);
+    const missionCards = visibleMissions.length
+      ? `<div class="monthly-mission-grid">${visibleMissions.map(renderMonthlyMissionCard).join('')}</div>${hiddenCount ? `<div class="monthly-mission-more">${hiddenCount} weitere Mission${hiddenCount === 1 ? '' : 'en'} bewusst verborgen, damit das Dashboard ruhig bleibt.</div>` : ''}`
+      : `<div class="monthly-mission-empty"><strong>Starte deinen Monat mit 1–3 starken Missionen.</strong><p>Die App berechnet automatische Missionen aus deinen bestehenden Fitness-, Konsum-, Routine- und Task-Daten.</p></div>`;
+    const presetIds = new Set(missions.map(mission => `${mission.metric}:${mission.target}:${mission.title.toLowerCase()}`));
+    const presetButtons = MONTHLY_MISSION_PRESETS.map(preset => {
+      const disabled = presetIds.has(`${preset.metric}:${preset.target}:${preset.title.toLowerCase()}`);
+      return `<button class="monthly-preset-btn ${disabled ? 'is-disabled' : ''}" type="button" data-action="create-monthly-mission-preset" data-id="${escapeHtml(preset.id)}" ${disabled ? 'disabled aria-disabled="true"' : ''}><strong>${escapeHtml(preset.title)}</strong><span>${escapeHtml(monthlyMissionMetricMeta(preset.metric).source)}</span></button>`;
+    }).join('');
+    const form = monthlyMissionFormOpen ? `<div class="monthly-mission-builder">
+      <div class="monthly-preset-grid">${presetButtons}</div>
+      <div class="monthly-custom-row">
+        <label><span>Eigene Mission</span><input id="monthlyMissionTitle" type="text" maxlength="80" placeholder="z. B. 3 soziale Abende" /></label>
+        <label><span>Ziel</span><input id="monthlyMissionTarget" type="number" min="1" max="999" value="4" inputmode="numeric" /></label>
+        <label><span>Quelle</span><select id="monthlyMissionMetric">${Object.entries(MONTHLY_MISSION_METRICS).map(([key, item]) => `<option value="${escapeHtml(key)}">${escapeHtml(item.label)}</option>`).join('')}</select></label>
+        <button class="pill primary" type="button" data-action="create-monthly-mission-custom">Mission erstellen</button>
+      </div>
+    </div>` : '';
+    els.monthlyMissions.innerHTML = `<div class="monthly-mission-hero">
+        <div class="monthly-mission-orb"><strong>${summary.average}%</strong><span>${escapeHtml(monthKeyLabel(monthKey))}</span></div>
+        <div><p class="eyebrow">Monats-Missionen</p><h3>${missions.length ? 'Dein Monatsfokus bleibt sichtbar' : 'Wähle deine erste Monats-Mission'}</h3><p>${missions.length ? `${summary.count} aktive Mission${summary.count === 1 ? '' : 'en'} · ${summary.completed} abgeschlossen · ${escapeHtml(syncHint)}` : `Vorlagen wählen, ohne dein Dashboard zu überladen · ${escapeHtml(syncHint)}`}</p></div>
+        <button class="pill secondary" type="button" data-action="toggle-monthly-mission-form" aria-expanded="${monthlyMissionFormOpen ? 'true' : 'false'}">${monthlyMissionFormOpen ? 'Auswahl schliessen' : '+ Mission'}</button>
+      </div>
+      ${missionCards}
+      ${form}`;
+  }
+
+  function toggleMonthlyMissionForm() {
+    monthlyMissionFormOpen = !monthlyMissionFormOpen;
+    localStorage.setItem(MONTHLY_MISSION_FORM_KEY, monthlyMissionFormOpen ? 'open' : 'closed');
+    renderMonthlyMissions();
+  }
+
+  function createMonthlyMission(data = {}) {
+    const mission = normalizeMonthlyMission({
+      id: uid(),
+      month_key: currentMonthKey(),
+      title: data.title,
+      category: data.category,
+      metric: data.metric,
+      target: data.target,
+      manual_count: 0,
+      created_at: nowIso(),
+      updated_at: nowIso(),
+      synced: false
+    });
+    const duplicate = activeMonthlyMissions(mission.month_key).some(item => item.metric === mission.metric && item.target === mission.target && item.title.toLowerCase() === mission.title.toLowerCase());
+    if (duplicate) {
+      toast('Diese Monats-Mission ist bereits aktiv.');
+      return;
+    }
+    state.monthlyMissions.push(mission);
+    saveState();
+    toast(`${mission.title} als Monats-Mission aktiviert.`);
+    syncWithSupabase({ silent: true, pullFirst: false });
+  }
+
+  function createMonthlyMissionFromPreset(presetId) {
+    const preset = MONTHLY_MISSION_PRESETS.find(item => item.id === presetId);
+    if (!preset) return;
+    createMonthlyMission(preset);
+  }
+
+  function createCustomMonthlyMission() {
+    const titleInput = $('#monthlyMissionTitle');
+    const targetInput = $('#monthlyMissionTarget');
+    const metricInput = $('#monthlyMissionMetric');
+    const metric = normalizeMonthlyMissionMetric(metricInput?.value || 'manual_count');
+    const title = String(titleInput?.value || '').trim() || monthlyMissionMetricMeta(metric).label;
+    const target = Math.max(1, Math.min(999, Math.round(Number(targetInput?.value || 1) || 1)));
+    createMonthlyMission({ title, target, metric, category: monthlyMissionMetricMeta(metric).category });
+    if (titleInput) titleInput.value = '';
+  }
+
+  function updateMonthlyMission(id, updater) {
+    const index = (state.monthlyMissions || []).findIndex(mission => mission.id === id);
+    if (index < 0) return null;
+    const current = normalizeMonthlyMission(state.monthlyMissions[index]);
+    const next = normalizeMonthlyMission({ ...current, ...updater(current), updated_at: nowIso(), synced: false });
+    const status = monthlyMissionState(next);
+    if (status.completed && !next.completed_at) next.completed_at = nowIso();
+    if (!status.completed) next.completed_at = null;
+    state.monthlyMissions[index] = next;
+    saveState();
+    syncWithSupabase({ silent: true, pullFirst: false });
+    return next;
+  }
+
+  function incrementMonthlyMission(id) {
+    const mission = updateMonthlyMission(id, current => ({ manual_count: Number(current.manual_count || 0) + 1 }));
+    if (mission) toast(`${mission.title}: +1`);
+  }
+
+  function decrementMonthlyMission(id) {
+    updateMonthlyMission(id, current => ({ manual_count: Math.max(0, Number(current.manual_count || 0) - 1) }));
+  }
+
+  function archiveMonthlyMission(id) {
+    const mission = updateMonthlyMission(id, () => ({ is_archived: true }));
+    if (mission) toast('Mission ausgeblendet.');
+  }
+
+  function deleteMonthlyMission(id) {
+    const mission = (state.monthlyMissions || []).find(item => item.id === id);
+    if (!mission) return;
+    state.monthlyMissions = state.monthlyMissions.filter(item => item.id !== id);
+    markRemoteDeleted('monthly_missions', id);
+    saveState();
+    toast('Monats-Mission gelöscht.');
+    syncWithSupabase({ silent: true, pullFirst: false });
   }
 
   function weeklyReviewRangeLabel(startDate = startOfWeekDate(new Date())) {
@@ -10582,7 +10952,7 @@ async function deleteAlcoholLog(id) {
   function hasPendingSyncWork() {
     if (!state) return false;
     if (hasPendingRemoteDeletes()) return true;
-    return ['habits', 'habitEntries', 'cigarettes', 'alcoholLogs', 'alcoholUnits', 'tasks', ...(remoteTaskIdeasSupported ? ['taskIdeas'] : []), 'appointments', 'pointsLedger', ...(remotePausePeriodsSupported ? ['pausePeriods'] : []), ...(remoteWeeklyReviewsSupported ? ['weeklyReviews'] : [])].some(key => (state[key] || []).some(entry => entry?.synced === false));
+    return ['habits', 'habitEntries', 'cigarettes', 'alcoholLogs', 'alcoholUnits', 'tasks', ...(remoteTaskIdeasSupported ? ['taskIdeas'] : []), 'appointments', 'pointsLedger', ...(remotePausePeriodsSupported ? ['pausePeriods'] : []), ...(remoteWeeklyReviewsSupported ? ['weeklyReviews'] : []), ...(remoteMonthlyMissionsSupported ? ['monthlyMissions'] : [])].some(key => (state[key] || []).some(entry => entry?.synced === false));
   }
 
   function renderSyncStatus(mode) {
@@ -10776,6 +11146,30 @@ async function deleteAlcoholLog(id) {
           }
         }
 
+        if (remoteMonthlyMissionsSupported) {
+          const monthlyMissionRows = rowsPendingSync('monthly_missions', state.monthlyMissions || [], { forceAll: forcePushAll }).map(mission => {
+            const normalized = normalizeMonthlyMission(mission);
+            return {
+              id: normalized.id,
+              month_key: normalized.month_key,
+              title: normalized.title,
+              category: normalizeMonthlyMissionCategory(normalized.category, normalized.metric),
+              metric: normalizeMonthlyMissionMetric(normalized.metric),
+              target: normalized.target,
+              manual_count: normalized.manual_count,
+              is_archived: Boolean(normalized.is_archived),
+              completed_at: normalized.completed_at || null,
+              created_at: normalized.created_at,
+              updated_at: normalized.updated_at || nowIso()
+            };
+          });
+          if (await upsertRows('monthly_missions', monthlyMissionRows)) {
+            wroteRemote = true;
+            markRowsSynced('monthlyMissions', monthlyMissionRows);
+            saveState({ skipRender: true });
+          }
+        }
+
         const ledgerRows = rowsPendingSync('points_ledger', state.pointsLedger, { forceAll: forcePushAll }).map(p => ({
           id: p.id, source_type: p.source_type, source_id: remoteLedgerSourceId(p), points: Number(p.points || 0), reason: p.reason || null,
           earned_at: p.earned_at, created_at: p.created_at || nowIso()
@@ -10820,6 +11214,7 @@ async function deleteAlcoholLog(id) {
       if (table === 'task_ideas') remoteTaskIdeasSupported = false;
       if (table === 'pause_periods') remotePausePeriodsSupported = false;
         if (table === 'weekly_reviews') remoteWeeklyReviewsSupported = false;
+        if (table === 'monthly_missions') remoteMonthlyMissionsSupported = false;
       console.warn(`Optionale Sync-Tabelle ${table} fehlt. App läuft lokal weiter.`, error);
       return false;
     }
@@ -11135,6 +11530,7 @@ async function deleteAlcoholLog(id) {
       if (table === 'task_ideas' && !remoteTaskIdeasSupported) continue;
       if (table === 'pause_periods' && !remotePausePeriodsSupported) continue;
       if (table === 'weekly_reviews' && !remoteWeeklyReviewsSupported) continue;
+      if (table === 'monthly_missions' && !remoteMonthlyMissionsSupported) continue;
       const entries = Object.entries(state.deletedRemoteIds[table] || {});
       const ids = entries.filter(([, meta]) => !meta?.synced_at).map(([id]) => id);
       if (!ids.length) continue;
@@ -11265,7 +11661,7 @@ async function deleteAlcoholLog(id) {
 
   async function pullSupabaseData() {
     if (!supabaseClient) return;
-    const [habits, entries, cigarettes, alcohol, alcoholEvents, tasks, taskIdeasRemote, appointments, ledger, pausePeriods, weeklyReviewsRemote] = await Promise.all([
+    const [habits, entries, cigarettes, alcohol, alcoholEvents, tasks, taskIdeasRemote, appointments, ledger, pausePeriods, weeklyReviewsRemote, monthlyMissionsRemote] = await Promise.all([
       fetchRemoteTable('habit_definitions'),
       fetchRemoteTable('habit_entries'),
       fetchRemoteTable('cigarette_events'),
@@ -11276,7 +11672,8 @@ async function deleteAlcoholLog(id) {
       fetchRemoteTable('appointments'),
       fetchRemoteTable('points_ledger'),
       fetchRemoteTable('pause_periods'),
-      fetchRemoteTable('weekly_reviews')
+      fetchRemoteTable('weekly_reviews'),
+      fetchRemoteTable('monthly_missions')
     ]);
 
     const remoteHabitRows = remoteRows('habit_definitions', habits);
@@ -11290,18 +11687,20 @@ async function deleteAlcoholLog(id) {
     let remoteLedgerRows = remoteRows('points_ledger', ledger);
     const remotePauseRows = remoteRows('pause_periods', pausePeriods);
     const remoteWeeklyReviewRows = remoteRows('weekly_reviews', weeklyReviewsRemote);
+    const remoteMonthlyMissionRows = remoteRows('monthly_missions', monthlyMissionsRemote);
 
     applyRemoteCollectionAuthority('cigarette_events', 'cigarettes', remoteCigaretteRows, { ledgerSourceType: 'cigarette' });
     applyRemoteCollectionAuthority('appointments', 'appointments', remoteAppointmentRows);
     if (remotePausePeriodsSupported) applyRemoteCollectionAuthority('pause_periods', 'pausePeriods', remotePauseRows);
     if (remoteWeeklyReviewsSupported) applyRemoteCollectionAuthority('weekly_reviews', 'weeklyReviews', remoteWeeklyReviewRows);
+    if (remoteMonthlyMissionsSupported) applyRemoteCollectionAuthority('monthly_missions', 'monthlyMissions', remoteMonthlyMissionRows);
     if (remoteTaskIdeasSupported) applyRemoteCollectionAuthority('task_ideas', 'taskIdeas', remoteTaskIdeaRows);
     const removedAlcoholUnits = applyRemoteCollectionAuthority('alcohol_events', 'alcoholUnits', remoteAlcoholEventRows, {
       ledgerMatcher: (point, removedSet) => isAlcoholPointsEntry(point) && removedSet.has(point.source_id)
     });
     if (removedAlcoholUnits.length) clearAlcoholLogsWithoutUnits(removedAlcoholUnits);
     remoteLedgerRows = filterRemoteLedgerRows(remoteLedgerRows, { habitEntryRows: remoteEntryRows, cigaretteRows: remoteCigaretteRows, alcoholEventRows: remoteAlcoholEventRows });
-    const remoteHasData = [remoteHabitRows, remoteEntryRows, remoteCigaretteRows, remoteAlcoholRows, remoteAlcoholEventRows, remoteTaskRows, remoteTaskIdeaRows, remoteAppointmentRows, remoteLedgerRows, remotePauseRows, remoteWeeklyReviewRows].some(rows => rows.length > 0);
+    const remoteHasData = [remoteHabitRows, remoteEntryRows, remoteCigaretteRows, remoteAlcoholRows, remoteAlcoholEventRows, remoteTaskRows, remoteTaskIdeaRows, remoteAppointmentRows, remoteLedgerRows, remotePauseRows, remoteWeeklyReviewRows, remoteMonthlyMissionRows].some(rows => rows.length > 0);
 
     applyRemoteHabitAuthority(remoteHabitRows);
 
@@ -11317,6 +11716,7 @@ async function deleteAlcoholLog(id) {
       state.pointsLedger = remoteLedgerRows.map(mapRemoteLedger);
       state.pausePeriods = remotePauseRows.map(mapRemotePausePeriod).map(normalizePausePeriod);
       state.weeklyReviews = remoteWeeklyReviewRows.map(mapRemoteWeeklyReview).map(normalizeWeeklyReview);
+      state.monthlyMissions = remoteMonthlyMissionRows.map(mapRemoteMonthlyMission).map(normalizeMonthlyMission);
       dedupeStateCollections(state);
       return;
     }
@@ -11335,6 +11735,7 @@ async function deleteAlcoholLog(id) {
     state.pointsLedger = mergeById(state.pointsLedger, remoteLedgerRows, mapRemoteLedger);
     state.pausePeriods = mergeById(state.pausePeriods || [], remotePauseRows, mapRemotePausePeriod).map(normalizePausePeriod);
     state.weeklyReviews = mergeById(state.weeklyReviews || [], remoteWeeklyReviewRows, mapRemoteWeeklyReview).map(normalizeWeeklyReview);
+    state.monthlyMissions = mergeById(state.monthlyMissions || [], remoteMonthlyMissionRows, mapRemoteMonthlyMission).map(normalizeMonthlyMission);
     dedupeStateCollections(state);
   }
 
@@ -11342,6 +11743,7 @@ async function deleteAlcoholLog(id) {
     if (table === 'task_ideas' && !remoteTaskIdeasSupported) return { data: [], error: null };
     if (table === 'pause_periods' && !remotePausePeriodsSupported) return { data: [], error: null };
     if (table === 'weekly_reviews' && !remoteWeeklyReviewsSupported) return { data: [], error: null };
+    if (table === 'monthly_missions' && !remoteMonthlyMissionsSupported) return { data: [], error: null };
     const userId = currentUserId();
     if (!userId) return { data: [], error: null };
     const result = await supabaseClient.from(table).select('*').eq('user_id', userId);
@@ -11350,6 +11752,7 @@ async function deleteAlcoholLog(id) {
         if (table === 'task_ideas') remoteTaskIdeasSupported = false;
         if (table === 'pause_periods') remotePausePeriodsSupported = false;
         if (table === 'weekly_reviews') remoteWeeklyReviewsSupported = false;
+        if (table === 'monthly_missions') remoteMonthlyMissionsSupported = false;
         console.warn(`Optionale Sync-Tabelle ${table} fehlt.`, result.error);
         return { data: [], error: null };
       }
@@ -11403,7 +11806,7 @@ async function deleteAlcoholLog(id) {
   function isLocalPristine() {
     const defaultIds = new Set(Object.values(DEFAULT_HABIT_IDS));
     const hasOnlyDefaultHabits = state.habits.every(h => defaultIds.has(h.id) || BUILT_IN_DEFAULT_HABIT_NAMES.has(String(h.name || '').trim().toLowerCase()));
-    return hasOnlyDefaultHabits && !state.habitEntries.length && !state.cigarettes.length && !state.alcoholLogs.length && !state.alcoholUnits.length && !state.tasks.length && !(state.taskIdeas || []).length && !state.appointments.length && !state.morningRoutineLogs?.length && !state.pointsLedger.length && !(state.pausePeriods || []).length && !(state.weeklyReviews || []).length;
+    return hasOnlyDefaultHabits && !state.habitEntries.length && !state.cigarettes.length && !state.alcoholLogs.length && !state.alcoholUnits.length && !state.tasks.length && !(state.taskIdeas || []).length && !state.appointments.length && !state.morningRoutineLogs?.length && !state.pointsLedger.length && !(state.pausePeriods || []).length && !(state.weeklyReviews || []).length && !(state.monthlyMissions || []).length;
   }
 
   function subscribeToRemoteChanges() {
@@ -11478,6 +11881,20 @@ async function deleteAlcoholLog(id) {
     metrics: row.metrics,
     highlights: row.highlights,
     recommendation: row.recommendation,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    synced: true
+  });
+  const mapRemoteMonthlyMission = row => normalizeMonthlyMission({
+    id: row.id,
+    month_key: row.month_key,
+    title: row.title,
+    category: row.category,
+    metric: row.metric,
+    target: row.target,
+    manual_count: row.manual_count,
+    is_archived: row.is_archived,
+    completed_at: row.completed_at,
     created_at: row.created_at,
     updated_at: row.updated_at,
     synced: true

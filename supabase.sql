@@ -103,6 +103,21 @@ create table if not exists public.weekly_reviews (
   constraint weekly_reviews_user_week_unique unique (user_id, week_key)
 );
 
+create table if not exists public.monthly_missions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  month_key text not null,
+  title text not null,
+  category text not null default 'manual' check (category in ('fitness','consumption','focus','routine','manual')),
+  metric text not null default 'manual_count' check (metric in ('running_sessions','hiking_days','smoke_free_evenings','alcohol_free_weekend_days','deep_work_sessions','completed_tasks','morning_routines','manual_count')),
+  target integer not null default 1 check (target between 1 and 999),
+  manual_count integer not null default 0 check (manual_count >= 0),
+  is_archived boolean not null default false,
+  completed_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.tasks (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
@@ -204,7 +219,10 @@ alter table public.activity_ideas add column if not exists user_id uuid referenc
 alter table public.appointments add column if not exists user_id uuid references auth.users(id) on delete cascade;
 alter table public.points_ledger add column if not exists user_id uuid references auth.users(id) on delete cascade;
 alter table public.pause_periods add column if not exists user_id uuid references auth.users(id) on delete cascade;
+alter table public.weekly_reviews add column if not exists user_id uuid references auth.users(id) on delete cascade;
+alter table public.monthly_missions add column if not exists user_id uuid references auth.users(id) on delete cascade;
 alter table public.pause_periods alter column user_id set default auth.uid();
+alter table public.weekly_reviews alter column user_id set default auth.uid();
 alter table public.pause_periods add column if not exists scope text not null default 'smoke';
 alter table public.pause_periods add column if not exists target_id uuid;
 alter table public.pause_periods add column if not exists starts_at timestamptz not null default now();
@@ -218,6 +236,27 @@ alter table public.pause_periods add constraint pause_periods_scope_check check 
 alter table public.pause_periods drop constraint if exists pause_periods_time_check;
 alter table public.pause_periods add constraint pause_periods_time_check check (ends_at is null or ends_at >= starts_at);
 
+
+alter table public.monthly_missions alter column user_id set default auth.uid();
+alter table public.monthly_missions add column if not exists month_key text not null default to_char(now(), 'YYYY-MM');
+alter table public.monthly_missions add column if not exists title text not null default 'Monats-Mission';
+alter table public.monthly_missions add column if not exists category text not null default 'manual';
+alter table public.monthly_missions add column if not exists metric text not null default 'manual_count';
+alter table public.monthly_missions add column if not exists target integer not null default 1;
+alter table public.monthly_missions add column if not exists manual_count integer not null default 0;
+alter table public.monthly_missions add column if not exists is_archived boolean not null default false;
+alter table public.monthly_missions add column if not exists completed_at timestamptz;
+alter table public.monthly_missions add column if not exists created_at timestamptz not null default now();
+alter table public.monthly_missions add column if not exists updated_at timestamptz not null default now();
+alter table public.monthly_missions drop constraint if exists monthly_missions_category_check;
+alter table public.monthly_missions add constraint monthly_missions_category_check check (category in ('fitness','consumption','focus','routine','manual'));
+alter table public.monthly_missions drop constraint if exists monthly_missions_metric_check;
+alter table public.monthly_missions add constraint monthly_missions_metric_check check (metric in ('running_sessions','hiking_days','smoke_free_evenings','alcohol_free_weekend_days','deep_work_sessions','completed_tasks','morning_routines','manual_count'));
+alter table public.monthly_missions drop constraint if exists monthly_missions_target_check;
+alter table public.monthly_missions add constraint monthly_missions_target_check check (target between 1 and 999);
+alter table public.monthly_missions drop constraint if exists monthly_missions_manual_count_check;
+alter table public.monthly_missions add constraint monthly_missions_manual_count_check check (manual_count >= 0);
+
 alter table public.habit_definitions alter column user_id set default auth.uid();
 alter table public.habit_entries alter column user_id set default auth.uid();
 alter table public.cigarette_events alter column user_id set default auth.uid();
@@ -229,6 +268,7 @@ alter table public.activity_ideas alter column user_id set default auth.uid();
 alter table public.appointments alter column user_id set default auth.uid();
 alter table public.points_ledger alter column user_id set default auth.uid();
 alter table public.pause_periods alter column user_id set default auth.uid();
+alter table public.weekly_reviews alter column user_id set default auth.uid();
 
 alter table public.appointments add column if not exists description text;
 alter table public.appointments add column if not exists location text;
@@ -333,6 +373,7 @@ alter table public.activity_ideas add constraint activity_ideas_priority_check c
 -- update public.appointments set user_id = '<YOUR_AUTH_USER_ID>' where user_id is null;
 -- update public.points_ledger set user_id = '<YOUR_AUTH_USER_ID>' where user_id is null;
 -- update public.pause_periods set user_id = '<YOUR_AUTH_USER_ID>' where user_id is null;
+-- update public.monthly_missions set user_id = '<YOUR_AUTH_USER_ID>' where user_id is null;
 
 create index if not exists idx_habit_definitions_user on public.habit_definitions(user_id, updated_at desc);
 create index if not exists idx_habit_entries_user_time on public.habit_entries(user_id, occurred_at desc);
@@ -350,6 +391,7 @@ create index if not exists idx_appointments_type_starts_at on public.appointment
 create index if not exists idx_points_ledger_user_time on public.points_ledger(user_id, earned_at desc);
 create index if not exists idx_pause_periods_user_scope on public.pause_periods(user_id, scope, starts_at desc);
 create index if not exists idx_weekly_reviews_user_week on public.weekly_reviews(user_id, week_key desc);
+create index if not exists idx_monthly_missions_user_month on public.monthly_missions(user_id, month_key desc, is_archived);
 
 drop trigger if exists set_habit_definitions_updated_at on public.habit_definitions;
 create trigger set_habit_definitions_updated_at before update on public.habit_definitions for each row execute function public.set_updated_at();
@@ -384,6 +426,9 @@ create trigger set_pause_periods_updated_at before update on public.pause_period
 drop trigger if exists set_weekly_reviews_updated_at on public.weekly_reviews;
 create trigger set_weekly_reviews_updated_at before update on public.weekly_reviews for each row execute function public.set_updated_at();
 
+drop trigger if exists set_monthly_missions_updated_at on public.monthly_missions;
+create trigger set_monthly_missions_updated_at before update on public.monthly_missions for each row execute function public.set_updated_at();
+
 -- Remove all old public/unrestricted policies and create strict owner policies.
 do $$
 declare
@@ -392,7 +437,7 @@ declare
 begin
   foreach tbl in array array[
     'habit_definitions','habit_entries','cigarette_events','alcohol_logs','alcohol_events','tasks','task_ideas','activity_ideas','appointments','points_ledger','pause_periods',
-    'weekly_reviews','participants','catches','duels','duel_events','duel_participants','duel_tracks','tournaments'
+    'weekly_reviews','monthly_missions','participants','catches','duels','duel_events','duel_participants','duel_tracks','tournaments'
   ] loop
     if to_regclass(format('public.%I', tbl)) is null then
       continue;
@@ -467,7 +512,7 @@ grant select, insert, update, delete on all tables in schema public to authentic
 do $$
 declare tbl text;
 begin
-  foreach tbl in array array['habit_definitions','habit_entries','cigarette_events','alcohol_logs','alcohol_events','tasks','task_ideas','activity_ideas','appointments','points_ledger','pause_periods','weekly_reviews'] loop
+  foreach tbl in array array['habit_definitions','habit_entries','cigarette_events','alcohol_logs','alcohol_events','tasks','task_ideas','activity_ideas','appointments','points_ledger','pause_periods','weekly_reviews','monthly_missions'] loop
     begin
       execute format('alter publication supabase_realtime add table public.%I', tbl);
     exception when others then
