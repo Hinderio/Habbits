@@ -3,10 +3,11 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v90-recurring-tasks-fitness-mobile';
+  const APP_DATA_SCHEMA_VERSION = 'v103-dashboard-history-idea-ratings';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
+  const DASHBOARD_CHART_WINDOW_KEY = 'habitflow-dashboard-chart-window-v1';
   const COACH_SESSION_KEY = 'habitflow-coach-session-v1';
   const MORNING_ROUTINE_SESSION_KEY = 'habitflow-morning-routine-session-v1';
   const MORNING_ROUTINE_VARIANT_KEY = 'habitflow-morning-routine-variant-offset-v1';
@@ -22,6 +23,7 @@
   const FITNESS_DETAIL_TAB_KEY = 'habitflow-fitness-detail-tab-v1';
   const FITNESS_MOBILE_SECTIONS_KEY = 'habitflow-fitness-mobile-sections-v1';
   const TASK_RECURRENCE_MARKER_RE = /\n?\s*<!--hf-task-rec:([^>]+)-->/;
+  const TASK_IDEA_META_MARKER_RE = /\n?\s*<!--hf-idea-meta:([^>]+)-->/;
   const FITNESS_ROUTE_START = Object.freeze({ lat: 47.459945, lng: 9.032719 });
   const FITNESS_TOWN_MILESTONES = Object.freeze([
     { name: 'Wil SG', km: 0 },
@@ -767,6 +769,7 @@
   let calendarCursor = new Date();
   let charts = { trend: null, points: null };
   let selectedTrendMetric = localStorage.getItem(TREND_METRIC_KEY) || 'points';
+  let dashboardChartOffsetDays = normalizeDashboardChartOffset(localStorage.getItem(DASHBOARD_CHART_WINDOW_KEY));
   let activeSmokingTipIndex = 0;
   let coachSession = loadCoachSession();
   let morningRoutineSession = loadMorningRoutineSession();
@@ -909,6 +912,11 @@
       habitHeatmap: $('#habitHeatmap'),
       trendMetricSelect: $('#trendMetricSelect'),
       trendChartTitle: $('#trendChartTitle'),
+      chartRangeLabel: $('#chartRangeLabel'),
+      chartPrevWindowBtn: $('#chartPrevWindowBtn'),
+      chartTodayWindowBtn: $('#chartTodayWindowBtn'),
+      chartNextWindowBtn: $('#chartNextWindowBtn'),
+      pointsChartRangeBadge: $('#pointsChartRangeBadge'),
       trendChart: $('#trendChart'),
       pointsChart: $('#pointsChart'),
       recordSmokeBtn: $('#recordSmokeBtn'),
@@ -1117,6 +1125,9 @@
       localStorage.setItem(TREND_METRIC_KEY, selectedTrendMetric);
       renderCharts();
     });
+    if (els.chartPrevWindowBtn) els.chartPrevWindowBtn.addEventListener('click', () => moveDashboardChartWindow(14));
+    if (els.chartNextWindowBtn) els.chartNextWindowBtn.addEventListener('click', () => moveDashboardChartWindow(-14));
+    if (els.chartTodayWindowBtn) els.chartTodayWindowBtn.addEventListener('click', () => moveDashboardChartWindow(0, { reset: true }));
     if (els.habitsPaneButtons?.length) els.habitsPaneButtons.forEach(btn => btn.addEventListener('click', () => switchHabitsExperiencePane(btn.dataset.habitsPane || 'overview')));
     if (els.habitFormToggleBtn) els.habitFormToggleBtn.addEventListener('click', () => openHabitForm());
     if (els.habitFormCloseBtn) els.habitFormCloseBtn.addEventListener('click', () => closeHabitForm({ clearForm: !editingHabitId }));
@@ -1188,6 +1199,7 @@
       if (action === 'done-archive-rank-up') shiftArchivedDoneTask(id, -1);
       if (action === 'done-archive-rank-down') shiftArchivedDoneTask(id, 1);
       if (action === 'generate-task-ideas') generateTaskIdeas();
+      if (action === 'rate-task-idea') rateTaskIdea(id, actionEl.dataset.rating);
       if (action === 'idea-to-task') createTaskFromIdea(id, 'open');
       if (action === 'idea-to-backlog') createTaskFromIdea(id, TASK_BACKLOG_STATUS);
       if (action === 'dismiss-task-idea') dismissTaskIdea(id);
@@ -1716,6 +1728,37 @@
     return `${clean ? `${clean}\n\n` : ''}<!--hf-task-rec:${encodeURIComponent(JSON.stringify(recurrence))}-->`;
   }
 
+  function parseTaskIdeaMetaFromDescription(description = '') {
+    const raw = String(description || '');
+    const match = raw.match(TASK_IDEA_META_MARKER_RE);
+    if (!match) return { description: raw, meta: {} };
+    const cleaned = raw.replace(TASK_IDEA_META_MARKER_RE, '').trim();
+    try {
+      const decoded = JSON.parse(decodeURIComponent(match[1] || ''));
+      return { description: cleaned, meta: decoded && typeof decoded === 'object' ? decoded : {} };
+    } catch (error) {
+      console.warn('Ideen-Metadaten konnten nicht gelesen werden.', error);
+      return { description: cleaned, meta: {} };
+    }
+  }
+
+  function normalizeTaskIdeaRating(value) {
+    const numeric = Math.round(Number(value || 0));
+    return Math.max(0, Math.min(5, Number.isFinite(numeric) ? numeric : 0));
+  }
+
+  function taskIdeaDescriptionForDisplay(idea = {}) {
+    return parseTaskIdeaMetaFromDescription(idea.description || '').description;
+  }
+
+  function taskIdeaDescriptionForStorage(idea = {}) {
+    const clean = taskIdeaDescriptionForDisplay(idea).trim();
+    const rating = normalizeTaskIdeaRating(idea.rating);
+    if (!rating) return clean || null;
+    const meta = { rating };
+    return `${clean ? `${clean}\n\n` : ''}<!--hf-idea-meta:${encodeURIComponent(JSON.stringify(meta))}-->`;
+  }
+
   function buildMonthlyTaskRecurrence(dueAt, existing = {}) {
     const date = dueAt ? new Date(dueAt) : null;
     if (!date || Number.isNaN(date.getTime())) return null;
@@ -1813,13 +1856,16 @@
 
   function normalizeTaskIdea(idea = {}) {
     const created = idea.created_at || nowIso();
+    const parsedDescription = parseTaskIdeaMetaFromDescription(idea.description || '');
     const story = Number(idea.story_points ?? idea.storyPoints ?? 2);
     const status = TASK_IDEA_STATUSES.has(String(idea.idea_status || idea.status || '').trim()) ? String(idea.idea_status || idea.status).trim() : 'open';
     const category = TASK_IDEA_CATEGORIES[String(idea.category || '').trim()] ? String(idea.category).trim() : 'focus';
+    const rating = normalizeTaskIdeaRating(idea.rating ?? idea.idea_rating ?? idea.stars ?? parsedDescription.meta.rating);
     return {
       ...idea,
       title: String(idea.title || '').trim(),
-      description: String(idea.description || '').trim(),
+      description: parsedDescription.description,
+      rating,
       category,
       story_points: [1, 2, 3, 5, 8].includes(story) ? story : 2,
       priority: normalizeTaskPriority(idea.priority),
@@ -1960,6 +2006,8 @@
     const ar = statusRank[a.idea_status || 'open'] ?? 3;
     const br = statusRank[b.idea_status || 'open'] ?? 3;
     if (ar !== br) return ar - br;
+    const rating = normalizeTaskIdeaRating(b.rating) - normalizeTaskIdeaRating(a.rating);
+    if (rating) return rating;
     const prio = taskPriorityMeta(b).rank - taskPriorityMeta(a).rank;
     if (prio) return prio;
     const story = Number(a.story_points || 2) - Number(b.story_points || 2);
@@ -2789,6 +2837,42 @@
   function closeMobileQuickAdd() {
     const quickAdd = document.getElementById('mobileQuickAdd');
     if (quickAdd) quickAdd.open = false;
+  }
+
+  function normalizeDashboardChartOffset(value) {
+    const numeric = Math.round(Number(value || 0));
+    if (!Number.isFinite(numeric)) return 0;
+    return Math.max(0, Math.min(3650, numeric));
+  }
+
+  function moveDashboardChartWindow(deltaDays = 0, { reset = false } = {}) {
+    dashboardChartOffsetDays = reset ? 0 : normalizeDashboardChartOffset(dashboardChartOffsetDays + Number(deltaDays || 0));
+    localStorage.setItem(DASHBOARD_CHART_WINDOW_KEY, String(dashboardChartOffsetDays));
+    renderCharts();
+  }
+
+  function dashboardChartRangeLabel(keys = []) {
+    if (!keys.length) return 'Letzte 14 Tage';
+    const first = new Date(`${keys[0]}T12:00:00`);
+    const last = new Date(`${keys[keys.length - 1]}T12:00:00`);
+    const format = date => Number.isNaN(date.getTime()) ? '–' : date.toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' });
+    return dashboardChartOffsetDays > 0
+      ? `${format(first)} – ${format(last)} · ${dashboardChartOffsetDays} Tage zurück`
+      : `Letzte ${keys.length} Tage · ${format(first)} – ${format(last)}`;
+  }
+
+  function syncDashboardChartControls(keys = []) {
+    const label = dashboardChartRangeLabel(keys);
+    if (els.chartRangeLabel) els.chartRangeLabel.textContent = label;
+    if (els.pointsChartRangeBadge) els.pointsChartRangeBadge.textContent = dashboardChartOffsetDays ? 'historisch' : '14 Tage';
+    if (els.chartNextWindowBtn) {
+      els.chartNextWindowBtn.disabled = dashboardChartOffsetDays <= 0;
+      els.chartNextWindowBtn.setAttribute('aria-disabled', String(dashboardChartOffsetDays <= 0));
+    }
+    if (els.chartTodayWindowBtn) {
+      els.chartTodayWindowBtn.disabled = dashboardChartOffsetDays <= 0;
+      els.chartTodayWindowBtn.setAttribute('aria-disabled', String(dashboardChartOffsetDays <= 0));
+    }
   }
 
   function loadFitnessMobileSectionState() {
@@ -7960,14 +8044,19 @@
     const category = taskIdeaCategoryMeta(idea.category);
     const status = idea.idea_status || 'open';
     const statusLabel = status === 'accepted' ? 'Umgesetzt' : status === 'dismissed' ? 'Verworfen' : 'Idee';
+    const rating = normalizeTaskIdeaRating(idea.rating);
+    const ratingText = rating ? `${rating}/5 Priorität` : 'Sterne vergeben';
+    const ratingButtons = [1, 2, 3, 4, 5].map(value => `
+      <button class="idea-star ${value <= rating ? 'is-active' : ''}" type="button" data-action="rate-task-idea" data-id="${idea.id}" data-rating="${value}" aria-label="${value} Sterne für ${escapeHtml(idea.title)}" aria-pressed="${value <= rating}">★</button>`).join('');
     const meta = `${escapeHtml(category.label)} · ${Number(idea.story_points || 2)} SP · ${escapeHtml(priorityMeta.label)}`;
+    const description = taskIdeaDescriptionForDisplay(idea);
     const actionBlock = status === 'open'
       ? `<button class="mini-btn primary" type="button" data-action="idea-to-task" data-id="${idea.id}">Als Task</button>
          <button class="mini-btn" type="button" data-action="idea-to-backlog" data-id="${idea.id}">In Backlog</button>
          <button class="mini-btn" type="button" data-action="dismiss-task-idea" data-id="${idea.id}">Verwerfen</button>`
       : `<button class="mini-btn" type="button" data-action="reopen-task-idea" data-id="${idea.id}">Wieder öffnen</button>`;
     const source = idea.source_key ? '<span class="badge muted">Smart</span>' : '<span class="badge muted">Manuell</span>';
-    return `<article class="kanban-card idea-card idea-status-${escapeHtml(status)}">
+    return `<article class="kanban-card idea-card idea-status-${escapeHtml(status)}" style="--idea-rating:${rating}">
       <div class="kanban-card-top">
         <span class="idea-card-icon">${svgIcon('idea', 'ui-icon')}</span>
         <div class="task-badges">
@@ -7977,7 +8066,13 @@
         </div>
       </div>
       <h4>${escapeHtml(idea.title)}</h4>
-      <p class="meta">${meta}${idea.description ? `<br>${escapeHtml(idea.description)}` : ''}</p>
+      <p class="meta">${meta}${description ? `<br>${escapeHtml(description)}` : ''}</p>
+      <div class="idea-rating-row" aria-label="Ideen-Rating">
+        <div class="idea-stars">${ratingButtons}
+          <button class="idea-star-clear ${rating ? '' : 'is-hidden'}" type="button" data-action="rate-task-idea" data-id="${idea.id}" data-rating="0" aria-label="Rating zurücksetzen">×</button>
+        </div>
+        <span>${escapeHtml(ratingText)}</span>
+      </div>
       <div class="idea-value-strip">
         <span>${Number(idea.story_points || 2)} Story Points</span>
         <span>Aufwand ${storyPointsToEffort(idea.story_points)}/5</span>
@@ -8283,7 +8378,8 @@
   }
   function renderCharts() {
     if (!window.Chart) return;
-    const keys = daysBack(14);
+    const keys = daysBack(14, dashboardChartOffsetDays);
+    syncDashboardChartControls(keys);
     const labels = keys.map(k => new Date(`${k}T12:00:00`).toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' }));
     const trend = getTrendMetricConfig(keys);
     const pointsData = keys.map(k => pointsOnDate(k));
@@ -9420,6 +9516,19 @@ async function deleteAlcoholLog(id) {
     syncWithSupabase({ silent: true });
   }
 
+  function rateTaskIdea(id, ratingValue) {
+    const idea = state.taskIdeas.find(item => item.id === id);
+    if (!idea) return;
+    const nextRating = normalizeTaskIdeaRating(ratingValue);
+    if (normalizeTaskIdeaRating(idea.rating) === nextRating) return;
+    idea.rating = nextRating;
+    idea.updated_at = nowIso();
+    idea.synced = false;
+    saveState();
+    toast(nextRating ? `Idee mit ${nextRating} Sternen bewertet` : 'Ideen-Rating entfernt');
+    syncWithSupabase({ silent: true, pullFirst: false });
+  }
+
   function createTaskFromIdea(id, targetStatus = 'open', { dueAt = null } = {}) {
     const idea = state.taskIdeas.find(item => item.id === id);
     if (!idea || idea.idea_status !== 'open') return;
@@ -10044,9 +10153,11 @@ async function deleteAlcoholLog(id) {
     });
   }
 
-  function daysBack(count) {
+  function daysBack(count, offsetDays = 0) {
     const out = [];
     const today = new Date();
+    const safeOffset = Math.max(0, Math.round(Number(offsetDays || 0)));
+    today.setDate(today.getDate() - safeOffset);
     for (let i = count - 1; i >= 0; i--) {
       const d = new Date(today);
       d.setDate(today.getDate() - i);
@@ -10820,7 +10931,7 @@ async function deleteAlcoholLog(id) {
     return rowsPendingSync('task_ideas', state.taskIdeas || [], { forceAll }).map(idea => ({
       id: idea.id,
       title: idea.title,
-      description: idea.description || null,
+      description: taskIdeaDescriptionForStorage(idea),
       category: TASK_IDEA_CATEGORIES[idea.category] ? idea.category : 'focus',
       story_points: Number(idea.story_points || 2),
       priority: normalizeTaskPriority(idea.priority),
@@ -11042,6 +11153,11 @@ async function deleteAlcoholLog(id) {
   function applyRemoteCollectionAuthority(table, localKey, remoteRowsForTable, { ledgerSourceType = null, ledgerMatcher = null } = {}) {
     const localRows = Array.isArray(state[localKey]) ? state[localKey] : [];
     if (!localRows.length) return [];
+    if (localKey === 'taskIdeas') {
+      // Ideen sind ein weicher Backlog: eine verzögerte oder schema-kompatible Remote-Antwort
+      // darf lokale Vorschläge nach einem Hard Refresh nicht wieder auf den alten Stand kürzen.
+      return [];
+    }
     const remoteIds = new Set(remoteRowsForTable.map(row => row.id).filter(Boolean));
     const removedRows = localRows
       .filter(row => row?.id && row.synced === true && !remoteIds.has(row.id) && !isRemoteDeleted(table, row.id));
@@ -11206,6 +11322,7 @@ async function deleteAlcoholLog(id) {
     }
 
     const localTasksBeforePull = new Map(state.tasks.map(task => [task.id, normalizeTask(task)]));
+    const localTaskIdeasBeforePull = new Map((state.taskIdeas || []).map(idea => [idea.id, normalizeTaskIdea(idea)]));
     const localHabitsBeforePull = new Map(state.habits.map(habit => [habit.id, normalizeHabit(habit)]));
     state.habits = mergeById(state.habits, remoteHabitRows, mapRemoteHabit).map(habit => preserveLocalHabitFallbacks(normalizeHabit(habit), localHabitsBeforePull.get(habit.id)));
     state.habitEntries = mergeById(state.habitEntries, remoteEntryRows, mapRemoteEntry);
@@ -11213,7 +11330,7 @@ async function deleteAlcoholLog(id) {
     state.alcoholLogs = mergeById(state.alcoholLogs, remoteAlcoholRows, mapRemoteAlcohol);
     state.alcoholUnits = mergeById(state.alcoholUnits, remoteAlcoholEventRows, mapRemoteAlcoholEvent);
     state.tasks = mergeById(state.tasks, remoteTaskRows, mapRemoteTask).map(task => preserveLocalTaskFallbacks(normalizeTask(task), localTasksBeforePull.get(task.id)));
-    state.taskIdeas = mergeById(state.taskIdeas || [], remoteTaskIdeaRows, mapRemoteTaskIdea).map(normalizeTaskIdea);
+    state.taskIdeas = mergeById(state.taskIdeas || [], remoteTaskIdeaRows, mapRemoteTaskIdea).map(idea => preserveLocalTaskIdeaFallbacks(normalizeTaskIdea(idea), localTaskIdeasBeforePull.get(idea.id)));
     state.appointments = mergeById(state.appointments, remoteAppointmentRows, mapRemoteAppointment).map(normalizeAppointment);
     state.pointsLedger = mergeById(state.pointsLedger, remoteLedgerRows, mapRemoteLedger);
     state.pausePeriods = mergeById(state.pausePeriods || [], remotePauseRows, mapRemotePausePeriod).map(normalizePausePeriod);
@@ -11248,6 +11365,13 @@ async function deleteAlcoholLog(id) {
     HABIT_DNA_LOCAL_FIELDS.forEach(field => {
       if (localHabit[field] != null) next[field] = localHabit[field];
     });
+    return next;
+  }
+
+  function preserveLocalTaskIdeaFallbacks(remoteIdea, localIdea) {
+    if (!localIdea) return remoteIdea;
+    const next = { ...remoteIdea };
+    if (!normalizeTaskIdeaRating(next.rating) && normalizeTaskIdeaRating(localIdea.rating)) next.rating = normalizeTaskIdeaRating(localIdea.rating);
     return next;
   }
 

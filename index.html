@@ -125,6 +125,12 @@
 
         <details class="mobile-dashboard-section" open>
           <summary><span>Trends & XP</span><small>Analyse öffnen</small></summary>
+        <div class="dashboard-chart-toolbar glass" aria-label="Zeitraum der Dashboard-Diagramme">
+          <button id="chartPrevWindowBtn" class="mini-btn" type="button">← Früher</button>
+          <span id="chartRangeLabel" class="chart-range-label">Letzte 14 Tage</span>
+          <button id="chartTodayWindowBtn" class="mini-btn primary" type="button">Heute</button>
+          <button id="chartNextWindowBtn" class="mini-btn" type="button">Später →</button>
+        </div>
         <div class="grid two-columns">
           <section class="panel glass dashboard-chart-panel">
             <div class="panel-head chart-head">
@@ -134,7 +140,7 @@
             <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
           </section>
           <section class="panel glass dashboard-chart-panel">
-            <div class="panel-head chart-head"><div><p class="eyebrow">XP</p><h3>Punkteentwicklung</h3></div><span class="subtle">14 Tage</span></div>
+            <div class="panel-head chart-head"><div><p class="eyebrow">XP</p><h3>Punkteentwicklung</h3></div><span id="pointsChartRangeBadge" class="subtle">14 Tage</span></div>
             <div class="chart-wrap"><canvas id="pointsChart"></canvas></div>
           </section>
         </div>
