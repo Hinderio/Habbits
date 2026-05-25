@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v87-weekly-review-supabase-dashboard-fix';
+  const APP_DATA_SCHEMA_VERSION = 'v85-mobile-review-collapse-chart-softfill';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -8142,32 +8142,32 @@
     const chart = ctx.chart;
     const area = chart.chartArea;
     const yScale = chart.scales?.y;
-    if (!area || !yScale) return 'rgba(74,215,209,.22)';
+    if (!area || !yScale) return 'rgba(74,215,209,.10)';
     const gradient = chart.ctx.createLinearGradient(0, area.top, 0, area.bottom);
     const mode = options.toneMode || 'score';
 
     if (mode === 'lowerBetter') {
-      gradient.addColorStop(0, 'rgba(255,112,112,.46)');
-      gradient.addColorStop(.34, 'rgba(255,189,106,.38)');
-      gradient.addColorStop(.68, 'rgba(143,220,116,.30)');
-      gradient.addColorStop(1, 'rgba(66,214,125,.25)');
+      gradient.addColorStop(0, 'rgba(255,112,112,.20)');
+      gradient.addColorStop(.34, 'rgba(255,189,106,.16)');
+      gradient.addColorStop(.68, 'rgba(143,220,116,.12)');
+      gradient.addColorStop(1, 'rgba(66,214,125,.10)');
       return gradient;
     }
 
     if (mode === 'higherBetter') {
-      gradient.addColorStop(0, 'rgba(66,214,125,.44)');
-      gradient.addColorStop(.45, 'rgba(143,220,116,.32)');
-      gradient.addColorStop(.78, 'rgba(255,189,106,.30)');
-      gradient.addColorStop(1, 'rgba(255,112,112,.24)');
+      gradient.addColorStop(0, 'rgba(66,214,125,.19)');
+      gradient.addColorStop(.45, 'rgba(143,220,116,.14)');
+      gradient.addColorStop(.78, 'rgba(255,189,106,.12)');
+      gradient.addColorStop(1, 'rgba(255,112,112,.10)');
       return gradient;
     }
 
     const zeroPixel = Math.max(area.top, Math.min(area.bottom, yScale.getPixelForValue(0)));
     const zeroStop = (zeroPixel - area.top) / Math.max(1, area.bottom - area.top);
-    gradient.addColorStop(0, 'rgba(66,214,125,.48)');
-    gradient.addColorStop(Math.max(0, zeroStop - .02), 'rgba(143,220,116,.26)');
-    gradient.addColorStop(Math.min(1, zeroStop + .02), 'rgba(255,112,112,.20)');
-    gradient.addColorStop(1, 'rgba(255,112,112,.44)');
+    gradient.addColorStop(0, 'rgba(66,214,125,.20)');
+    gradient.addColorStop(Math.max(0, zeroStop - .02), 'rgba(143,220,116,.11)');
+    gradient.addColorStop(Math.min(1, zeroStop + .02), 'rgba(255,112,112,.09)');
+    gradient.addColorStop(1, 'rgba(255,112,112,.18)');
     return gradient;
   }
 
