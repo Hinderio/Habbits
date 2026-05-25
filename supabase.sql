@@ -86,6 +86,23 @@ create table if not exists public.pause_periods (
   constraint pause_periods_time_check check (ends_at is null or ends_at >= starts_at)
 );
 
+create table if not exists public.weekly_reviews (
+  id text primary key,
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  week_key text not null,
+  start_key text not null,
+  end_key text not null,
+  range_label text,
+  title text,
+  score integer not null default 0 check (score between 0 and 100),
+  metrics jsonb not null default '{}'::jsonb,
+  highlights jsonb not null default '[]'::jsonb,
+  recommendation text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint weekly_reviews_user_week_unique unique (user_id, week_key)
+);
+
 create table if not exists public.tasks (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
@@ -332,6 +349,7 @@ create index if not exists idx_appointments_user_starts_at on public.appointment
 create index if not exists idx_appointments_type_starts_at on public.appointments(user_id, appointment_type, starts_at desc);
 create index if not exists idx_points_ledger_user_time on public.points_ledger(user_id, earned_at desc);
 create index if not exists idx_pause_periods_user_scope on public.pause_periods(user_id, scope, starts_at desc);
+create index if not exists idx_weekly_reviews_user_week on public.weekly_reviews(user_id, week_key desc);
 
 drop trigger if exists set_habit_definitions_updated_at on public.habit_definitions;
 create trigger set_habit_definitions_updated_at before update on public.habit_definitions for each row execute function public.set_updated_at();
@@ -363,6 +381,9 @@ create trigger set_appointments_updated_at before update on public.appointments 
 drop trigger if exists set_pause_periods_updated_at on public.pause_periods;
 create trigger set_pause_periods_updated_at before update on public.pause_periods for each row execute function public.set_updated_at();
 
+drop trigger if exists set_weekly_reviews_updated_at on public.weekly_reviews;
+create trigger set_weekly_reviews_updated_at before update on public.weekly_reviews for each row execute function public.set_updated_at();
+
 -- Remove all old public/unrestricted policies and create strict owner policies.
 do $$
 declare
@@ -371,7 +392,7 @@ declare
 begin
   foreach tbl in array array[
     'habit_definitions','habit_entries','cigarette_events','alcohol_logs','alcohol_events','tasks','task_ideas','activity_ideas','appointments','points_ledger','pause_periods',
-    'participants','catches','duels','duel_events','duel_participants','duel_tracks','tournaments'
+    'weekly_reviews','participants','catches','duels','duel_events','duel_participants','duel_tracks','tournaments'
   ] loop
     if to_regclass(format('public.%I', tbl)) is null then
       continue;
@@ -446,7 +467,7 @@ grant select, insert, update, delete on all tables in schema public to authentic
 do $$
 declare tbl text;
 begin
-  foreach tbl in array array['habit_definitions','habit_entries','cigarette_events','alcohol_logs','alcohol_events','tasks','task_ideas','activity_ideas','appointments','points_ledger','pause_periods'] loop
+  foreach tbl in array array['habit_definitions','habit_entries','cigarette_events','alcohol_logs','alcohol_events','tasks','task_ideas','activity_ideas','appointments','points_ledger','pause_periods','weekly_reviews'] loop
     begin
       execute format('alter publication supabase_realtime add table public.%I', tbl);
     exception when others then

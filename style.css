@@ -2741,3 +2741,14 @@ body.light .fitness-destination-connector i{border-color:rgba(17,36,58,.08)}
 body.light .weekly-review-card,body.light .weekly-review-score,body.light .weekly-review-hero-card,body.light .weekly-review-pro-grid article,body.light .weekly-review-highlights span,body.light .weekly-review-mini,body.light .weekly-archive-toolbar article,body.light .weekly-archive-card,body.light .weekly-archive-metrics span{background:rgba(255,255,255,.72);border-color:rgba(17,36,58,.08)}body.light .weekly-review-empty-inline{background:rgba(255,255,255,.5);border-color:rgba(17,36,58,.12)}
 @media (max-width:1100px){.weekly-review-pro-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.weekly-archive-toolbar{grid-template-columns:1fr 1fr}.weekly-archive-toolbar .pill{grid-column:1/-1;width:100%;justify-content:center}.weekly-archive-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:760px){.weekly-review-card{padding:15px;border-radius:24px}.weekly-review-pro-head{flex-direction:column}.weekly-review-score{width:100%;display:flex;justify-content:space-between;align-items:center;text-align:left}.weekly-review-score span{margin-top:0}.weekly-review-hero,.weekly-review-pro-grid,.weekly-archive-toolbar,.weekly-archive-metrics{grid-template-columns:1fr}.weekly-review-actions{display:grid;grid-template-columns:1fr;align-items:stretch}.weekly-review-actions .pill{width:100%;justify-content:center}.weekly-review-actions .subtle{margin-left:0;text-align:center}.weekly-archive-card-head{align-items:flex-start}.weekly-review-mini{min-width:86px}.weekly-review-highlights span{font-size:.78rem}.weekly-archive-card{padding:14px;border-radius:22px}}
+
+
+/* v97: weekly review is always visible + Supabase-ready */
+.weekly-review-shell{display:block}
+.weekly-review-shell .weekly-review-card{margin:0}
+.weekly-review-pro-head .weekly-review-score span{max-width:160px;text-align:center}
+@media (max-width:760px){
+  .weekly-review-shell{margin-top:0}
+  .weekly-review-pro-head{gap:14px}
+  .weekly-review-pro-head .weekly-review-score{align-self:flex-start}
+}

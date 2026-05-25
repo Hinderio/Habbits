@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v85-weekly-review-archive';
+  const APP_DATA_SCHEMA_VERSION = 'v86-weekly-review-supabase';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -328,13 +328,13 @@
     sport: '00000000-0000-4000-8000-000000000103',
     meditation: '00000000-0000-4000-8000-000000000104'
   });
-  const SYNC_TABLES = ['habit_definitions', 'habit_entries', 'cigarette_events', 'alcohol_logs', 'alcohol_events', 'tasks', 'task_ideas', 'appointments', 'points_ledger', 'pause_periods'];
+  const SYNC_TABLES = ['habit_definitions', 'habit_entries', 'cigarette_events', 'alcohol_logs', 'alcohol_events', 'tasks', 'task_ideas', 'appointments', 'points_ledger', 'pause_periods', 'weekly_reviews'];
   const IDLE_SYNC_CHECK_MS = 60_000;
   const SAFETY_REMOTE_PULL_MS = 10 * 60_000;
   const REMOTE_PULL_DEBOUNCE_MS = 1_500;
   const SELF_WRITE_ECHO_GRACE_MS = 4_000;
   const REMOTE_DELETE_TOMBSTONE_TTL_DAYS = 14;
-  const OPTIONAL_SYNC_TABLES = new Set(['alcohol_events', 'appointments', 'task_ideas', 'pause_periods']);
+  const OPTIONAL_SYNC_TABLES = new Set(['alcohol_events', 'appointments', 'task_ideas', 'pause_periods', 'weekly_reviews']);
   const BUILT_IN_DEFAULT_HABIT_NAMES = new Set(['gewicht', 'wasser', 'sport', 'meditation']);
   const PAUSE_SCOPE_META = {
     smoke: { label: 'Rauchen', eyebrow: 'Konsum-Pause', helper: 'Rauch-Logs im Zeitraum bleiben gespeichert, werden in Auswertungen aber pausiert betrachtet.' },
@@ -779,6 +779,7 @@
   let editingActivityIdeaId = null;
   let pauseModalContext = { scope: 'smoke', targetId: null };
   let remotePausePeriodsSupported = true;
+  let remoteWeeklyReviewsSupported = true;
   let taskWeeklyCursor = startOfWeekDate(new Date());
   let taskTimelineScrollLeft = null;
   let taskTimelineDragState = null;
@@ -1389,7 +1390,8 @@
       highlights: Array.isArray(review.highlights) ? review.highlights.slice(0, 5) : [],
       recommendation: review.recommendation || '',
       created_at: validIsoOrFallback(review.created_at || review.createdAt || nowIso()),
-      updated_at: validIsoOrFallback(review.updated_at || review.updatedAt || review.created_at || nowIso())
+      updated_at: validIsoOrFallback(review.updated_at || review.updatedAt || review.created_at || nowIso()),
+      synced: review.synced === true
     };
   }
 
@@ -1900,6 +1902,7 @@
     return SYNC_TABLES.some(table => {
       if (table === 'task_ideas' && !remoteTaskIdeasSupported) return false;
       if (table === 'pause_periods' && !remotePausePeriodsSupported) return false;
+      if (table === 'weekly_reviews' && !remoteWeeklyReviewsSupported) return false;
       return Object.values(state.deletedRemoteIds?.[table] || {}).some(meta => !meta?.synced_at);
     });
   }
@@ -1910,6 +1913,19 @@
     dedupeTaskIdeas(nextState);
     dedupeActivityIdeas(nextState);
     dedupePausePeriods(nextState);
+    dedupeWeeklyReviews(nextState);
+  }
+
+  function dedupeWeeklyReviews(nextState = state) {
+    if (!Array.isArray(nextState.weeklyReviews)) nextState.weeklyReviews = [];
+    const byWeek = new Map();
+    nextState.weeklyReviews.map(normalizeWeeklyReview).filter(review => review.week_key).forEach(review => {
+      const current = byWeek.get(review.week_key);
+      if (!current || new Date(review.updated_at || review.created_at || 0) >= new Date(current.updated_at || current.created_at || 0)) {
+        byWeek.set(review.week_key, review);
+      }
+    });
+    nextState.weeklyReviews = Array.from(byWeek.values()).sort((a, b) => String(b.week_key).localeCompare(String(a.week_key)));
   }
 
   function dedupeActivityIdeas(nextState = state) {
@@ -3272,7 +3288,12 @@
     const previous = getPreviousWeeklyReview(display.week_key);
     const compare = compareWeeklyReviews(display, previous);
     const savedCount = state.weeklyReviews.length;
-    const statusBadge = saved ? 'gespeichert' : 'Live-Vorschau';
+    const statusBadge = saved ? (saved.synced ? 'Supabase gespeichert' : 'Sync ausstehend') : 'Live-Vorschau';
+    const syncHint = remoteWeeklyReviewsSupported && isAuthenticated()
+      ? 'wird zwischen Desktop und Handy synchronisiert'
+      : remoteWeeklyReviewsSupported
+        ? 'Login nötig für Geräte-Sync'
+        : 'Supabase-Tabelle weekly_reviews fehlt noch';
     const archivePreview = savedCount
       ? `<div class="weekly-review-archive-preview">${sortedWeeklyReviews().slice(0, 4).map(review => `<button class="weekly-review-mini ${review.week_key === display.week_key ? 'is-active' : ''}" type="button" data-action="open-weekly-reviews"><strong>${escapeHtml(shortWeekLabel(review.start_key))}</strong><span>${review.score}%</span></button>`).join('')}</div>`
       : `<div class="weekly-review-empty-inline">Noch kein gespeicherter Rückblick. Speichere diese Woche als erste Vergleichsbasis.</div>`;
@@ -3288,7 +3309,7 @@
         ${weeklyReviewMetricCards(display, previous).map(item => `<article><small>${escapeHtml(item.label)}</small><strong>${escapeHtml(item.value)}</strong><p>${escapeHtml(item.text)}</p>${item.delta ? `<em class="weekly-delta ${item.tone || ''}">${escapeHtml(item.delta)}</em>` : ''}</article>`).join('')}
       </div>
       <div class="weekly-review-highlights">${display.highlights.map(item => `<span>${escapeHtml(item)}</span>`).join('') || '<span>Noch keine Highlights gespeichert</span>'}</div>
-      <div class="weekly-review-actions"><button class="pill primary" type="button" data-action="save-weekly-review">${saved ? 'Diese Woche aktualisieren' : 'Rückblick speichern'}</button><button class="pill secondary" type="button" data-action="open-weekly-reviews">Archiv & Vergleich</button><span class="subtle">${savedCount} gespeicherte Woche${savedCount === 1 ? '' : 'n'}</span></div>
+      <div class="weekly-review-actions"><button class="pill primary" type="button" data-action="save-weekly-review">${saved ? 'Diese Woche aktualisieren' : 'Rückblick speichern'}</button><button class="pill secondary" type="button" data-action="open-weekly-reviews">Archiv & Vergleich</button><span class="subtle">${savedCount} gespeicherte Woche${savedCount === 1 ? '' : 'n'} · ${escapeHtml(syncHint)}</span></div>
       ${archivePreview}`;
   }
 
@@ -3449,15 +3470,16 @@
     const existingIndex = state.weeklyReviews.findIndex(review => review.week_key === snapshot.week_key);
     if (existingIndex >= 0) {
       const existing = normalizeWeeklyReview(state.weeklyReviews[existingIndex]);
-      state.weeklyReviews[existingIndex] = { ...snapshot, id: existing.id || snapshot.id, created_at: existing.created_at || snapshot.created_at, updated_at: nowIso() };
-      toast('Wochenrückblick aktualisiert');
+      state.weeklyReviews[existingIndex] = { ...snapshot, id: existing.id || snapshot.id, created_at: existing.created_at || snapshot.created_at, updated_at: nowIso(), synced: false };
+      toast(isAuthenticated() ? 'Wochenrückblick aktualisiert · Sync läuft' : 'Wochenrückblick lokal aktualisiert');
     } else {
-      state.weeklyReviews.push({ ...snapshot, created_at: nowIso(), updated_at: nowIso() });
-      toast('Wochenrückblick gespeichert');
+      state.weeklyReviews.push({ ...snapshot, created_at: nowIso(), updated_at: nowIso(), synced: false });
+      toast(isAuthenticated() ? 'Wochenrückblick gespeichert · Sync läuft' : 'Wochenrückblick lokal gespeichert');
     }
     saveState();
     renderWeeklyReview();
     renderHistoryModal();
+    if (isAuthenticated()) syncWithSupabase({ silent: true, pullFirst: false, pullAfter: true });
   }
 
   function renderWeeklyReviewArchiveModal() {
@@ -10108,7 +10130,7 @@ async function deleteAlcoholLog(id) {
   function hasPendingSyncWork() {
     if (!state) return false;
     if (hasPendingRemoteDeletes()) return true;
-    return ['habits', 'habitEntries', 'cigarettes', 'alcoholLogs', 'alcoholUnits', 'tasks', ...(remoteTaskIdeasSupported ? ['taskIdeas'] : []), 'appointments', 'pointsLedger', ...(remotePausePeriodsSupported ? ['pausePeriods'] : [])].some(key => (state[key] || []).some(entry => entry?.synced === false));
+    return ['habits', 'habitEntries', 'cigarettes', 'alcoholLogs', 'alcoholUnits', 'tasks', ...(remoteTaskIdeasSupported ? ['taskIdeas'] : []), 'appointments', 'pointsLedger', ...(remotePausePeriodsSupported ? ['pausePeriods'] : []), ...(remoteWeeklyReviewsSupported ? ['weeklyReviews'] : [])].some(key => (state[key] || []).some(entry => entry?.synced === false));
   }
 
   function renderSyncStatus(mode) {
@@ -10273,6 +10295,31 @@ async function deleteAlcoholLog(id) {
           }
         }
 
+        if (remoteWeeklyReviewsSupported) {
+          const weeklyReviewRows = rowsPendingSync('weekly_reviews', state.weeklyReviews || [], { forceAll: forcePushAll }).map(review => {
+            const normalized = normalizeWeeklyReview(review);
+            return {
+              id: normalized.id,
+              week_key: normalized.week_key,
+              start_key: normalized.start_key,
+              end_key: normalized.end_key,
+              range_label: normalized.range_label,
+              title: normalized.title,
+              score: normalized.score,
+              metrics: normalized.metrics,
+              highlights: normalized.highlights,
+              recommendation: normalized.recommendation || null,
+              created_at: normalized.created_at,
+              updated_at: normalized.updated_at || nowIso()
+            };
+          });
+          if (await upsertRows('weekly_reviews', weeklyReviewRows)) {
+            wroteRemote = true;
+            markRowsSynced('weeklyReviews', weeklyReviewRows);
+            saveState({ skipRender: true });
+          }
+        }
+
         const ledgerRows = rowsPendingSync('points_ledger', state.pointsLedger, { forceAll: forcePushAll }).map(p => ({
           id: p.id, source_type: p.source_type, source_id: remoteLedgerSourceId(p), points: Number(p.points || 0), reason: p.reason || null,
           earned_at: p.earned_at, created_at: p.created_at || nowIso()
@@ -10316,6 +10363,7 @@ async function deleteAlcoholLog(id) {
     if (error && OPTIONAL_SYNC_TABLES.has(table) && isMissingRemoteRelationError(error)) {
       if (table === 'task_ideas') remoteTaskIdeasSupported = false;
       if (table === 'pause_periods') remotePausePeriodsSupported = false;
+        if (table === 'weekly_reviews') remoteWeeklyReviewsSupported = false;
       console.warn(`Optionale Sync-Tabelle ${table} fehlt. App läuft lokal weiter.`, error);
       return false;
     }
@@ -10617,6 +10665,7 @@ async function deleteAlcoholLog(id) {
     for (const table of SYNC_TABLES) {
       if (table === 'task_ideas' && !remoteTaskIdeasSupported) continue;
       if (table === 'pause_periods' && !remotePausePeriodsSupported) continue;
+      if (table === 'weekly_reviews' && !remoteWeeklyReviewsSupported) continue;
       const entries = Object.entries(state.deletedRemoteIds[table] || {});
       const ids = entries.filter(([, meta]) => !meta?.synced_at).map(([id]) => id);
       if (!ids.length) continue;
@@ -10732,7 +10781,7 @@ async function deleteAlcoholLog(id) {
 
   async function pullSupabaseData() {
     if (!supabaseClient) return;
-    const [habits, entries, cigarettes, alcohol, alcoholEvents, tasks, taskIdeasRemote, appointments, ledger, pausePeriods] = await Promise.all([
+    const [habits, entries, cigarettes, alcohol, alcoholEvents, tasks, taskIdeasRemote, appointments, ledger, pausePeriods, weeklyReviewsRemote] = await Promise.all([
       fetchRemoteTable('habit_definitions'),
       fetchRemoteTable('habit_entries'),
       fetchRemoteTable('cigarette_events'),
@@ -10742,7 +10791,8 @@ async function deleteAlcoholLog(id) {
       fetchRemoteTable('task_ideas'),
       fetchRemoteTable('appointments'),
       fetchRemoteTable('points_ledger'),
-      fetchRemoteTable('pause_periods')
+      fetchRemoteTable('pause_periods'),
+      fetchRemoteTable('weekly_reviews')
     ]);
 
     const remoteHabitRows = remoteRows('habit_definitions', habits);
@@ -10755,17 +10805,19 @@ async function deleteAlcoholLog(id) {
     const remoteAppointmentRows = remoteRows('appointments', appointments);
     let remoteLedgerRows = remoteRows('points_ledger', ledger);
     const remotePauseRows = remoteRows('pause_periods', pausePeriods);
+    const remoteWeeklyReviewRows = remoteRows('weekly_reviews', weeklyReviewsRemote);
 
     applyRemoteCollectionAuthority('cigarette_events', 'cigarettes', remoteCigaretteRows, { ledgerSourceType: 'cigarette' });
     applyRemoteCollectionAuthority('appointments', 'appointments', remoteAppointmentRows);
     if (remotePausePeriodsSupported) applyRemoteCollectionAuthority('pause_periods', 'pausePeriods', remotePauseRows);
+    if (remoteWeeklyReviewsSupported) applyRemoteCollectionAuthority('weekly_reviews', 'weeklyReviews', remoteWeeklyReviewRows);
     if (remoteTaskIdeasSupported) applyRemoteCollectionAuthority('task_ideas', 'taskIdeas', remoteTaskIdeaRows);
     const removedAlcoholUnits = applyRemoteCollectionAuthority('alcohol_events', 'alcoholUnits', remoteAlcoholEventRows, {
       ledgerMatcher: (point, removedSet) => isAlcoholPointsEntry(point) && removedSet.has(point.source_id)
     });
     if (removedAlcoholUnits.length) clearAlcoholLogsWithoutUnits(removedAlcoholUnits);
     remoteLedgerRows = filterRemoteLedgerRows(remoteLedgerRows, { cigaretteRows: remoteCigaretteRows, alcoholEventRows: remoteAlcoholEventRows });
-    const remoteHasData = [remoteHabitRows, remoteEntryRows, remoteCigaretteRows, remoteAlcoholRows, remoteAlcoholEventRows, remoteTaskRows, remoteTaskIdeaRows, remoteAppointmentRows, remoteLedgerRows, remotePauseRows].some(rows => rows.length > 0);
+    const remoteHasData = [remoteHabitRows, remoteEntryRows, remoteCigaretteRows, remoteAlcoholRows, remoteAlcoholEventRows, remoteTaskRows, remoteTaskIdeaRows, remoteAppointmentRows, remoteLedgerRows, remotePauseRows, remoteWeeklyReviewRows].some(rows => rows.length > 0);
 
     applyRemoteHabitAuthority(remoteHabitRows);
 
@@ -10780,6 +10832,7 @@ async function deleteAlcoholLog(id) {
       state.appointments = remoteAppointmentRows.map(mapRemoteAppointment).map(normalizeAppointment);
       state.pointsLedger = remoteLedgerRows.map(mapRemoteLedger);
       state.pausePeriods = remotePauseRows.map(mapRemotePausePeriod).map(normalizePausePeriod);
+      state.weeklyReviews = remoteWeeklyReviewRows.map(mapRemoteWeeklyReview).map(normalizeWeeklyReview);
       dedupeStateCollections(state);
       return;
     }
@@ -10796,12 +10849,14 @@ async function deleteAlcoholLog(id) {
     state.appointments = mergeById(state.appointments, remoteAppointmentRows, mapRemoteAppointment).map(normalizeAppointment);
     state.pointsLedger = mergeById(state.pointsLedger, remoteLedgerRows, mapRemoteLedger);
     state.pausePeriods = mergeById(state.pausePeriods || [], remotePauseRows, mapRemotePausePeriod).map(normalizePausePeriod);
+    state.weeklyReviews = mergeById(state.weeklyReviews || [], remoteWeeklyReviewRows, mapRemoteWeeklyReview).map(normalizeWeeklyReview);
     dedupeStateCollections(state);
   }
 
   async function fetchRemoteTable(table) {
     if (table === 'task_ideas' && !remoteTaskIdeasSupported) return { data: [], error: null };
     if (table === 'pause_periods' && !remotePausePeriodsSupported) return { data: [], error: null };
+    if (table === 'weekly_reviews' && !remoteWeeklyReviewsSupported) return { data: [], error: null };
     const userId = currentUserId();
     if (!userId) return { data: [], error: null };
     const result = await supabaseClient.from(table).select('*').eq('user_id', userId);
@@ -10809,6 +10864,7 @@ async function deleteAlcoholLog(id) {
       if (OPTIONAL_SYNC_TABLES.has(table) && isMissingRemoteRelationError(result.error)) {
         if (table === 'task_ideas') remoteTaskIdeasSupported = false;
         if (table === 'pause_periods') remotePausePeriodsSupported = false;
+        if (table === 'weekly_reviews') remoteWeeklyReviewsSupported = false;
         console.warn(`Optionale Sync-Tabelle ${table} fehlt.`, result.error);
         return { data: [], error: null };
       }
@@ -10854,7 +10910,7 @@ async function deleteAlcoholLog(id) {
   function isLocalPristine() {
     const defaultIds = new Set(Object.values(DEFAULT_HABIT_IDS));
     const hasOnlyDefaultHabits = state.habits.every(h => defaultIds.has(h.id) || BUILT_IN_DEFAULT_HABIT_NAMES.has(String(h.name || '').trim().toLowerCase()));
-    return hasOnlyDefaultHabits && !state.habitEntries.length && !state.cigarettes.length && !state.alcoholLogs.length && !state.alcoholUnits.length && !state.tasks.length && !(state.taskIdeas || []).length && !state.appointments.length && !state.morningRoutineLogs?.length && !state.pointsLedger.length && !(state.pausePeriods || []).length;
+    return hasOnlyDefaultHabits && !state.habitEntries.length && !state.cigarettes.length && !state.alcoholLogs.length && !state.alcoholUnits.length && !state.tasks.length && !(state.taskIdeas || []).length && !state.appointments.length && !state.morningRoutineLogs?.length && !state.pointsLedger.length && !(state.pausePeriods || []).length && !(state.weeklyReviews || []).length;
   }
 
   function subscribeToRemoteChanges() {
@@ -10918,6 +10974,21 @@ async function deleteAlcoholLog(id) {
   const mapRemoteAppointment = a => normalizeAppointment({ id: a.id, title: a.title, description: a.description, location: a.location, appointment_type: a.appointment_type, starts_at: a.starts_at, ends_at: a.ends_at, created_at: a.created_at, updated_at: a.updated_at, synced: true });
   const mapRemoteLedger = p => normalizeMorningRoutineLedgerPoint({ id: p.id, source_type: p.source_type, source_id: p.source_id, points: p.points, reason: p.reason, earned_at: p.earned_at, created_at: p.created_at, updated_at: p.created_at, synced: true });
   const mapRemotePausePeriod = p => normalizePausePeriod({ id: p.id, scope: p.scope, target_id: p.target_id, starts_at: p.starts_at, ends_at: p.ends_at, note: p.note, is_archived: p.is_archived, created_at: p.created_at, updated_at: p.updated_at, synced: true });
+  const mapRemoteWeeklyReview = row => normalizeWeeklyReview({
+    id: row.id,
+    week_key: row.week_key,
+    start_key: row.start_key,
+    end_key: row.end_key,
+    range_label: row.range_label,
+    title: row.title,
+    score: row.score,
+    metrics: row.metrics,
+    highlights: row.highlights,
+    recommendation: row.recommendation,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    synced: true
+  });
 
   function exportJson() {
     const blob = new Blob([JSON.stringify({ state, settings: { email: settings.email || '' } }, null, 2)], { type: 'application/json' });
