@@ -637,6 +637,8 @@
             <label><span>Aufwand</span><select name="effort"><option value="1">1 · sehr klein</option><option value="2">2 · klein</option><option value="3" selected>3 · mittel</option><option value="4">4 · gross</option><option value="5">5 · sehr gross</option></select></label>
             <label><span>Priorität</span><select name="priority"><option value="low">Niedrig</option><option value="medium" selected>Normal</option><option value="high">Hoch</option><option value="urgent">Kritisch</option></select></label>
             <label><span>Fällig</span><input name="due_at" type="datetime-local" /></label>
+            <label><span>Zyklus</span><select id="taskRecurrenceSelect" name="recurrence"><option value="none" selected>Einmalig</option><option value="monthly">Monatlich automatisch</option></select></label>
+            <div id="taskRecurrenceHint" class="task-cycle-hint full">Einmalige Aufgabe ohne automatische Folgekarten.</div>
             <label class="full"><span>Notiz</span><textarea name="description" rows="3" placeholder="optional"></textarea></label>
             <div class="form-actions full"><button id="taskSubmitBtn" class="pill primary" type="submit">Aufgabe speichern</button><button id="cancelTaskEditBtn" class="pill secondary hidden" type="button">Abbrechen</button></div>
           </form>

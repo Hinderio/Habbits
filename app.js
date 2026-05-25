@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v89-delete-tombstone-retry';
+  const APP_DATA_SCHEMA_VERSION = 'v90-recurring-tasks-fitness-mobile';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -20,6 +20,8 @@
   const HABITS_EXPERIENCE_KEY = 'habitflow-habits-experience-v1';
   const FITNESS_FILTER_KEY = 'habitflow-fitness-filter-v1';
   const FITNESS_DETAIL_TAB_KEY = 'habitflow-fitness-detail-tab-v1';
+  const FITNESS_MOBILE_SECTIONS_KEY = 'habitflow-fitness-mobile-sections-v1';
+  const TASK_RECURRENCE_MARKER_RE = /\n?\s*<!--hf-task-rec:([^>]+)-->/;
   const FITNESS_ROUTE_START = Object.freeze({ lat: 47.459945, lng: 9.032719 });
   const FITNESS_TOWN_MILESTONES = Object.freeze([
     { name: 'Wil SG', km: 0 },
@@ -809,6 +811,7 @@
   let activeHabitsPane = localStorage.getItem(HABITS_EXPERIENCE_KEY) === 'fitness' ? 'fitness' : 'overview';
   let selectedFitnessFilter = ['all', 'jogging', 'hiking'].includes(localStorage.getItem(FITNESS_FILTER_KEY)) ? localStorage.getItem(FITNESS_FILTER_KEY) : 'all';
   let selectedFitnessDetailTab = ['summary', 'stats', 'peaks'].includes(localStorage.getItem(FITNESS_DETAIL_TAB_KEY)) ? localStorage.getItem(FITNESS_DETAIL_TAB_KEY) : 'summary';
+  let fitnessMobileSectionState = loadFitnessMobileSectionState();
   let selectedFitnessEntryId = null;
   let leisureSeedCatalog = [];
   let leisureCatalog = [];
@@ -978,6 +981,8 @@
       taskSubmitBtn: $('#taskSubmitBtn'),
       cancelTaskEditBtn: $('#cancelTaskEditBtn'),
       taskPointsPreview: $('#taskPointsPreview'),
+      taskRecurrenceSelect: $('#taskRecurrenceSelect'),
+      taskRecurrenceHint: $('#taskRecurrenceHint'),
       tasksList: $('#tasksList'),
       taskIdeasToggleBtn: $('#taskIdeasToggleBtn'),
       taskWeeklyToggleBtn: $('#taskWeeklyToggleBtn'),
@@ -1139,6 +1144,8 @@
     if (els.appointmentForm) els.appointmentForm.addEventListener('submit', createAppointment);
     els.taskForm.elements.effort.addEventListener('change', updateTaskPreview);
     els.taskForm.elements.priority.addEventListener('change', updateTaskPreview);
+    if (els.taskForm.elements.due_at) els.taskForm.elements.due_at.addEventListener('change', updateTaskRecurrenceHint);
+    if (els.taskRecurrenceSelect) els.taskRecurrenceSelect.addEventListener('change', updateTaskRecurrenceHint);
     if (els.appointmentForm?.elements?.starts_at) els.appointmentForm.elements.starts_at.addEventListener('change', syncAppointmentEndDefault);
     if (els.cancelHabitEditBtn) els.cancelHabitEditBtn.addEventListener('click', () => closeHabitForm({ clearForm: true }));
     if (els.cancelTaskEditBtn) els.cancelTaskEditBtn.addEventListener('click', () => closeTaskForm({ clearForm: true }));
@@ -1661,17 +1668,147 @@
   }
 
 
+  function parseTaskRecurrenceFromDescription(description = '') {
+    const raw = String(description || '');
+    const match = raw.match(TASK_RECURRENCE_MARKER_RE);
+    if (!match) return { description: raw, recurrence: null };
+    const cleaned = raw.replace(TASK_RECURRENCE_MARKER_RE, '').trim();
+    try {
+      const decoded = JSON.parse(decodeURIComponent(match[1] || ''));
+      return { description: cleaned, recurrence: decoded };
+    } catch (error) {
+      console.warn('Task-Wiederholung konnte nicht gelesen werden.', error);
+      return { description: cleaned, recurrence: null };
+    }
+  }
+
+  function normalizeTaskRecurrence(recurrence = null, task = {}) {
+    if (!recurrence) return null;
+    const value = typeof recurrence === 'string' ? { frequency: recurrence } : recurrence;
+    if (value.frequency !== 'monthly') return null;
+    const due = task.due_at ? new Date(task.due_at) : null;
+    const anchorDay = Number(value.anchor_day || value.anchorDay || (due && !Number.isNaN(due.getTime()) ? due.getDate() : 1));
+    const safeAnchorDay = Math.max(1, Math.min(31, Number.isFinite(anchorDay) ? Math.round(anchorDay) : 1));
+    const time = String(value.time || (due && !Number.isNaN(due.getTime()) ? `${String(due.getHours()).padStart(2, '0')}:${String(due.getMinutes()).padStart(2, '0')}` : '09:00')).slice(0, 5);
+    return {
+      frequency: 'monthly',
+      series_id: String(value.series_id || value.seriesId || task.recurrence_series_id || task.id || uid()),
+      anchor_day: safeAnchorDay,
+      time: /^\d{2}:\d{2}$/.test(time) ? time : '09:00',
+      previous_task_id: value.previous_task_id || value.previousTaskId || null
+    };
+  }
+
+  function taskRecurrenceLabel(task = {}) {
+    const recurrence = normalizeTaskRecurrence(task.recurrence, task);
+    if (!recurrence) return '';
+    return recurrence.frequency === 'monthly' ? 'Monatlich' : '';
+  }
+
+  function taskDescriptionForDisplay(task = {}) {
+    return parseTaskRecurrenceFromDescription(task.description || '').description;
+  }
+
+  function taskDescriptionForStorage(task = {}) {
+    const clean = taskDescriptionForDisplay(task).trim();
+    const recurrence = normalizeTaskRecurrence(task.recurrence, task);
+    if (!recurrence) return clean || null;
+    return `${clean ? `${clean}\n\n` : ''}<!--hf-task-rec:${encodeURIComponent(JSON.stringify(recurrence))}-->`;
+  }
+
+  function buildMonthlyTaskRecurrence(dueAt, existing = {}) {
+    const date = dueAt ? new Date(dueAt) : null;
+    if (!date || Number.isNaN(date.getTime())) return null;
+    return normalizeTaskRecurrence({
+      frequency: 'monthly',
+      series_id: existing.recurrence?.series_id || existing.recurrence_series_id || existing.id || uid(),
+      anchor_day: date.getDate(),
+      time: `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+    }, { ...existing, due_at: dueAt });
+  }
+
+  function daysInMonth(year, monthIndex) {
+    return new Date(year, monthIndex + 1, 0).getDate();
+  }
+
+  function nextMonthlyDueAt(task = {}) {
+    const recurrence = normalizeTaskRecurrence(task.recurrence, task);
+    const base = task.due_at ? new Date(task.due_at) : new Date(task.completed_at || Date.now());
+    if (!recurrence || Number.isNaN(base.getTime())) return null;
+    const [hourRaw, minuteRaw] = String(recurrence.time || '09:00').split(':');
+    const hour = Math.max(0, Math.min(23, Number(hourRaw) || 0));
+    const minute = Math.max(0, Math.min(59, Number(minuteRaw) || 0));
+    let monthOffset = 1;
+    let next = null;
+    const staleBoundary = Date.now() - DAY_MS;
+    do {
+      const candidateMonth = base.getMonth() + monthOffset;
+      const year = base.getFullYear() + Math.floor(candidateMonth / 12);
+      const month = ((candidateMonth % 12) + 12) % 12;
+      const day = Math.min(recurrence.anchor_day || base.getDate(), daysInMonth(year, month));
+      next = new Date(year, month, day, hour, minute, 0, 0);
+      monthOffset += 1;
+    } while (next && next.getTime() < staleBoundary && monthOffset < 24);
+    return next && !Number.isNaN(next.getTime()) ? next.toISOString() : null;
+  }
+
+  function ensureNextRecurringTask(task = {}) {
+    const completed = normalizeTask(task);
+    const recurrence = normalizeTaskRecurrence(completed.recurrence, completed);
+    if (!recurrence || completed.status !== 'done' || !completed.due_at) return null;
+    const seriesId = recurrence.series_id;
+    if (!seriesId) return null;
+    const existingNext = state.tasks.map(normalizeTask).some(item => {
+      if (item.id === completed.id) return false;
+      const itemRecurrence = normalizeTaskRecurrence(item.recurrence, item);
+      if (!itemRecurrence || itemRecurrence.series_id !== seriesId) return false;
+      if (itemRecurrence.previous_task_id === completed.id) return true;
+      const currentDue = new Date(completed.due_at || 0).getTime();
+      const itemDue = new Date(item.due_at || 0).getTime();
+      return Number.isFinite(itemDue) && Number.isFinite(currentDue) && itemDue > currentDue && (item.status || 'open') !== 'archived';
+    });
+    if (existingNext) return null;
+    const nextDue = nextMonthlyDueAt(completed);
+    if (!nextDue) return null;
+    const created = nowIso();
+    const nextRecurrence = normalizeTaskRecurrence({ ...recurrence, previous_task_id: completed.id }, { ...completed, due_at: nextDue });
+    const nextTask = normalizeTask({
+      id: uid(),
+      title: completed.title,
+      description: taskDescriptionForDisplay(completed),
+      effort: completed.effort || 3,
+      priority: normalizeTaskPriority(completed.priority),
+      status: 'open',
+      due_at: nextDue,
+      completed_at: null,
+      done_archived_at: null,
+      done_archive_rank: null,
+      backlog_rank: null,
+      points: 0,
+      recurrence: nextRecurrence,
+      created_at: created,
+      updated_at: created,
+      synced: false
+    });
+    state.tasks.push(nextTask);
+    return nextTask;
+  }
+
   function normalizeTask(task = {}) {
+    const parsedDescription = parseTaskRecurrenceFromDescription(task.description || '');
     const status = TASK_COLUMNS.some(column => column.status === task.status) ? task.status : 'open';
     const doneArchivedAt = status === 'done' ? validIsoOrNull(task.done_archived_at || task.doneArchivedAt) : null;
     const doneArchiveRank = Number.isFinite(Number(task.done_archive_rank)) ? Number(task.done_archive_rank) : null;
-    return {
+    const normalized = {
       ...task,
+      description: parsedDescription.description,
       status,
       priority: normalizeTaskPriority(task.priority),
       done_archived_at: doneArchivedAt,
       done_archive_rank: doneArchivedAt ? doneArchiveRank : null
     };
+    normalized.recurrence = normalizeTaskRecurrence(task.recurrence || parsedDescription.recurrence, normalized);
+    return normalized;
   }
 
   function normalizeTaskIdea(idea = {}) {
@@ -2654,11 +2791,49 @@
     if (quickAdd) quickAdd.open = false;
   }
 
+  function loadFitnessMobileSectionState() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(FITNESS_MOBILE_SECTIONS_KEY) || '{}');
+      return ['jogging', 'hiking', 'summary'].reduce((acc, key) => {
+        acc[key] = parsed[key] !== false;
+        return acc;
+      }, {});
+    } catch (error) {
+      return { jogging: true, hiking: true, summary: true };
+    }
+  }
+
+  function saveFitnessMobileSectionState() {
+    localStorage.setItem(FITNESS_MOBILE_SECTIONS_KEY, JSON.stringify(fitnessMobileSectionState));
+  }
+
+  function applyFitnessMobileSections() {
+    const sections = [...document.querySelectorAll('#screen-fitness .mobile-fitness-section')];
+    if (!sections.length) return;
+    const isMobile = window.matchMedia('(max-width: 760px)').matches;
+    sections.forEach(section => {
+      const key = section.dataset.fitnessSection || 'summary';
+      if (isMobile) {
+        section.open = fitnessMobileSectionState[key] !== false;
+      } else {
+        section.open = true;
+      }
+      if (!section.dataset.fitnessBound) {
+        section.dataset.fitnessBound = 'true';
+        section.addEventListener('toggle', () => {
+          if (!window.matchMedia('(max-width: 760px)').matches) return;
+          const currentKey = section.dataset.fitnessSection || 'summary';
+          fitnessMobileSectionState[currentKey] = section.open;
+          saveFitnessMobileSectionState();
+        });
+      }
+    });
+  }
+
   function setupMobileResponsiveSections() {
     const dashboardSections = [...document.querySelectorAll('#screen-dashboard .mobile-dashboard-section')];
     const consumptionSections = [...document.querySelectorAll('#screen-smoking .mobile-consumption-section')];
     const sections = [...dashboardSections, ...consumptionSections];
-    if (!sections.length) return;
     const apply = () => {
       const isMobile = window.matchMedia('(max-width: 760px)').matches;
       arrangeDashboardKpis(isMobile);
@@ -2673,6 +2848,7 @@
           delete section.dataset.mobilePrepared;
         }
       });
+      applyFitnessMobileSections();
     };
     apply();
     window.addEventListener('resize', apply, { passive: true });
@@ -6334,7 +6510,7 @@
     const timeSecondsInputId = type === 'jogging' && habit ? `fitness-quick-sec-${type}-${habit.id}` : '';
     const latest = sessions[0] || null;
     const mountainCollection = type === 'hiking' ? buildMountainCollection(sessions) : null;
-    return `<details class="mobile-fitness-section fitness-journey-section is-${type}" open>
+    return `<details class="mobile-fitness-section fitness-journey-section is-${type}" data-fitness-section="${type}" open>
       <summary><span>${escapeHtml(meta.label)}</span><small>${summary.totalSessions} Session${summary.totalSessions === 1 ? '' : 's'} · ${formatKmValue(summary.totalDistance)}</small></summary>
       <article class="fitness-journey-card is-${type}">
       <div class="fitness-journey-head">
@@ -6432,7 +6608,7 @@
         ${renderFitnessJourneyCard('jogging', joggingSessions, runningHabit)}
         ${renderFitnessJourneyCard('hiking', hikingSessions, hikingHabit)}
       </section>
-      <details class="mobile-fitness-section fitness-summary-section" open>
+      <details class="mobile-fitness-section fitness-summary-section" data-fitness-section="summary" open>
         <summary><span>Summary</span><small>${selectedSession ? `${escapeHtml(selectedSession.meta.label)} · ${formatKmValue(selectedSession.distanceKm)}` : 'Session-Fokus'}</small></summary>
       <section class="fitness-detail-card">
         <div class="fitness-route-head">
@@ -6467,6 +6643,7 @@
       </section>
       </details>
     </div>`;
+    applyFitnessMobileSections();
   }
 
   function renderMeditationHabitControl(habit) {
@@ -7831,11 +8008,12 @@
         <span class="drag-handle" aria-hidden="true">⋮⋮</span>
         <div class="task-badges">
           <span class="badge muted ${taskPriorityClass(priority)}">${escapeHtml(priorityMeta.short)}</span>
+          ${taskRecurrenceLabel(task) ? `<span class="badge task-recurrence-badge">${escapeHtml(taskRecurrenceLabel(task))}</span>` : ''}
           <span class="badge muted">#${index + 1}</span>
         </div>
       </div>
       <h4>${escapeHtml(task.title)}</h4>
-      <p class="meta">Backlog · Aufwand ${task.effort}/5 · Priorität ${escapeHtml(priorityMeta.label)} · ${escapeHtml(dueLabel)}${task.description ? `<br>${escapeHtml(task.description)}` : ''}</p>
+      <p class="meta">Backlog · Aufwand ${task.effort}/5 · Priorität ${escapeHtml(priorityMeta.label)} · ${escapeHtml(dueLabel)}${task.description ? `<br>${escapeHtml(taskDescriptionForDisplay(task))}` : ''}</p>
       ${renderOverdueDots(task)}
       <div class="list-actions compact-actions backlog-actions">
         <button class="mini-btn primary" type="button" data-action="move-backlog-task" data-status="open" data-id="${task.id}">In Offen</button>
@@ -7868,11 +8046,12 @@
         <div class="task-badges">
           <span class="badge muted ${taskPriorityClass(priority)}">${escapeHtml(priorityMeta.short)}</span>
           <span class="badge">+${Number(task.points || taskPoints(task))} Pkt.</span>
+          ${taskRecurrenceLabel(task) ? `<span class="badge task-recurrence-badge">${escapeHtml(taskRecurrenceLabel(task))}</span>` : ''}
           <span class="badge muted">#${index + 1}</span>
         </div>
       </div>
       <h4>${escapeHtml(task.title)}</h4>
-      <p class="meta">Archiv · ${escapeHtml(completedLabel)} · ${escapeHtml(archivedLabel)} · Aufwand ${task.effort}/5 · Priorität ${escapeHtml(priorityMeta.label)}${task.description ? `<br>${escapeHtml(task.description)}` : ''}</p>
+      <p class="meta">Archiv · ${escapeHtml(completedLabel)} · ${escapeHtml(archivedLabel)} · Aufwand ${task.effort}/5 · Priorität ${escapeHtml(priorityMeta.label)}${task.description ? `<br>${escapeHtml(taskDescriptionForDisplay(task))}` : ''}</p>
       <div class="list-actions compact-actions backlog-actions">
         <button class="mini-btn primary" type="button" data-action="restore-archived-task" data-id="${task.id}">Zurück zu Erledigt</button>
         <button class="mini-btn" type="button" data-action="edit-task" data-id="${task.id}">Bearbeiten</button>
@@ -7908,10 +8087,11 @@
         <div class="task-badges">
           <span class="badge muted ${taskPriorityClass(priority)}">${escapeHtml(priorityMeta.short)}</span>
           <span class="badge ${status === 'done' ? '' : 'muted'}">${status === 'done' ? `+${Number(task.points || taskPoints(task))} Pkt.` : `+${taskPoints(task)} Pkt.`}</span>
+          ${taskRecurrenceLabel(task) ? `<span class="badge task-recurrence-badge">${escapeHtml(taskRecurrenceLabel(task))}</span>` : ''}
         </div>
       </div>
       <h4>${escapeHtml(task.title)}</h4>
-      <p class="meta">${escapeHtml(statusLabel)} · Aufwand ${task.effort}/5 · Priorität ${escapeHtml(priorityMeta.label)} · ${task.due_at ? `${isOverdue ? 'Überfällig' : 'Fällig'} ${formatDateTime(task.due_at)}` : 'ohne Fälligkeitsdatum'}${task.description ? `<br>${escapeHtml(task.description)}` : ''}</p>
+      <p class="meta">${escapeHtml(statusLabel)} · Aufwand ${task.effort}/5 · Priorität ${escapeHtml(priorityMeta.label)} · ${task.due_at ? `${isOverdue ? 'Überfällig' : 'Fällig'} ${formatDateTime(task.due_at)}` : 'ohne Fälligkeitsdatum'}${task.description ? `<br>${escapeHtml(taskDescriptionForDisplay(task))}` : ''}</p>
       ${renderOverdueDots(task)}
       <div class="list-actions compact-actions">
         ${primaryAction}
@@ -9035,12 +9215,19 @@ async function deleteAlcoholLog(id) {
   function createTask(event) {
     event.preventDefault();
     const data = new FormData(els.taskForm);
+    const wantsMonthly = String(data.get('recurrence') || 'none') === 'monthly';
+    const dueAt = data.get('due_at') ? new Date(data.get('due_at')).toISOString() : null;
+    if (wantsMonthly && !dueAt) {
+      toast('Für monatliche Aufgaben braucht es ein Fälligkeitsdatum.');
+      els.taskForm.elements.due_at?.focus();
+      return;
+    }
     const values = {
       title: String(data.get('title') || '').trim(),
       description: String(data.get('description') || '').trim(),
       effort: Number(data.get('effort') || 3),
       priority: normalizeTaskPriority(data.get('priority')),
-      due_at: data.get('due_at') ? new Date(data.get('due_at')).toISOString() : null,
+      due_at: dueAt,
       updated_at: nowIso(),
       synced: false
     };
@@ -9054,6 +9241,7 @@ async function deleteAlcoholLog(id) {
         return;
       }
       Object.assign(task, values);
+      task.recurrence = wantsMonthly ? buildMonthlyTaskRecurrence(values.due_at, task) : null;
       if (task.status === 'done') {
         task.points = taskPoints(task);
         addPoints('task', task.id, task.points, `Aufgabe abgeschlossen: ${task.title}`, task.completed_at || nowIso());
@@ -9062,28 +9250,31 @@ async function deleteAlcoholLog(id) {
       taskFormOpen = false;
       syncTaskFormPanel();
       saveState();
-      toast('Aufgabe aktualisiert');
+      toast(wantsMonthly ? 'Aufgabe aktualisiert · monatlicher Zyklus aktiv' : 'Aufgabe aktualisiert');
       syncWithSupabase({ silent: true, pullFirst: false });
       return;
     }
 
     const created = nowIso();
-    state.tasks.push({
-      id: uid(),
+    const taskId = uid();
+    const nextTask = normalizeTask({
+      id: taskId,
       ...values,
       status: 'open',
       completed_at: null,
       done_archived_at: null,
       done_archive_rank: null,
       points: 0,
+      recurrence: wantsMonthly ? buildMonthlyTaskRecurrence(values.due_at, { id: taskId }) : null,
       created_at: created,
       updated_at: created
     });
+    state.tasks.push(nextTask);
     resetTaskFormMode({ clearForm: true });
     taskFormOpen = false;
     syncTaskFormPanel();
     saveState();
-    toast('Aufgabe gespeichert');
+    toast(wantsMonthly ? 'Aufgabe gespeichert · wird monatlich fortgeführt' : 'Aufgabe gespeichert');
     syncWithSupabase({ silent: true });
   }
 
@@ -9318,6 +9509,7 @@ async function deleteAlcoholLog(id) {
     if (nextStatus === TASK_BACKLOG_STATUS && !Number.isFinite(Number(task.backlog_rank))) task.backlog_rank = nextBacklogRank();
     task.updated_at = nowIso();
     task.synced = false;
+    let createdRecurringTask = null;
 
     if (nextStatus === 'done') {
       task.done_archived_at = null;
@@ -9325,6 +9517,7 @@ async function deleteAlcoholLog(id) {
       task.completed_at = nowIso();
       task.points = taskPoints(task);
       addPoints('task', task.id, task.points, `Aufgabe abgeschlossen: ${task.title}`, task.completed_at);
+      createdRecurringTask = ensureNextRecurringTask(task);
     } else if (previousStatus === 'done' && nextStatus !== TASK_BACKLOG_STATUS) {
       task.completed_at = null;
       task.points = 0;
@@ -9340,7 +9533,7 @@ async function deleteAlcoholLog(id) {
     if (wasDoneArchived || nextStatus !== 'done') compactDoneArchiveRanks();
     saveState();
     const label = TASK_COLUMNS.find(column => column.status === nextStatus)?.title || 'verschoben';
-    toast(`Aufgabe: ${label}`);
+    toast(createdRecurringTask ? `Aufgabe: ${label} · nächste Monatskarte erstellt` : `Aufgabe: ${label}`);
     syncWithSupabase({ silent: true });
   }
 
@@ -9481,10 +9674,11 @@ async function deleteAlcoholLog(id) {
     editingTaskId = id;
     const fields = els.taskForm.elements;
     fields.title.value = task.title || '';
-    fields.description.value = task.description || '';
+    fields.description.value = taskDescriptionForDisplay(task);
     fields.effort.value = String(task.effort || 3);
     fields.priority.value = normalizeTaskPriority(task.priority);
     fields.due_at.value = toDateTimeLocalValue(task.due_at);
+    if (fields.recurrence) fields.recurrence.value = normalizeTaskRecurrence(task.recurrence, task) ? 'monthly' : 'none';
     els.taskFormTitle.textContent = 'Aufgabe bearbeiten';
     els.taskSubmitBtn.textContent = 'Änderungen speichern';
     els.cancelTaskEditBtn.classList.remove('hidden');
@@ -9502,6 +9696,7 @@ async function deleteAlcoholLog(id) {
       els.taskForm.reset();
       els.taskForm.elements.effort.value = '3';
       els.taskForm.elements.priority.value = 'medium';
+      if (els.taskForm.elements.recurrence) els.taskForm.elements.recurrence.value = 'none';
     }
     els.taskFormTitle.textContent = 'Aufgabe erfassen';
     els.taskSubmitBtn.textContent = 'Aufgabe speichern';
@@ -9534,6 +9729,16 @@ async function deleteAlcoholLog(id) {
 
   function archiveTask(id) {
     moveTaskToStatus(id, 'archived');
+  }
+
+  function updateTaskRecurrenceHint() {
+    if (!els.taskRecurrenceHint) return;
+    const monthly = els.taskForm?.elements?.recurrence?.value === 'monthly';
+    const dueValue = els.taskForm?.elements?.due_at?.value || '';
+    els.taskRecurrenceHint.textContent = monthly
+      ? (dueValue ? 'Nach dem Erledigen entsteht automatisch die nächste Monats-Aufgabe mit gleichem Tag und gleicher Uhrzeit.' : 'Setze ein Fälligkeitsdatum, damit der Monatszyklus sauber starten kann.')
+      : 'Einmalige Aufgabe ohne automatische Folgekarten.';
+    els.taskRecurrenceHint.classList.toggle('is-active', monthly);
   }
 
   function updateTaskPreview() {
@@ -10652,7 +10857,7 @@ async function deleteAlcoholLog(id) {
       const row = {
         id: t.id,
         title: t.title,
-        description: t.description || null,
+        description: taskDescriptionForStorage(t),
         effort: Number(t.effort || 3),
         status: taskStatusForRemote(t.status || 'open'),
         due_at: t.due_at,
@@ -11049,6 +11254,7 @@ async function deleteAlcoholLog(id) {
   function preserveLocalTaskFallbacks(remoteTask, localTask) {
     if (!localTask) return remoteTask;
     const next = { ...remoteTask };
+    if (!next.recurrence && localTask.recurrence) next.recurrence = localTask.recurrence;
     if (!remoteTaskPrioritySupported) next.priority = localTask.priority || next.priority;
     if (!remoteTaskInProgressSupported && localTask.status === 'in_progress' && remoteTask.status === 'open') next.status = 'in_progress';
     if (!remoteTaskBacklogRankSupported && localTask.backlog_rank != null) next.backlog_rank = localTask.backlog_rank;

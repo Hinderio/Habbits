@@ -2940,3 +2940,33 @@ body.light .pause-card-log-row{
     border-color:rgba(17,36,58,.08);
   }
 }
+
+/* v102: mobile fitness accordion persistence + monthly task cycle UI */
+.task-cycle-hint{
+  border-radius:18px;
+  border:1px solid rgba(255,255,255,.08);
+  background:rgba(255,255,255,.045);
+  color:var(--muted);
+  font-size:.82rem;
+  line-height:1.35;
+  padding:12px 14px;
+}
+.task-cycle-hint.is-active{
+  border-color:rgba(74,215,209,.22);
+  background:rgba(74,215,209,.1);
+  color:var(--text);
+  font-weight:850;
+}
+.task-recurrence-badge{
+  border-color:rgba(74,215,209,.28)!important;
+  background:rgba(74,215,209,.13)!important;
+  color:var(--primary)!important;
+}
+body.light .task-cycle-hint{
+  background:rgba(255,255,255,.72);
+  border-color:rgba(17,36,58,.08);
+}
+body.light .task-cycle-hint.is-active{
+  background:rgba(74,215,209,.13);
+  border-color:rgba(40,150,150,.22);
+}
