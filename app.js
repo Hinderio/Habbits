@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v88-weekly-review-mobile-hiking-hm';
+  const APP_DATA_SCHEMA_VERSION = 'v89-delete-tombstone-retry';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -1433,14 +1433,9 @@
   function runLocalCacheRepair() {
     const previousVersion = localStorage.getItem(APP_DATA_SCHEMA_KEY);
     if (previousVersion === APP_DATA_SCHEMA_VERSION) return;
+    // Keep recent delete tombstones intact. They are the local guard that prevents
+    // Supabase echo rows from resurrecting deleted logs after a hard refresh.
     state.deletedRemoteIds = normalizeDeletedRemoteIds(state.deletedRemoteIds);
-    // Synced delete markers are only a local cache aid. If a browser kept a stale marker,
-    // it can hide valid Supabase rows after a hard refresh. Pending deletes stay intact.
-    Object.keys(state.deletedRemoteIds || {}).forEach(table => {
-      Object.entries(state.deletedRemoteIds[table] || {}).forEach(([id, meta]) => {
-        if (meta?.synced_at) delete state.deletedRemoteIds[table][id];
-      });
-    });
     localStorage.setItem(APP_DATA_SCHEMA_KEY, APP_DATA_SCHEMA_VERSION);
     saveState({ skipRender: true });
   }
@@ -1905,6 +1900,11 @@
   function clearRemoteDeleteMarker(table, id) {
     if (!table || !id || !state.deletedRemoteIds?.[table]?.[id]) return;
     delete state.deletedRemoteIds[table][id];
+  }
+
+  function retryRemoteDeleteMarker(table, id) {
+    if (!table || !id || !state.deletedRemoteIds?.[table]?.[id]) return;
+    state.deletedRemoteIds[table][id].synced_at = null;
   }
 
   function hasPendingRemoteDeletes() {
@@ -6652,8 +6652,11 @@
     saveState();
     renderHabits();
     renderHistoryModal();
-    await deleteRemoteByIds('points_ledger', removedLedgerIds);
-    await deleteRemoteById('habit_entries', id);
+    const ledgerDeleted = await deleteRemoteByIds('points_ledger', removedLedgerIds);
+    if (ledgerDeleted) markRemoteDeletedMany('points_ledger', removedLedgerIds, { synced: true });
+    const entryDeleted = await deleteRemoteById('habit_entries', id);
+    if (entryDeleted) markRemoteDeleted('habit_entries', id, { synced: true });
+    saveState({ skipRender: true });
     toast('Habit-Log gelöscht');
     syncWithSupabase({ silent: true, pullFirst: false });
   }
@@ -10291,10 +10294,14 @@ async function deleteAlcoholLog(id) {
     let wroteRemote = false;
     try {
       const pendingBeforePull = hasPendingSyncWork();
-      const effectivePullOnly = pullOnly && !pendingBeforePull && !forcePushAll;
+      let effectivePullOnly = pullOnly && !pendingBeforePull && !forcePushAll;
       if (pullFirst || effectivePullOnly) {
         await pullSupabaseData();
         lastRemotePullAt = Date.now();
+        // A pull can reveal a recently deleted row that is still present remotely.
+        // In that case remoteRows() keeps it hidden locally and reopens the tombstone
+        // so this same sync cycle can delete it again instead of treating the pull as read-only.
+        if (effectivePullOnly && hasPendingRemoteDeletes()) effectivePullOnly = false;
       }
 
       if (!effectivePullOnly) {
@@ -10667,52 +10674,65 @@ async function deleteAlcoholLog(id) {
     return message.includes('does not exist') || message.includes('schema cache') || message.includes('could not find the table');
   }
 
-  async function deleteRemoteById(table, id) {
-    const userId = currentUserId();
-    if (!supabaseClient || !userId || !id) return false;
-    try {
-      const { error } = await supabaseClient.from(table).delete().eq('user_id', userId).eq('id', id);
-      if (error) {
-        if (table === 'task_ideas' && isMissingRemoteRelationError(error)) {
-          remoteTaskIdeasSupported = false;
-          console.warn('Remote Ideenpool-Tabelle fehlt. Delete wird lokal behandelt.', error);
-          return true;
-        }
-        if (table === 'pause_periods' && isMissingRemoteRelationError(error)) {
-          remotePausePeriodsSupported = false;
-          console.warn('Remote Pausen-Tabelle fehlt. Delete wird lokal behandelt.', error);
-          return true;
-        }
-        console.warn(`Remote-Delete ${table} fehlgeschlagen`, error);
-        return false;
-      }
+  function handleRemoteDeleteError(table, error) {
+    if (table === 'task_ideas' && isMissingRemoteRelationError(error)) {
+      remoteTaskIdeasSupported = false;
+      console.warn('Remote Ideenpool-Tabelle fehlt. Delete wird lokal behandelt.', error);
       return true;
-    } catch (error) {
-      console.warn(`Remote-Delete ${table} nicht möglich`, error);
-      return false;
     }
+    if (table === 'pause_periods' && isMissingRemoteRelationError(error)) {
+      remotePausePeriodsSupported = false;
+      console.warn('Remote Pausen-Tabelle fehlt. Delete wird lokal behandelt.', error);
+      return true;
+    }
+    if (table === 'weekly_reviews' && isMissingRemoteRelationError(error)) {
+      remoteWeeklyReviewsSupported = false;
+      console.warn('Remote Wochenrückblick-Tabelle fehlt. Delete wird lokal behandelt.', error);
+      return true;
+    }
+    console.warn(`Remote-Delete ${table} fehlgeschlagen`, error);
+    return false;
+  }
+
+  async function remoteRowsStillVisible(table, ids) {
+    const userId = currentUserId();
+    if (!supabaseClient || !userId || !ids?.length) return [];
+    const { data, error } = await supabaseClient.from(table).select('id').eq('user_id', userId).in('id', ids);
+    if (error) {
+      if (handleRemoteDeleteError(table, error)) return [];
+      return ids;
+    }
+    return (data || []).map(row => row.id).filter(Boolean);
+  }
+
+  async function deleteRemoteById(table, id) {
+    if (!id) return false;
+    return deleteRemoteByIds(table, [id]);
   }
 
   async function deleteRemoteByIds(table, ids) {
     const userId = currentUserId();
-    if (!supabaseClient || !userId || !ids?.length) return false;
+    const uniqueIds = Array.from(new Set((ids || []).filter(Boolean)));
+    if (!supabaseClient || !userId || !uniqueIds.length) return false;
     try {
-      const { error } = await supabaseClient.from(table).delete().eq('user_id', userId).in('id', ids);
-      if (error) {
-        if (table === 'task_ideas' && isMissingRemoteRelationError(error)) {
-          remoteTaskIdeasSupported = false;
-          console.warn('Remote Ideenpool-Tabelle fehlt. Delete wird lokal behandelt.', error);
-          return true;
-        }
-        if (table === 'pause_periods' && isMissingRemoteRelationError(error)) {
-          remotePausePeriodsSupported = false;
-          console.warn('Remote Pausen-Tabelle fehlt. Delete wird lokal behandelt.', error);
-          return true;
-        }
-        console.warn(`Remote-Delete ${table} fehlgeschlagen`, error);
-        return false;
-      }
-      return true;
+      const { data, error } = await supabaseClient
+        .from(table)
+        .delete()
+        .eq('user_id', userId)
+        .in('id', uniqueIds)
+        .select('id');
+      if (error) return handleRemoteDeleteError(table, error);
+
+      const deletedIds = new Set((data || []).map(row => row.id).filter(Boolean));
+      if (deletedIds.size >= uniqueIds.length) return true;
+
+      // Supabase deletes can legally return zero rows when the row was already gone.
+      // Treat that as synced only after a read confirms the row is no longer visible
+      // for the current user; otherwise keep the tombstone pending for a retry.
+      const remainingIds = await remoteRowsStillVisible(table, uniqueIds.filter(id => !deletedIds.has(id)));
+      if (!remainingIds.length) return true;
+      console.warn(`Remote-Delete ${table}: ${remainingIds.length} Zeile(n) weiterhin sichtbar`, remainingIds);
+      return false;
     } catch (error) {
       console.warn(`Remote-Delete ${table} nicht möglich`, error);
       return false;
@@ -10800,11 +10820,17 @@ async function deleteAlcoholLog(id) {
     });
   }
 
-  function filterRemoteLedgerRows(remoteLedgerRows, { cigaretteRows = [], alcoholEventRows = [] } = {}) {
+  function filterRemoteLedgerRows(remoteLedgerRows, { habitEntryRows = [], cigaretteRows = [], alcoholEventRows = [] } = {}) {
+    const habitEntryIds = new Set(habitEntryRows.map(row => row.id).filter(Boolean));
     const cigaretteIds = new Set(cigaretteRows.map(row => row.id).filter(Boolean));
     const alcoholEventIds = new Set(alcoholEventRows.map(row => row.id).filter(Boolean));
     const orphanLedgerIds = [];
     const filtered = remoteLedgerRows.filter(row => {
+      if (row.source_type === 'habit') {
+        const keep = row.source_id && habitEntryIds.has(row.source_id) && !isRemoteDeleted('habit_entries', row.source_id);
+        if (!keep && row.id) orphanLedgerIds.push(row.id);
+        return keep;
+      }
       if (row.source_type === 'cigarette') {
         const keep = row.source_id && cigaretteIds.has(row.source_id) && !isRemoteDeleted('cigarette_events', row.source_id);
         if (!keep && row.id) orphanLedgerIds.push(row.id);
@@ -10822,12 +10848,16 @@ async function deleteAlcoholLog(id) {
   }
 
   function remoteRows(table, result) {
-    const rows = (result.data || []).filter(row => row?.id && !isRemoteDeletePending(table, row.id));
-    rows.forEach(row => {
+    return (result.data || []).filter(row => {
+      if (!row?.id) return false;
       const marker = state.deletedRemoteIds?.[table]?.[row.id];
-      if (marker?.synced_at) clearRemoteDeleteMarker(table, row.id);
+      if (!marker) return true;
+      // Never accept a remote echo for a recently deleted local row. If Supabase still
+      // returns it after the marker was considered synced, reopen the tombstone so the
+      // current/next sync pass deletes it again instead of resurrecting it in the UI.
+      if (marker.synced_at) retryRemoteDeleteMarker(table, row.id);
+      return false;
     });
-    return rows;
   }
 
   function applyRemoteHabitAuthority(remoteHabitRows) {
@@ -10893,7 +10923,7 @@ async function deleteAlcoholLog(id) {
       ledgerMatcher: (point, removedSet) => isAlcoholPointsEntry(point) && removedSet.has(point.source_id)
     });
     if (removedAlcoholUnits.length) clearAlcoholLogsWithoutUnits(removedAlcoholUnits);
-    remoteLedgerRows = filterRemoteLedgerRows(remoteLedgerRows, { cigaretteRows: remoteCigaretteRows, alcoholEventRows: remoteAlcoholEventRows });
+    remoteLedgerRows = filterRemoteLedgerRows(remoteLedgerRows, { habitEntryRows: remoteEntryRows, cigaretteRows: remoteCigaretteRows, alcoholEventRows: remoteAlcoholEventRows });
     const remoteHasData = [remoteHabitRows, remoteEntryRows, remoteCigaretteRows, remoteAlcoholRows, remoteAlcoholEventRows, remoteTaskRows, remoteTaskIdeaRows, remoteAppointmentRows, remoteLedgerRows, remotePauseRows, remoteWeeklyReviewRows].some(rows => rows.length > 0);
 
     applyRemoteHabitAuthority(remoteHabitRows);

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v99-weekly-review-mobile-hiking-hm';
+const CACHE_NAME = 'habitflow-v100-delete-tombstone-retry';
 const ASSETS = ['./', './index.html', './style.css', './app.js', './supabase-config.js', './supabase-schema.js', './manifest.json', './icons/coach-clean.svg', './data/activity-ideas.json'];
 const NETWORK_FIRST_PATHS = new Set(['/', '/index.html', '/app.js', '/style.css', '/supabase-config.js', '/supabase-schema.js', '/manifest.json']);
 
