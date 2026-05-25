@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v87-weekly-review-supabase-dashboard-fix';
+  const APP_DATA_SCHEMA_VERSION = 'v88-weekly-review-mobile-hiking-hm';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -649,6 +649,16 @@
     return match ? Math.round(Number(match[1].replace(',', '.'))) : null;
   }
 
+  function buildFitnessAscentNote(ascentValue = 0, baseNote = '') {
+    const numeric = Number(ascentValue || 0);
+    const ascent = Number.isFinite(numeric) && numeric > 0 ? Math.round(numeric) : 0;
+    const cleanedNote = String(baseNote || '')
+      .replace(/(?:^|[\s·,;|])\d+(?:[.,]\d+)?\s*hm\b/ig, ' ')
+      .replace(/[\s·,;|]+/g, ' ')
+      .trim();
+    return [ascent ? `${ascent} hm` : '', cleanedNote].filter(Boolean).join(' · ');
+  }
+
   function parseFitnessDurationNote(note = '') {
     const raw = String(note || '');
     const taggedSeconds = raw.match(/(?:time|zeit|dauer)\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*(?:sec|sek|s|seconds|sekunden)/i);
@@ -1219,7 +1229,7 @@
       if (action === 'select-fitness-entry') selectFitnessEntry(id);
       if (action === 'set-fitness-detail-tab') setFitnessDetailTab(actionEl.dataset.tab || 'summary');
       if (action === 'log-fitness-quick') logFitnessQuickEntry(id, actionEl.dataset.inputId, actionEl.dataset.ascentInputId || '', actionEl.dataset.timeInputId || '', actionEl.dataset.timeSecondsInputId || '');
-      if (action === 'log-habit') logHabit(id, actionEl.dataset.inputId, actionEl.dataset.timeInputId || '', actionEl.dataset.timeSecondsInputId || '');
+      if (action === 'log-habit') logHabit(id, actionEl.dataset.inputId, actionEl.dataset.timeInputId || '', actionEl.dataset.timeSecondsInputId || '', actionEl.dataset.ascentInputId || '');
       if (action === 'start-morning-routine') startMorningRoutine();
       if (action === 'next-morning-step') advanceMorningRoutine();
       if (action === 'finish-morning-routine') finishMorningRoutine();
@@ -5400,18 +5410,25 @@
     const unit = effectiveHabitUnit(habit);
     const safeInputId = inputId || `habit-input-${habit.id}`;
     const fitnessHabit = isFitnessDistanceHabit(habit);
-    const isJoggingHabit = fitnessHabit && fitnessHabitType(habit) === 'jogging';
+    const fitnessType = fitnessHabit ? fitnessHabitType(habit) : '';
+    const isJoggingHabit = fitnessType === 'jogging';
+    const isHikingHabit = fitnessType === 'hiking';
     const safeTimeInputId = isJoggingHabit ? `${safeInputId}-time-min` : '';
     const safeSecondsInputId = isJoggingHabit ? `${safeInputId}-time-sec` : '';
+    const safeAscentInputId = isHikingHabit ? `${safeInputId}-ascent` : '';
     const placeholder = fitnessHabit
       ? 'Kilometer eingeben'
       : (context === 'detail' ? `Wert ${unit ? `in ${unit}` : 'eintragen'}` : (unit ? unit : 'Wert'));
-    const actionLabel = isJoggingHabit ? 'Run loggen' : (fitnessHabit ? 'Strecke loggen' : buttonLabel);
+    const actionLabel = isJoggingHabit ? 'Run loggen' : (isHikingHabit ? 'Tour loggen' : (fitnessHabit ? 'Strecke loggen' : buttonLabel));
     const helper = isJoggingHabit
       ? `<small class="habit-quick-log-hint">Distanz plus optional Minuten und Sekunden für eine echte Pace.</small>`
-      : (fitnessHabit ? `<small class="habit-quick-log-hint">Für die Fitness-Linien bitte die Distanz in km loggen.</small>` : '');
+      : (isHikingHabit
+        ? `<small class="habit-quick-log-hint">Distanz plus optionale Höhenmeter für Bergsammlung und Fitness-Auswertung.</small>`
+        : (fitnessHabit ? `<small class="habit-quick-log-hint">Für die Fitness-Linien bitte die Distanz in km loggen.</small>` : ''));
     const timeInputs = isJoggingHabit ? `<input id="${escapeHtml(safeTimeInputId)}" type="number" step="1" min="0" inputmode="numeric" placeholder="Min." aria-label="Laufzeit Minuten" /><input id="${escapeHtml(safeSecondsInputId)}" type="number" step="1" min="0" max="59" inputmode="numeric" placeholder="Sek." aria-label="Laufzeit Sekunden" />` : '';
-    return `<div class="habit-quick-log-stack"><div class="habit-log-row habit-quick-log-row ${isJoggingHabit ? 'is-jogging-time' : ''}"><input id="${escapeHtml(safeInputId)}" type="number" step="0.01" inputmode="decimal" placeholder="${escapeHtml(placeholder)}" />${timeInputs}<button class="mini-btn primary" type="button" data-action="log-habit" data-id="${habit.id}" data-input-id="${escapeHtml(safeInputId)}" ${isJoggingHabit ? `data-time-input-id="${escapeHtml(safeTimeInputId)}" data-time-seconds-input-id="${escapeHtml(safeSecondsInputId)}"` : ''}>${escapeHtml(actionLabel)}</button></div>${helper}</div>`;
+    const ascentInput = isHikingHabit ? `<input id="${escapeHtml(safeAscentInputId)}" type="number" step="1" min="0" inputmode="numeric" placeholder="hm" aria-label="Höhenmeter für ${escapeHtml(habit.name)}" />` : '';
+    const rowClass = isJoggingHabit ? 'is-jogging-time' : (isHikingHabit ? 'is-hiking-ascent' : '');
+    return `<div class="habit-quick-log-stack"><div class="habit-log-row habit-quick-log-row ${rowClass}"><input id="${escapeHtml(safeInputId)}" type="number" step="0.01" inputmode="decimal" placeholder="${escapeHtml(placeholder)}" />${timeInputs}${ascentInput}<button class="mini-btn primary" type="button" data-action="log-habit" data-id="${habit.id}" data-input-id="${escapeHtml(safeInputId)}" ${isJoggingHabit ? `data-time-input-id="${escapeHtml(safeTimeInputId)}" data-time-seconds-input-id="${escapeHtml(safeSecondsInputId)}"` : ''}${isHikingHabit ? ` data-ascent-input-id="${escapeHtml(safeAscentInputId)}"` : ''}>${escapeHtml(actionLabel)}</button></div>${helper}</div>`;
   }
 
   function renderHabits() {
@@ -6523,17 +6540,22 @@
 
   function renderHabitEntryEditCard(habit, entry) {
     const [dateValue = '', timeValue = ''] = toDateTimeLocalValue(entry.occurred_at).split('T');
-    const isJoggingEntry = isFitnessDistanceHabit(habit) && fitnessHabitType(habit) === 'jogging';
+    const isFitnessEntry = isFitnessDistanceHabit(habit);
+    const fitnessType = isFitnessEntry ? fitnessHabitType(habit) : '';
+    const isJoggingEntry = fitnessType === 'jogging';
+    const isHikingEntry = fitnessType === 'hiking';
     const durationParts = isJoggingEntry ? splitDurationInputValues(parseFitnessDurationNote(entry.note) || 0) : null;
-    const valueInput = habit.type === 'boolean' && !isFitnessDistanceHabit(habit)
+    const ascentValue = isHikingEntry ? parseFitnessAscentNote(entry.note) : null;
+    const noteInputValue = isHikingEntry ? buildFitnessAscentNote(0, entry.note) : String(entry.note || '');
+    const valueInput = habit.type === 'boolean' && !isFitnessEntry
       ? `<label><span>Status</span><select id="habit-entry-bool-${entry.id}"><option value="true" ${entry.value_bool ? 'selected' : ''}>Ja</option><option value="false" ${!entry.value_bool ? 'selected' : ''}>Nein</option></select></label>`
-      : `<label><span>${isFitnessDistanceHabit(habit) ? 'Kilometer' : 'Wert'}</span><input id="habit-entry-value-${entry.id}" type="number" step="0.01" value="${Number(entry.value_num || 0)}" /></label>${isJoggingEntry ? `<label><span>Minuten</span><input id="habit-entry-run-min-${entry.id}" type="number" step="1" min="0" value="${durationParts.minutes || ''}" /></label><label><span>Sekunden</span><input id="habit-entry-run-sec-${entry.id}" type="number" step="1" min="0" max="59" value="${durationParts.seconds || ''}" /></label>` : ''}`;
+      : `<label><span>${isFitnessEntry ? 'Kilometer' : 'Wert'}</span><input id="habit-entry-value-${entry.id}" type="number" step="0.01" value="${Number(entry.value_num || 0)}" /></label>${isJoggingEntry ? `<label><span>Minuten</span><input id="habit-entry-run-min-${entry.id}" type="number" step="1" min="0" value="${durationParts.minutes || ''}" /></label><label><span>Sekunden</span><input id="habit-entry-run-sec-${entry.id}" type="number" step="1" min="0" max="59" value="${durationParts.seconds || ''}" /></label>` : ''}${isHikingEntry ? `<label><span>Höhenmeter</span><input id="habit-entry-hike-hm-${entry.id}" type="number" step="1" min="0" value="${ascentValue || ''}" /></label>` : ''}`;
     return `<article class="habit-entry-card is-editing">
       <div class="habit-entry-edit-grid">
         <label><span>Datum</span><input id="habit-entry-date-${entry.id}" type="date" value="${dateValue}" /></label>
         <label><span>Zeit</span><input id="habit-entry-time-${entry.id}" type="time" value="${timeValue}" step="60" /></label>
         ${valueInput}
-        <label class="habit-entry-note"><span>Notiz</span><input id="habit-entry-note-${entry.id}" type="text" value="${escapeHtml(entry.note || '')}" placeholder="optional" /></label>
+        <label class="habit-entry-note"><span>Notiz</span><input id="habit-entry-note-${entry.id}" type="text" value="${escapeHtml(noteInputValue)}" placeholder="optional" /></label>
       </div>
       <div class="habit-entry-edit-actions">
         <button class="mini-btn primary" type="button" data-action="save-habit-entry" data-id="${entry.id}">Speichern</button>
@@ -6595,6 +6617,9 @@
     if (isFitnessDistanceHabit(habit) && fitnessHabitType(habit) === 'jogging') {
       const runNote = buildFitnessDurationNote($(`#habit-entry-run-min-${cssEscape(id)}`)?.value || 0, $(`#habit-entry-run-sec-${cssEscape(id)}`)?.value || 0);
       entry.note = runNote || entry.note.replace(/(?:time|zeit|dauer)\s*[:=]?\s*\d+(?:[.,]\d+)?\s*(?:sec|sek|s|seconds|sekunden|min|m|minute|minutes)?/ig, '').trim();
+    }
+    if (isFitnessDistanceHabit(habit) && fitnessHabitType(habit) === 'hiking') {
+      entry.note = buildFitnessAscentNote($(`#habit-entry-hike-hm-${cssEscape(id)}`)?.value || 0, entry.note);
     }
     entry.occurred_at = nextDate.toISOString();
     entry.updated_at = nowIso();
@@ -8142,32 +8167,32 @@
     const chart = ctx.chart;
     const area = chart.chartArea;
     const yScale = chart.scales?.y;
-    if (!area || !yScale) return 'rgba(74,215,209,.22)';
+    if (!area || !yScale) return 'rgba(74,215,209,.34)';
     const gradient = chart.ctx.createLinearGradient(0, area.top, 0, area.bottom);
     const mode = options.toneMode || 'score';
 
     if (mode === 'lowerBetter') {
-      gradient.addColorStop(0, 'rgba(255,112,112,.46)');
-      gradient.addColorStop(.34, 'rgba(255,189,106,.38)');
-      gradient.addColorStop(.68, 'rgba(143,220,116,.30)');
-      gradient.addColorStop(1, 'rgba(66,214,125,.25)');
+      gradient.addColorStop(0, 'rgba(255,112,112,.62)');
+      gradient.addColorStop(.34, 'rgba(255,189,106,.52)');
+      gradient.addColorStop(.68, 'rgba(143,220,116,.42)');
+      gradient.addColorStop(1, 'rgba(66,214,125,.36)');
       return gradient;
     }
 
     if (mode === 'higherBetter') {
-      gradient.addColorStop(0, 'rgba(66,214,125,.44)');
-      gradient.addColorStop(.45, 'rgba(143,220,116,.32)');
-      gradient.addColorStop(.78, 'rgba(255,189,106,.30)');
-      gradient.addColorStop(1, 'rgba(255,112,112,.24)');
+      gradient.addColorStop(0, 'rgba(66,214,125,.60)');
+      gradient.addColorStop(.45, 'rgba(143,220,116,.46)');
+      gradient.addColorStop(.78, 'rgba(255,189,106,.42)');
+      gradient.addColorStop(1, 'rgba(255,112,112,.36)');
       return gradient;
     }
 
     const zeroPixel = Math.max(area.top, Math.min(area.bottom, yScale.getPixelForValue(0)));
     const zeroStop = (zeroPixel - area.top) / Math.max(1, area.bottom - area.top);
-    gradient.addColorStop(0, 'rgba(66,214,125,.48)');
-    gradient.addColorStop(Math.max(0, zeroStop - .02), 'rgba(143,220,116,.26)');
-    gradient.addColorStop(Math.min(1, zeroStop + .02), 'rgba(255,112,112,.20)');
-    gradient.addColorStop(1, 'rgba(255,112,112,.44)');
+    gradient.addColorStop(0, 'rgba(66,214,125,.64)');
+    gradient.addColorStop(Math.max(0, zeroStop - .02), 'rgba(143,220,116,.40)');
+    gradient.addColorStop(Math.min(1, zeroStop + .02), 'rgba(255,112,112,.34)');
+    gradient.addColorStop(1, 'rgba(255,112,112,.60)');
     return gradient;
   }
 
@@ -8760,7 +8785,7 @@ async function deleteAlcoholLog(id) {
     syncWithSupabase({ silent: true, pullFirst: false });
   }
 
-  function logHabit(habitId, inputId = '', timeInputId = '', timeSecondsInputId = '') {
+  function logHabit(habitId, inputId = '', timeInputId = '', timeSecondsInputId = '', ascentInputId = '') {
     const habit = state.habits.find(h => h.id === habitId);
     if (!habit) return;
     const pause = activePauseNow('habit', habit.id);
@@ -8787,6 +8812,10 @@ async function deleteAlcoholLog(id) {
       note = buildFitnessDurationNote(timeInput?.value || 0, secondsInput?.value || 0);
       if (timeInput) timeInput.value = '';
       if (secondsInput) secondsInput.value = '';
+    } else if (requiresNumericDistance && fitnessHabitType(habit) === 'hiking' && ascentInputId) {
+      const ascentInput = $(`#${cssEscape(ascentInputId)}`);
+      note = buildFitnessAscentNote(ascentInput?.value || 0);
+      if (ascentInput) ascentInput.value = '';
     }
     const occurredAt = nowIso();
     const entry = { id: uid(), habit_id: habit.id, value_num: valueNum, value_bool: valueBool, note, occurred_at: occurredAt, created_at: occurredAt, updated_at: occurredAt, synced: false };
@@ -8796,7 +8825,9 @@ async function deleteAlcoholLog(id) {
     saveState();
     renderHistoryModal();
     const duration = parseFitnessDurationNote(note);
-    const toastLabel = isFitnessDistanceHabit(habit) && valueNum ? `${habit.name} · ${formatKmValue(valueNum)}${duration ? ` · ${Math.round(duration)} Min.` : ''} geloggt` : `${habit.name} geloggt`;
+    const ascent = parseFitnessAscentNote(note);
+    const fitnessSuffix = duration ? ` · ${Math.round(duration)} Min.` : (ascent != null ? ` · ${formatMetersValue(ascent)}` : '');
+    const toastLabel = isFitnessDistanceHabit(habit) && valueNum ? `${habit.name} · ${formatKmValue(valueNum)}${fitnessSuffix} geloggt` : `${habit.name} geloggt`;
     toast(`${toastLabel} · +${points} Punkte`);
     syncWithSupabase({ silent: true });
   }
@@ -8817,8 +8848,7 @@ async function deleteAlcoholLog(id) {
     }
     let note = '';
     if (fitnessHabitType(habit) === 'hiking') {
-      const ascentRaw = Number($(ascentInput)?.value || 0);
-      if (Number.isFinite(ascentRaw) && ascentRaw > 0) note = `${Math.round(ascentRaw)} hm`;
+      note = buildFitnessAscentNote($(ascentInput)?.value || 0);
     } else if (fitnessHabitType(habit) === 'jogging') {
       note = buildFitnessDurationNote($(timeInput)?.value || 0, $(secondsInput)?.value || 0);
     }

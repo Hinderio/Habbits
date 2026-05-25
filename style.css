@@ -2752,3 +2752,27 @@ body.light .weekly-review-card,body.light .weekly-review-score,body.light .weekl
   .weekly-review-pro-head{gap:14px}
   .weekly-review-pro-head .weekly-review-score{align-self:flex-start}
 }
+
+
+/* v99: mobile weekly-review accordion + hiking hm quick-log fields */
+#screen-habits .habit-log-row.is-hiking-ascent,
+.history-modal-content .habit-detail-primary .habit-quick-log-row.is-hiking-ascent{
+  grid-template-columns:minmax(0,1fr) minmax(76px,.45fr) auto;
+}
+#screen-habits .habit-log-row.is-hiking-ascent input[placeholder="hm"],
+.history-modal-content .habit-detail-primary .habit-quick-log-row.is-hiking-ascent input[placeholder="hm"]{
+  text-align:center;
+}
+@media (max-width:760px){
+  #screen-habits .habit-log-row.is-hiking-ascent,
+  .history-modal-content .habit-detail-primary .habit-quick-log-row.is-hiking-ascent{
+    grid-template-columns:1fr;
+  }
+  #screen-habits .habit-log-row.is-hiking-ascent .mini-btn,
+  .history-modal-content .habit-detail-primary .habit-quick-log-row.is-hiking-ascent .mini-btn{
+    width:100%;
+  }
+  .weekly-review-mobile-section .weekly-review-shell{
+    margin-top:0;
+  }
+}
