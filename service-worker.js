@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v105-monthly-missions';
+const CACHE_NAME = 'habitflow-v106-monthly-missions-form-fix';
 const ASSETS = ['./', './index.html', './style.css', './app.js', './supabase-config.js', './supabase-schema.js', './manifest.json', './icons/coach-clean.svg', './data/activity-ideas.json'];
 const NETWORK_FIRST_PATHS = new Set(['/', '/index.html', '/app.js', '/style.css', '/supabase-config.js', '/supabase-schema.js', '/manifest.json']);
 

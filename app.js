@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v105-monthly-missions';
+  const APP_DATA_SCHEMA_VERSION = 'v106-monthly-missions-form-fix';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -938,6 +938,9 @@
       morningRoutineCard: $('#morningRoutineCard'),
       insightsGrid: $('#insightsGrid'),
       weeklyReview: $('#weeklyReview'),
+      monthlyMissions: $('#monthlyMissions'),
+      monthlyMissionsSummary: $('#monthlyMissionsSummary'),
+      monthlyMissionMobileSummary: $('#monthlyMissionMobileSummary'),
       habitHeatmap: $('#habitHeatmap'),
       trendMetricSelect: $('#trendMetricSelect'),
       trendChartTitle: $('#trendChartTitle'),
@@ -3839,12 +3842,12 @@
         ? 'lokal · Login für Sync'
         : 'lokal · SQL optional aktualisieren';
     if (els.monthlyMissionsSummary) els.monthlyMissionsSummary.textContent = missions.length ? `${summary.completed}/${summary.count} geschafft · ${summary.average}% Gesamt` : 'Noch keine Mission aktiv';
-    if (els.monthlyMissionMobileSummary) els.monthlyMissionMobileSummary.textContent = missions.length ? `${summary.count} aktiv · ${summary.average}%` : 'Vorlagen wählen';
+    if (els.monthlyMissionMobileSummary) els.monthlyMissionMobileSummary.textContent = missions.length ? `${summary.count} aktiv · ${summary.average}%` : 'Mission erstellen';
     const visibleMissions = missions.slice(0, 3);
     const hiddenCount = Math.max(0, missions.length - visibleMissions.length);
     const missionCards = visibleMissions.length
       ? `<div class="monthly-mission-grid">${visibleMissions.map(renderMonthlyMissionCard).join('')}</div>${hiddenCount ? `<div class="monthly-mission-more">${hiddenCount} weitere Mission${hiddenCount === 1 ? '' : 'en'} bewusst verborgen, damit das Dashboard ruhig bleibt.</div>` : ''}`
-      : `<div class="monthly-mission-empty"><strong>Starte deinen Monat mit 1–3 starken Missionen.</strong><p>Die App berechnet automatische Missionen aus deinen bestehenden Fitness-, Konsum-, Routine- und Task-Daten.</p></div>`;
+      : `<div class="monthly-mission-empty"><strong>Starte deinen Monat mit 1–3 starken Missionen.</strong><p>Tippe auf „+ Mission“, wähle eine Vorlage oder formuliere ein eigenes Monatsziel. Die App berechnet automatische Missionen aus deinen bestehenden Fitness-, Konsum-, Routine- und Task-Daten.</p></div>`;
     const presetIds = new Set(missions.map(mission => `${mission.metric}:${mission.target}:${mission.title.toLowerCase()}`));
     const presetButtons = MONTHLY_MISSION_PRESETS.map(preset => {
       const disabled = presetIds.has(`${preset.metric}:${preset.target}:${preset.title.toLowerCase()}`);
