@@ -3248,7 +3248,7 @@
         <div class="fish-stage-grid" aria-label="20 Companion-Stufen">${stageTiles}</div>
         <div class="fish-chapter-strip">${chapterTiles}</div>
         <div class="companion-actions fish-actions">
-          <button class="mini-btn" type="button" data-action="open-coach">Coach</button>
+          <button class="mini-btn primary" type="button" data-action="open-coach">Coach</button>
           <button class="mini-btn primary" type="button" data-action="open-morning-routine">Routine</button>
         </div>
       </div>
@@ -6334,7 +6334,9 @@
     const timeSecondsInputId = type === 'jogging' && habit ? `fitness-quick-sec-${type}-${habit.id}` : '';
     const latest = sessions[0] || null;
     const mountainCollection = type === 'hiking' ? buildMountainCollection(sessions) : null;
-    return `<article class="fitness-journey-card is-${type}">
+    return `<details class="mobile-fitness-section fitness-journey-section is-${type}" open>
+      <summary><span>${escapeHtml(meta.label)}</span><small>${summary.totalSessions} Session${summary.totalSessions === 1 ? '' : 's'} · ${formatKmValue(summary.totalDistance)}</small></summary>
+      <article class="fitness-journey-card is-${type}">
       <div class="fitness-journey-head">
         <div>
           <p class="eyebrow">${escapeHtml(meta.label)}</p>
@@ -6351,7 +6353,8 @@
         <div><strong>${habit ? `${escapeHtml(habit.name)} direkt loggen` : `${meta.label}-Habit fehlt`}</strong><small>${habit ? (type === 'hiking' ? 'Kilometer plus optionale Höhenmeter' : 'Kilometer plus Minuten und Sekunden') : `Lege in Habits ein ${meta.label}-Habit an, damit du hier direkt loggen kannst.`}</small></div>
         ${habit ? `<div class="fitness-journey-log-grid ${type === 'hiking' ? 'is-hiking' : 'is-jogging'}"><input id="${escapeHtml(inputId)}" type="number" step="0.01" min="0" inputmode="decimal" placeholder="km" aria-label="Kilometer für ${escapeHtml(habit.name)}" />${type === 'hiking' ? `<input id="${escapeHtml(ascentInputId)}" type="number" step="1" min="0" inputmode="numeric" placeholder="hm" aria-label="Höhenmeter für ${escapeHtml(habit.name)}" />` : `<input id="${escapeHtml(timeInputId)}" type="number" step="1" min="0" inputmode="numeric" placeholder="Min." aria-label="Laufzeit Minuten für ${escapeHtml(habit.name)}" /><input id="${escapeHtml(timeSecondsInputId)}" type="number" step="1" min="0" max="59" inputmode="numeric" placeholder="Sek." aria-label="Laufzeit Sekunden für ${escapeHtml(habit.name)}" />`}<button class="mini-btn primary" type="button" data-action="log-fitness-quick" data-id="${habit.id}" data-input-id="${escapeHtml(inputId)}" ${type === 'hiking' ? `data-ascent-input-id="${escapeHtml(ascentInputId)}"` : `data-time-input-id="${escapeHtml(timeInputId)}" data-time-seconds-input-id="${escapeHtml(timeSecondsInputId)}"`}>${type === 'hiking' ? 'Tour loggen' : 'Run loggen'}</button></div>` : ''}
       </div>
-    </article>`;
+      </article>
+    </details>`;
   }
 
   function renderFitnessDetailContent(selectedSession, visibleSessions, allSessions) {
@@ -6429,6 +6432,8 @@
         ${renderFitnessJourneyCard('jogging', joggingSessions, runningHabit)}
         ${renderFitnessJourneyCard('hiking', hikingSessions, hikingHabit)}
       </section>
+      <details class="mobile-fitness-section fitness-summary-section" open>
+        <summary><span>Summary</span><small>${selectedSession ? `${escapeHtml(selectedSession.meta.label)} · ${formatKmValue(selectedSession.distanceKm)}` : 'Session-Fokus'}</small></summary>
       <section class="fitness-detail-card">
         <div class="fitness-route-head">
           <div>
@@ -6460,6 +6465,7 @@
           ${renderFitnessDetailContent(selectedSession, visibleSessions.length ? visibleSessions : allSessions, allSessions)}
         </div>
       </section>
+      </details>
     </div>`;
   }
 
@@ -8687,6 +8693,55 @@ async function deleteAlcoholLog(id) {
     return date.toLocaleString('de-CH', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
   }
 
+  function pausePeriodConsumptionEntries(period) {
+    const start = new Date(period.starts_at).getTime();
+    const end = period.ends_at ? new Date(period.ends_at).getTime() : Infinity;
+    if (!Number.isFinite(start)) return [];
+    const inRange = value => {
+      const time = new Date(value || 0).getTime();
+      return Number.isFinite(time) && time >= start && time <= end;
+    };
+    if (period.scope === 'smoke') {
+      return (state.cigarettes || [])
+        .filter(item => inRange(item.smoked_at || item.created_at))
+        .map(item => ({
+          id: item.id,
+          kind: 'smoke',
+          at: item.smoked_at || item.created_at,
+          title: 'Zigarette',
+          meta: Number.isFinite(Number(item.points)) ? `${Number(item.points) > 0 ? '+' : ''}${Number(item.points)} Pkt.` : 'Pausenlog',
+          note: String(item.note || '').startsWith('trigger:') ? (COACH_TRIGGER_META[String(item.note).replace('trigger:', '')]?.label || '') : String(item.note || '')
+        }));
+    }
+    if (period.scope === 'alcohol') {
+      return (state.alcoholUnits || [])
+        .filter(item => inRange(item.occurred_at || item.created_at))
+        .map(item => ({
+          id: item.id,
+          kind: 'alcohol',
+          at: item.occurred_at || item.created_at,
+          title: alcoholTypeLabel(item.drink_type || 'other'),
+          meta: `${formatSignedPoints(alcoholPointsForUnit(item.id))} Pkt.`,
+          note: String(item.note || '')
+        }));
+    }
+    return [];
+  }
+
+  function renderPauseConsumptionLogList(period) {
+    const logs = pausePeriodConsumptionEntries(period)
+      .sort((a, b) => new Date(b.at) - new Date(a.at));
+    const countLabel = `${logs.length} Log${logs.length === 1 ? '' : 's'} in dieser Pause`;
+    if (!logs.length) {
+      return `<div class="pause-card-log-list"><div class="pause-card-log-head"><strong>Pausenlogs</strong><span>0 Logs</span></div><p class="pause-card-log-empty">Keine Konsum-Logs im Pausenzeitraum – genau so soll es sein.</p></div>`;
+    }
+    return `<div class="pause-card-log-list">
+      <div class="pause-card-log-head"><strong>Pausenlogs</strong><span>${escapeHtml(countLabel)}</span></div>
+      ${logs.slice(0, 6).map(log => `<div class="pause-card-log-row is-${escapeHtml(log.kind)}"><span>${escapeHtml(formatDateTimeCompact(log.at))}</span><strong>${escapeHtml(log.title)}</strong><em>${escapeHtml(log.meta)}</em>${log.note ? `<small>${escapeHtml(log.note)}</small>` : ''}</div>`).join('')}
+      ${logs.length > 6 ? `<small class="pause-card-log-more">+${logs.length - 6} weitere Logs in dieser Pause</small>` : ''}
+    </div>`;
+  }
+
   function pausePeriodCard(period) {
     const label = pauseScopeLabel(period.scope, period.target_id);
     const isActive = isWithinPauseAt(nowIso(), { scope: period.scope, targetId: period.target_id });
@@ -8695,6 +8750,7 @@ async function deleteAlcoholLog(id) {
       <div><p class="eyebrow">${escapeHtml(PAUSE_SCOPE_META[period.scope]?.eyebrow || 'Pause')}</p><h4>${escapeHtml(label)}</h4></div>
       <p>${formatDateTimeCompact(period.starts_at)} – ${endLabel}</p>
       ${period.note ? `<small>${escapeHtml(period.note)}</small>` : '<small>Kein Kommentar</small>'}
+      ${['smoke', 'alcohol'].includes(period.scope) ? renderPauseConsumptionLogList(period) : ''}
       <div class="pause-card-actions">
         ${isActive ? `<button class="mini-btn" type="button" data-action="end-pause-now" data-id="${period.id}">Jetzt beenden</button>` : ''}
         <button class="mini-btn danger" type="button" data-action="delete-pause" data-id="${period.id}">Löschen</button>

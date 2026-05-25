@@ -2776,3 +2776,167 @@ body.light .weekly-review-card,body.light .weekly-review-score,body.light .weekl
     margin-top:0;
   }
 }
+
+/* v101: Konsum-Pausenlogs, mobile Fitness-Accordions, calmer calendar background */
+.calendar-panel:before,
+body:not(.light) .calendar-panel:before{
+  display:none!important;
+}
+
+#screen-smoking .craving-actions{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+}
+#screen-smoking .craving-actions .mini-btn.primary{
+  justify-content:center;
+}
+
+.pause-overview-mobile-section{display:contents}
+.pause-overview-mobile-section>summary{display:none}
+.pause-card-log-list{
+  display:grid;
+  gap:8px;
+  margin-top:6px;
+  padding:10px;
+  border-radius:18px;
+  background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.08);
+}
+.pause-card-log-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.pause-card-log-head strong{
+  font-size:.82rem;
+  letter-spacing:.02em;
+}
+.pause-card-log-head span,
+.pause-card-log-more{
+  color:var(--muted);
+  font-size:.72rem;
+  font-weight:900;
+}
+.pause-card-log-empty{
+  color:var(--muted);
+  font-size:.82rem;
+  line-height:1.35;
+}
+.pause-card-log-row{
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto;
+  gap:6px 8px;
+  align-items:center;
+  padding:8px 9px;
+  border-radius:14px;
+  background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.08);
+}
+.pause-card-log-row span{
+  color:var(--muted);
+  font-size:.72rem;
+  font-weight:900;
+  white-space:nowrap;
+}
+.pause-card-log-row strong{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:.82rem;
+}
+.pause-card-log-row em{
+  font-style:normal;
+  font-size:.75rem;
+  font-weight:950;
+  color:var(--primary);
+  white-space:nowrap;
+}
+.pause-card-log-row small{
+  grid-column:2 / -1;
+  font-size:.72rem;
+  line-height:1.25;
+}
+.pause-card-log-row.is-smoke em{color:#ff8b8b}
+.pause-card-log-row.is-alcohol em{color:#d28a15}
+body.light .pause-card-log-list,
+body.light .pause-card-log-row{
+  background:rgba(255,255,255,.68);
+  border-color:rgba(17,36,58,.08);
+}
+
+.mobile-fitness-section{display:contents}
+.mobile-fitness-section>summary{display:none}
+
+@media (max-width:760px){
+  .pause-overview-mobile-section{display:block}
+  .pause-overview-panel{margin-top:0}
+  .pause-overview-mobile-section>summary,
+  .mobile-fitness-section>summary{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    list-style:none;
+    cursor:pointer;
+    margin:0;
+    padding:15px 16px;
+    border-radius:22px;
+    background:var(--card);
+    border:1px solid var(--card-border);
+    box-shadow:0 10px 28px rgba(0,0,0,.16);
+    color:var(--text);
+    font-weight:950;
+  }
+  .pause-overview-mobile-section>summary::-webkit-details-marker,
+  .mobile-fitness-section>summary::-webkit-details-marker{display:none}
+  .pause-overview-mobile-section>summary span,
+  .mobile-fitness-section>summary span{font-size:.98rem;letter-spacing:-.02em}
+  .pause-overview-mobile-section>summary small,
+  .mobile-fitness-section>summary small{
+    color:var(--muted);
+    font-size:.72rem;
+    font-weight:850;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    text-align:right;
+  }
+  .pause-overview-mobile-section>summary:after,
+  .mobile-fitness-section>summary:after{
+    content:"+";
+    width:28px;
+    height:28px;
+    border-radius:999px;
+    display:grid;
+    place-items:center;
+    background:rgba(74,215,209,.13);
+    color:var(--primary);
+    font-size:1.12rem;
+    flex:0 0 auto;
+  }
+  .pause-overview-mobile-section[open]>summary,
+  .mobile-fitness-section[open]>summary{
+    margin-bottom:12px;
+    border-color:rgba(74,215,209,.18);
+  }
+  .pause-overview-mobile-section[open]>summary:after,
+  .mobile-fitness-section[open]>summary:after{content:"–"}
+  .pause-overview-mobile-section:not([open])>*:not(summary),
+  .mobile-fitness-section:not([open])>*:not(summary){display:none!important}
+  .mobile-fitness-section{display:block}
+  .fitness-summary-section{display:grid;gap:12px}
+  .fitness-summary-section .fitness-detail-card{margin:0}
+  .fitness-journey-grid{gap:14px}
+  .pause-card-list{grid-template-columns:1fr}
+  .pause-card-log-row{grid-template-columns:1fr auto;align-items:start}
+  .pause-card-log-row span{grid-column:1 / -1}
+  .pause-card-log-row small{grid-column:1 / -1}
+  #screen-smoking .craving-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
+  body.light .pause-overview-mobile-section>summary,
+  body.light .mobile-fitness-section>summary{
+    background:rgba(255,255,255,.86);
+    border-color:rgba(17,36,58,.08);
+  }
+}
