@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v103-dashboard-history-idea-ratings';
+  const APP_DATA_SCHEMA_VERSION = 'v104-idea-rating-bubbles';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -8045,9 +8045,9 @@
     const status = idea.idea_status || 'open';
     const statusLabel = status === 'accepted' ? 'Umgesetzt' : status === 'dismissed' ? 'Verworfen' : 'Idee';
     const rating = normalizeTaskIdeaRating(idea.rating);
-    const ratingText = rating ? `${rating}/5 Priorität` : 'Sterne vergeben';
+    const ratingText = rating ? `Rating ${rating}/5` : 'ohne Rating';
     const ratingButtons = [1, 2, 3, 4, 5].map(value => `
-      <button class="idea-star ${value <= rating ? 'is-active' : ''}" type="button" data-action="rate-task-idea" data-id="${idea.id}" data-rating="${value}" aria-label="${value} Sterne für ${escapeHtml(idea.title)}" aria-pressed="${value <= rating}">★</button>`).join('');
+      <button class="idea-rating-dot ${value <= rating ? 'is-active' : ''}" type="button" data-action="rate-task-idea" data-id="${idea.id}" data-rating="${value}" aria-label="Rating ${value} von 5 für ${escapeHtml(idea.title)}" aria-pressed="${value <= rating}"><span aria-hidden="true"></span></button>`).join('');
     const meta = `${escapeHtml(category.label)} · ${Number(idea.story_points || 2)} SP · ${escapeHtml(priorityMeta.label)}`;
     const description = taskIdeaDescriptionForDisplay(idea);
     const actionBlock = status === 'open'
@@ -8067,9 +8067,9 @@
       </div>
       <h4>${escapeHtml(idea.title)}</h4>
       <p class="meta">${meta}${description ? `<br>${escapeHtml(description)}` : ''}</p>
-      <div class="idea-rating-row" aria-label="Ideen-Rating">
-        <div class="idea-stars">${ratingButtons}
-          <button class="idea-star-clear ${rating ? '' : 'is-hidden'}" type="button" data-action="rate-task-idea" data-id="${idea.id}" data-rating="0" aria-label="Rating zurücksetzen">×</button>
+      <div class="idea-rating-row ${rating ? 'has-rating' : 'is-empty'}" aria-label="Ideen-Rating">
+        <div class="idea-rating-dots">${ratingButtons}
+          <button class="idea-rating-clear ${rating ? '' : 'is-hidden'}" type="button" data-action="rate-task-idea" data-id="${idea.id}" data-rating="0" aria-label="Rating zurücksetzen">×</button>
         </div>
         <span>${escapeHtml(ratingText)}</span>
       </div>
@@ -9525,7 +9525,7 @@ async function deleteAlcoholLog(id) {
     idea.updated_at = nowIso();
     idea.synced = false;
     saveState();
-    toast(nextRating ? `Idee mit ${nextRating} Sternen bewertet` : 'Ideen-Rating entfernt');
+    toast(nextRating ? `Idee mit Rating ${nextRating}/5 bewertet` : 'Ideen-Rating entfernt');
     syncWithSupabase({ silent: true, pullFirst: false });
   }
 
