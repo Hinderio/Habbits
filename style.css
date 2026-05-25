@@ -2752,11 +2752,3 @@ body.light .weekly-review-card,body.light .weekly-review-score,body.light .weekl
   .weekly-review-pro-head{gap:14px}
   .weekly-review-pro-head .weekly-review-score{align-self:flex-start}
 }
-
-
-/* v99: mobile review collapse + softer dashboard chart fills */
-@media (max-width:760px){
-  .dashboard-review-section[open] > .panel + .panel{margin-top:12px}
-  .dashboard-review-section:not([open]) > .weekly-review-shell{display:none!important}
-  .dashboard-review-section > .weekly-review-shell{border-radius:24px}
-}
