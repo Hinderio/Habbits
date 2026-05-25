@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v84-fitness-marker-duration-seconds';
+  const APP_DATA_SCHEMA_VERSION = 'v85-weekly-review-archive';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -1188,6 +1188,8 @@
       if (action === 'weekly-plan-backlog') planBacklogTaskForWeek(id, actionEl.dataset.day);
       if (action === 'weekly-plan-idea') planIdeaForWeek(id, actionEl.dataset.day);
       if (action === 'weekly-clear-task-date') clearTaskDueDate(id);
+      if (action === 'save-weekly-review') saveWeeklyReviewSnapshot();
+      if (action === 'open-weekly-reviews') openHistoryModal('weekly-reviews');
       if (action === 'edit-task') editTask(id);
       if (action === 'delete-task') deleteTask(id);
       if (action === 'archive-task') archiveTask(id);
@@ -1356,6 +1358,41 @@
     });
   }
 
+  function normalizeWeeklyReview(review = {}) {
+    const metrics = review.metrics && typeof review.metrics === 'object' ? review.metrics : {};
+    const startKey = review.start_key || review.startKey || review.week_key || review.weekKey || '';
+    const fallbackStart = startKey ? new Date(`${startKey}T12:00:00`) : startOfWeekDate(new Date());
+    const normalizedStart = Number.isNaN(fallbackStart.getTime()) ? startOfWeekDate(new Date()) : startOfWeekDate(fallbackStart);
+    const normalizedEnd = addDays(normalizedStart, 6);
+    return {
+      id: review.id || `weekly-${toDateKey(normalizedStart)}`,
+      week_key: review.week_key || review.weekKey || toDateKey(normalizedStart),
+      start_key: toDateKey(normalizedStart),
+      end_key: review.end_key || review.endKey || toDateKey(normalizedEnd),
+      range_label: review.range_label || review.rangeLabel || weeklyReviewRangeLabel(normalizedStart),
+      title: review.title || 'Wochenrückblick',
+      score: Math.max(0, Math.min(100, Math.round(Number(review.score || 0)))),
+      metrics: {
+        cigarettes: Number(metrics.cigarettes || 0),
+        alcoholUnits: Number(metrics.alcoholUnits || 0),
+        tasksDone: Number(metrics.tasksDone || 0),
+        habitLogs: Number(metrics.habitLogs || 0),
+        habitDays: Number(metrics.habitDays || 0),
+        routineDays: Number(metrics.routineDays || 0),
+        runKm: Number(metrics.runKm || 0),
+        hikeKm: Number(metrics.hikeKm || 0),
+        ascentM: Number(metrics.ascentM || 0),
+        points: Number(metrics.points || 0),
+        activeDays: Number(metrics.activeDays || 0),
+        cleanDays: Number(metrics.cleanDays || 0)
+      },
+      highlights: Array.isArray(review.highlights) ? review.highlights.slice(0, 5) : [],
+      recommendation: review.recommendation || '',
+      created_at: validIsoOrFallback(review.created_at || review.createdAt || nowIso()),
+      updated_at: validIsoOrFallback(review.updated_at || review.updatedAt || review.created_at || nowIso())
+    };
+  }
+
   function defaultState() {
     const created = nowIso();
     return {
@@ -1376,6 +1413,7 @@
       partyPlans: [],
       recoverySessions: [],
       morningRoutineLogs: [],
+      weeklyReviews: [],
       deletedRemoteIds: createEmptyDeletedRemoteIds()
     };
   }
@@ -1427,6 +1465,7 @@
     next.partyPlans = Array.isArray(next.partyPlans) ? next.partyPlans : [];
     next.recoverySessions = Array.isArray(next.recoverySessions) ? next.recoverySessions : [];
     next.morningRoutineLogs = Array.isArray(next.morningRoutineLogs) ? next.morningRoutineLogs : [];
+    next.weeklyReviews = Array.isArray(next.weeklyReviews) ? next.weeklyReviews.map(normalizeWeeklyReview).filter(review => review.week_key) : [];
     next.deletedRemoteIds = normalizeDeletedRemoteIds(next.deletedRemoteIds);
     ensureSystemHabits(next);
     dedupeStateCollections(next);
@@ -3227,85 +3266,228 @@
 
   function renderWeeklyReview() {
     if (!els.weeklyReview) return;
-    const review = buildWeeklyReview();
-    els.weeklyReview.innerHTML = `<div class="weekly-review-head"><div><p class="eyebrow">Wochenreview</p><h3>${escapeHtml(review.title)}</h3></div><span class="badge ${review.score >= 70 ? '' : 'muted'}">${review.score}%</span></div>
-      <div class="weekly-review-grid">
-        ${review.items.map(item => `<article><small>${escapeHtml(item.label)}</small><strong>${escapeHtml(item.value)}</strong><p>${escapeHtml(item.text)}</p></article>`).join('')}
+    const current = buildWeeklyReviewSnapshot(new Date());
+    const saved = getSavedWeeklyReview(current.week_key);
+    const display = saved || current;
+    const previous = getPreviousWeeklyReview(display.week_key);
+    const compare = compareWeeklyReviews(display, previous);
+    const savedCount = state.weeklyReviews.length;
+    const statusBadge = saved ? 'gespeichert' : 'Live-Vorschau';
+    const archivePreview = savedCount
+      ? `<div class="weekly-review-archive-preview">${sortedWeeklyReviews().slice(0, 4).map(review => `<button class="weekly-review-mini ${review.week_key === display.week_key ? 'is-active' : ''}" type="button" data-action="open-weekly-reviews"><strong>${escapeHtml(shortWeekLabel(review.start_key))}</strong><span>${review.score}%</span></button>`).join('')}</div>`
+      : `<div class="weekly-review-empty-inline">Noch kein gespeicherter Rückblick. Speichere diese Woche als erste Vergleichsbasis.</div>`;
+    els.weeklyReview.innerHTML = `<div class="weekly-review-head weekly-review-pro-head">
+        <div><p class="eyebrow">Wochenrückblick</p><h3>${escapeHtml(display.title)}</h3><p class="subtle">${escapeHtml(display.range_label)} · später abrufbar und vergleichbar</p></div>
+        <div class="weekly-review-score"><strong>${display.score}%</strong><span>${escapeHtml(statusBadge)}</span></div>
       </div>
-      <div class="coach-callout"><b>Empfehlung nächste Woche:</b> ${escapeHtml(review.recommendation)}</div>`;
+      <div class="weekly-review-hero">
+        <article class="weekly-review-hero-card"><small>Vergleich</small><strong>${escapeHtml(compare.score.label)}</strong><p>${escapeHtml(compare.score.text)}</p></article>
+        <article class="weekly-review-hero-card"><small>Fokus</small><strong>${escapeHtml(primaryWeeklyFocus(display))}</strong><p>${escapeHtml(display.recommendation || 'Sammle noch ein paar Logs, dann wird der Wochenfokus präziser.')}</p></article>
+      </div>
+      <div class="weekly-review-grid weekly-review-pro-grid">
+        ${weeklyReviewMetricCards(display, previous).map(item => `<article><small>${escapeHtml(item.label)}</small><strong>${escapeHtml(item.value)}</strong><p>${escapeHtml(item.text)}</p>${item.delta ? `<em class="weekly-delta ${item.tone || ''}">${escapeHtml(item.delta)}</em>` : ''}</article>`).join('')}
+      </div>
+      <div class="weekly-review-highlights">${display.highlights.map(item => `<span>${escapeHtml(item)}</span>`).join('') || '<span>Noch keine Highlights gespeichert</span>'}</div>
+      <div class="weekly-review-actions"><button class="pill primary" type="button" data-action="save-weekly-review">${saved ? 'Diese Woche aktualisieren' : 'Rückblick speichern'}</button><button class="pill secondary" type="button" data-action="open-weekly-reviews">Archiv & Vergleich</button><span class="subtle">${savedCount} gespeicherte Woche${savedCount === 1 ? '' : 'n'}</span></div>
+      ${archivePreview}`;
   }
 
-
-  function calculateDailyScore(key) {
-    const cigarettes = cigarettesOnDate(key).length;
-    const alcohol = alcoholUnitsOnDate(key).length;
-    const tasksDone = state.tasks.filter(t => t.status === 'done' && toDateKey(t.completed_at || t.updated_at || t.created_at) === key).length;
-    const habitLogs = visibleHabitEntries().filter(e => toDateKey(e.occurred_at) === key).length;
-    const last = getLastCigarette();
-    const pauseHours = last ? Math.max(0, (Date.now() - new Date(last.smoked_at).getTime()) / 36e5) : 8;
-    let score = 72;
-    score += Math.min(18, pauseHours * 2.2);
-    score += Math.min(14, habitLogs * 4);
-    score += Math.min(12, tasksDone * 5);
-    score -= Math.min(36, cigarettes * 8);
-    score -= Math.min(18, alcohol * 5);
-    score = Math.max(0, Math.min(100, Math.round(score)));
-    const label = score >= 82 ? 'starker Tag' : score >= 62 ? 'stabil' : score >= 42 ? 'achtsam bleiben' : 'Akutmodus empfohlen';
-    return { score, label };
+  function weeklyReviewRangeLabel(startDate = startOfWeekDate(new Date())) {
+    const start = startOfWeekDate(startDate);
+    const end = addDays(start, 6);
+    const format = new Intl.DateTimeFormat('de-CH', { day: '2-digit', month: '2-digit' });
+    return `${format.format(start)} – ${format.format(end)}`;
   }
 
-  function detectPrimaryPattern() {
-    const keys = daysBack(14);
-    const alcoholDays = new Set(visibleAlcoholUnits().filter(u => keys.includes(toDateKey(u.occurred_at))).map(u => toDateKey(u.occurred_at)));
-    const byHour = new Map();
-    visibleCigarettes().filter(c => keys.includes(toDateKey(c.smoked_at))).forEach(c => {
-      const h = new Date(c.smoked_at).getHours();
-      const bucket = h < 11 ? 'Morgen' : h < 16 ? 'Mittag' : h < 21 ? 'Abend' : 'Spätabend';
-      byHour.set(bucket, (byHour.get(bucket) || 0) + 1);
-    });
-    const alcoholSmoke = visibleCigarettes().filter(c => alcoholDays.has(toDateKey(c.smoked_at))).length;
-    const topTime = [...byHour.entries()].sort((a,b)=>b[1]-a[1])[0];
-    if (alcoholSmoke >= 3) return { body: `Alkohol-Tage erzeugen aktuell auffällig viele Rauchmomente (${alcoholSmoke} in 14 Tagen). Plane vor dem ersten Drink einen Delay-Schritt.` };
-    if (topTime) return { body: `${topTime[0]} ist dein stärkstes Rauchfenster (${topTime[1]}× in 14 Tagen). Der Coach priorisiert dort kurze Unterbrechungen.` };
-    return { body: 'Noch zu wenig Verlauf für robuste Muster. Die App sammelt weiter lokal und via Supabase synchronisiert.' };
+  function shortWeekLabel(startKey = '') {
+    const date = startKey ? new Date(`${startKey}T12:00:00`) : new Date();
+    const monday = startOfWeekDate(date);
+    return monday.toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' });
   }
 
-  function topSmokeTrigger(days = 14) {
-    const keys = daysBack(days);
-    const counts = new Map();
-    visibleCigarettes().filter(c => keys.includes(toDateKey(c.smoked_at))).forEach(c => {
-      const match = String(c.note || '').match(/trigger:([a-z_]+)/);
-      const key = match?.[1];
-      if (COACH_TRIGGER_META[key]) counts.set(key, (counts.get(key) || 0) + 1);
-    });
-    const top = [...counts.entries()].sort((a,b)=>b[1]-a[1])[0];
-    return top ? { key: top[0], count: top[1], label: COACH_TRIGGER_META[top[0]].label } : null;
+  function weekKeysFromStart(startDate, { untilToday = false } = {}) {
+    const start = startOfWeekDate(startDate);
+    const todayKey = toDateKey(new Date());
+    return Array.from({ length: 7 }, (_, index) => toDateKey(addDays(start, index)))
+      .filter(key => !untilToday || key <= todayKey);
   }
 
-  function buildWeeklyReview() {
-    const keys = daysBack(7);
-    const cigs = visibleCigarettes().filter(c => keys.includes(toDateKey(c.smoked_at)));
-    const routineDays = keys.filter(key => Boolean(morningRoutineCompletedLog(key))).length;
-    const tasks = state.tasks.filter(t => t.status === 'done' && keys.includes(toDateKey(t.completed_at || t.updated_at || t.created_at)));
-    const habits = visibleHabitEntries().filter(e => keys.includes(toDateKey(e.occurred_at)));
-    const best = bestPauseMinutes();
-    const alcoholDays = new Set(visibleAlcoholUnits().filter(u => keys.includes(toDateKey(u.occurred_at))).map(u => toDateKey(u.occurred_at))).size;
-    const score = Math.round(sum(keys.map(k => calculateDailyScore(k).score)) / Math.max(1, keys.length));
-    const pattern = detectPrimaryPattern().body;
-    return {
-      score,
-      title: score >= 70 ? 'Solide Woche mit sichtbarem Momentum' : 'Woche mit klaren Hebeln',
-      items: [
-        { label: 'Rauchen', value: `${cigs.length}×`, text: best ? `Beste Pause ${formatDuration(best)}.` : 'Noch kein Pausen-Highscore.' },
-        { label: 'Aufgaben', value: `${tasks.length} erledigt`, text: tasks.length ? 'Task-Momentum wirkt als Schutzfaktor.' : 'Eine kleine Aufgabe pro Tag würde den Score stabilisieren.' },
-        { label: 'Habits', value: `${habits.length} Logs`, text: 'Zielperioden werden neu pro Tag, Woche oder Monat gewertet.' },
-        { label: 'Routinen', value: `${routineDays}×`, text: routineDays ? 'Morgenroutinen geben stabile Bonuspunkte ohne zusätzliche Aufgabe.' : 'Eine Morgenroutine pro Woche würde den Startanker stärken.' },
-        { label: 'Alkohol', value: `${alcoholDays} Tage`, text: alcoholDays ? 'Alkohol bleibt ein wichtiger Risikokontext.' : 'Kein Alkohol-Kontext in der Wochenansicht.' }
-      ],
-      recommendation: pattern
+  function dateValueInKeys(value, keys = []) {
+    const key = toDateKey(value);
+    return key && keys.includes(key);
+  }
+
+  function buildWeeklyReviewSnapshot(value = new Date()) {
+    const start = startOfWeekDate(value);
+    const startKey = toDateKey(start);
+    const endKey = toDateKey(addDays(start, 6));
+    const isCurrentWeek = startKey === toDateKey(startOfWeekDate(new Date()));
+    const keys = weekKeysFromStart(start, { untilToday: isCurrentWeek });
+    const allWeekKeys = weekKeysFromStart(start);
+    const cigarettes = visibleCigarettes().filter(c => dateValueInKeys(c.smoked_at, allWeekKeys));
+    const alcoholUnits = visibleAlcoholUnits().filter(unit => dateValueInKeys(unit.occurred_at || unit.created_at, allWeekKeys));
+    const tasksDone = state.tasks.filter(task => task.status === 'done' && dateValueInKeys(task.completed_at || task.updated_at || task.created_at, allWeekKeys));
+    const habitEntries = visibleHabitEntries().filter(entry => dateValueInKeys(entry.occurred_at, allWeekKeys));
+    const habitDays = new Set(habitEntries.map(entry => toDateKey(entry.occurred_at)).filter(Boolean)).size;
+    const routineDays = new Set((state.morningRoutineLogs || []).filter(log => dateValueInKeys(log.date_key || log.completed_at, allWeekKeys)).map(log => log.date_key || toDateKey(log.completed_at))).size;
+    const fitnessSessions = buildFitnessSessions('all').filter(session => dateValueInKeys(session.entry?.occurred_at || session.date, allWeekKeys));
+    const runSessions = fitnessSessions.filter(session => session.type === 'jogging');
+    const hikeSessions = fitnessSessions.filter(session => session.type === 'hiking');
+    const activeDays = allWeekKeys.filter(key => dayHasTrackedActivity(key)).length;
+    const cleanDays = allWeekKeys.filter(key => dayHasTrackedActivity(key) && !cigarettes.some(c => toDateKey(c.smoked_at) === key) && !alcoholUnits.some(unit => toDateKey(unit.occurred_at || unit.created_at) === key)).length;
+    const points = sum(allWeekKeys.map(pointsOnDate));
+    const scoreKeys = keys.length ? keys : [startKey];
+    const score = Math.round(sum(scoreKeys.map(key => calculateDailyScore(key).score)) / Math.max(1, scoreKeys.length));
+    const metrics = {
+      cigarettes: cigarettes.length,
+      alcoholUnits: alcoholUnits.length,
+      tasksDone: tasksDone.length,
+      habitLogs: habitEntries.length,
+      habitDays,
+      routineDays,
+      runKm: sum(runSessions.map(session => session.distanceKm)),
+      hikeKm: sum(hikeSessions.map(session => session.distanceKm)),
+      ascentM: sum(hikeSessions.map(session => session.ascent)),
+      points,
+      activeDays,
+      cleanDays
     };
+    const highlights = buildWeeklyHighlights(metrics);
+    return normalizeWeeklyReview({
+      id: `weekly-${startKey}`,
+      week_key: startKey,
+      start_key: startKey,
+      end_key: endKey,
+      range_label: weeklyReviewRangeLabel(start),
+      title: weeklyReviewTitle(score, metrics),
+      score,
+      metrics,
+      highlights,
+      recommendation: weeklyReviewRecommendation(metrics),
+      created_at: nowIso(),
+      updated_at: nowIso()
+    });
   }
 
+  function buildWeeklyHighlights(metrics = {}) {
+    const out = [];
+    if (metrics.cleanDays) out.push(`${metrics.cleanDays} klare Tage ohne Konsum-Kontext`);
+    if (metrics.runKm) out.push(`${formatKmValue(metrics.runKm)} Joggen`);
+    if (metrics.hikeKm || metrics.ascentM) out.push(`${formatKmValue(metrics.hikeKm)} Wandern · ${formatMetersValue(metrics.ascentM)}`);
+    if (metrics.tasksDone) out.push(`${metrics.tasksDone} Aufgabe${metrics.tasksDone === 1 ? '' : 'n'} erledigt`);
+    if (metrics.routineDays) out.push(`${metrics.routineDays} Morgenroutine${metrics.routineDays === 1 ? '' : 'n'}`);
+    if (!metrics.cigarettes) out.push('rauchfrei dokumentiert');
+    return out.slice(0, 5);
+  }
+
+  function weeklyReviewTitle(score, metrics = {}) {
+    if (score >= 82) return 'Starke Woche mit Premium-Momentum';
+    if ((metrics.runKm || metrics.hikeKm || metrics.tasksDone) && score >= 68) return 'Solide Woche mit klarer Bewegung';
+    if (score >= 55) return 'Stabile Woche mit sichtbaren Hebeln';
+    return 'Woche mit klarer nächster Stellschraube';
+  }
+
+  function weeklyReviewRecommendation(metrics = {}) {
+    if (metrics.cigarettes >= 12 && metrics.alcoholUnits) return 'Nächste Woche zuerst Alkohol-Kontexte planen: vor dem ersten Drink einen Delay-Schritt festlegen.';
+    if (metrics.cigarettes >= 8) return 'Fokussiere eine starke Tagespause statt Perfektion – ein bewusstes Delay-Fenster pro Tag reicht.';
+    if (!metrics.tasksDone) return 'Plane eine kleine Aufgabe mit Datum. Ein sichtbarer Abschluss gibt der Woche Struktur.';
+    if (!metrics.runKm && !metrics.hikeKm) return 'Eine kurze Bewegungseinheit würde den Wochenrückblick stark aufwerten.';
+    if (metrics.routineDays < 2) return 'Zwei Morgenroutinen reichen als ruhiger Anker für die nächste Woche.';
+    return 'Behalte den Kurs bei und setze nur ein kleines Zusatz-Ziel, damit die Woche nicht überladen wird.';
+  }
+
+  function primaryWeeklyFocus(review = {}) {
+    const metrics = review.metrics || {};
+    if (metrics.cigarettes >= 8) return 'Konsumdruck senken';
+    if (metrics.runKm || metrics.hikeKm) return 'Bewegung halten';
+    if (metrics.tasksDone) return 'Task-Momentum';
+    if (metrics.routineDays) return 'Routine stabilisieren';
+    return 'klein starten';
+  }
+
+  function sortedWeeklyReviews() {
+    return [...(state.weeklyReviews || [])].map(normalizeWeeklyReview).sort((a, b) => String(b.week_key).localeCompare(String(a.week_key)));
+  }
+
+  function getSavedWeeklyReview(weekKey) {
+    return sortedWeeklyReviews().find(review => review.week_key === weekKey) || null;
+  }
+
+  function getPreviousWeeklyReview(weekKey) {
+    return sortedWeeklyReviews().filter(review => review.week_key < weekKey)[0] || null;
+  }
+
+  function compareWeeklyReviews(current, previous) {
+    if (!previous) return { score: { label: 'erste Basis', text: 'Speichere weitere Wochen, dann entstehen echte Vergleiche.' } };
+    const delta = Number(current.score || 0) - Number(previous.score || 0);
+    return { score: { label: `${delta >= 0 ? '+' : ''}${delta} Score`, text: delta > 0 ? 'besser als der vorherige Rückblick' : delta < 0 ? 'unter der Vorwoche – gute Lernbasis' : 'gleich stabil wie die Vorwoche' } };
+  }
+
+  function formatWeeklyDelta(value, { invert = false, suffix = '' } = {}) {
+    if (!Number.isFinite(value) || value === 0) return '±0';
+    const good = invert ? value < 0 : value > 0;
+    const signed = `${value > 0 ? '+' : ''}${Number.isInteger(value) ? value : value.toFixed(1)}`;
+    return `${good ? '↗' : '↘'} ${signed}${suffix}`;
+  }
+
+  function weeklyReviewMetricCards(review, previous = null) {
+    const m = review.metrics || {};
+    const p = previous?.metrics || null;
+    const delta = (key, options = {}) => p ? formatWeeklyDelta(Number(m[key] || 0) - Number(p[key] || 0), options) : '';
+    return [
+      { label: 'Score', value: `${review.score}%`, text: 'Durchschnitt der Tages-Scores dieser Woche.', delta: previous ? formatWeeklyDelta(review.score - previous.score, { suffix: ' Pkt.' }) : '', tone: review.score >= 70 ? 'is-good' : '' },
+      { label: 'Konsum', value: `${m.cigarettes}× / ${m.alcoholUnits}`, text: 'Zigaretten / Alkohol-Einheiten.', delta: delta('cigarettes', { invert: true }), tone: m.cigarettes ? 'is-watch' : 'is-good' },
+      { label: 'Fitness', value: `${formatKmValue((m.runKm || 0) + (m.hikeKm || 0))}`, text: `${formatKmValue(m.runKm || 0)} Run · ${formatKmValue(m.hikeKm || 0)} Hike · ${formatMetersValue(m.ascentM || 0)}.`, delta: delta('runKm', { suffix: ' km' }), tone: (m.runKm || m.hikeKm) ? 'is-good' : '' },
+      { label: 'Habits', value: `${m.habitLogs} Logs`, text: `${m.habitDays} aktive Habit-Tage · ${m.routineDays} Routinen.`, delta: delta('habitLogs'), tone: m.habitLogs ? 'is-good' : '' },
+      { label: 'Tasks', value: `${m.tasksDone} erledigt`, text: 'Abgeschlossene Aufgaben in dieser Woche.', delta: delta('tasksDone'), tone: m.tasksDone ? 'is-good' : '' },
+      { label: 'XP', value: `${m.points} Pkt.`, text: `${m.activeDays} aktive Tage · ${m.cleanDays} klare Tage.`, delta: delta('points', { suffix: ' Pkt.' }), tone: m.points > 0 ? 'is-good' : '' }
+    ];
+  }
+
+  function saveWeeklyReviewSnapshot() {
+    const snapshot = buildWeeklyReviewSnapshot(new Date());
+    const existingIndex = state.weeklyReviews.findIndex(review => review.week_key === snapshot.week_key);
+    if (existingIndex >= 0) {
+      const existing = normalizeWeeklyReview(state.weeklyReviews[existingIndex]);
+      state.weeklyReviews[existingIndex] = { ...snapshot, id: existing.id || snapshot.id, created_at: existing.created_at || snapshot.created_at, updated_at: nowIso() };
+      toast('Wochenrückblick aktualisiert');
+    } else {
+      state.weeklyReviews.push({ ...snapshot, created_at: nowIso(), updated_at: nowIso() });
+      toast('Wochenrückblick gespeichert');
+    }
+    saveState();
+    renderWeeklyReview();
+    renderHistoryModal();
+  }
+
+  function renderWeeklyReviewArchiveModal() {
+    const current = buildWeeklyReviewSnapshot(new Date());
+    const saved = sortedWeeklyReviews();
+    const hasCurrentSaved = saved.some(review => review.week_key === current.week_key);
+    const rows = saved.length ? saved : [current];
+    const best = saved.length ? [...saved].sort((a, b) => b.score - a.score)[0] : null;
+    return `<div class="history-modal-head weekly-archive-head">
+      <div><p class="eyebrow">Wochenrückblick</p><h2 id="historyModalTitle">Archiv & Vergleich</h2><p class="subtle">Gespeicherte Wochen bleiben abrufbar und werden automatisch mit der vorherigen gespeicherten Woche verglichen.</p></div>
+      <span class="badge muted">${saved.length} gespeichert</span>
+    </div>
+    <div class="weekly-archive-toolbar">
+      <article><small>Aktuelle Woche</small><strong>${escapeHtml(current.range_label)}</strong><span>${hasCurrentSaved ? 'gespeichert' : 'noch Live-Vorschau'}</span></article>
+      <article><small>Beste Woche</small><strong>${best ? `${best.score}%` : '–'}</strong><span>${best ? escapeHtml(best.range_label) : 'noch keine Historie'}</span></article>
+      <button class="pill primary" type="button" data-action="save-weekly-review">${hasCurrentSaved ? 'Aktuelle Woche aktualisieren' : 'Aktuelle Woche speichern'}</button>
+    </div>
+    <div class="weekly-archive-list">
+      ${rows.map((review, index) => {
+        const previous = saved.filter(item => item.week_key < review.week_key)[0] || null;
+        const metricCards = weeklyReviewMetricCards(review, previous).slice(0, 4);
+        return `<article class="weekly-archive-card ${index === 0 ? 'is-latest' : ''}">
+          <div class="weekly-archive-card-head"><div><p class="eyebrow">${escapeHtml(review.range_label)}</p><h3>${escapeHtml(review.title)}</h3></div><strong>${review.score}%</strong></div>
+          <div class="weekly-archive-metrics">${metricCards.map(item => `<span><small>${escapeHtml(item.label)}</small><b>${escapeHtml(item.value)}</b>${item.delta ? `<em>${escapeHtml(item.delta)}</em>` : ''}</span>`).join('')}</div>
+          <p>${escapeHtml(review.recommendation || 'Noch keine Empfehlung gespeichert.')}</p>
+          <div class="weekly-review-highlights compact">${(review.highlights || []).map(item => `<span>${escapeHtml(item)}</span>`).join('') || '<span>keine Highlights</span>'}</div>
+        </article>`;
+      }).join('')}
+    </div>`;
+  }
 
   function renderBehaviorIntelligence() {
     if (!els.nextBestActionCard) return;
@@ -3487,6 +3669,10 @@
 
   function renderHistoryModal() {
     if (!els.historyModal || !els.historyModalContent || els.historyModal.classList.contains('hidden')) return;
+    if (historyModalMode === 'weekly-reviews') {
+      els.historyModalContent.innerHTML = renderWeeklyReviewArchiveModal();
+      return;
+    }
     if (historyModalMode === 'smoke') {
       const count = visibleCigarettes().length;
       els.historyModalContent.innerHTML = `<div class="history-modal-head">
