@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v106-monthly-missions-form-fix';
+  const APP_DATA_SCHEMA_VERSION = 'v107-exponential-evolution-rules';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -23,6 +23,7 @@
   const FITNESS_DETAIL_TAB_KEY = 'habitflow-fitness-detail-tab-v1';
   const FITNESS_MOBILE_SECTIONS_KEY = 'habitflow-fitness-mobile-sections-v1';
   const MONTHLY_MISSION_FORM_KEY = 'habitflow-monthly-mission-form-v1';
+  const EVOLUTION_LEVEL_RULES = Object.freeze({ maxStage: 20, baseCost: 250, growth: 1.18 });
   const TASK_RECURRENCE_MARKER_RE = /\n?\s*<!--hf-task-rec:([^>]+)-->/;
   const TASK_IDEA_META_MARKER_RE = /\n?\s*<!--hf-idea-meta:([^>]+)-->/;
   const FITNESS_ROUTE_START = Object.freeze({ lat: 47.459945, lng: 9.032719 });
@@ -904,6 +905,8 @@
       authStatusText: $('#authStatusText'),
       authUserEmail: $('#authUserEmail'),
       themeToggle: $('#themeToggle'),
+      pointsRulesBtn: $('#pointsRulesBtn'),
+      pointsRulesPopover: $('#pointsRulesPopover'),
       syncNowBtn: $('#syncNowBtn'),
       navButtons: $$('.nav-btn'),
       screens: $$('.screen'),
@@ -1104,6 +1107,19 @@
       document.body.classList.toggle('light');
       localStorage.setItem(THEME_KEY, document.body.classList.contains('light') ? 'light' : 'dark');
     });
+    if (els.pointsRulesBtn) els.pointsRulesBtn.addEventListener('click', event => {
+      event.stopPropagation();
+      const isOpen = !els.pointsRulesPopover?.classList.contains('hidden');
+      setPointsRulesPopoverOpen(!isOpen);
+    });
+    document.addEventListener('click', event => {
+      if (!els.pointsRulesPopover || els.pointsRulesPopover.classList.contains('hidden')) return;
+      if (event.target.closest('#pointsRulesPopover, #pointsRulesBtn')) return;
+      setPointsRulesPopoverOpen(false);
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape') setPointsRulesPopoverOpen(false);
+    });
 
     if (els.authForm) els.authForm.addEventListener('submit', handleAuthForm);
     if (els.authResetBtn) els.authResetBtn.addEventListener('click', requestPasswordRecoveryEmail);
@@ -1220,6 +1236,7 @@
       const actionEl = event.target.closest('[data-action]');
       if (!actionEl) return;
       const { action, id } = actionEl.dataset;
+      if (action === 'close-points-rules') setPointsRulesPopoverOpen(false);
       if (action === 'complete-task') completeTask(id);
       if (action === 'move-task') moveTaskToStatus(id, actionEl.dataset.status);
       if (action === 'move-task-to-backlog') moveTaskToBacklog(id);
@@ -3091,15 +3108,81 @@
     window.addEventListener('pointercancel', endDrag);
   }
 
+  function evolutionStageCost(stage) {
+    const safeStage = Math.max(1, Math.min(EVOLUTION_LEVEL_RULES.maxStage - 1, Number(stage) || 1));
+    return Math.max(10, Math.round((EVOLUTION_LEVEL_RULES.baseCost * Math.pow(EVOLUTION_LEVEL_RULES.growth, safeStage - 1)) / 10) * 10);
+  }
+
+  function evolutionThresholds() {
+    const thresholds = [0];
+    let total = 0;
+    for (let stage = 1; stage < EVOLUTION_LEVEL_RULES.maxStage; stage += 1) {
+      total += evolutionStageCost(stage);
+      thresholds.push(total);
+    }
+    return thresholds;
+  }
+
+  function evolutionStageFromPoints(points) {
+    const safePoints = Math.max(0, Number(points || 0));
+    const thresholds = evolutionThresholds();
+    let stage = 1;
+    thresholds.forEach((threshold, index) => {
+      if (safePoints >= threshold) stage = index + 1;
+    });
+    stage = Math.min(EVOLUTION_LEVEL_RULES.maxStage, Math.max(1, stage));
+    const previousStageAt = thresholds[stage - 1] || 0;
+    const nextStageAt = stage >= EVOLUTION_LEVEL_RULES.maxStage ? thresholds[thresholds.length - 1] : thresholds[stage];
+    const currentStageCost = stage >= EVOLUTION_LEVEL_RULES.maxStage ? 0 : Math.max(1, nextStageAt - previousStageAt);
+    const pointsInStage = stage >= EVOLUTION_LEVEL_RULES.maxStage ? currentStageCost : Math.max(0, safePoints - previousStageAt);
+    const nextPoints = stage >= EVOLUTION_LEVEL_RULES.maxStage ? 0 : Math.max(0, nextStageAt - safePoints);
+    const stageProgress = stage >= EVOLUTION_LEVEL_RULES.maxStage
+      ? 100
+      : Math.min(100, Math.max(0, Math.round((pointsInStage / currentStageCost) * 100)));
+    return { stage, previousStageAt, nextStageAt, currentStageCost, pointsInStage, nextPoints, stageProgress, thresholds };
+  }
+
+  function renderPointsRulesPopover() {
+    if (!els.pointsRulesPopover) return;
+    const total = Math.max(0, Number(getTotalPoints() || 0));
+    const meta = evolutionStageFromPoints(total);
+    const nextLabel = meta.stage >= EVOLUTION_LEVEL_RULES.maxStage ? 'Max-Level erreicht' : `${Math.round(meta.nextPoints).toLocaleString('de-CH')} Pkt. bis Stufe ${meta.stage + 1}`;
+    const sampleRows = Array.from({ length: Math.min(6, EVOLUTION_LEVEL_RULES.maxStage - meta.stage) }, (_, index) => meta.stage + index)
+      .filter(stage => stage < EVOLUTION_LEVEL_RULES.maxStage)
+      .map(stage => `<span><b>${stage}→${stage + 1}</b>${evolutionStageCost(stage).toLocaleString('de-CH')} Pkt.</span>`)
+      .join('');
+    els.pointsRulesPopover.innerHTML = `<div class="points-rules-card-head">
+      <div><p class="eyebrow">Punkte-Regelwerk</p><h3>Transparente Evolution</h3></div>
+      <button class="icon-btn" type="button" data-action="close-points-rules" aria-label="Punkte-Regelwerk schliessen">×</button>
+    </div>
+    <div class="points-rules-live">
+      <article><small>Aktuelle Stufe</small><strong>${meta.stage}/20</strong><span>${total.toLocaleString('de-CH')} Pkt. total</span></article>
+      <article><small>Nächster Schritt</small><strong>${escapeHtml(nextLabel)}</strong><span>${meta.stage >= EVOLUTION_LEVEL_RULES.maxStage ? 'kein weiterer Schwellenwert' : `${meta.pointsInStage.toLocaleString('de-CH')} / ${meta.currentStageCost.toLocaleString('de-CH')} Pkt. in dieser Stufe`}</span></article>
+    </div>
+    <p class="points-rules-copy">Die Companion-Stufe wird jetzt direkt aus deinen gesammelten Punkten berechnet. Stufe 1→2 startet bei 250 Punkten; danach steigen die benötigten Punkte pro Stufe um 18%. Badges, Rhythmus und Habits beeinflussen Bindung/Energie, aber springen nicht mehr stillschweigend die Stufe hoch.</p>
+    <div class="points-rules-grid" aria-label="Nächste Stufenkosten">${sampleRows || '<span><b>20/20</b>Maximalstufe</span>'}</div>
+    <ul class="points-rules-list">
+      <li><strong>Pluspunkte:</strong> Habit-Logs, erledigte Aufgaben, Morgenroutine und längere bewusste Pausen.</li>
+      <li><strong>Minuspunkte:</strong> kurze Rauchabstände und Alkohol-Logs können den Tageswert reduzieren.</li>
+      <li><strong>Keine versteckten Sprünge:</strong> Level, Posterlinie und „nächste Stufe“ nutzen dieselbe exponentielle Kurve.</li>
+    </ul>`;
+  }
+
+  function setPointsRulesPopoverOpen(open) {
+    if (!els.pointsRulesBtn || !els.pointsRulesPopover) return;
+    if (open) renderPointsRulesPopover();
+    els.pointsRulesPopover.classList.toggle('hidden', !open);
+    els.pointsRulesBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
 
   function renderDashboard() {
     const total = getTotalPoints();
     const safeTotal = Math.max(0, Number(total || 0));
-    const level = Math.floor(safeTotal / 500) + 1;
-    const levelPoints = safeTotal % 500;
+    const evolutionMeta = evolutionStageFromPoints(safeTotal);
     if (els.totalPoints) els.totalPoints.textContent = total.toLocaleString('de-CH');
-    if (els.levelLabel) els.levelLabel.textContent = `Level ${level}`;
-    if (els.levelProgress) els.levelProgress.style.width = `${Math.min(100, (levelPoints / 500) * 100)}%`;
+    if (els.levelLabel) els.levelLabel.textContent = `Level ${evolutionMeta.stage}`;
+    if (els.levelProgress) els.levelProgress.style.width = `${evolutionMeta.stageProgress}%`;
     const todayKey = toDateKey(new Date());
     const todayCount = cigarettesOnDate(todayKey).length;
     const habitLogsToday = visibleHabitEntries().filter(e => toDateKey(e.occurred_at) === todayKey).length;
@@ -3125,6 +3208,7 @@
     renderGamification();
     renderHabitHeatmap();
     renderCharts();
+    if (els.pointsRulesPopover && !els.pointsRulesPopover.classList.contains('hidden')) renderPointsRulesPopover();
   }
 
   function renderGamification() {
@@ -3246,8 +3330,9 @@
   function buildGamificationStats() {
     const total = getTotalPoints();
     const safeTotal = Math.max(0, Number(total || 0));
-    const level = Math.max(1, Math.floor(safeTotal / 500) + 1);
-    const levelPoints = safeTotal % 500;
+    const evolutionMeta = evolutionStageFromPoints(safeTotal);
+    const level = evolutionMeta.stage;
+    const levelPoints = evolutionMeta.pointsInStage;
     const todayKey = toDateKey(new Date());
     const dayScore = calculateDailyScore(todayKey);
     const keys7 = daysBack(7);
@@ -3302,7 +3387,9 @@
       total,
       level,
       levelPoints,
-      levelProgress: Math.round((levelPoints / 500) * 100),
+      levelProgress: evolutionMeta.stageProgress,
+      levelNextPoints: evolutionMeta.nextPoints,
+      levelCurrentCost: evolutionMeta.currentStageCost,
       dayScore,
       completedTasks,
       todayCompletedTasks,
@@ -3413,16 +3500,12 @@
       { title: 'Champ', range: '17-20', detail: 'Bestversion leben' }
     ];
     const stagePoints = Math.max(0, Number(stats.total || 0));
-    const pointStage = Math.floor(stagePoints / 250) + 1;
-    const badgeStage = Math.floor((stats.unlockedBadges || 0) / 2) + 1;
-    const habitStage = Math.floor((stats.habitLogDays || 0) / 3) + 1;
-    const stage = Math.min(20, Math.max(1, Math.max(pointStage, badgeStage, habitStage)));
+    const evolutionMeta = evolutionStageFromPoints(stagePoints);
+    const stage = evolutionMeta.stage;
     const chapterIndex = Math.min(4, Math.floor((stage - 1) / 4));
-    const nextStageAt = stage >= 20 ? stagePoints : stage * 250;
-    const previousStageAt = stage <= 1 ? 0 : (stage - 1) * 250;
-    const stageProgress = stage >= 20
-      ? 100
-      : Math.min(100, Math.max(0, Math.round(((stagePoints - previousStageAt) / Math.max(1, nextStageAt - previousStageAt)) * 100)));
+    const nextStageAt = evolutionMeta.nextStageAt;
+    const previousStageAt = evolutionMeta.previousStageAt;
+    const stageProgress = evolutionMeta.stageProgress;
     const score = stats.dayScore.score;
     const mood = score >= 82 ? 'fokussiert' : score >= 62 ? 'stabil' : score >= 42 ? 'wachsam' : 'Recovery';
     const cue = stats.activeOverdue
@@ -3445,6 +3528,9 @@
       charge,
       trait,
       nextStageAt,
+      previousStageAt,
+      currentStageCost: evolutionMeta.currentStageCost,
+      nextPoints: evolutionMeta.nextPoints,
       stageProgress
     };
   }
@@ -3473,9 +3559,9 @@
 
   function renderPosterProgressOverlay(stats = {}, companion = {}) {
     const total = Math.max(0, Number(stats.total || 0));
-    const pointStep = 250;
-    const pointFloor = Math.floor(total / pointStep) * pointStep;
-    const targetPoints = pointFloor + pointStep;
+    const meta = companion?.stage ? companion : evolutionStageFromPoints(total);
+    const pointFloor = Math.max(0, Number(meta.previousStageAt || 0));
+    const targetPoints = Math.max(pointFloor + 1, Number(meta.nextStageAt || total || 1));
     const keys = daysBack(21);
     const dailyDeltas = keys.map(key => Number(pointsOnDate(key) || 0));
     const windowDelta = sum(dailyDeltas);
@@ -3508,7 +3594,7 @@
     const polyline = points.map(point => `${point.x},${point.y}`).join(' ');
     const areaPath = `M ${points[0].x} ${chartBottom} ` + points.map(point => `L ${point.x} ${point.y}`).join(' ') + ` L ${points[points.length - 1].x} ${chartBottom} Z`;
     const nextPoints = Math.max(0, Math.round(targetPoints - total));
-    const nextStageLabel = nextPoints ? `+${nextPoints.toLocaleString('de-CH')} Pkt.` : 'Ziel erreicht';
+    const nextStageLabel = meta.stage >= EVOLUTION_LEVEL_RULES.maxStage ? 'Max' : (nextPoints ? `+${nextPoints.toLocaleString('de-CH')} Pkt.` : 'Ziel erreicht');
     const windowLabel = `${windowDelta >= 0 ? '+' : ''}${Math.round(windowDelta).toLocaleString('de-CH')} / 21T`;
     return `<div class="poster-progress-overlay" aria-hidden="true">
       <svg class="poster-progress-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
@@ -3554,7 +3640,8 @@
   }
 
   function renderCompanionCard(companion, stats, currentCompanion = companion) {
-    const nextPoints = currentCompanion.stage >= 20 ? 'Max' : `${Math.max(0, currentCompanion.nextStageAt - Math.max(0, Number(stats.total || 0))).toLocaleString('de-CH')} Pkt.`;
+    const nextRaw = Math.max(0, Number(currentCompanion.nextPoints ?? (currentCompanion.nextStageAt - Math.max(0, Number(stats.total || 0)))));
+    const nextPoints = currentCompanion.stage >= EVOLUTION_LEVEL_RULES.maxStage ? 'Max' : `${Math.round(nextRaw).toLocaleString('de-CH')} Pkt.`;
     const unlockedText = `${stats.unlockedBadges}/${GAMIFICATION_BADGES.length}`;
     const chapterIndex = Math.min(4, Math.floor((companion.stage - 1) / 4));
     const stageTiles = companion.stageNames.map((name, index) => {
@@ -3577,7 +3664,7 @@
       : `Noch ${nextPoints} bis Stufe ${Math.min(20, currentCompanion.stage + 1)}.`;
     const progressInsight = currentCompanion.stage >= 20
       ? 'Jetzt geht es darum, dieses Niveau ruhig und sauber zu halten.'
-      : 'Eine kleine saubere Aktion heute bringt dein naechstes Poster sichtbar naeher.';
+      : `Die neue Kurve ist exponentiell: Diese Stufe braucht ${Number(currentCompanion.currentStageCost || 0).toLocaleString('de-CH')} Pkt. bis zum naechsten Poster.`;
     const momentumInsight = stats.activeOverdue
       ? `${stats.activeOverdue} offene Aufgabe(n) ziehen Energie. Eine davon zu beruhigen wirkt sofort auf dein Momentum.`
       : stats.momentumStreak >= 3
