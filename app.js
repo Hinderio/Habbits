@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v110-fitness-coach-launcher-fix';
+  const APP_DATA_SCHEMA_VERSION = 'v112-habit-entry-delete-archive';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -23,6 +23,7 @@
   const FITNESS_DETAIL_TAB_KEY = 'habitflow-fitness-detail-tab-v1';
   const FITNESS_MOBILE_SECTIONS_KEY = 'habitflow-fitness-mobile-sections-v1';
   const FITNESS_COACH_STATE_KEY = 'habitflow-fitness-coach-state-v1';
+  const REMOTE_DELETE_ARCHIVE_KEY = 'habitflow-remote-delete-archive-v1';
   const MONTHLY_MISSION_FORM_KEY = 'habitflow-monthly-mission-form-v1';
   const EVOLUTION_LEVEL_RULES = Object.freeze({ maxStage: 20, baseCost: 250, growth: 1.18 });
   const TASK_RECURRENCE_MARKER_RE = /\n?\s*<!--hf-task-rec:([^>]+)-->/;
@@ -408,7 +409,7 @@
   const SAFETY_REMOTE_PULL_MS = 10 * 60_000;
   const REMOTE_PULL_DEBOUNCE_MS = 1_500;
   const SELF_WRITE_ECHO_GRACE_MS = 4_000;
-  const REMOTE_DELETE_TOMBSTONE_TTL_DAYS = 14;
+  const REMOTE_DELETE_TOMBSTONE_TTL_DAYS = 3650;
   const OPTIONAL_SYNC_TABLES = new Set(['alcohol_events', 'appointments', 'task_ideas', 'pause_periods', 'weekly_reviews', 'monthly_missions']);
   const BUILT_IN_DEFAULT_HABIT_NAMES = new Set(['gewicht', 'wasser', 'sport', 'meditation']);
   const PAUSE_SCOPE_META = {
@@ -1638,7 +1639,8 @@
     if (previousVersion === APP_DATA_SCHEMA_VERSION) return;
     // Keep recent delete tombstones intact. They are the local guard that prevents
     // Supabase echo rows from resurrecting deleted logs after a hard refresh.
-    state.deletedRemoteIds = normalizeDeletedRemoteIds(state.deletedRemoteIds);
+    state.deletedRemoteIds = combineDeletedRemoteIds(state.deletedRemoteIds, readRemoteDeleteArchive());
+    writeRemoteDeleteArchive(state.deletedRemoteIds);
     localStorage.setItem(APP_DATA_SCHEMA_KEY, APP_DATA_SCHEMA_VERSION);
     saveState({ skipRender: true });
   }
@@ -1677,7 +1679,7 @@
     next.morningRoutineLogs = Array.isArray(next.morningRoutineLogs) ? next.morningRoutineLogs : [];
     next.weeklyReviews = Array.isArray(next.weeklyReviews) ? next.weeklyReviews.map(normalizeWeeklyReview).filter(review => review.week_key) : [];
     next.monthlyMissions = Array.isArray(next.monthlyMissions) ? next.monthlyMissions.map(normalizeMonthlyMission).filter(mission => mission.id && mission.month_key) : [];
-    next.deletedRemoteIds = normalizeDeletedRemoteIds(next.deletedRemoteIds);
+    next.deletedRemoteIds = combineDeletedRemoteIds(next.deletedRemoteIds, readRemoteDeleteArchive());
     ensureSystemHabits(next);
     dedupeStateCollections(next);
     return next;
@@ -1746,6 +1748,54 @@
       else if (value && typeof value === 'object') Object.entries(value).forEach(([id, meta]) => remember(table, id, meta));
     });
     return normalized;
+  }
+
+
+  function combineDeletedRemoteIds(...sources) {
+    const combined = createEmptyDeletedRemoteIds();
+    sources.forEach(source => {
+      const normalized = normalizeDeletedRemoteIds(source || {});
+      Object.keys(combined).forEach(table => {
+        Object.entries(normalized[table] || {}).forEach(([id, meta]) => {
+          const current = combined[table][id];
+          if (!current) {
+            combined[table][id] = { ...meta };
+            return;
+          }
+          const currentDeletedMs = new Date(current.deleted_at || 0).getTime();
+          const incomingDeletedMs = new Date(meta.deleted_at || 0).getTime();
+          const keepIncomingDate = Number.isFinite(incomingDeletedMs) && (!Number.isFinite(currentDeletedMs) || incomingDeletedMs < currentDeletedMs);
+          const currentSyncedMs = new Date(current.synced_at || 0).getTime();
+          const incomingSyncedMs = new Date(meta.synced_at || 0).getTime();
+          combined[table][id] = {
+            deleted_at: keepIncomingDate ? meta.deleted_at : (current.deleted_at || meta.deleted_at || nowIso()),
+            // If either source still needs a retry, keep the tombstone pending.
+            synced_at: current.synced_at && meta.synced_at
+              ? (Number.isFinite(incomingSyncedMs) && incomingSyncedMs > currentSyncedMs ? meta.synced_at : current.synced_at)
+              : null
+          };
+        });
+      });
+    });
+    return combined;
+  }
+
+  function readRemoteDeleteArchive() {
+    try {
+      const raw = localStorage.getItem(REMOTE_DELETE_ARCHIVE_KEY);
+      return raw ? normalizeDeletedRemoteIds(JSON.parse(raw)) : createEmptyDeletedRemoteIds();
+    } catch (error) {
+      console.warn('Remote-Delete-Archiv konnte nicht gelesen werden.', error);
+      return createEmptyDeletedRemoteIds();
+    }
+  }
+
+  function writeRemoteDeleteArchive(deletedRemoteIds = state?.deletedRemoteIds) {
+    try {
+      localStorage.setItem(REMOTE_DELETE_ARCHIVE_KEY, JSON.stringify(normalizeDeletedRemoteIds(deletedRemoteIds || {})));
+    } catch (error) {
+      console.warn('Remote-Delete-Archiv konnte nicht gespeichert werden.', error);
+    }
   }
 
 
@@ -2246,12 +2296,13 @@
 
   function markRemoteDeleted(table, id, { synced = false } = {}) {
     if (!table || !id) return;
-    state.deletedRemoteIds = normalizeDeletedRemoteIds(state.deletedRemoteIds);
+    state.deletedRemoteIds = combineDeletedRemoteIds(state.deletedRemoteIds, readRemoteDeleteArchive());
     if (!state.deletedRemoteIds[table]) state.deletedRemoteIds[table] = {};
     state.deletedRemoteIds[table][id] = {
       deleted_at: nowIso(),
       synced_at: synced ? nowIso() : null
     };
+    writeRemoteDeleteArchive(state.deletedRemoteIds);
   }
 
   function markRemoteDeletedMany(table, ids = [], options = {}) {
@@ -2270,15 +2321,17 @@
   function clearRemoteDeleteMarker(table, id) {
     if (!table || !id || !state.deletedRemoteIds?.[table]?.[id]) return;
     delete state.deletedRemoteIds[table][id];
+    writeRemoteDeleteArchive(state.deletedRemoteIds);
   }
 
   function retryRemoteDeleteMarker(table, id) {
     if (!table || !id || !state.deletedRemoteIds?.[table]?.[id]) return;
     state.deletedRemoteIds[table][id].synced_at = null;
+    writeRemoteDeleteArchive(state.deletedRemoteIds);
   }
 
   function hasPendingRemoteDeletes() {
-    state.deletedRemoteIds = normalizeDeletedRemoteIds(state.deletedRemoteIds);
+    state.deletedRemoteIds = combineDeletedRemoteIds(state.deletedRemoteIds, readRemoteDeleteArchive());
     return SYNC_TABLES.some(table => {
       if (table === 'task_ideas' && !remoteTaskIdeasSupported) return false;
       if (table === 'pause_periods' && !remotePausePeriodsSupported) return false;
@@ -2425,7 +2478,8 @@
   }
 
   function saveState({ skipRender = false } = {}) {
-    if (state?.deletedRemoteIds) state.deletedRemoteIds = normalizeDeletedRemoteIds(state.deletedRemoteIds);
+    if (state?.deletedRemoteIds) state.deletedRemoteIds = combineDeletedRemoteIds(state.deletedRemoteIds, readRemoteDeleteArchive());
+    writeRemoteDeleteArchive(state.deletedRemoteIds);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     if (!skipRender) queueRender();
   }
@@ -11962,7 +12016,7 @@ async function deleteAlcoholLog(id) {
   async function flushRemoteDeletes() {
     if (!supabaseClient || !isAuthenticated()) return false;
     let changed = false;
-    state.deletedRemoteIds = normalizeDeletedRemoteIds(state.deletedRemoteIds);
+    state.deletedRemoteIds = combineDeletedRemoteIds(state.deletedRemoteIds, readRemoteDeleteArchive());
     for (const table of SYNC_TABLES) {
       if (table === 'task_ideas' && !remoteTaskIdeasSupported) continue;
       if (table === 'pause_periods' && !remotePausePeriodsSupported) continue;
@@ -12126,6 +12180,7 @@ async function deleteAlcoholLog(id) {
     const remoteWeeklyReviewRows = remoteRows('weekly_reviews', weeklyReviewsRemote);
     const remoteMonthlyMissionRows = remoteRows('monthly_missions', monthlyMissionsRemote);
 
+    applyRemoteCollectionAuthority('habit_entries', 'habitEntries', remoteEntryRows, { ledgerSourceType: 'habit' });
     applyRemoteCollectionAuthority('cigarette_events', 'cigarettes', remoteCigaretteRows, { ledgerSourceType: 'cigarette' });
     applyRemoteCollectionAuthority('appointments', 'appointments', remoteAppointmentRows);
     if (remotePausePeriodsSupported) applyRemoteCollectionAuthority('pause_periods', 'pausePeriods', remotePauseRows);
