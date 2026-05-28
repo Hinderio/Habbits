@@ -7402,14 +7402,17 @@
   }
 
   function renderFitnessFoodMap() {
+    const nodes = [
+      { cls: 'is-protein', kicker: 'Protein', title: 'Muskelerhalt', body: 'Sättigt stark und schützt Muskulatur im Defizit.', terms: ['Eier', 'Skyr', 'Fisch', 'Poulet', 'Tofu', 'Linsen', 'Quark', 'Bohnen', 'Edamame', 'Tempeh', 'Hüttenkäse'] },
+      { cls: 'is-volume', kicker: 'Volumen', title: 'Fülle', body: 'Viel Tellerfläche bei moderater Energiedichte.', terms: ['Gemüse', 'Salat', 'Beeren', 'Suppe', 'Kartoffeln', 'Zucchini', 'Gurke', 'Tomaten', 'Karotten', 'Kohl', 'Äpfel'] },
+      { cls: 'is-energy', kicker: 'Energie', title: 'Training', body: 'Kohlenhydrate geben Tempo, Fokus und bessere Einheiten.', terms: ['Reis', 'Hafer', 'Pasta', 'Wraps', 'Obst', 'Brot', 'Couscous', 'Bulgur', 'Bananen', 'Mais'] },
+      { cls: 'is-joy', kicker: 'Genuss', title: 'Dranbleiben', body: 'Geschmack macht das System langfristig realistisch.', terms: ['Sauce', 'Crunch', 'Gewürze', 'Nüsse', 'Käse', 'Olivenöl', 'Kräuter', 'Zitrone', 'Joghurt-Dip', 'Lieblingsessen bewusst'] }
+    ];
     return `<div class="fitness-coach-section">
       <div class="fitness-coach-section-head"><div><p class="eyebrow">Food Map</p><h3>Visuelle Theorie: der ruhige Teller</h3></div><span class="badge muted">einfach merken</span></div>
       <div class="food-map-shell">
-        <div class="food-map-core"><strong>Sättigung</strong><span>Protein + Volumen + Rhythmus</span></div>
-        <article class="food-map-node is-protein"><small>Protein</small><strong>Muskelerhalt</strong><span>Eier, Skyr, Fisch, Poulet, Tofu, Linsen</span></article>
-        <article class="food-map-node is-volume"><small>Volumen</small><strong>Fülle</strong><span>Gemüse, Salat, Beeren, Suppe, Kartoffeln</span></article>
-        <article class="food-map-node is-energy"><small>Energie</small><strong>Training</strong><span>Reis, Hafer, Pasta, Wraps, Obst</span></article>
-        <article class="food-map-node is-joy"><small>Genuss</small><strong>Dranbleiben</strong><span>Sauce, Crunch, Gewürze, Lieblingsessen bewusst</span></article>
+        <div class="food-map-core"><small>ruhiger Teller</small><strong>Sättigung</strong><span>Protein + Volumen + Energie + Genuss</span></div>
+        ${nodes.map(node => `<article class="food-map-node ${node.cls}"><small>${escapeHtml(node.kicker)}</small><strong>${escapeHtml(node.title)}</strong><p>${escapeHtml(node.body)}</p><div class="food-map-tags">${node.terms.map(term => `<span>${escapeHtml(term)}</span>`).join('')}</div></article>`).join('')}
       </div>
       <div class="food-map-rules">
         <article><strong>Vor dem Training</strong><span>leicht verdauliche Kohlenhydrate plus Flüssigkeit.</span></article>
@@ -7458,7 +7461,7 @@
     const hikingHabit = firstFitnessHabitByType('hiking');
     const hasFitnessHabits = Boolean(runningHabit || hikingHabit || allSessions.length);
     if (!hasFitnessHabits) {
-      els.fitnessHubContent.innerHTML = `${renderFitnessCoachInlineLauncher()}<div class="fitness-empty-state">
+      els.fitnessHubContent.innerHTML = `<div class="fitness-empty-state">
         <div class="fitness-empty-icon" aria-hidden="true">${svgIcon('jogging', 'ui-icon')}</div>
         <div>
           <strong>Noch keine Fitness-Habits vorhanden</strong>
@@ -7470,14 +7473,13 @@
     }
     const visibleSessions = selectedFitnessFilter === 'all' ? allSessions : buildFitnessSessions(selectedFitnessFilter);
     if (selectedFitnessFilter !== 'all' && !visibleSessions.length) {
-      els.fitnessHubContent.innerHTML = `${renderFitnessCoachInlineLauncher()}<div class="fitness-empty-state is-filtered"><div class="fitness-empty-icon" aria-hidden="true">${svgIcon(selectedFitnessFilter === 'hiking' ? 'hiking' : 'jogging', 'ui-icon')}</div><div><strong>Noch keine ${selectedFitnessFilter === 'hiking' ? 'Wander-' : 'Jogging-'}Sessions erfasst</strong><p>Wechsle auf <em>Alle</em> oder logge die nächste Distanz direkt hier im Fitness-Tab.</p></div><div class="fitness-filter-row">${[{ key: 'all', label: 'Alle' }, { key: 'jogging', label: 'Joggen' }, { key: 'hiking', label: 'Wandern' }].map(filter => `<button class="fitness-filter-btn ${selectedFitnessFilter === filter.key ? 'is-active' : ''}" type="button" data-action="set-fitness-filter" data-filter="${filter.key}">${filter.label}</button>`).join('')}</div></div>`;
+      els.fitnessHubContent.innerHTML = `<div class="fitness-empty-state is-filtered"><div class="fitness-empty-icon" aria-hidden="true">${svgIcon(selectedFitnessFilter === 'hiking' ? 'hiking' : 'jogging', 'ui-icon')}</div><div><strong>Noch keine ${selectedFitnessFilter === 'hiking' ? 'Wander-' : 'Jogging-'}Sessions erfasst</strong><p>Wechsle auf <em>Alle</em> oder logge die nächste Distanz direkt hier im Fitness-Tab.</p></div><div class="fitness-filter-row">${[{ key: 'all', label: 'Alle' }, { key: 'jogging', label: 'Joggen' }, { key: 'hiking', label: 'Wandern' }].map(filter => `<button class="fitness-filter-btn ${selectedFitnessFilter === filter.key ? 'is-active' : ''}" type="button" data-action="set-fitness-filter" data-filter="${filter.key}">${filter.label}</button>`).join('')}</div></div>`;
       return;
     }
     const heroSummary = summarizeFitnessSessions(allSessions);
     const selectedSession = ensureSelectedFitnessSession(visibleSessions.length ? visibleSessions : allSessions);
     const mountainCollection = buildMountainCollection(hikingSessions);
     els.fitnessHubContent.innerHTML = `<div class="fitness-hub-shell">
-      ${renderFitnessCoachInlineLauncher()}
       <div class="fitness-kpi-grid">
         <article class="fitness-kpi-card"><small>Joggen gesamt</small><strong>${formatKmValue(summarizeFitnessSessions(joggingSessions).totalDistance)}</strong><span>${joggingSessions.length} Run-Logs</span></article>
         <article class="fitness-kpi-card"><small>Wandern gesamt</small><strong>${formatKmValue(summarizeFitnessSessions(hikingSessions).totalDistance)}</strong><span>${hikingSessions.length} Hike-Logs</span></article>
