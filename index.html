@@ -523,15 +523,25 @@
       </section>
 
       <section id="screen-fitness" class="screen" data-screen="fitness" hidden aria-hidden="true">
-        <div class="section-toolbar glass">
+        <div class="section-toolbar glass fitness-toolbar">
           <div><p class="eyebrow">Fitness</p><h3>Routen, Kilometer & Trainings-Story</h3></div>
-          <span class="badge muted">Joggen · Wandern</span>
+          <div class="fitness-toolbar-actions">
+            <span class="badge muted">Joggen · Wandern</span>
+            <button id="fitnessCoachBtn" class="bubble-add-btn fitness-coach-open-btn" type="button" data-action="open-fitness-coach" aria-label="Fitness Coach öffnen"><span data-icon="plus"></span></button>
+          </div>
         </div>
         <section class="panel glass fitness-screen-panel">
           <div class="panel-head"><div><p class="eyebrow">Fitness Tab</p><h3>Luftlinien, Orte & Berg-Sammlung</h3></div><span class="subtle">Luftlinie ab Wil SG</span></div>
           <div id="fitnessHubContent"></div>
         </section>
       </section>
+
+      <div id="fitnessCoachModal" class="coach-modal fitness-coach-modal hidden" role="dialog" aria-modal="true" aria-labelledby="fitnessCoachTitle">
+        <section class="coach-modal-card fitness-coach-card">
+          <button id="fitnessCoachCloseBtn" class="icon-btn coach-close-btn" type="button" aria-label="Fitness Coach schliessen">×</button>
+          <div id="fitnessCoachContent" class="fitness-coach-content"></div>
+        </section>
+      </div>
 
       <section id="screen-tasks" class="screen" data-screen="tasks" hidden aria-hidden="true">
         <div class="section-toolbar glass task-toolbar">

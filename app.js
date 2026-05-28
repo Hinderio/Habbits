@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v107-exponential-evolution-rules';
+  const APP_DATA_SCHEMA_VERSION = 'v109-fitness-nutrition-coach';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -22,6 +22,7 @@
   const FITNESS_FILTER_KEY = 'habitflow-fitness-filter-v1';
   const FITNESS_DETAIL_TAB_KEY = 'habitflow-fitness-detail-tab-v1';
   const FITNESS_MOBILE_SECTIONS_KEY = 'habitflow-fitness-mobile-sections-v1';
+  const FITNESS_COACH_STATE_KEY = 'habitflow-fitness-coach-state-v1';
   const MONTHLY_MISSION_FORM_KEY = 'habitflow-monthly-mission-form-v1';
   const EVOLUTION_LEVEL_RULES = Object.freeze({ maxStage: 20, baseCost: 250, growth: 1.18 });
   const TASK_RECURRENCE_MARKER_RE = /\n?\s*<!--hf-task-rec:([^>]+)-->/;
@@ -79,6 +80,74 @@
     { key: 'urge-surf', title: 'Craving-Welle', subtitle: 'Drang beobachten, ohne sofort zu handeln', minutes: 4, pattern: 'wahrnehmen · warten · wählen' },
     { key: 'gratitude', title: 'Dankbarkeits-Minute', subtitle: 'Kurzer mentaler Reset mit positiver Ankerung', minutes: 3, pattern: '3 Dinge benennen' }
   ];
+
+
+  const FITNESS_COACH_TABS = Object.freeze([
+    { key: 'training', label: 'Training' },
+    { key: 'sports', label: 'Sportarten' },
+    { key: 'mind', label: 'Mind' },
+    { key: 'nutrition', label: 'Ernährung' },
+    { key: 'recipes', label: 'Rezepte' },
+    { key: 'foodmap', label: 'Food Map' }
+  ]);
+
+  const FITNESS_COACH_EXERCISES = Object.freeze([
+    { title: 'Tempo Squat', focus: 'Beine · Core', minutes: 6, level: 'Basis', cue: 'Füsse hüftbreit, Knie folgen den Zehen, 3 Sek. runter, ruhig hoch.', steps: ['8–12 Wiederholungen', 'Brust bleibt offen', 'Pause, sobald die Technik kippt'] },
+    { title: 'Incline Push-up', focus: 'Brust · Schulter', minutes: 5, level: 'Skalierbar', cue: 'Hände auf Tischkante oder Sofa, Körper bleibt wie ein Brett.', steps: ['Ellbogen ca. 45°', 'Langsam absenken', 'Explosiv, aber kontrolliert hoch'] },
+    { title: 'Reverse Lunge', focus: 'Beine · Balance', minutes: 6, level: 'Mittel', cue: 'Ein Bein nach hinten, vorderer Fuss bleibt stabil, Oberkörper aufrecht.', steps: ['6–10 pro Seite', 'Knie weich landen lassen', 'Mit dem vorderen Bein hochdrücken'] },
+    { title: 'Glute Bridge', focus: 'Gesäss · Rücken', minutes: 4, level: 'Basis', cue: 'Rückenlage, Füsse nah am Gesäss, Becken bewusst nach oben rollen.', steps: ['2 Sek. oben halten', 'Rippen unten lassen', '12–15 Wiederholungen'] },
+    { title: 'Dead Bug', focus: 'Core · Kontrolle', minutes: 5, level: 'Ruhig', cue: 'Rückenlage, Lendenwirbelsäule sanft am Boden, diagonal Arm/Bein strecken.', steps: ['Langsam ausatmen', '6–8 pro Seite', 'Qualität vor Tempo'] },
+    { title: 'Bird Dog', focus: 'Rücken · Stabilität', minutes: 5, level: 'Basis', cue: 'Vierfüsslerstand, diagonal strecken, Becken bleibt parallel zum Boden.', steps: ['2 Sek. halten', 'Blick zum Boden', '8 pro Seite'] },
+    { title: 'Side Plank', focus: 'Seitlicher Core', minutes: 4, level: 'Mittel', cue: 'Ellbogen unter Schulter, Körper lang, Hüfte aktiv anheben.', steps: ['20–35 Sek. pro Seite', 'Knie ablegen erlaubt', 'Nicht in die Schulter sinken'] },
+    { title: 'Wall Sit', focus: 'Beine · Willenskraft', minutes: 4, level: 'Kurz & stark', cue: 'Rücken an die Wand, Knie ca. 90°, Gewicht auf den ganzen Fuss.', steps: ['30–45 Sek. halten', '2–3 Runden', 'Atmung ruhig halten'] },
+    { title: 'Mountain Climber langsam', focus: 'Puls · Core', minutes: 5, level: 'Aktiv', cue: 'Plank-Position, Knie kontrolliert Richtung Brust, kein Hohlkreuz.', steps: ['20–30 Sek. Arbeit', '30 Sek. Pause', '3–5 Runden'] },
+    { title: 'Calf Raise', focus: 'Waden · Fusskraft', minutes: 4, level: 'Basis', cue: 'Aufrecht stehen, langsam auf die Zehenspitzen, kontrolliert absenken.', steps: ['12–20 Wiederholungen', 'Oben 1 Sek. halten', 'Optional einbeinig'] },
+    { title: 'Hip Hinge Drill', focus: 'Hüfte · Rücken', minutes: 5, level: 'Technik', cue: 'Hände an Hüfte, Gesäss nach hinten, Rücken lang, Knie leicht gebeugt.', steps: ['10 saubere Wiederholungen', 'Bewegung aus der Hüfte', 'Perfekt für Wandern/Joggen'] },
+    { title: 'Mobility Flow', focus: 'Nacken · Hüfte', minutes: 7, level: 'Recovery', cue: 'Langsame Gelenkbewegungen ohne Schmerz, ruhig durch die Nase atmen.', steps: ['Nacken kreisen', 'Brustwirbelsäule öffnen', 'Hüfte und Sprunggelenke mobilisieren'] }
+  ]);
+
+  const FITNESS_COACH_SPORTS = Object.freeze([
+    { title: 'Spazieren', kcal: 220, note: 'sehr niedrigschwellig, ideal als Reset nach Stress' },
+    { title: 'Joggen locker', kcal: 620, note: 'starker Ausdauerreiz, aber Belastung langsam steigern' },
+    { title: 'Wandern', kcal: 430, note: 'mehr Höhenmeter erhöhen den Verbrauch deutlich' },
+    { title: 'Radfahren moderat', kcal: 520, note: 'gelenkschonend und gut für Grundlagenausdauer' },
+    { title: 'Schwimmen', kcal: 560, note: 'Ganzkörpertraining mit wenig Stossbelastung' },
+    { title: 'Tanzen', kcal: 390, note: 'spielerisch, sozial und überraschend effektiv' },
+    { title: 'Treppensteigen', kcal: 650, note: 'kurz, intensiv, perfekt als Mini-Workout' },
+    { title: 'Fussball locker', kcal: 580, note: 'Intervalle, Koordination und Spass in einem' },
+    { title: 'Tennis / Padel', kcal: 520, note: 'schnelle Richtungswechsel und Fokus' },
+    { title: 'Yoga dynamisch', kcal: 260, note: 'Beweglichkeit, Kraft und Nervensystem' },
+    { title: 'Bodyweight-Zirkel', kcal: 480, note: 'ohne Geräte, schnell anpassbar' },
+    { title: 'Nordic Walking', kcal: 360, note: 'mehr Oberkörper als normales Gehen' }
+  ]);
+
+  const FITNESS_MIND_EXERCISES = Object.freeze([
+    { title: 'Physiological Sigh', minutes: 2, body: 'Zwei kurze Einatmungen durch die Nase, eine lange Ausatmung. 5–8 Wiederholungen für schnellen Druckabbau.' },
+    { title: '5-4-3-2-1 Grounding', minutes: 3, body: '5 Dinge sehen, 4 fühlen, 3 hören, 2 riechen, 1 schmecken. Gut bei innerer Unruhe.' },
+    { title: 'Mindful Walk', minutes: 10, body: 'Ohne Podcast gehen. Schritte, Atmung und Umgebung wahrnehmen. Perfekt als Craving- oder Stress-Reset.' },
+    { title: 'Gedanken-Parkplatz', minutes: 5, body: 'Alles aufschreiben, was mental offen ist. Danach genau eine nächste Aktion markieren.' },
+    { title: 'Progressive Entspannung', minutes: 8, body: 'Füsse, Beine, Bauch, Hände, Schultern nacheinander 5 Sek. anspannen und lösen.' },
+    { title: 'Selbstmitgefühls-Reset', minutes: 2, body: 'Satz: „Das ist gerade schwer. Ich darf klein anfangen. Der nächste gute Schritt reicht.“' },
+    { title: 'Box Breathing', minutes: 4, body: '4 Sekunden ein, 4 halten, 4 aus, 4 halten. Ruhig, gleichmässig, 4 Runden.' },
+    { title: 'Schlaf-Offload', minutes: 6, body: 'Vor dem Schlafen: Sorgen, offene Aufgaben und morgige Top-1 notieren. Kopf wird entlastet.' }
+  ]);
+
+  const FITNESS_NUTRITION_TIPS = Object.freeze([
+    { title: 'Protein-Anker pro Mahlzeit', body: 'Baue jede Hauptmahlzeit um eine Proteinquelle. Das stabilisiert Sättigung und hilft beim Muskelerhalt.' },
+    { title: 'Volumen zuerst', body: 'Gemüse, Salat, Beeren, Suppen und Kartoffeln geben viel Volumen bei moderater Energiedichte.' },
+    { title: '80/20 statt Perfektion', body: 'Plane bewusst einfache Standard-Mahlzeiten und lasse Platz für Genuss. Konstanz schlägt Extremregeln.' },
+    { title: 'Flüssige Kalorien prüfen', body: 'Säfte, Alkohol, süsse Kaffeegetränke und Softdrinks sind oft der leichteste Hebel für ein Defizit.' },
+    { title: 'Meal-Prep minimal', body: 'Nicht 7 Tage vorkochen: 1 Protein, 1 Kohlenhydrat, 2 Gemüse und 1 Sauce reichen als Baukasten.' },
+    { title: 'Gewichtsverlust ohne Crash', body: 'Ein kleines, nachhaltiges Defizit ist sinnvoller als aggressive Diäten. Bei Erkrankungen bitte ärztlich abklären.' }
+  ]);
+
+  const FITNESS_RECIPE_PARTS = Object.freeze({
+    bases: ['Haferflocken', 'Quinoa', 'Vollkornreis', 'Kartoffeln', 'Süsskartoffeln', 'Linsenpasta', 'Couscous', 'Bulgur', 'Vollkornwrap'],
+    proteins: ['Poulet', 'Lachs', 'Thunfisch', 'Tofu', 'Tempeh', 'Eier', 'Skyr', 'Kichererbsen', 'Linsen', 'Hüttenkäse'],
+    vegetables: ['Brokkoli', 'Spinat', 'Peperoni', 'Zucchini', 'Karotten', 'Tomaten', 'Gurke', 'Blumenkohl', 'Edamame'],
+    sauces: ['Zitronen-Joghurt', 'Tomaten-Basilikum', 'Tahini-Limette', 'Salsa', 'Soja-Ingwer', 'Avocado-Limette', 'Kräuterquark'],
+    formats: ['Bowl', 'Pfanne', 'Salat', 'Wrap', 'Ofenblech', 'Suppe', 'Meal-Prep-Box']
+  });
 
   const COMPANION_STAGE_POSTERS = [
     { file: 'stage-01.png', mood: 'Opening Frame', cue: 'Foundation', align: 'left' },
@@ -844,6 +913,7 @@
   let selectedFitnessFilter = ['all', 'jogging', 'hiking'].includes(localStorage.getItem(FITNESS_FILTER_KEY)) ? localStorage.getItem(FITNESS_FILTER_KEY) : 'all';
   let selectedFitnessDetailTab = ['summary', 'stats', 'peaks'].includes(localStorage.getItem(FITNESS_DETAIL_TAB_KEY)) ? localStorage.getItem(FITNESS_DETAIL_TAB_KEY) : 'summary';
   let fitnessMobileSectionState = loadFitnessMobileSectionState();
+  let fitnessCoachState = loadFitnessCoachState();
   let selectedFitnessEntryId = null;
   let leisureSeedCatalog = [];
   let leisureCatalog = [];
@@ -1011,6 +1081,10 @@
       habitPauseList: $('#habitPauseList'),
       habitPlayfulStats: $('#habitPlayfulStats'),
       fitnessHubContent: $('#fitnessHubContent'),
+      fitnessCoachBtn: $('#fitnessCoachBtn'),
+      fitnessCoachModal: $('#fitnessCoachModal'),
+      fitnessCoachCloseBtn: $('#fitnessCoachCloseBtn'),
+      fitnessCoachContent: $('#fitnessCoachContent'),
       pauseModal: $('#pauseModal'),
       pauseModalCloseBtn: $('#pauseModalCloseBtn'),
       pauseModalTitle: $('#pauseModalTitle'),
@@ -1159,6 +1233,12 @@
         if (event.target === els.pauseModal) closePauseModal();
       });
     }
+    if (els.fitnessCoachCloseBtn) els.fitnessCoachCloseBtn.addEventListener('click', closeFitnessCoach);
+    if (els.fitnessCoachModal) {
+      els.fitnessCoachModal.addEventListener('click', event => {
+        if (event.target === els.fitnessCoachModal) closeFitnessCoach();
+      });
+    }
     if (els.coachModal) {
       els.coachModal.addEventListener('click', event => {
         if (event.target === els.coachModal) closeCoachModal();
@@ -1304,6 +1384,10 @@
       if (action === 'select-fitness-entry') selectFitnessEntry(id);
       if (action === 'set-fitness-detail-tab') setFitnessDetailTab(actionEl.dataset.tab || 'summary');
       if (action === 'log-fitness-quick') logFitnessQuickEntry(id, actionEl.dataset.inputId, actionEl.dataset.ascentInputId || '', actionEl.dataset.timeInputId || '', actionEl.dataset.timeSecondsInputId || '');
+      if (action === 'open-fitness-coach') openFitnessCoach();
+      if (action === 'close-fitness-coach') closeFitnessCoach();
+      if (action === 'set-fitness-coach-tab') setFitnessCoachTab(actionEl.dataset.tab || 'training');
+      if (action === 'shuffle-fitness-coach') shuffleFitnessCoach();
       if (action === 'log-habit') logHabit(id, actionEl.dataset.inputId, actionEl.dataset.timeInputId || '', actionEl.dataset.timeSecondsInputId || '', actionEl.dataset.ascentInputId || '');
       if (action === 'start-morning-routine') startMorningRoutine();
       if (action === 'next-morning-step') advanceMorningRoutine();
@@ -1360,6 +1444,7 @@
       if (els.pauseModal && !els.pauseModal.classList.contains('hidden')) return closePauseModal();
       if (els.historyModal && !els.historyModal.classList.contains('hidden')) return closeHistoryModal();
       if (els.morningRoutineModal && !els.morningRoutineModal.classList.contains('hidden')) return closeMorningRoutineModal();
+      if (els.fitnessCoachModal && !els.fitnessCoachModal.classList.contains('hidden')) return closeFitnessCoach();
       if (els.coachModal && !els.coachModal.classList.contains('hidden')) closeCoachModal();
     });
 
@@ -2675,6 +2760,7 @@
     renderSection('meditation', renderMeditation);
     renderSection('habits', renderHabits);
     renderSection('fitness-hub', renderFitnessHub);
+    renderSection('fitness-coach', renderFitnessCoachModal);
     renderSection('tasks', renderTasks);
     renderSection('coach', renderCoach);
     renderSection('calendar', renderCalendar);
@@ -7113,6 +7199,241 @@
       <article class="fitness-stat-card"><small>${selectedSession.type === 'hiking' ? 'Höhenmeter' : 'Aufstieg'}</small><strong>${formatMetersValue(selectedSession.ascent)}</strong><span>${selectedSession.loggedAscent != null ? 'manuell mitgegeben' : 'ohne manuelle hm geschätzt'}</span></article>
       <article class="fitness-stat-card"><small>Nächstes Ziel</small><strong>${buildTownProgress(summarizeFitnessSessions(allSessions.filter(session => session.type === selectedSession.type)).totalDistance).nextTown?.name || 'Rorschach'}</strong><span>Motivationslinie ab Wil SG</span></article>
     </div>` : `<div class="empty-state">Wähle eine Session aus, um die Details zu sehen.</div>`;
+  }
+
+
+  function loadFitnessCoachState() {
+    const fallback = { tab: 'training', seed: 0 };
+    try {
+      const parsed = JSON.parse(localStorage.getItem(FITNESS_COACH_STATE_KEY) || 'null') || fallback;
+      const tab = FITNESS_COACH_TABS.some(item => item.key === parsed.tab) ? parsed.tab : fallback.tab;
+      const seed = Number.isFinite(Number(parsed.seed)) ? Number(parsed.seed) : 0;
+      return { tab, seed };
+    } catch (error) {
+      return fallback;
+    }
+  }
+
+  function persistFitnessCoachState() {
+    try { localStorage.setItem(FITNESS_COACH_STATE_KEY, JSON.stringify(fitnessCoachState)); } catch (error) {}
+  }
+
+  function openFitnessCoach() {
+    if (!els.fitnessCoachModal) return;
+    els.fitnessCoachModal.classList.remove('hidden');
+    document.body.classList.add('modal-open');
+    renderFitnessCoachModal();
+    requestAnimationFrame(() => els.fitnessCoachCloseBtn?.focus({ preventScroll: true }));
+  }
+
+  function closeFitnessCoach() {
+    if (!els.fitnessCoachModal) return;
+    els.fitnessCoachModal.classList.add('hidden');
+    document.body.classList.toggle('modal-open', Boolean(
+      (els.coachModal && !els.coachModal.classList.contains('hidden')) ||
+      (els.historyModal && !els.historyModal.classList.contains('hidden')) ||
+      (els.pauseModal && !els.pauseModal.classList.contains('hidden')) ||
+      (els.morningRoutineModal && !els.morningRoutineModal.classList.contains('hidden'))
+    ));
+  }
+
+  function setFitnessCoachTab(tab) {
+    if (!FITNESS_COACH_TABS.some(item => item.key === tab)) return;
+    fitnessCoachState.tab = tab;
+    persistFitnessCoachState();
+    renderFitnessCoachModal();
+  }
+
+  function shuffleFitnessCoach() {
+    fitnessCoachState.seed = (Number(fitnessCoachState.seed) || 0) + 1;
+    persistFitnessCoachState();
+    renderFitnessCoachModal();
+    toast('Fitness Coach neu gemischt');
+  }
+
+  function buildFitnessCoachRecipeLibrary() {
+    const { bases, proteins, vegetables, sauces, formats } = FITNESS_RECIPE_PARTS;
+    const goals = ['High Protein', 'Leicht', 'Meal Prep', 'Recovery', 'Schnell'];
+    const library = [];
+    let index = 0;
+    bases.forEach((base, baseIndex) => {
+      proteins.forEach((protein, proteinIndex) => {
+        vegetables.forEach((vegetable, vegIndex) => {
+          const sauce = sauces[(baseIndex + proteinIndex + vegIndex) % sauces.length];
+          const format = formats[(baseIndex * 2 + proteinIndex + vegIndex) % formats.length];
+          const goal = goals[(proteinIndex + vegIndex) % goals.length];
+          const kcal = 430 + ((baseIndex * 19 + proteinIndex * 23 + vegIndex * 11) % 240);
+          const minutes = 12 + ((baseIndex + proteinIndex + vegIndex) % 22);
+          const title = `${format} mit ${protein}, ${base} und ${vegetable}`;
+          library.push({
+            id: `recipe-${index++}`,
+            title,
+            goal,
+            kcal,
+            minutes,
+            tags: [goal, format, minutes <= 20 ? 'schnell' : 'sattmacher'],
+            ingredients: [base, protein, vegetable, sauce],
+            steps: [
+              `${base} als Basis vorbereiten oder erwärmen.`,
+              `${protein} schonend garen oder kalt als Protein-Anker einsetzen.`,
+              `${vegetable} grosszügig ergänzen und mit ${sauce} abrunden.`
+            ]
+          });
+        });
+      });
+    });
+    return library;
+  }
+
+  function selectFitnessCoachRecipes(count = 8) {
+    const library = buildFitnessCoachRecipeLibrary();
+    const seed = Number(fitnessCoachState.seed || 0);
+    const start = (seed * 17 + new Date().getDate() * 7) % Math.max(1, library.length);
+    const picks = [];
+    for (let i = 0; i < Math.min(count, library.length); i += 1) picks.push(library[(start + i * 23) % library.length]);
+    return { library, picks };
+  }
+
+  function renderFitnessCoachHero() {
+    const sessions7 = buildFitnessSessions('all').filter(session => Date.now() - session.date.getTime() <= 7 * DAY_MS);
+    const km7 = sum(sessions7.map(session => session.distanceKm));
+    const suggestion = sessions7.length === 0
+      ? { title: '20-Minuten Reset starten', body: 'Heute zählt ein leichter Einstieg: 12 Min. Spaziergang, 5 Min. Mobility, 3 Min. ruhige Atmung.' }
+      : km7 < 10
+        ? { title: 'Sanfte Progression', body: 'Erhöhe diese Woche nicht maximal, sondern sauber: eine lockere Einheit plus ein kurzer Mobility-Block.' }
+        : { title: 'Recovery bewusst einplanen', body: 'Du hast Momentum. Halte es stabil mit Schlaf, Protein-Anker und einer lockeren Einheit statt Dauerpush.' };
+    return `<div class="fitness-coach-hero">
+      <div>
+        <p class="eyebrow">Fitness Coach</p>
+        <h2 id="fitnessCoachTitle">Training, Ernährung & Mind.</h2>
+        <p>${escapeHtml(suggestion.body)}</p>
+      </div>
+      <article class="fitness-coach-next">
+        <small>Next Best Move</small>
+        <strong>${escapeHtml(suggestion.title)}</strong>
+        <span>${sessions7.length} Session${sessions7.length === 1 ? '' : 's'} · ${formatKmValue(km7)} in 7 Tagen</span>
+      </article>
+    </div>`;
+  }
+
+  function renderFitnessCoachTabs() {
+    return `<div class="fitness-coach-tabs" role="tablist" aria-label="Fitness Coach Bereiche">
+      ${FITNESS_COACH_TABS.map(tab => `<button class="fitness-coach-tab ${fitnessCoachState.tab === tab.key ? 'is-active' : ''}" type="button" data-action="set-fitness-coach-tab" data-tab="${tab.key}" role="tab" aria-selected="${fitnessCoachState.tab === tab.key ? 'true' : 'false'}">${escapeHtml(tab.label)}</button>`).join('')}
+    </div>`;
+  }
+
+  function renderFitnessCoachTraining() {
+    return `<div class="fitness-coach-section">
+      <div class="fitness-coach-section-head"><div><p class="eyebrow">No Equipment</p><h3>Übungen, die sofort ausführbar sind</h3></div><span class="badge muted">saubere Technik zuerst</span></div>
+      <div class="fitness-exercise-grid">
+        ${FITNESS_COACH_EXERCISES.map(item => `<article class="fitness-exercise-card">
+          <div class="fitness-card-kicker"><span>${escapeHtml(item.level)}</span><small>${item.minutes} Min.</small></div>
+          <h4>${escapeHtml(item.title)}</h4>
+          <strong>${escapeHtml(item.focus)}</strong>
+          <p>${escapeHtml(item.cue)}</p>
+          <ul>${item.steps.map(step => `<li>${escapeHtml(step)}</li>`).join('')}</ul>
+        </article>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  function renderFitnessCoachSports() {
+    return `<div class="fitness-coach-section">
+      <div class="fitness-coach-section-head"><div><p class="eyebrow">Kalorien-Kompass</p><h3>Gängige Sportarten als Richtwert</h3></div><span class="badge muted">ca. kcal / 60 Min. · 75 kg</span></div>
+      <div class="fitness-sport-grid">
+        ${FITNESS_COACH_SPORTS.map(sport => `<article class="fitness-sport-card">
+          <small>${escapeHtml(sport.title)}</small>
+          <strong>${sport.kcal} kcal</strong>
+          <span>${escapeHtml(sport.note)}</span>
+        </article>`).join('')}
+      </div>
+      <p class="fitness-coach-note">Kalorien sind Näherungen. Körpergewicht, Intensität, Gelände und Technik verändern den Verbrauch deutlich.</p>
+    </div>`;
+  }
+
+  function renderFitnessCoachMind() {
+    return `<div class="fitness-coach-section">
+      <div class="fitness-coach-section-head"><div><p class="eyebrow">Mental Health</p><h3>Regulation statt Selbstoptimierungsdruck</h3></div><span class="badge muted">2–10 Min.</span></div>
+      <div class="fitness-mind-grid">
+        ${FITNESS_MIND_EXERCISES.map(item => `<article class="fitness-mind-card">
+          <div class="fitness-mind-minutes">${item.minutes}m</div>
+          <h4>${escapeHtml(item.title)}</h4>
+          <p>${escapeHtml(item.body)}</p>
+        </article>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  function renderFitnessCoachNutrition() {
+    const sampleMeals = selectFitnessCoachRecipes(3).picks;
+    return `<div class="fitness-coach-section nutrition-coach-section">
+      <div class="fitness-coach-section-head"><div><p class="eyebrow">Nutrition Coach</p><h3>Gewicht verlieren ohne Crash-Modus</h3></div><span class="badge muted">alltagstauglich</span></div>
+      <div class="nutrition-principle-grid">
+        ${FITNESS_NUTRITION_TIPS.map(tip => `<article class="nutrition-principle-card"><strong>${escapeHtml(tip.title)}</strong><p>${escapeHtml(tip.body)}</p></article>`).join('')}
+      </div>
+      <div class="fitness-coach-callout">
+        <strong>Ein einfacher Teller-Code</strong>
+        <span>½ Gemüse oder Salat · ¼ Protein · ¼ Sättigungsbeilage · 1 bewusster Genuss. Das ist kein starres Gesetz, sondern ein robustes Default-System.</span>
+      </div>
+      <div class="fitness-mini-recipes">
+        ${sampleMeals.map(recipe => renderFitnessRecipeCard(recipe, true)).join('')}
+      </div>
+      <p class="fitness-coach-note">Hinweis: Ernährungstipps sind allgemeine Orientierung und ersetzen keine medizinische Beratung, besonders bei Erkrankungen, Essstörungen, Schwangerschaft oder Medikamenten.</p>
+    </div>`;
+  }
+
+  function renderFitnessRecipeCard(recipe, compact = false) {
+    return `<article class="fitness-recipe-card ${compact ? 'is-compact' : ''}">
+      <div class="fitness-card-kicker"><span>${escapeHtml(recipe.goal)}</span><small>${recipe.minutes} Min.</small></div>
+      <h4>${escapeHtml(recipe.title)}</h4>
+      <div class="fitness-recipe-meta"><span>${recipe.kcal} kcal grob</span><span>${recipe.tags.map(escapeHtml).join(' · ')}</span></div>
+      <p>${escapeHtml(recipe.ingredients.join(' · '))}</p>
+      ${compact ? '' : `<ol>${recipe.steps.map(step => `<li>${escapeHtml(step)}</li>`).join('')}</ol>`}
+    </article>`;
+  }
+
+  function renderFitnessCoachRecipes() {
+    const { library, picks } = selectFitnessCoachRecipes(10);
+    return `<div class="fitness-coach-section">
+      <div class="fitness-coach-section-head"><div><p class="eyebrow">Recipe Engine</p><h3>${library.length} Rezeptideen ohne Pilzgerichte</h3></div><button class="mini-btn primary" type="button" data-action="shuffle-fitness-coach">Überrasch mich</button></div>
+      <div class="fitness-recipe-grid">${picks.map(recipe => renderFitnessRecipeCard(recipe)).join('')}</div>
+      <p class="fitness-coach-note">Die Rezeptbibliothek ist als Baukasten aufgebaut: Protein, Basis, Gemüse, Sauce und Format werden kombiniert. So bleiben die Vorschläge vielfältig, aber schnell umsetzbar.</p>
+    </div>`;
+  }
+
+  function renderFitnessFoodMap() {
+    return `<div class="fitness-coach-section">
+      <div class="fitness-coach-section-head"><div><p class="eyebrow">Food Map</p><h3>Visuelle Theorie: der ruhige Teller</h3></div><span class="badge muted">einfach merken</span></div>
+      <div class="food-map-shell">
+        <div class="food-map-core"><strong>Sättigung</strong><span>Protein + Volumen + Rhythmus</span></div>
+        <article class="food-map-node is-protein"><small>Protein</small><strong>Muskelerhalt</strong><span>Eier, Skyr, Fisch, Poulet, Tofu, Linsen</span></article>
+        <article class="food-map-node is-volume"><small>Volumen</small><strong>Fülle</strong><span>Gemüse, Salat, Beeren, Suppe, Kartoffeln</span></article>
+        <article class="food-map-node is-energy"><small>Energie</small><strong>Training</strong><span>Reis, Hafer, Pasta, Wraps, Obst</span></article>
+        <article class="food-map-node is-joy"><small>Genuss</small><strong>Dranbleiben</strong><span>Sauce, Crunch, Gewürze, Lieblingsessen bewusst</span></article>
+      </div>
+      <div class="food-map-rules">
+        <article><strong>Vor dem Training</strong><span>leicht verdauliche Kohlenhydrate plus Flüssigkeit.</span></article>
+        <article><strong>Nach dem Training</strong><span>Protein-Anker plus normale Mahlzeit innerhalb weniger Stunden.</span></article>
+        <article><strong>Beim Abnehmen</strong><span>Defizit über Standards bauen, nicht über Hunger-Drama.</span></article>
+      </div>
+    </div>`;
+  }
+
+  function renderFitnessCoachBody() {
+    switch (fitnessCoachState.tab) {
+      case 'sports': return renderFitnessCoachSports();
+      case 'mind': return renderFitnessCoachMind();
+      case 'nutrition': return renderFitnessCoachNutrition();
+      case 'recipes': return renderFitnessCoachRecipes();
+      case 'foodmap': return renderFitnessFoodMap();
+      case 'training':
+      default: return renderFitnessCoachTraining();
+    }
+  }
+
+  function renderFitnessCoachModal() {
+    if (!els.fitnessCoachContent || !els.fitnessCoachModal || els.fitnessCoachModal.classList.contains('hidden')) return;
+    els.fitnessCoachContent.innerHTML = `${renderFitnessCoachHero()}${renderFitnessCoachTabs()}${renderFitnessCoachBody()}`;
   }
 
   function renderFitnessHub() {
