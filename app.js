@@ -1671,16 +1671,16 @@
 
   function normalizePausePeriod(period = {}) {
     const created = validIsoOrFallback(period.created_at || period.createdAt || nowIso());
-    const startsAt = validIsoOrFallback(period.starts_at || period.startsAt || created, created);
-    const endsAt = validIsoOrNull(period.ends_at || period.endsAt);
-    const scope = normalizePauseScope(period.scope);
+    const startsAt = validIsoOrFallback(period.starts_at || period.startsAt || period.started_at || period.start_at || period.start || period.from || created, created);
+    const endsAt = validIsoOrNull(period.ends_at || period.endsAt || period.ended_at || period.end_at || period.end || period.until);
+    const scope = normalizePauseScope(period.scope || period.pause_scope || period.pauseScope || period.type || period.kind);
     return {
       ...period,
       scope,
-      target_id: scope === 'habit' ? (period.target_id || period.targetId || null) : null,
+      target_id: scope === 'habit' ? (period.target_id || period.targetId || period.habit_id || null) : null,
       starts_at: startsAt,
       ends_at: endsAt && new Date(endsAt) >= new Date(startsAt) ? endsAt : null,
-      note: String(period.note || '').trim(),
+      note: String(period.note || period.comment || '').trim(),
       is_archived: Boolean(period.is_archived),
       created_at: created,
       updated_at: validIsoOrFallback(period.updated_at || period.updatedAt || created, created)
@@ -3159,10 +3159,10 @@
       <article><small>Aktuelle Stufe</small><strong>${meta.stage}/20</strong><span>${total.toLocaleString('de-CH')} Pkt. total</span></article>
       <article><small>Nächster Schritt</small><strong>${escapeHtml(nextLabel)}</strong><span>${meta.stage >= EVOLUTION_LEVEL_RULES.maxStage ? 'kein weiterer Schwellenwert' : `${meta.pointsInStage.toLocaleString('de-CH')} / ${meta.currentStageCost.toLocaleString('de-CH')} Pkt. in dieser Stufe`}</span></article>
     </div>
-    <p class="points-rules-copy">Die Companion-Stufe wird jetzt direkt aus deinen gesammelten Punkten berechnet. Stufe 1→2 startet bei 250 Punkten; danach steigen die benötigten Punkte pro Stufe um 18%. Badges, Rhythmus und Habits beeinflussen Bindung/Energie, aber springen nicht mehr stillschweigend die Stufe hoch.</p>
+    <p class="points-rules-copy">Die Companion-Stufe wird direkt aus deinen gesammelten Punkten berechnet. Stufe 1→2 startet bei 250 Punkten; danach steigen die benötigten Punkte pro Stufe um 18%. Bei Rauchen zählen längere bewusste Abstände jetzt klarer: 4–8 Std. geben +60 Pkt., 8+ Std. geben +100 Pkt.</p>
     <div class="points-rules-grid" aria-label="Nächste Stufenkosten">${sampleRows || '<span><b>20/20</b>Maximalstufe</span>'}</div>
     <ul class="points-rules-list">
-      <li><strong>Pluspunkte:</strong> Habit-Logs, erledigte Aufgaben, Morgenroutine und längere bewusste Pausen.</li>
+      <li><strong>Pluspunkte:</strong> Habit-Logs, erledigte Aufgaben, Morgenroutine sowie Rauchpausen ab 2 Std. mit stärkerem Bonus ab 4 Std.</li>
       <li><strong>Minuspunkte:</strong> kurze Rauchabstände und Alkohol-Logs können den Tageswert reduzieren.</li>
       <li><strong>Keine versteckten Sprünge:</strong> Level, Posterlinie und „nächste Stufe“ nutzen dieselbe exponentielle Kurve.</li>
     </ul>`;
@@ -5209,11 +5209,12 @@
       }
     ];
 
-    const header = weeks.map(week => `<div class="smoke-week-label" title="${escapeHtml(week.rangeLabel)}"><span>${escapeHtml(week.label)}</span><small>${escapeHtml(week.rangeLabel)}</small></div>`).join('');
+    const displayWeeks = [...weeks].reverse();
+    const header = displayWeeks.map(week => `<div class="smoke-week-label" title="${escapeHtml(week.rangeLabel)}"><span>${escapeHtml(week.label)}</span><small>${escapeHtml(week.rangeLabel)}</small></div>`).join('');
     const body = rows.map(row => `
       <div class="smoke-week-row-label"><strong>${smokingWeekdayLabel(row.day, { short: true })}</strong><small>${row.total}×</small></div>
-      ${row.cells.map((cell, index) => {
-        const week = weeks[index];
+      ${displayWeeks.map(week => {
+        const cell = row.cells.find(item => item.key === week.key) || { key: week.key, count: 0 };
         const level = cell.count ? Math.max(1, Math.ceil((cell.count / maxValue) * 5)) : 0;
         const title = `${smokingWeekdayLabel(row.day)}, ${week.label} (${week.rangeLabel}) · ${cell.count} Alkohol-Einheit${cell.count === 1 ? '' : 'en'}`;
         return `<span class="smoke-week-cell level-${level}" title="${escapeHtml(title)}"><em>${cell.count || ''}</em></span>`;
@@ -5459,11 +5460,12 @@
       }
     ];
 
-    const header = weeks.map(week => `<div class="smoke-week-label" title="${escapeHtml(week.rangeLabel)}"><span>${escapeHtml(week.label)}</span><small>${escapeHtml(week.rangeLabel)}</small></div>`).join('');
+    const displayWeeks = [...weeks].reverse();
+    const header = displayWeeks.map(week => `<div class="smoke-week-label" title="${escapeHtml(week.rangeLabel)}"><span>${escapeHtml(week.label)}</span><small>${escapeHtml(week.rangeLabel)}</small></div>`).join('');
     const body = rows.map(row => `
       <div class="smoke-week-row-label"><strong>${smokingWeekdayLabel(row.day, { short: true })}</strong><small>${row.total}×</small></div>
-      ${row.cells.map((cell, index) => {
-        const week = weeks[index];
+      ${displayWeeks.map(week => {
+        const cell = row.cells.find(item => item.key === week.key) || { key: week.key, count: 0 };
         const level = cell.count ? Math.max(1, Math.ceil((cell.count / maxValue) * 5)) : 0;
         const title = `${smokingWeekdayLabel(row.day)}, ${week.label} (${week.rangeLabel}) · ${cell.count} Zigarette${cell.count === 1 ? '' : 'n'}`;
         return `<span class="smoke-week-cell level-${level}" title="${escapeHtml(title)}"><em>${cell.count || ''}</em></span>`;
@@ -5489,9 +5491,9 @@
       </div>`;
     }).join('');
 
-    const weekPulse = weeks.map((week, index) => ({
+    const weekPulse = displayWeeks.map(week => ({
       week,
-      count: weekCounts[index] || 0
+      count: weekTotals.get(week.key) || 0
     }));
     const pulseMax = Math.max(...weekPulse.map(item => item.count), 1);
     const weekPulseMarkup = weekPulse.map(item => {
@@ -5530,7 +5532,7 @@
         <article class="smoke-map-support-card">
           <div class="smoke-map-support-head"><strong>Wochen-Puls</strong><small>12 Kalenderwochen im Direktvergleich</small></div>
           <div class="smoke-pulse-chart" aria-label="Wochenpuls der letzten Kalenderwochen">${weekPulseMarkup}</div>
-          <div class="interval-skyline-axis smoke-pulse-axis"><span>älter</span><span>neu</span></div>
+          <div class="interval-skyline-axis smoke-pulse-axis"><span>neu</span><span>älter</span></div>
           <p class="meta">Der Wochen-Puls ergänzt die Heatmap um ein kompaktes Trendbild, ohne mit der Pausen-Analyse zu konkurrieren.</p>
         </article>
       </div>
@@ -9503,12 +9505,20 @@ async function deleteAlcoholLog(id) {
     targetEl.innerHTML = periods.map(pausePeriodCard).join('');
   }
 
+  function visiblePausePeriodsForList(scopeFilter = null) {
+    return (state.pausePeriods || [])
+      .map(normalizePausePeriod)
+      .filter(period => period.id && period.starts_at && !period.is_archived)
+      .filter(period => !scopeFilter || scopeFilter.includes(period.scope))
+      .sort((a, b) => new Date(b.starts_at) - new Date(a.starts_at));
+  }
+
   function renderPauseUi() {
     renderPauseStatus(els.smokePauseStatus, 'smoke');
     renderPauseStatus(els.alcoholPauseStatus, 'alcohol');
-    const consumptionPauses = activePausePeriods({ includeFuture: true }).filter(period => ['smoke', 'alcohol'].includes(period.scope));
+    const consumptionPauses = visiblePausePeriodsForList(['smoke', 'alcohol']);
     renderPauseList(els.consumptionPauseList, consumptionPauses, 'Noch keine Konsum-Pausen. Plane eine Pause für Rauchen oder Alkohol – auch rückwirkend.');
-    const habitPauses = activePausePeriods({ scope: 'habit', includeFuture: true });
+    const habitPauses = visiblePausePeriodsForList(['habit']);
     renderPauseList(els.habitPauseList, habitPauses, 'Noch keine Habit-Pausen. Pausiere einzelne Habits direkt auf der Karte.');
   }
 
@@ -10482,8 +10492,8 @@ async function deleteAlcoholLog(id) {
     if (minutes < 60) return -20;
     if (minutes < 120) return 0;
     if (minutes < 240) return 20;
-    if (minutes < 480) return 40;
-    return isDaytimeInterval ? 80 : 0;
+    if (minutes < 480) return 60;
+    return 100;
   }
 
   function smokingScoringContext(previousCigarette, cigarette) {
@@ -10504,7 +10514,8 @@ async function deleteAlcoholLog(id) {
 
   function cigarettePointReason(minutes, { isDaytimeInterval = false } = {}) {
     if (minutes == null) return 'Erste Zigarette erfasst';
-    if (minutes >= 480 && !isDaytimeInterval) return `Pause ${formatDuration(minutes)} · kein 8h-Tagesbonus`;
+    if (minutes >= 480) return `Pause ${formatDuration(minutes)} · 8h+ Bonus`;
+    if (minutes >= 240) return `Pause ${formatDuration(minutes)} · 4h+ Bonus`;
     return `Pause ${formatDuration(minutes)}`;
   }
 
@@ -11639,9 +11650,9 @@ async function deleteAlcoholLog(id) {
   function applyRemoteCollectionAuthority(table, localKey, remoteRowsForTable, { ledgerSourceType = null, ledgerMatcher = null } = {}) {
     const localRows = Array.isArray(state[localKey]) ? state[localKey] : [];
     if (!localRows.length) return [];
-    if (localKey === 'taskIdeas') {
-      // Ideen sind ein weicher Backlog: eine verzögerte oder schema-kompatible Remote-Antwort
-      // darf lokale Vorschläge nach einem Hard Refresh nicht wieder auf den alten Stand kürzen.
+    if (localKey === 'taskIdeas' || localKey === 'pausePeriods') {
+      // Ideen und Pausen sind weiche, nutzernahe Planungsdaten: eine verzögerte oder schema-kompatible
+      // Remote-Antwort darf lokale Einträge nach einem Hard Refresh nicht wieder aus der UI kürzen.
       return [];
     }
     const remoteIds = new Set(remoteRowsForTable.map(row => row.id).filter(Boolean));

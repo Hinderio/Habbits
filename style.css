@@ -3284,3 +3284,46 @@ body.light .points-rules-grid span{
   .points-rules-grid{grid-template-columns:1fr}
   .points-rules-live strong{font-size:1rem}
 }
+
+
+/* v108: Mobile Topbar Controls stabil ausrichten */
+@media (max-width:760px){
+  .topbar{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto;
+    align-items:center;
+    gap:12px;
+    padding:18px 18px;
+  }
+  .topbar>div:first-child{min-width:0}
+  .topbar h1{font-size:clamp(1.45rem,8vw,1.78rem);line-height:1.02;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .topbar-actions{
+    display:grid;
+    grid-template-columns:42px 42px minmax(58px,auto);
+    align-items:center;
+    justify-content:end;
+    gap:8px;
+    flex-wrap:nowrap;
+    min-width:max-content;
+  }
+  .topbar-actions .icon-btn{
+    width:42px;
+    height:42px;
+    min-width:42px;
+    flex:0 0 42px;
+  }
+  #syncNowBtn{
+    min-width:58px;
+    height:42px;
+    padding:0 13px;
+    display:inline-grid;
+    place-items:center;
+    white-space:nowrap;
+  }
+}
+@media (max-width:380px){
+  .topbar{padding:16px 14px;gap:9px}
+  .topbar-actions{grid-template-columns:40px 40px minmax(52px,auto);gap:6px}
+  .topbar-actions .icon-btn{width:40px;height:40px;min-width:40px}
+  #syncNowBtn{min-width:52px;height:40px;padding:0 10px;font-size:.86rem}
+}
