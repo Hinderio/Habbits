@@ -3352,3 +3352,77 @@ body.light .points-rules-grid span{
 body.light .fitness-coach-next,body.light .fitness-exercise-card,body.light .fitness-sport-card,body.light .fitness-mind-card,body.light .nutrition-principle-card,body.light .fitness-recipe-card,body.light .food-map-rules article,body.light .food-map-node{background:rgba(255,255,255,.72);border-color:rgba(17,36,58,.08)}body.light .fitness-coach-tab{background:rgba(255,255,255,.72);border-color:rgba(17,36,58,.08)}body.light .food-map-shell{background:radial-gradient(circle at 50% 50%,rgba(74,215,209,.16),transparent 28%),linear-gradient(135deg,rgba(255,255,255,.74),rgba(241,248,252,.78));border-color:rgba(17,36,58,.08)}body.light .food-map-shell:before,body.light .food-map-shell:after{background:rgba(17,36,58,.08)}body.light .fitness-recipe-meta span{background:rgba(17,36,58,.055)}
 @media (max-width:980px){.fitness-coach-hero{grid-template-columns:1fr;padding-right:54px}.fitness-exercise-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.fitness-sport-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.fitness-recipe-grid{grid-template-columns:1fr}.fitness-mini-recipes{grid-template-columns:1fr}.food-map-rules{grid-template-columns:1fr}}
 @media (max-width:760px){.fitness-toolbar{align-items:center}.fitness-toolbar-actions{gap:8px}.fitness-coach-open-btn{width:48px;height:48px}.fitness-coach-modal{align-items:flex-end}.fitness-coach-card{max-height:94vh;border-radius:30px 30px 18px 18px;padding:16px}.fitness-coach-hero{padding:0;gap:12px}.fitness-coach-hero h2{font-size:2rem}.fitness-coach-next{padding:15px;border-radius:22px}.fitness-coach-tabs{margin-left:-2px;margin-right:-2px}.fitness-coach-tab{padding:10px 13px}.fitness-exercise-grid,.fitness-sport-grid,.fitness-mind-grid,.nutrition-principle-grid{grid-template-columns:1fr}.fitness-exercise-card,.fitness-sport-card,.fitness-mind-card,.nutrition-principle-card,.fitness-recipe-card{border-radius:22px;padding:15px}.food-map-shell{grid-template-columns:1fr;min-height:auto;padding:14px}.food-map-shell:before,.food-map-shell:after{display:none}.food-map-core{position:relative;left:auto;top:auto;transform:none;width:100%;height:auto;min-height:96px;border-radius:24px;grid-row:1}.food-map-node{min-height:126px}.fitness-coach-section-head{align-items:stretch}.fitness-coach-section-head .mini-btn{width:100%}}
+
+/* v110: robust visible Fitness Coach launchers */
+.fitness-coach-fab{
+  position:fixed;
+  right:24px;
+  bottom:104px;
+  z-index:60;
+  min-width:118px;
+  min-height:54px;
+  border:0;
+  border-radius:999px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:9px;
+  padding:12px 18px 12px 14px;
+  color:#00131c;
+  background:linear-gradient(135deg,var(--primary),#66e7ff);
+  box-shadow:0 22px 46px rgba(74,215,209,.28);
+  font-weight:950;
+  letter-spacing:-.02em;
+  transition:transform .18s ease,box-shadow .18s ease;
+}
+.fitness-coach-fab:hover{transform:translateY(-2px);box-shadow:0 26px 54px rgba(74,215,209,.34)}
+.fitness-coach-fab .ui-icon{width:20px;height:20px;stroke-width:2.2}
+.fitness-coach-launcher-card{
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto;
+  align-items:center;
+  gap:14px;
+  padding:16px;
+  border-radius:28px;
+  background:linear-gradient(135deg,rgba(74,215,209,.13),rgba(143,240,167,.075));
+  border:1px solid rgba(74,215,209,.18);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
+}
+.fitness-coach-launcher-icon{
+  width:54px;
+  height:54px;
+  border-radius:20px;
+  display:grid;
+  place-items:center;
+  color:var(--primary);
+  background:rgba(74,215,209,.12);
+  border:1px solid rgba(74,215,209,.16);
+}
+.fitness-coach-launcher-icon .ui-icon{width:25px;height:25px}
+.fitness-coach-launcher-copy h3{margin:0 0 4px;font-size:1.12rem;letter-spacing:-.03em}
+.fitness-coach-launcher-copy span{display:block;color:var(--muted);font-weight:760;line-height:1.38}
+body.light .fitness-coach-launcher-card{background:linear-gradient(135deg,rgba(74,215,209,.16),rgba(255,255,255,.72));border-color:rgba(13,151,149,.13)}
+body.light .fitness-coach-launcher-icon{background:rgba(74,215,209,.12);border-color:rgba(13,151,149,.14)}
+@media (min-width:1320px){.fitness-coach-fab{right:calc((100vw - 1280px) / 2 + 24px)}}
+@media (max-width:760px){
+  .fitness-toolbar{display:none}
+  .fitness-coach-fab{
+    right:20px;
+    bottom:calc(96px + env(safe-area-inset-bottom));
+    min-width:0;
+    width:58px;
+    height:58px;
+    padding:0;
+    border-radius:50%;
+  }
+  .fitness-coach-fab strong{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+  .fitness-coach-fab .ui-icon{width:24px;height:24px}
+  .fitness-coach-launcher-card{
+    grid-template-columns:auto minmax(0,1fr);
+    border-radius:26px;
+    padding:14px;
+  }
+  .fitness-coach-launcher-card .pill{grid-column:1/-1;width:100%;justify-content:center;text-align:center}
+  .fitness-coach-launcher-icon{width:48px;height:48px;border-radius:18px}
+  .fitness-coach-launcher-copy span{font-size:.9rem}
+}

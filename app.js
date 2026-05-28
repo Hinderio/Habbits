@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v109-fitness-nutrition-coach';
+  const APP_DATA_SCHEMA_VERSION = 'v110-fitness-coach-launcher-fix';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -7436,6 +7436,18 @@
     els.fitnessCoachContent.innerHTML = `${renderFitnessCoachHero()}${renderFitnessCoachTabs()}${renderFitnessCoachBody()}`;
   }
 
+  function renderFitnessCoachInlineLauncher() {
+    return `<article class="fitness-coach-launcher-card">
+      <div class="fitness-coach-launcher-icon" aria-hidden="true">${svgIcon('coach', 'ui-icon')}</div>
+      <div class="fitness-coach-launcher-copy">
+        <p class="eyebrow">Fitness Coach</p>
+        <h3>Training, Ernährung & Mind öffnen</h3>
+        <span>No-Equipment-Übungen, Sportarten, Mental-Reset, Food Map und Rezeptideen.</span>
+      </div>
+      <button class="pill primary" type="button" data-action="open-fitness-coach">Coach öffnen</button>
+    </article>`;
+  }
+
   function renderFitnessHub() {
     if (!els.fitnessHubContent) return;
     syncHabitsExperienceUi();
@@ -7446,7 +7458,7 @@
     const hikingHabit = firstFitnessHabitByType('hiking');
     const hasFitnessHabits = Boolean(runningHabit || hikingHabit || allSessions.length);
     if (!hasFitnessHabits) {
-      els.fitnessHubContent.innerHTML = `<div class="fitness-empty-state">
+      els.fitnessHubContent.innerHTML = `${renderFitnessCoachInlineLauncher()}<div class="fitness-empty-state">
         <div class="fitness-empty-icon" aria-hidden="true">${svgIcon('jogging', 'ui-icon')}</div>
         <div>
           <strong>Noch keine Fitness-Habits vorhanden</strong>
@@ -7458,13 +7470,14 @@
     }
     const visibleSessions = selectedFitnessFilter === 'all' ? allSessions : buildFitnessSessions(selectedFitnessFilter);
     if (selectedFitnessFilter !== 'all' && !visibleSessions.length) {
-      els.fitnessHubContent.innerHTML = `<div class="fitness-empty-state is-filtered"><div class="fitness-empty-icon" aria-hidden="true">${svgIcon(selectedFitnessFilter === 'hiking' ? 'hiking' : 'jogging', 'ui-icon')}</div><div><strong>Noch keine ${selectedFitnessFilter === 'hiking' ? 'Wander-' : 'Jogging-'}Sessions erfasst</strong><p>Wechsle auf <em>Alle</em> oder logge die nächste Distanz direkt hier im Fitness-Tab.</p></div><div class="fitness-filter-row">${[{ key: 'all', label: 'Alle' }, { key: 'jogging', label: 'Joggen' }, { key: 'hiking', label: 'Wandern' }].map(filter => `<button class="fitness-filter-btn ${selectedFitnessFilter === filter.key ? 'is-active' : ''}" type="button" data-action="set-fitness-filter" data-filter="${filter.key}">${filter.label}</button>`).join('')}</div></div>`;
+      els.fitnessHubContent.innerHTML = `${renderFitnessCoachInlineLauncher()}<div class="fitness-empty-state is-filtered"><div class="fitness-empty-icon" aria-hidden="true">${svgIcon(selectedFitnessFilter === 'hiking' ? 'hiking' : 'jogging', 'ui-icon')}</div><div><strong>Noch keine ${selectedFitnessFilter === 'hiking' ? 'Wander-' : 'Jogging-'}Sessions erfasst</strong><p>Wechsle auf <em>Alle</em> oder logge die nächste Distanz direkt hier im Fitness-Tab.</p></div><div class="fitness-filter-row">${[{ key: 'all', label: 'Alle' }, { key: 'jogging', label: 'Joggen' }, { key: 'hiking', label: 'Wandern' }].map(filter => `<button class="fitness-filter-btn ${selectedFitnessFilter === filter.key ? 'is-active' : ''}" type="button" data-action="set-fitness-filter" data-filter="${filter.key}">${filter.label}</button>`).join('')}</div></div>`;
       return;
     }
     const heroSummary = summarizeFitnessSessions(allSessions);
     const selectedSession = ensureSelectedFitnessSession(visibleSessions.length ? visibleSessions : allSessions);
     const mountainCollection = buildMountainCollection(hikingSessions);
     els.fitnessHubContent.innerHTML = `<div class="fitness-hub-shell">
+      ${renderFitnessCoachInlineLauncher()}
       <div class="fitness-kpi-grid">
         <article class="fitness-kpi-card"><small>Joggen gesamt</small><strong>${formatKmValue(summarizeFitnessSessions(joggingSessions).totalDistance)}</strong><span>${joggingSessions.length} Run-Logs</span></article>
         <article class="fitness-kpi-card"><small>Wandern gesamt</small><strong>${formatKmValue(summarizeFitnessSessions(hikingSessions).totalDistance)}</strong><span>${hikingSessions.length} Hike-Logs</span></article>
