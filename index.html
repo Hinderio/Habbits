@@ -673,7 +673,9 @@
             <label><span>Fällig</span><input name="due_at" type="datetime-local" /></label>
             <label><span>Zyklus</span><select id="taskRecurrenceSelect" name="recurrence"><option value="none" selected>Einmalig</option><option value="monthly">Monatlich automatisch</option></select></label>
             <div id="taskRecurrenceHint" class="task-cycle-hint full">Einmalige Aufgabe ohne automatische Folgekarten.</div>
-            <label class="full"><span>Notiz</span><textarea name="description" rows="3" placeholder="optional"></textarea></label>
+            <label class="full"><span>Notiz</span><textarea name="description" rows="3" placeholder="optional · Links werden automatisch klickbar"></textarea></label>
+            <label class="full task-image-upload"><span>Bildanhang</span><input name="images" type="file" accept="image/*" multiple /><small id="taskImageHint">Optional · bis zu 3 Bilder, komprimiert und nur im Task-Detail sichtbar.</small></label>
+            <label id="taskImageRemoveLabel" class="full task-image-remove hidden"><input name="remove_images" type="checkbox" value="1" /><span>Bestehende Bilder beim Speichern entfernen</span></label>
             <div class="form-actions full"><button id="taskSubmitBtn" class="pill primary" type="submit">Aufgabe speichern</button><button id="cancelTaskEditBtn" class="pill secondary hidden" type="button">Abbrechen</button></div>
           </form>
         </section>
@@ -703,6 +705,13 @@
           <div id="tasksList" class="kanban-shell"></div>
         </section>
       </section>
+
+      <div id="taskDetailModal" class="coach-modal task-detail-modal hidden" role="dialog" aria-modal="true" aria-labelledby="taskDetailTitle">
+        <section class="coach-modal-card task-detail-card">
+          <button id="taskDetailCloseBtn" class="icon-btn coach-close-btn" type="button" aria-label="Task-Detail schliessen">×</button>
+          <div id="taskDetailContent" class="task-detail-content"></div>
+        </section>
+      </div>
 
       <section id="screen-calendar" class="screen" data-screen="calendar" hidden aria-hidden="true">
         <div class="section-toolbar glass">

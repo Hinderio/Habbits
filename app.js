@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v112-habit-entry-delete-archive';
+  const APP_DATA_SCHEMA_VERSION = 'v113-task-links-images-detail';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -27,6 +27,10 @@
   const MONTHLY_MISSION_FORM_KEY = 'habitflow-monthly-mission-form-v1';
   const EVOLUTION_LEVEL_RULES = Object.freeze({ maxStage: 20, baseCost: 250, growth: 1.18 });
   const TASK_RECURRENCE_MARKER_RE = /\n?\s*<!--hf-task-rec:([^>]+)-->/;
+  const TASK_MEDIA_MARKER_RE = /\n?\s*<!--hf-task-media:([^>]+)-->/;
+  const TASK_IMAGE_LIMIT = 3;
+  const TASK_IMAGE_MAX_EDGE = 1280;
+  const TASK_IMAGE_QUALITY = 0.78;
   const TASK_IDEA_META_MARKER_RE = /\n?\s*<!--hf-idea-meta:([^>]+)-->/;
   const FITNESS_ROUTE_START = Object.freeze({ lat: 47.459945, lng: 9.032719 });
   const FITNESS_TOWN_MILESTONES = Object.freeze([
@@ -888,6 +892,7 @@
   let taskArchiveOpen = false;
   let taskTimelineOpen = false;
   let taskWeeklyOpen = false;
+  let taskDetailTaskId = null;
   let activityCatalogFormOpen = false;
   let editingActivityIdeaId = null;
   let pauseModalContext = { scope: 'smoke', targetId: null };
@@ -897,6 +902,7 @@
   let taskWeeklyCursor = startOfWeekDate(new Date());
   let taskTimelineScrollLeft = null;
   let taskTimelineDragState = null;
+  let lastTaskDragEndedAt = 0;
   let appointmentFormOpen = false;
   let remoteTaskPrioritySupported = true;
   let remoteTaskInProgressSupported = true;
@@ -1101,6 +1107,11 @@
       taskPointsPreview: $('#taskPointsPreview'),
       taskRecurrenceSelect: $('#taskRecurrenceSelect'),
       taskRecurrenceHint: $('#taskRecurrenceHint'),
+      taskImageHint: $('#taskImageHint'),
+      taskImageRemoveLabel: $('#taskImageRemoveLabel'),
+      taskDetailModal: $('#taskDetailModal'),
+      taskDetailCloseBtn: $('#taskDetailCloseBtn'),
+      taskDetailContent: $('#taskDetailContent'),
       tasksList: $('#tasksList'),
       taskIdeasToggleBtn: $('#taskIdeasToggleBtn'),
       taskWeeklyToggleBtn: $('#taskWeeklyToggleBtn'),
@@ -1240,6 +1251,12 @@
         if (event.target === els.fitnessCoachModal) closeFitnessCoach();
       });
     }
+    if (els.taskDetailModal) {
+      els.taskDetailModal.addEventListener('click', event => {
+        if (event.target === els.taskDetailModal) closeTaskDetail();
+      });
+    }
+    if (els.taskDetailCloseBtn) els.taskDetailCloseBtn.addEventListener('click', closeTaskDetail);
     if (els.coachModal) {
       els.coachModal.addEventListener('click', event => {
         if (event.target === els.coachModal) closeCoachModal();
@@ -1286,6 +1303,7 @@
     els.taskForm.elements.priority.addEventListener('change', updateTaskPreview);
     if (els.taskForm.elements.due_at) els.taskForm.elements.due_at.addEventListener('change', updateTaskRecurrenceHint);
     if (els.taskRecurrenceSelect) els.taskRecurrenceSelect.addEventListener('change', updateTaskRecurrenceHint);
+    if (els.taskForm.elements.images) els.taskForm.elements.images.addEventListener('change', updateTaskImageHint);
     if (els.appointmentForm?.elements?.starts_at) els.appointmentForm.elements.starts_at.addEventListener('change', syncAppointmentEndDefault);
     if (els.cancelHabitEditBtn) els.cancelHabitEditBtn.addEventListener('click', () => closeHabitForm({ clearForm: true }));
     if (els.cancelTaskEditBtn) els.cancelTaskEditBtn.addEventListener('click', () => closeTaskForm({ clearForm: true }));
@@ -1314,6 +1332,11 @@
     setupTaskTimelineScroller();
 
     document.addEventListener('click', event => {
+      const detailCard = event.target.closest('[data-task-detail-card]');
+      if (detailCard && Date.now() - lastTaskDragEndedAt > 250 && !event.target.closest('button, a, input, select, textarea, label, .drag-handle') && !detailCard.classList.contains('is-dragging')) {
+        openTaskDetail(detailCard.dataset.id);
+        return;
+      }
       const actionEl = event.target.closest('[data-action]');
       if (!actionEl) return;
       const { action, id } = actionEl.dataset;
@@ -1357,6 +1380,8 @@
       if (action === 'decrement-monthly-mission') decrementMonthlyMission(id);
       if (action === 'archive-monthly-mission') archiveMonthlyMission(id);
       if (action === 'delete-monthly-mission') deleteMonthlyMission(id);
+      if (action === 'open-task-detail') openTaskDetail(id);
+      if (action === 'close-task-detail') closeTaskDetail();
       if (action === 'edit-task') editTask(id);
       if (action === 'delete-task') deleteTask(id);
       if (action === 'archive-task') archiveTask(id);
@@ -1446,6 +1471,7 @@
       if (els.historyModal && !els.historyModal.classList.contains('hidden')) return closeHistoryModal();
       if (els.morningRoutineModal && !els.morningRoutineModal.classList.contains('hidden')) return closeMorningRoutineModal();
       if (els.fitnessCoachModal && !els.fitnessCoachModal.classList.contains('hidden')) return closeFitnessCoach();
+      if (els.taskDetailModal && !els.taskDetailModal.classList.contains('hidden')) return closeTaskDetail();
       if (els.coachModal && !els.coachModal.classList.contains('hidden')) closeCoachModal();
     });
 
@@ -1523,6 +1549,7 @@
     });
 
     document.addEventListener('dragend', () => {
+      lastTaskDragEndedAt = Date.now();
       $$('[data-task-card].is-dragging').forEach(card => card.classList.remove('is-dragging'));
       $$('[data-task-drop].is-over').forEach(column => column.classList.remove('is-over'));
       $$('[data-backlog-drop].is-over').forEach(zone => zone.classList.remove('is-over'));
@@ -1929,6 +1956,45 @@
     }
   }
 
+  function normalizeTaskImages(images = []) {
+    const list = Array.isArray(images) ? images : [];
+    return list
+      .map(image => ({
+        id: String(image?.id || uid()),
+        name: String(image?.name || 'Task-Bild').slice(0, 120),
+        type: String(image?.type || 'image/jpeg'),
+        data_url: String(image?.data_url || image?.dataUrl || ''),
+        size: Number(image?.size || 0),
+        created_at: image?.created_at || image?.createdAt || nowIso()
+      }))
+      .filter(image => image.data_url.startsWith('data:image/'))
+      .slice(0, TASK_IMAGE_LIMIT);
+  }
+
+  function parseTaskMediaFromDescription(description = '') {
+    const raw = String(description || '');
+    const match = raw.match(TASK_MEDIA_MARKER_RE);
+    if (!match) return { description: raw, media: [] };
+    const cleaned = raw.replace(TASK_MEDIA_MARKER_RE, '').trim();
+    try {
+      const decoded = JSON.parse(decodeURIComponent(match[1] || ''));
+      return { description: cleaned, media: normalizeTaskImages(decoded?.images || decoded || []) };
+    } catch (error) {
+      console.warn('Task-Bilddaten konnten nicht gelesen werden.', error);
+      return { description: cleaned, media: [] };
+    }
+  }
+
+  function parseTaskContentFromDescription(description = '') {
+    const recurrenceParsed = parseTaskRecurrenceFromDescription(description);
+    const mediaParsed = parseTaskMediaFromDescription(recurrenceParsed.description);
+    return {
+      description: mediaParsed.description,
+      recurrence: recurrenceParsed.recurrence,
+      media: mediaParsed.media
+    };
+  }
+
   function normalizeTaskRecurrence(recurrence = null, task = {}) {
     if (!recurrence) return null;
     const value = typeof recurrence === 'string' ? { frequency: recurrence } : recurrence;
@@ -1953,14 +2019,145 @@
   }
 
   function taskDescriptionForDisplay(task = {}) {
-    return parseTaskRecurrenceFromDescription(task.description || '').description;
+    return parseTaskContentFromDescription(task.description || '').description;
+  }
+
+  function taskImages(task = {}) {
+    return normalizeTaskImages(task.images || task.media || parseTaskContentFromDescription(task.description || '').media);
+  }
+
+  function taskHasImages(task = {}) {
+    return taskImages(task).length > 0;
   }
 
   function taskDescriptionForStorage(task = {}) {
     const clean = taskDescriptionForDisplay(task).trim();
     const recurrence = normalizeTaskRecurrence(task.recurrence, task);
-    if (!recurrence) return clean || null;
-    return `${clean ? `${clean}\n\n` : ''}<!--hf-task-rec:${encodeURIComponent(JSON.stringify(recurrence))}-->`;
+    const images = taskImages(task);
+    const parts = [];
+    if (clean) parts.push(clean);
+    if (recurrence) parts.push(`<!--hf-task-rec:${encodeURIComponent(JSON.stringify(recurrence))}-->`);
+    if (images.length) parts.push(`<!--hf-task-media:${encodeURIComponent(JSON.stringify({ images }))}-->`);
+    return parts.length ? parts.join('\n\n') : null;
+  }
+
+  function truncateTaskText(text = '', maxLength = 180) {
+    const clean = String(text || '').replace(/\s+/g, ' ').trim();
+    if (clean.length <= maxLength) return clean;
+    const slice = clean.slice(0, maxLength).replace(/\s+\S*$/, '').trim();
+    return `${slice || clean.slice(0, maxLength).trim()}…`;
+  }
+
+  function renderLinkedText(text = '') {
+    const source = String(text || '');
+    if (!source) return '';
+    const urlRe = /\b(?:https?:\/\/|www\.)[^\s<>'"]+/gi;
+    let html = '';
+    let lastIndex = 0;
+    source.replace(urlRe, (match, offset) => {
+      html += escapeHtml(source.slice(lastIndex, offset));
+      const trailing = (match.match(/[),.;:!?]+$/) || [''])[0];
+      const cleanUrl = trailing ? match.slice(0, -trailing.length) : match;
+      const href = cleanUrl.startsWith('www.') ? `https://${cleanUrl}` : cleanUrl;
+      try {
+        const parsed = new URL(href);
+        if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('unsupported protocol');
+        html += `<a class="task-inline-link" href="${escapeHtml(parsed.href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(cleanUrl)}</a>${escapeHtml(trailing)}`;
+      } catch {
+        html += escapeHtml(match);
+      }
+      lastIndex = offset + match.length;
+      return match;
+    });
+    html += escapeHtml(source.slice(lastIndex));
+    return html.replace(/\n/g, '<br>');
+  }
+
+  function renderTaskDescriptionPreview(task = {}, maxLength = 170) {
+    const description = taskDescriptionForDisplay(task);
+    if (!description) return '';
+    const truncated = truncateTaskText(description, maxLength);
+    const suffix = truncated.endsWith('…') ? ' <span class="task-preview-more">mehr im Detail</span>' : '';
+    return `<div class="task-description-preview">${renderLinkedText(truncated.replace(/…$/, ''))}${truncated.endsWith('…') ? '…' : ''}${suffix}</div>`;
+  }
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(reader.error || new Error('Datei konnte nicht gelesen werden.'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function loadImageFromDataUrl(dataUrl) {
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error('Bild konnte nicht verarbeitet werden.'));
+      image.src = dataUrl;
+    });
+  }
+
+  async function compressTaskImage(file) {
+    const rawDataUrl = await readFileAsDataUrl(file);
+    const image = await loadImageFromDataUrl(rawDataUrl);
+    const maxEdge = Math.max(image.width || 0, image.height || 0);
+    if (!maxEdge) return rawDataUrl;
+    const scale = Math.min(1, TASK_IMAGE_MAX_EDGE / maxEdge);
+    const width = Math.max(1, Math.round((image.width || TASK_IMAGE_MAX_EDGE) * scale));
+    const height = Math.max(1, Math.round((image.height || TASK_IMAGE_MAX_EDGE) * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(image, 0, 0, width, height);
+    return canvas.toDataURL('image/jpeg', TASK_IMAGE_QUALITY);
+  }
+
+  async function readTaskImagesFromForm(formData) {
+    const files = Array.from(formData.getAll('images') || [])
+      .filter(file => file && typeof file === 'object' && file.size > 0 && String(file.type || '').startsWith('image/'))
+      .slice(0, TASK_IMAGE_LIMIT);
+    if (!files.length) return [];
+    const images = [];
+    for (const file of files) {
+      try {
+        const dataUrl = await compressTaskImage(file);
+        images.push({
+          id: uid(),
+          name: file.name || 'Task-Bild',
+          type: 'image/jpeg',
+          data_url: dataUrl,
+          size: dataUrl.length,
+          created_at: nowIso()
+        });
+      } catch (error) {
+        console.warn('Task-Bild konnte nicht verarbeitet werden.', error);
+      }
+    }
+    return normalizeTaskImages(images);
+  }
+
+  function updateTaskImageHint() {
+    if (!els.taskImageHint || !els.taskForm?.elements?.images) return;
+    const selected = Array.from(els.taskForm.elements.images.files || []).filter(file => file.size > 0);
+    const existing = editingTaskId ? taskImages(state.tasks.find(task => task.id === editingTaskId)).length : 0;
+    if (selected.length) {
+      els.taskImageHint.textContent = `${Math.min(selected.length, TASK_IMAGE_LIMIT)} Bild${selected.length === 1 ? '' : 'er'} werden komprimiert und nur im Task-Detail angezeigt.`;
+      return;
+    }
+    els.taskImageHint.textContent = existing
+      ? `${existing} vorhandene${existing === 1 ? 's Bild' : ' Bilder'} · in der Übersicht nur als Badge, im Detail sichtbar.`
+      : `Optional · bis zu ${TASK_IMAGE_LIMIT} Bilder, komprimiert und nur im Task-Detail sichtbar.`;
+  }
+
+  function syncTaskImageRemoveControl(task = null) {
+    if (!els.taskImageRemoveLabel) return;
+    const count = task ? taskImages(task).length : 0;
+    els.taskImageRemoveLabel.classList.toggle('hidden', !count);
+    const input = els.taskForm?.elements?.remove_images;
+    if (input) input.checked = false;
   }
 
   function parseTaskIdeaMetaFromDescription(description = '') {
@@ -2073,13 +2270,14 @@
   }
 
   function normalizeTask(task = {}) {
-    const parsedDescription = parseTaskRecurrenceFromDescription(task.description || '');
+    const parsedDescription = parseTaskContentFromDescription(task.description || '');
     const status = TASK_COLUMNS.some(column => column.status === task.status) ? task.status : 'open';
     const doneArchivedAt = status === 'done' ? validIsoOrNull(task.done_archived_at || task.doneArchivedAt) : null;
     const doneArchiveRank = Number.isFinite(Number(task.done_archive_rank)) ? Number(task.done_archive_rank) : null;
     const normalized = {
       ...task,
       description: parsedDescription.description,
+      images: normalizeTaskImages(task.images || task.media || parsedDescription.media),
       status,
       priority: normalizeTaskPriority(task.priority),
       done_archived_at: doneArchivedAt,
@@ -8166,6 +8364,7 @@
     renderTaskTimeline();
     if (!tasks.length) {
       els.tasksList.innerHTML = '<div class="empty-state">Keine Aufgaben vorhanden. Neue Aufgaben erscheinen hier direkt als Kanban-Karte.</div>';
+      refreshTaskDetailIfOpen();
       return;
     }
 
@@ -8183,6 +8382,7 @@
         </section>`;
       }).join('')}
     </div>`;
+    refreshTaskDetailIfOpen();
   }
 
   function taskIdeas() {
@@ -8950,20 +9150,25 @@
     const priorityMeta = taskPriorityMeta(priority);
     const dueState = taskDueState(task);
     const dueLabel = task.due_at ? `${dueState.overdue ? 'überfällig' : 'fällig'} ${formatDateTime(task.due_at)}` : 'ohne Fälligkeitsdatum';
-    return `<article class="kanban-card backlog-card ${editingTaskId === task.id ? 'is-editing' : ''} ${dueState.overdue ? 'is-overdue' : ''}" draggable="true" data-task-card data-backlog-card data-id="${task.id}">
+    const descriptionPreview = renderTaskDescriptionPreview(task);
+    const imageBadge = taskHasImages(task) ? `<span class="badge muted task-image-badge">Bild</span>` : '';
+    return `<article class="kanban-card backlog-card ${editingTaskId === task.id ? 'is-editing' : ''} ${dueState.overdue ? 'is-overdue' : ''}" draggable="true" data-task-card data-backlog-card data-task-detail-card data-id="${task.id}" title="Task-Details öffnen">
       <div class="kanban-card-top">
         <span class="drag-handle" aria-hidden="true">⋮⋮</span>
         <div class="task-badges">
           <span class="badge muted ${taskPriorityClass(priority)}">${escapeHtml(priorityMeta.short)}</span>
           ${taskRecurrenceLabel(task) ? `<span class="badge task-recurrence-badge">${escapeHtml(taskRecurrenceLabel(task))}</span>` : ''}
+          ${imageBadge}
           <span class="badge muted">#${index + 1}</span>
         </div>
       </div>
       <h4>${escapeHtml(task.title)}</h4>
-      <p class="meta">Backlog · Aufwand ${task.effort}/5 · Priorität ${escapeHtml(priorityMeta.label)} · ${escapeHtml(dueLabel)}${task.description ? `<br>${escapeHtml(taskDescriptionForDisplay(task))}` : ''}</p>
+      <p class="meta">Backlog · Aufwand ${task.effort}/5 · Priorität ${escapeHtml(priorityMeta.label)} · ${escapeHtml(dueLabel)}</p>
+      ${descriptionPreview}
       ${renderOverdueDots(task)}
       <div class="list-actions compact-actions backlog-actions">
         <button class="mini-btn primary" type="button" data-action="move-backlog-task" data-status="open" data-id="${task.id}">In Offen</button>
+        <button class="mini-btn" type="button" data-action="open-task-detail" data-id="${task.id}">Details</button>
         <button class="mini-btn" type="button" data-action="edit-task" data-id="${task.id}">Bearbeiten</button>
         <button class="mini-btn" type="button" data-action="backlog-rank-up" data-id="${task.id}" ${index === 0 ? 'disabled' : ''}>↑</button>
         <button class="mini-btn" type="button" data-action="backlog-rank-down" data-id="${task.id}" ${index === total - 1 ? 'disabled' : ''}>↓</button>
@@ -8987,20 +9192,25 @@
     const archivedAt = task.done_archived_at || task.completed_at || task.updated_at || task.created_at;
     const completedLabel = task.completed_at ? `Erledigt ${formatDateTime(task.completed_at)}` : 'erledigt';
     const archivedLabel = archivedAt ? `archiviert ${formatDateTime(archivedAt)}` : 'archiviert';
-    return `<article class="kanban-card backlog-card archive-card ${editingTaskId === task.id ? 'is-editing' : ''}" draggable="true" data-task-card data-archive-card data-id="${task.id}">
+    const descriptionPreview = renderTaskDescriptionPreview(task);
+    const imageBadge = taskHasImages(task) ? `<span class="badge muted task-image-badge">Bild</span>` : '';
+    return `<article class="kanban-card backlog-card archive-card ${editingTaskId === task.id ? 'is-editing' : ''}" draggable="true" data-task-card data-archive-card data-task-detail-card data-id="${task.id}" title="Task-Details öffnen">
       <div class="kanban-card-top">
         <span class="drag-handle" aria-hidden="true">⋮⋮</span>
         <div class="task-badges">
           <span class="badge muted ${taskPriorityClass(priority)}">${escapeHtml(priorityMeta.short)}</span>
           <span class="badge">+${Number(task.points || taskPoints(task))} Pkt.</span>
           ${taskRecurrenceLabel(task) ? `<span class="badge task-recurrence-badge">${escapeHtml(taskRecurrenceLabel(task))}</span>` : ''}
+          ${imageBadge}
           <span class="badge muted">#${index + 1}</span>
         </div>
       </div>
       <h4>${escapeHtml(task.title)}</h4>
-      <p class="meta">Archiv · ${escapeHtml(completedLabel)} · ${escapeHtml(archivedLabel)} · Aufwand ${task.effort}/5 · Priorität ${escapeHtml(priorityMeta.label)}${task.description ? `<br>${escapeHtml(taskDescriptionForDisplay(task))}` : ''}</p>
+      <p class="meta">Archiv · ${escapeHtml(completedLabel)} · ${escapeHtml(archivedLabel)} · Aufwand ${task.effort}/5 · Priorität ${escapeHtml(priorityMeta.label)}</p>
+      ${descriptionPreview}
       <div class="list-actions compact-actions backlog-actions">
         <button class="mini-btn primary" type="button" data-action="restore-archived-task" data-id="${task.id}">Zurück zu Erledigt</button>
+        <button class="mini-btn" type="button" data-action="open-task-detail" data-id="${task.id}">Details</button>
         <button class="mini-btn" type="button" data-action="edit-task" data-id="${task.id}">Bearbeiten</button>
         <button class="mini-btn" type="button" data-action="done-archive-rank-up" data-id="${task.id}" ${index === 0 ? 'disabled' : ''}>↑</button>
         <button class="mini-btn" type="button" data-action="done-archive-rank-down" data-id="${task.id}" ${index === total - 1 ? 'disabled' : ''}>↓</button>
@@ -9016,6 +9226,8 @@
     const statusLabel = TASK_COLUMNS.find(column => column.status === status)?.title || 'Offen';
     const dueState = taskDueState(task);
     const isOverdue = dueState.overdue;
+    const descriptionPreview = renderTaskDescriptionPreview(task);
+    const imageBadge = taskHasImages(task) ? `<span class="badge muted task-image-badge">Bild</span>` : '';
     const primaryAction = status === 'open'
       ? `<button class="mini-btn primary" type="button" data-action="move-task" data-status="in_progress" data-id="${task.id}">In Bearbeitung</button>`
       : status === 'in_progress'
@@ -9028,25 +9240,114 @@
       : status === TASK_BACKLOG_STATUS
         ? ''
         : `<button class="mini-btn" type="button" data-action="move-task-to-backlog" data-id="${task.id}">Backlog</button>`;
-    return `<article class="kanban-card ${editingTaskId === task.id ? 'is-editing' : ''} ${isOverdue ? 'is-overdue' : ''}" draggable="true" data-task-card data-id="${task.id}">
+    return `<article class="kanban-card ${editingTaskId === task.id ? 'is-editing' : ''} ${isOverdue ? 'is-overdue' : ''}" draggable="true" data-task-card data-task-detail-card data-id="${task.id}" title="Task-Details öffnen">
       <div class="kanban-card-top">
         <span class="drag-handle" aria-hidden="true">⋮⋮</span>
         <div class="task-badges">
           <span class="badge muted ${taskPriorityClass(priority)}">${escapeHtml(priorityMeta.short)}</span>
           <span class="badge ${status === 'done' ? '' : 'muted'}">${status === 'done' ? `+${Number(task.points || taskPoints(task))} Pkt.` : `+${taskPoints(task)} Pkt.`}</span>
           ${taskRecurrenceLabel(task) ? `<span class="badge task-recurrence-badge">${escapeHtml(taskRecurrenceLabel(task))}</span>` : ''}
+          ${imageBadge}
         </div>
       </div>
       <h4>${escapeHtml(task.title)}</h4>
-      <p class="meta">${escapeHtml(statusLabel)} · Aufwand ${task.effort}/5 · Priorität ${escapeHtml(priorityMeta.label)} · ${task.due_at ? `${isOverdue ? 'Überfällig' : 'Fällig'} ${formatDateTime(task.due_at)}` : 'ohne Fälligkeitsdatum'}${task.description ? `<br>${escapeHtml(taskDescriptionForDisplay(task))}` : ''}</p>
+      <p class="meta">${escapeHtml(statusLabel)} · Aufwand ${task.effort}/5 · Priorität ${escapeHtml(priorityMeta.label)} · ${task.due_at ? `${isOverdue ? 'Überfällig' : 'Fällig'} ${formatDateTime(task.due_at)}` : 'ohne Fälligkeitsdatum'}</p>
+      ${descriptionPreview}
       ${renderOverdueDots(task)}
       <div class="list-actions compact-actions">
         ${primaryAction}
+        <button class="mini-btn" type="button" data-action="open-task-detail" data-id="${task.id}">Details</button>
         <button class="mini-btn" type="button" data-action="edit-task" data-id="${task.id}">Bearbeiten</button>
         ${archiveAction}
         <button class="mini-btn danger" type="button" data-action="delete-task" data-id="${task.id}">Löschen</button>
       </div>
     </article>`;
+  }
+
+  function renderTaskImageGallery(task = {}) {
+    const images = taskImages(task);
+    if (!images.length) return '';
+    return `<section class="task-detail-images" aria-label="Task-Bilder">
+      <div class="task-detail-section-head"><p class="eyebrow">Bilder</p><span class="subtle">nur im Detail sichtbar</span></div>
+      <div class="task-image-grid">${images.map((image, index) => `
+        <figure class="task-detail-image">
+          <img src="${escapeHtml(image.data_url)}" alt="${escapeHtml(image.name || `Task-Bild ${index + 1}`)}" loading="lazy" />
+          <figcaption>${escapeHtml(image.name || `Bild ${index + 1}`)}</figcaption>
+        </figure>`).join('')}</div>
+    </section>`;
+  }
+
+  function renderTaskDetailContent(task = {}) {
+    const normalized = normalizeTask(task);
+    const status = normalized.status || 'open';
+    const priority = taskPriorityMeta(normalized.priority);
+    const dueState = taskDueState(normalized);
+    const description = taskDescriptionForDisplay(normalized);
+    const recurrence = taskRecurrenceLabel(normalized);
+    const images = taskImages(normalized);
+    const statusLabel = TASK_COLUMNS.find(column => column.status === status)?.title || 'Offen';
+    const primaryAction = status === 'open'
+      ? `<button class="pill primary" type="button" data-action="move-task" data-status="in_progress" data-id="${normalized.id}">In Bearbeitung</button>`
+      : status === 'in_progress'
+        ? `<button class="pill primary" type="button" data-action="move-task" data-status="done" data-id="${normalized.id}">Erledigt</button>`
+        : status === 'done'
+          ? `<button class="pill secondary" type="button" data-action="move-task" data-status="in_progress" data-id="${normalized.id}">Zurück in Arbeit</button>`
+          : `<button class="pill secondary" type="button" data-action="move-task" data-status="open" data-id="${normalized.id}">Reaktivieren</button>`;
+    return `<div class="task-detail-hero">
+      <div>
+        <p class="eyebrow">Task Detail</p>
+        <h2 id="taskDetailTitle">${escapeHtml(normalized.title)}</h2>
+        <div class="task-detail-badges">
+          <span class="badge muted ${taskPriorityClass(normalized.priority)}">${escapeHtml(priority.label)}</span>
+          <span class="badge muted">${escapeHtml(statusLabel)}</span>
+          <span class="badge muted">Aufwand ${Number(normalized.effort || 3)}/5</span>
+          ${recurrence ? `<span class="badge task-recurrence-badge">${escapeHtml(recurrence)}</span>` : ''}
+          ${images.length ? `<span class="badge muted task-image-badge">${images.length} Bild${images.length === 1 ? '' : 'er'}</span>` : ''}
+        </div>
+      </div>
+    </div>
+    <div class="task-detail-grid">
+      <section class="task-detail-copy">
+        <div class="task-detail-section-head"><p class="eyebrow">Notiz</p><span class="subtle">Links direkt antippbar</span></div>
+        <div class="task-detail-text">${description ? renderLinkedText(description) : '<span class="subtle">Keine Notiz hinterlegt.</span>'}</div>
+      </section>
+      <aside class="task-detail-facts">
+        <article><small>Status</small><strong>${escapeHtml(statusLabel)}</strong></article>
+        <article><small>Fällig</small><strong>${escapeHtml(normalized.due_at ? formatDateTime(normalized.due_at) : 'ohne Datum')}</strong>${dueState.overdue ? `<span>${escapeHtml(dueState.label)}</span>` : ''}</article>
+        <article><small>Punkte</small><strong>+${Number(normalized.points || taskPoints(normalized))}</strong><span>${status === 'done' ? 'verbucht' : 'bei Abschluss'}</span></article>
+      </aside>
+    </div>
+    ${renderTaskImageGallery(normalized)}
+    <div class="task-detail-actions">
+      ${primaryAction}
+      <button class="pill secondary" type="button" data-action="edit-task" data-id="${normalized.id}">Bearbeiten</button>
+      <button class="pill secondary" type="button" data-action="close-task-detail">Schliessen</button>
+    </div>`;
+  }
+
+  function openTaskDetail(id) {
+    const task = state.tasks.map(normalizeTask).find(item => item.id === id);
+    if (!task || !els.taskDetailModal || !els.taskDetailContent) return;
+    taskDetailTaskId = id;
+    els.taskDetailContent.innerHTML = renderTaskDetailContent(task);
+    els.taskDetailModal.classList.remove('hidden');
+    document.body.classList.add('modal-open');
+  }
+
+  function closeTaskDetail() {
+    taskDetailTaskId = null;
+    if (els.taskDetailModal) els.taskDetailModal.classList.add('hidden');
+    if (els.taskDetailContent) els.taskDetailContent.innerHTML = '';
+    if ((!els.historyModal || els.historyModal.classList.contains('hidden')) && (!els.fitnessCoachModal || els.fitnessCoachModal.classList.contains('hidden')) && (!els.coachModal || els.coachModal.classList.contains('hidden'))) {
+      document.body.classList.remove('modal-open');
+    }
+  }
+
+  function refreshTaskDetailIfOpen() {
+    if (!taskDetailTaskId || !els.taskDetailModal || els.taskDetailModal.classList.contains('hidden')) return;
+    const task = state.tasks.map(normalizeTask).find(item => item.id === taskDetailTaskId);
+    if (!task) return closeTaskDetail();
+    if (els.taskDetailContent) els.taskDetailContent.innerHTML = renderTaskDetailContent(task);
   }
 
   function renderTaskTimeline() {
@@ -10168,7 +10469,7 @@ async function deleteAlcoholLog(id) {
     syncWithSupabase({ silent: true, pullFirst: false });
   }
 
-  function createTask(event) {
+  async function createTask(event) {
     event.preventDefault();
     const data = new FormData(els.taskForm);
     const wantsMonthly = String(data.get('recurrence') || 'none') === 'monthly';
@@ -10189,6 +10490,14 @@ async function deleteAlcoholLog(id) {
     };
     if (!values.title) return;
 
+    let uploadedImages = [];
+    try {
+      uploadedImages = await readTaskImagesFromForm(data);
+    } catch (error) {
+      console.warn('Task-Bilder konnten nicht verarbeitet werden.', error);
+      toast('Bild konnte nicht verarbeitet werden. Aufgabe bleibt gespeichert.');
+    }
+
     if (editingTaskId) {
       const task = state.tasks.find(t => t.id === editingTaskId);
       if (!task) {
@@ -10197,6 +10506,9 @@ async function deleteAlcoholLog(id) {
         return;
       }
       Object.assign(task, values);
+      const existingImages = taskImages(task);
+      const removeImages = Boolean(data.get('remove_images'));
+      task.images = removeImages ? [] : normalizeTaskImages([...existingImages, ...uploadedImages]).slice(-TASK_IMAGE_LIMIT);
       task.recurrence = wantsMonthly ? buildMonthlyTaskRecurrence(values.due_at, task) : null;
       if (task.status === 'done') {
         task.points = taskPoints(task);
@@ -10222,6 +10534,7 @@ async function deleteAlcoholLog(id) {
       done_archive_rank: null,
       points: 0,
       recurrence: wantsMonthly ? buildMonthlyTaskRecurrence(values.due_at, { id: taskId }) : null,
+      images: uploadedImages,
       created_at: created,
       updated_at: created
     });
@@ -10638,6 +10951,7 @@ async function deleteAlcoholLog(id) {
 
 
   function editTask(id) {
+    if (els.taskDetailModal && !els.taskDetailModal.classList.contains('hidden')) closeTaskDetail();
     const task = state.tasks.find(t => t.id === id);
     if (!task) return;
     editingTaskId = id;
@@ -10648,6 +10962,9 @@ async function deleteAlcoholLog(id) {
     fields.priority.value = normalizeTaskPriority(task.priority);
     fields.due_at.value = toDateTimeLocalValue(task.due_at);
     if (fields.recurrence) fields.recurrence.value = normalizeTaskRecurrence(task.recurrence, task) ? 'monthly' : 'none';
+    if (fields.images) fields.images.value = '';
+    syncTaskImageRemoveControl(task);
+    updateTaskImageHint();
     els.taskFormTitle.textContent = 'Aufgabe bearbeiten';
     els.taskSubmitBtn.textContent = 'Änderungen speichern';
     els.cancelTaskEditBtn.classList.remove('hidden');
@@ -10666,7 +10983,11 @@ async function deleteAlcoholLog(id) {
       els.taskForm.elements.effort.value = '3';
       els.taskForm.elements.priority.value = 'medium';
       if (els.taskForm.elements.recurrence) els.taskForm.elements.recurrence.value = 'none';
+      if (els.taskForm.elements.images) els.taskForm.elements.images.value = '';
+      if (els.taskForm.elements.remove_images) els.taskForm.elements.remove_images.checked = false;
     }
+    syncTaskImageRemoveControl(null);
+    updateTaskImageHint();
     els.taskFormTitle.textContent = 'Aufgabe erfassen';
     els.taskSubmitBtn.textContent = 'Aufgabe speichern';
     els.cancelTaskEditBtn.classList.add('hidden');
@@ -12274,6 +12595,9 @@ async function deleteAlcoholLog(id) {
     if (!localTask) return remoteTask;
     const next = { ...remoteTask };
     if (!next.recurrence && localTask.recurrence) next.recurrence = localTask.recurrence;
+    if (!taskImages(next).length && taskImages(localTask).length) {
+      next.images = taskImages(localTask);
+    }
     if (!remoteTaskPrioritySupported) next.priority = localTask.priority || next.priority;
     if (!remoteTaskInProgressSupported && localTask.status === 'in_progress' && remoteTask.status === 'open') next.status = 'in_progress';
     if (!remoteTaskBacklogRankSupported && localTask.backlog_rank != null) next.backlog_rank = localTask.backlog_rank;
