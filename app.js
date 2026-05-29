@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v114-training-compass-best-museum';
+  const APP_DATA_SCHEMA_VERSION = 'v115-monthly-magazine-review';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -77,6 +77,11 @@
   const LEISURE_RESULT_LIMIT = 12;
   const COMPANION_POSTER_BUCKET = 'companion-posters';
   const COMPANION_POSTER_EXTENSION = 'png';
+  const MONTHLY_MAGAZINE_COVERS = Object.freeze([
+    { file: 'stage-21.png', label: 'Calm Reset', minScore: 0 },
+    { file: 'stage-22.png', label: 'Momentum Issue', minScore: 45 },
+    { file: 'stage-23.png', label: 'Peak Issue', minScore: 75 }
+  ]);
   const SUPABASE_CONFIG = window.HABITFLOW_SUPABASE_CONFIG || {};
   const MEDITATION_TECHNIQUES = [
     { key: '7-3-11', title: '7-3-11 Atemtechnik', subtitle: 'Runterfahren mit langer Ausatmung', minutes: 6, pattern: '7 ein · 3 halten · 11 aus' },
@@ -1021,6 +1026,9 @@
       monthlyMissions: $('#monthlyMissions'),
       monthlyMissionsSummary: $('#monthlyMissionsSummary'),
       monthlyMissionMobileSummary: $('#monthlyMissionMobileSummary'),
+      monthlyMagazine: $('#monthlyMagazine'),
+      monthlyMagazineSummary: $('#monthlyMagazineSummary'),
+      monthlyMagazineMobileSummary: $('#monthlyMagazineMobileSummary'),
       habitHeatmap: $('#habitHeatmap'),
       trendMetricSelect: $('#trendMetricSelect'),
       trendChartTitle: $('#trendChartTitle'),
@@ -3542,6 +3550,7 @@
     renderInsights();
     renderWeeklyReview();
     renderMonthlyMissions();
+    renderMonthlyMagazine();
     renderBehaviorIntelligence();
     renderGamification();
     renderHabitHeatmap();
@@ -3879,20 +3888,25 @@
     return `stage-${String(safeStage).padStart(2, '0')}.${COMPANION_POSTER_EXTENSION}`;
   }
 
+  function companionPosterAssetUrl(fileName = '') {
+    const safeFile = String(fileName || '').trim() || companionPosterFileName(1);
+    const configuredUrl = String(SUPABASE_CONFIG.url || SUPABASE_CONFIG.supabaseUrl || '').trim().replace(/\/$/, '');
+    try {
+      const storageUrl = supabaseClient?.storage?.from?.(COMPANION_POSTER_BUCKET)?.getPublicUrl?.(safeFile)?.data?.publicUrl;
+      if (storageUrl) return storageUrl;
+    } catch (error) {
+      console.warn('Companion poster URL konnte nicht via Supabase Storage Client erzeugt werden.', error);
+    }
+    if (configuredUrl) return `${configuredUrl}/storage/v1/object/public/${COMPANION_POSTER_BUCKET}/${safeFile}`;
+    return `./assets/companion-posters/${safeFile}`;
+  }
+
   function companionPosterUrl(stage) {
     const numericStage = Number(stage || 1);
     const safeStage = Number.isFinite(numericStage) ? Math.min(20, Math.max(1, numericStage)) : 1;
     const poster = COMPANION_STAGE_POSTERS[safeStage - 1] || {};
     const fileName = poster.file || companionPosterFileName(safeStage);
-    const configuredUrl = String(SUPABASE_CONFIG.url || SUPABASE_CONFIG.supabaseUrl || '').trim().replace(/\/$/, '');
-    try {
-      const storageUrl = supabaseClient?.storage?.from?.(COMPANION_POSTER_BUCKET)?.getPublicUrl?.(fileName)?.data?.publicUrl;
-      if (storageUrl) return storageUrl;
-    } catch (error) {
-      console.warn('Companion poster URL konnte nicht via Supabase Storage Client erzeugt werden.', error);
-    }
-    if (configuredUrl) return `${configuredUrl}/storage/v1/object/public/${COMPANION_POSTER_BUCKET}/${fileName}`;
-    return `./assets/companion-posters/${fileName}`;
+    return companionPosterAssetUrl(fileName);
   }
 
   function renderPosterProgressOverlay(stats = {}, companion = {}) {
@@ -4295,6 +4309,194 @@
       ${missionCards}
       ${form}`;
   }
+
+
+  function monthKeyRange(monthKey = currentMonthKey()) {
+    const [year, month] = String(monthKey || currentMonthKey()).split('-').map(Number);
+    if (!year || !month) {
+      const now = new Date();
+      return { start: new Date(now.getFullYear(), now.getMonth(), 1, 12), end: new Date(now.getFullYear(), now.getMonth() + 1, 0, 12) };
+    }
+    return { start: new Date(year, month - 1, 1, 12), end: new Date(year, month, 0, 12) };
+  }
+
+  function formatMagazineDate(key = '') {
+    if (!key) return '–';
+    const date = new Date(`${key}T12:00:00`);
+    return Number.isNaN(date.getTime()) ? key : date.toLocaleDateString('de-CH', { weekday: 'short', day: '2-digit', month: '2-digit' });
+  }
+
+  function monthlyMagazineCoverUrl(score = 0) {
+    const cover = [...MONTHLY_MAGAZINE_COVERS]
+      .sort((a, b) => b.minScore - a.minScore)
+      .find(item => score >= item.minScore) || MONTHLY_MAGAZINE_COVERS[0];
+    return { ...cover, url: companionPosterAssetUrl(cover.file) };
+  }
+
+  function monthlyMagazinePoints(monthKey = currentMonthKey(), keySet = new Set(monthMissionKeys(monthKey))) {
+    let total = visibleLedgerPoints()
+      .filter(point => keySet.has(toDateKey(point.earned_at)))
+      .reduce((sum, point) => sum + Number(point.points || 0), 0);
+    visibleCigarettes()
+      .filter(cigarette => keySet.has(toDateKey(cigarette.smoked_at)))
+      .filter(cigarette => !state.pointsLedger.some(point => point.source_type === 'cigarette' && point.source_id === cigarette.id))
+      .forEach(cigarette => { total += Number(cigarette.points || 0); });
+    return Math.round(total);
+  }
+
+  function buildMonthlyMagazineBestDay(keys = []) {
+    const keyFilter = new Set(keys);
+    const taskCounts = new Map();
+    state.tasks.map(normalizeTask)
+      .filter(task => task.status === 'done')
+      .forEach(task => {
+        const key = toDateKey(task.completed_at || task.updated_at || task.created_at);
+        if (key && keyFilter.has(key)) taskCounts.set(key, (taskCounts.get(key) || 0) + 1);
+      });
+    const fitnessCounts = new Map();
+    buildFitnessSessions('all').forEach(session => {
+      const key = toDateKey(session.entry?.occurred_at || session.date);
+      if (!key || !keyFilter.has(key)) return;
+      const current = fitnessCounts.get(key) || { count: 0, km: 0, ascent: 0 };
+      current.count += 1;
+      current.km += Number(session.distanceKm || 0);
+      current.ascent += Number(session.ascent || 0);
+      fitnessCounts.set(key, current);
+    });
+    const pointsByDay = new Map();
+    visibleLedgerPoints().forEach(point => {
+      const key = toDateKey(point.earned_at);
+      if (!key || !keyFilter.has(key)) return;
+      pointsByDay.set(key, (pointsByDay.get(key) || 0) + Number(point.points || 0));
+    });
+    const best = keys.map(key => {
+      const tasks = taskCounts.get(key) || 0;
+      const fitness = fitnessCounts.get(key) || { count: 0, km: 0, ascent: 0 };
+      const cigarettes = cigarettesOnDate(key).length;
+      const points = Number(pointsByDay.get(key) || 0);
+      const score = points + tasks * 18 + fitness.count * 26 + Math.min(36, fitness.km * 4) + (fitness.ascent ? Math.min(30, fitness.ascent / 35) : 0) + (!cigarettes && (tasks || fitness.count || points > 0) ? 18 : 0);
+      return { key, tasks, fitness, cigarettes, points, score };
+    }).sort((a, b) => b.score - a.score)[0];
+    if (!best || best.score <= 0) {
+      return { title: 'Beste Entscheidung', value: 'Noch im Aufbau', body: 'Sobald Tasks, Fitness, Habits oder Konsum-Pausen im Monat sichtbar sind, hebt das Magazine deinen stärksten Tag hervor.' };
+    }
+    const signals = [];
+    if (best.fitness.count) signals.push(`${best.fitness.count} Fitness-Log${best.fitness.count === 1 ? '' : 's'}`);
+    if (best.tasks) signals.push(`${best.tasks} Task${best.tasks === 1 ? '' : 's'} erledigt`);
+    if (!best.cigarettes) signals.push('rauchfrei dokumentiert');
+    if (best.points) signals.push(`${Math.round(best.points)} XP`);
+    return {
+      title: 'Beste Entscheidung',
+      value: formatMagazineDate(best.key),
+      body: `${signals.slice(0, 3).join(' · ')}. Dieser Tag ist dein stärkstes Monats-Signal.`
+    };
+  }
+
+  function buildMonthlyMagazineReview(monthKey = currentMonthKey()) {
+    const keys = monthMissionKeys(monthKey);
+    const keySet = new Set(keys);
+    const inMonth = value => keySet.has(toDateKey(value));
+    const { end } = monthKeyRange(monthKey);
+    const isComplete = toDateKey(end) < toDateKey(new Date());
+    const missions = activeMonthlyMissions(monthKey);
+    const missionStates = missions.map(monthlyMissionState);
+    const missionSummary = monthlyMissionSummary(missions);
+    const sessions = buildFitnessSessions('all').filter(session => inMonth(session.entry?.occurred_at || session.date));
+    const jogs = sessions.filter(session => session.type === 'jogging');
+    const hikes = sessions.filter(session => session.type === 'hiking');
+    const runKm = sum(jogs.map(session => session.distanceKm));
+    const hikeKm = sum(hikes.map(session => session.distanceKm));
+    const ascent = sum(hikes.map(session => session.ascent));
+    const cigarettes = visibleCigarettes().filter(cigarette => inMonth(cigarette.smoked_at));
+    const eveningCigarettes = cigarettes.filter(cigarette => new Date(cigarette.smoked_at).getHours() >= 18).length;
+    const alcoholUnits = visibleAlcoholUnits().filter(unit => inMonth(unit.occurred_at || unit.created_at));
+    const tasksDone = state.tasks.map(normalizeTask).filter(task => task.status === 'done' && inMonth(task.completed_at || task.updated_at || task.created_at));
+    const routines = new Set((state.morningRoutineLogs || []).filter(log => inMonth(log.date_key || log.completed_at)).map(log => log.date_key || toDateKey(log.completed_at))).size;
+    const smokeFreeEvenings = countMonthlyMissionProgress({ metric: 'smoke_free_evenings', target: 1, month_key: monthKey, title: 'Rauchfreie Abende' });
+    const points = monthlyMagazinePoints(monthKey, keySet);
+    const achievements = [
+      missionSummary.completed ? { icon: 'reward', label: 'Missionen abgeschlossen', value: `${missionSummary.completed}/${missionSummary.count}`, detail: 'Monatsziele wirklich ins Ziel gebracht.', score: 120 + missionSummary.completed * 10 } : null,
+      missionSummary.average ? { icon: 'habits', label: 'Missions-Fortschritt', value: `${missionSummary.average}%`, detail: `${missionSummary.count} aktive Mission${missionSummary.count === 1 ? '' : 'en'} im Fokus.`, score: missionSummary.average } : null,
+      jogs.length ? { icon: 'jogging', label: 'Lauf-Momentum', value: `${jogs.length}×`, detail: `${formatKmValue(runKm)} im Monat.`, score: 45 + runKm * 2 + jogs.length * 8 } : null,
+      hikes.length ? { icon: 'hiking', label: 'Wandern', value: `${hikes.length}×`, detail: `${formatKmValue(hikeKm)} · ${formatMetersValue(ascent)}.`, score: 45 + hikeKm * 1.6 + ascent / 35 } : null,
+      smokeFreeEvenings ? { icon: 'smoke', label: 'Rauchfreie Abende', value: `${smokeFreeEvenings}`, detail: 'Abendfenster ohne Rauch-Log.', score: smokeFreeEvenings * 5 } : null,
+      tasksDone.length ? { icon: 'tasks', label: 'Tasks erledigt', value: `${tasksDone.length}`, detail: 'sichtbares Produktivitäts-Momentum.', score: 35 + tasksDone.length * 4 } : null,
+      routines ? { icon: 'meditation', label: 'Morgenroutine', value: `${routines}×`, detail: 'stabilisierende Starts in den Tag.', score: 35 + routines * 5 } : null,
+      points ? { icon: 'reward', label: 'XP gesammelt', value: `${points.toLocaleString('de-CH')}`, detail: 'über Ledger, Habits und Entscheidungen.', score: Math.min(110, Math.abs(points) / 8) } : null
+    ].filter(Boolean).sort((a, b) => b.score - a.score).slice(0, 3);
+    const strongestPattern = (() => {
+      if (jogs.length + hikes.length >= 4) return { value: 'Bewegung trägt', body: `${jogs.length + hikes.length} Fitness-Signale zeigen: dein Monat profitiert sichtbar von Bewegung.` };
+      if (smokeFreeEvenings >= Math.max(4, Math.round(keys.length * 0.65))) return { value: 'Ruhige Abende', body: `${smokeFreeEvenings} rauchfreie Abende sind dein stärkstes Konsum-Muster.` };
+      if (eveningCigarettes >= Math.max(3, Math.round(cigarettes.length * 0.5))) return { value: 'Abendfenster', body: `${eveningCigarettes} Rauch-Logs liegen ab 18 Uhr. Ein Abend-Playbook wäre der grösste Hebel.` };
+      if (tasksDone.length >= 8) return { value: 'Task-Momentum', body: `${tasksDone.length} erledigte Aufgaben machen Produktivität zum dominanten Muster.` };
+      if (routines >= 5) return { value: 'Routine-Anker', body: `${routines} Morgenroutinen stabilisieren den Monat stärker als grosse Einzelaktionen.` };
+      return { value: 'Daten entstehen', body: 'Noch kein dominantes Muster. Die Ausgabe wird mit jedem Log konkreter.' };
+    })();
+    const closeMission = missionStates
+      .filter(item => !item.completed)
+      .sort((a, b) => b.ratio - a.ratio || a.remaining - b.remaining)[0] || null;
+    const missedMission = closeMission
+      ? { value: closeMission.ratio >= 70 ? 'Knapp dran' : 'Offener Hebel', body: `${closeMission.mission.title}: ${closeMission.progress}/${closeMission.target}. Noch ${closeMission.remaining} ${monthlyMissionMetricMeta(closeMission.mission.metric).unit}.` }
+      : missionStates.length
+        ? { value: 'Keine Lücke', body: 'Alle aktiven Monatsmissionen sind erledigt oder aktuell ohne Rückstand.' }
+        : { value: 'Noch frei', body: 'Erstelle 1–3 Monatsmissionen, dann erkennt das Magazine automatisch knapp verpasste Ziele.' };
+    const bestDecision = buildMonthlyMagazineBestDay(keys);
+    const compass = buildTrainingCompassModel(buildFitnessSessions('all'));
+    const nextFocus = closeMission
+      ? { value: closeMission.mission.title, body: monthlyMissionStatusText(closeMission) }
+      : (compass?.weakest?.label
+        ? { value: compass.weakest.label, body: `Für nächste Woche: ${compass.weakest.cue}` }
+        : { value: 'Ein Mini-Ziel', body: 'Wähle ein kleines Monatsziel und halte die Ausgabe bewusst fokussiert.' });
+    const score = Math.round(clampNumber((missionSummary.average * 0.42) + Math.min(30, achievements.length * 10) + Math.min(18, Math.max(0, points) / 90) + Math.min(10, sessions.length * 2), 0, 100));
+    const cover = monthlyMagazineCoverUrl(score);
+    return {
+      monthKey,
+      label: monthKeyLabel(monthKey),
+      isComplete,
+      score,
+      cover,
+      stats: [
+        { label: 'Missionen', value: missionSummary.count ? `${missionSummary.completed}/${missionSummary.count}` : '0', detail: `${missionSummary.average}% Fortschritt` },
+        { label: 'Fitness', value: `${sessions.length}×`, detail: `${formatKmValue(runKm + hikeKm)} · ${formatMetersValue(ascent)}` },
+        { label: 'Konsum', value: `${cigarettes.length}×`, detail: `${smokeFreeEvenings} rauchfreie Abende · ${alcoholUnits.length} Alkohol-Einheiten` },
+        { label: 'Fokus', value: `${tasksDone.length}`, detail: `Tasks · ${routines} Routinen` }
+      ],
+      achievements: achievements.length ? achievements : [{ icon: 'reward', label: 'Ausgabe startet', value: 'Live', detail: 'Logge diesen Monat erste Signale, dann füllt sich das Magazine automatisch.' }],
+      strongestPattern,
+      missedMission,
+      bestDecision,
+      nextFocus
+    };
+  }
+
+  function renderMonthlyMagazine() {
+    if (!els.monthlyMagazine) return;
+    const magazine = buildMonthlyMagazineReview(currentMonthKey());
+    if (els.monthlyMagazineSummary) els.monthlyMagazineSummary.textContent = `${magazine.score}% · ${magazine.isComplete ? 'Monatsfinale' : 'Live-Ausgabe'}`;
+    if (els.monthlyMagazineMobileSummary) els.monthlyMagazineMobileSummary.textContent = `${magazine.score}% · ${magazine.cover.label}`;
+    const coverStyle = `background-image:linear-gradient(180deg,rgba(5,9,16,.08),rgba(5,9,16,.78)),url('${escapeHtml(magazine.cover.url)}')`;
+    els.monthlyMagazine.innerHTML = `<article class="monthly-magazine-card">
+      <div class="monthly-magazine-cover" style="${coverStyle}">
+        <div class="monthly-magazine-cover-top"><span>Life Magazine</span><b>${escapeHtml(magazine.isComplete ? 'Monatsfinale' : 'Live Preview')}</b></div>
+        <div class="monthly-magazine-cover-copy"><p>${escapeHtml(magazine.cover.label)}</p><h3>${escapeHtml(magazine.label)}</h3><span>Titelbild aus stage-21–23 · Supabase Storage</span></div>
+        <div class="monthly-magazine-score"><strong>${magazine.score}%</strong><span>Issue Score</span></div>
+      </div>
+      <div class="monthly-magazine-content">
+        <div class="monthly-magazine-stats">${magazine.stats.map(item => `<article><small>${escapeHtml(item.label)}</small><strong>${escapeHtml(item.value)}</strong><span>${escapeHtml(item.detail)}</span></article>`).join('')}</div>
+        <section class="monthly-magazine-achievements" aria-label="Top-Erfolge des Monats">
+          <div><p class="eyebrow">Top-Erfolge</p><h4>Was diesen Monat glänzt</h4></div>
+          <div class="monthly-magazine-achievement-grid">${magazine.achievements.map(item => `<article><span aria-hidden="true">${svgIcon(item.icon, 'ui-icon')}</span><small>${escapeHtml(item.label)}</small><strong>${escapeHtml(item.value)}</strong><em>${escapeHtml(item.detail)}</em></article>`).join('')}</div>
+        </section>
+        <div class="monthly-magazine-story-grid">
+          <article><small>Stärkstes Muster</small><strong>${escapeHtml(magazine.strongestPattern.value)}</strong><p>${escapeHtml(magazine.strongestPattern.body)}</p></article>
+          <article><small>Knapp verpasst</small><strong>${escapeHtml(magazine.missedMission.value)}</strong><p>${escapeHtml(magazine.missedMission.body)}</p></article>
+          <article><small>${escapeHtml(magazine.bestDecision.title)}</small><strong>${escapeHtml(magazine.bestDecision.value)}</strong><p>${escapeHtml(magazine.bestDecision.body)}</p></article>
+          <article class="is-focus"><small>Nächster Fokus</small><strong>${escapeHtml(magazine.nextFocus.value)}</strong><p>${escapeHtml(magazine.nextFocus.body)}</p></article>
+        </div>
+      </div>
+    </article>`;
+  }
+
 
   function toggleMonthlyMissionForm() {
     monthlyMissionFormOpen = !monthlyMissionFormOpen;

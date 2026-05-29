@@ -3907,3 +3907,40 @@ body.light .training-compass-footer{background:rgba(74,215,209,.09);border-color
   .personal-best-grid{grid-template-columns:1fr}
   .personal-best-card{min-height:0;border-radius:21px}
 }
+
+/* v115: Monthly Magazine Review */
+.monthly-magazine-panel{position:relative;overflow:hidden}
+.monthly-magazine-panel:before{content:"";position:absolute;left:-120px;top:-160px;width:360px;height:360px;border-radius:50%;background:radial-gradient(circle,rgba(74,215,209,.15),transparent 68%);pointer-events:none}
+.monthly-magazine-panel-head,.monthly-magazine-shell{position:relative;z-index:1}
+.monthly-magazine-card{display:grid;grid-template-columns:minmax(240px,.82fr) minmax(0,1.18fr);gap:16px;align-items:stretch}
+.monthly-magazine-cover{position:relative;min-height:440px;border-radius:32px;padding:20px;overflow:hidden;background-size:cover;background-position:center;background-color:rgba(74,215,209,.1);border:1px solid rgba(255,255,255,.1);box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 22px 48px rgba(0,0,0,.22);display:flex;flex-direction:column;justify-content:space-between;color:#fff}
+.monthly-magazine-cover:before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 30% 12%,rgba(255,255,255,.22),transparent 36%),linear-gradient(145deg,rgba(74,215,209,.22),rgba(143,240,167,.08));pointer-events:none}
+.monthly-magazine-cover-top,.monthly-magazine-cover-copy,.monthly-magazine-score{position:relative;z-index:1}
+.monthly-magazine-cover-top{display:flex;justify-content:space-between;gap:12px;align-items:center;text-transform:uppercase;letter-spacing:.12em;font-size:.68rem;font-weight:950}
+.monthly-magazine-cover-top span{padding:8px 10px;border-radius:999px;background:rgba(0,0,0,.28);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.16)}
+.monthly-magazine-cover-top b{padding:8px 10px;border-radius:999px;background:rgba(74,215,209,.18);border:1px solid rgba(255,255,255,.16)}
+.monthly-magazine-cover-copy p{margin:0 0 7px;text-transform:uppercase;letter-spacing:.16em;font-size:.72rem;font-weight:950;opacity:.82}
+.monthly-magazine-cover-copy h3{margin:0;font-size:clamp(2rem,5vw,3.4rem);line-height:.9;letter-spacing:-.08em;text-shadow:0 14px 34px rgba(0,0,0,.36)}
+.monthly-magazine-cover-copy span{display:block;margin-top:10px;font-size:.78rem;font-weight:850;opacity:.75}
+.monthly-magazine-score{width:108px;height:108px;border-radius:34px;background:rgba(0,0,0,.32);border:1px solid rgba(255,255,255,.16);display:grid;place-items:center;text-align:center;backdrop-filter:blur(16px)}
+.monthly-magazine-score strong{font-size:1.85rem;line-height:1;letter-spacing:-.06em}.monthly-magazine-score span{text-transform:uppercase;letter-spacing:.1em;font-size:.62rem;font-weight:950;opacity:.72}
+.monthly-magazine-content{display:grid;gap:14px;min-width:0}
+.monthly-magazine-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.monthly-magazine-stats article,.monthly-magazine-achievements,.monthly-magazine-story-grid article{border-radius:24px;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.075);padding:14px;min-width:0}
+.monthly-magazine-stats small,.monthly-magazine-story-grid small,.monthly-magazine-achievement-grid small{display:block;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;font-size:.64rem;font-weight:950;margin-bottom:6px}
+.monthly-magazine-stats strong{display:block;font-size:1.2rem;letter-spacing:-.045em}.monthly-magazine-stats span{display:block;margin-top:5px;color:var(--muted);font-size:.76rem;line-height:1.28;font-weight:760}
+.monthly-magazine-achievements{display:grid;gap:12px;background:linear-gradient(135deg,rgba(74,215,209,.09),rgba(143,240,167,.045));border-color:rgba(74,215,209,.14)}
+.monthly-magazine-achievements h4{margin:2px 0 0;font-size:1.16rem;letter-spacing:-.035em}
+.monthly-magazine-achievement-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.monthly-magazine-achievement-grid article{position:relative;display:grid;gap:7px;padding:13px;border-radius:22px;background:rgba(0,0,0,.11);border:1px solid rgba(255,255,255,.075);overflow:hidden}
+.monthly-magazine-achievement-grid article:after{content:"";position:absolute;right:-28px;top:-34px;width:92px;height:92px;border-radius:50%;background:rgba(143,240,167,.08)}
+.monthly-magazine-achievement-grid span{position:relative;z-index:1;width:36px;height:36px;border-radius:15px;display:grid;place-items:center;color:var(--primary);background:rgba(74,215,209,.12)}
+.monthly-magazine-achievement-grid .ui-icon{width:19px;height:19px}.monthly-magazine-achievement-grid strong{position:relative;z-index:1;font-size:1.18rem;letter-spacing:-.045em}.monthly-magazine-achievement-grid em{position:relative;z-index:1;font-style:normal;color:var(--muted);font-size:.76rem;line-height:1.3;font-weight:760}
+.monthly-magazine-story-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.monthly-magazine-story-grid strong{display:block;margin-bottom:7px;font-size:1.08rem;letter-spacing:-.04em}.monthly-magazine-story-grid p{margin:0;color:var(--muted);font-size:.84rem;line-height:1.38;font-weight:720}
+.monthly-magazine-story-grid article.is-focus{background:linear-gradient(135deg,rgba(143,240,167,.11),rgba(74,215,209,.07));border-color:rgba(143,240,167,.18)}
+body.light .monthly-magazine-panel:before{background:radial-gradient(circle,rgba(13,151,149,.12),transparent 68%)}
+body.light .monthly-magazine-stats article,body.light .monthly-magazine-story-grid article,body.light .monthly-magazine-achievements{background:rgba(255,255,255,.76);border-color:rgba(17,36,58,.08)}
+body.light .monthly-magazine-achievement-grid article{background:rgba(255,255,255,.58);border-color:rgba(17,36,58,.08)}
+@media (max-width:1100px){.monthly-magazine-card{grid-template-columns:1fr}.monthly-magazine-cover{min-height:360px}.monthly-magazine-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.monthly-magazine-mobile-section .monthly-magazine-panel{padding:14px}.monthly-magazine-card{gap:12px}.monthly-magazine-cover{min-height:320px;border-radius:26px;padding:16px}.monthly-magazine-cover-copy h3{font-size:2.15rem}.monthly-magazine-score{width:92px;height:92px;border-radius:28px}.monthly-magazine-stats,.monthly-magazine-achievement-grid,.monthly-magazine-story-grid{grid-template-columns:1fr}.monthly-magazine-stats article,.monthly-magazine-achievements,.monthly-magazine-story-grid article{border-radius:21px;padding:13px}.monthly-magazine-achievement-grid article{grid-template-columns:auto 1fr;align-items:center}.monthly-magazine-achievement-grid article small,.monthly-magazine-achievement-grid article em{grid-column:2}.monthly-magazine-achievement-grid article strong{grid-column:2}}
