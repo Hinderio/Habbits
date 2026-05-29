@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v113-task-links-images-detail';
+  const APP_DATA_SCHEMA_VERSION = 'v114-training-compass-best-museum';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -3335,12 +3335,12 @@
   function loadFitnessMobileSectionState() {
     try {
       const parsed = JSON.parse(localStorage.getItem(FITNESS_MOBILE_SECTIONS_KEY) || '{}');
-      return ['jogging', 'hiking', 'summary'].reduce((acc, key) => {
+      return ['jogging', 'hiking', 'compass', 'bests', 'summary'].reduce((acc, key) => {
         acc[key] = parsed[key] !== false;
         return acc;
       }, {});
     } catch (error) {
-      return { jogging: true, hiking: true, summary: true };
+      return { jogging: true, hiking: true, compass: true, bests: true, summary: true };
     }
   }
 
@@ -7703,6 +7703,219 @@
     </article>`;
   }
 
+
+  function currentIsoWeekKeys() {
+    const start = startOfIsoWeek(new Date());
+    return Array.from({ length: 7 }, (_, index) => {
+      const day = new Date(start);
+      day.setDate(start.getDate() + index);
+      return toDateKey(day);
+    });
+  }
+
+  function fitnessHabitMatchesKeywords(habit = {}, keywords = [], icons = []) {
+    const normalized = normalizeHabit(habit);
+    const name = `${normalized.name || ''} ${normalized.description || ''} ${normalized.unit || ''}`.toLowerCase();
+    const icon = habitIconKey(normalized);
+    return icons.includes(icon) || keywords.some(keyword => name.includes(keyword));
+  }
+
+  function countHabitEntriesForFitnessKeywords(weekKeys = [], keywords = [], icons = []) {
+    const weekSet = new Set(weekKeys);
+    const habitById = new Map(state.habits.map(habit => [habit.id, normalizeHabit(habit)]));
+    return visibleHabitEntries()
+      .filter(entry => weekSet.has(toDateKey(entry.occurred_at)))
+      .filter(entry => {
+        const habit = habitById.get(entry.habit_id);
+        return habit && !habit.is_archived && fitnessHabitMatchesKeywords(habit, keywords, icons);
+      }).length;
+  }
+
+  function fitnessCompassAreaState(score = 0) {
+    const safeScore = Math.round(clampNumber(score, 0, 100));
+    if (safeScore >= 80) return { score: safeScore, label: 'stark', tone: 'strong' };
+    if (safeScore >= 55) return { score: safeScore, label: 'solide', tone: 'good' };
+    if (safeScore >= 30) return { score: safeScore, label: 'ausbaufähig', tone: 'watch' };
+    return { score: safeScore, label: 'unterversorgt', tone: 'low' };
+  }
+
+  function buildTrainingCompassModel(allSessions = []) {
+    const weekKeys = currentIsoWeekKeys();
+    const weekSet = new Set(weekKeys);
+    const weekSessions = allSessions.filter(session => weekSet.has(toDateKey(session.date)));
+    const enduranceSessions = weekSessions.filter(session => ['jogging', 'hiking'].includes(session.type));
+    const enduranceKm = sum(enduranceSessions.map(session => session.distanceKm));
+    const strengthEntries = countHabitEntriesForFitnessKeywords(weekKeys, ['kraft', 'strength', 'liegest', 'push', 'squat', 'kniebeuge', 'plank', 'core', 'bodyweight', 'muskel'], ['pushups']);
+    const mobilityEntries = countHabitEntriesForFitnessKeywords(weekKeys, ['mobility', 'mobilität', 'mobilitaet', 'dehnen', 'stretch', 'yoga', 'beweglichkeit', 'faszien', 'rücken', 'ruecken', 'nacken'], ['standingDesk']);
+    const recoveryEntries = countHabitEntriesForFitnessKeywords(weekKeys, ['meditation', 'atem', 'breath', 'ruhe', 'schlaf', 'recovery', 'regeneration', 'entspann', 'mind', 'pause'], ['meditation']);
+    const routineDays = weekKeys.filter(key => Boolean(morningRoutineCompletedLog(key))).length;
+    const activeRecoverySignals = recoveryEntries + Math.min(3, routineDays);
+    const enduranceScore = clampNumber((enduranceSessions.length / 3) * 62 + (enduranceKm / 18) * 38, 0, 100);
+    const strengthScore = clampNumber((strengthEntries / 2) * 100, 0, 100);
+    const mobilityScore = clampNumber((mobilityEntries / 3) * 100, 0, 100);
+    const recoveryScore = clampNumber((activeRecoverySignals / 4) * 78 + (weekSessions.length <= 2 ? 20 : 8), 0, 100);
+    const areas = [
+      { key: 'strength', label: 'Kraft', icon: 'pushups', angle: -45, metric: `${strengthEntries} Log${strengthEntries === 1 ? '' : 's'}`, cue: strengthEntries ? 'Kraftreiz ist sichtbar. Halte zwei kurze Blöcke pro Woche.' : 'Unterversorgt: 6 Minuten Bodyweight reichen als Start.', ...fitnessCompassAreaState(strengthScore) },
+      { key: 'endurance', label: 'Ausdauer', icon: 'jogging', angle: 45, metric: `${enduranceSessions.length} Session${enduranceSessions.length === 1 ? '' : 's'} · ${formatKmValue(enduranceKm)}`, cue: enduranceSessions.length ? 'Cardio-Momentum ist aktiv. Progression ruhig halten.' : 'Diese Woche fehlt noch eine lockere Ausdauer-Einheit.', ...fitnessCompassAreaState(enduranceScore) },
+      { key: 'mobility', label: 'Mobility', icon: 'standingDesk', angle: 135, metric: `${mobilityEntries} Log${mobilityEntries === 1 ? '' : 's'}`, cue: mobilityEntries ? 'Beweglichkeit ist abgedeckt. Perfekt als Erhaltung.' : 'Ein kurzer Hüft-/Rücken-Flow würde die Woche ausgleichen.', ...fitnessCompassAreaState(mobilityScore) },
+      { key: 'recovery', label: 'Regeneration', icon: 'meditation', angle: 225, metric: `${activeRecoverySignals} Signal${activeRecoverySignals === 1 ? '' : 'e'}`, cue: activeRecoverySignals ? 'Recovery-Signale vorhanden. Schlaf und ruhige Minuten schützen Momentum.' : 'Plane bewusst einen Reset: Atemtechnik, Spaziergang oder früher Feierabend.', ...fitnessCompassAreaState(recoveryScore) }
+    ];
+    const weakest = [...areas].sort((a, b) => a.score - b.score)[0] || areas[0];
+    const balance = Math.round(average(areas.map(area => area.score)) || 0);
+    const weekInfo = isoWeekInfo(new Date());
+    return { areas, weakest, balance, weekLabel: `KW ${weekInfo.week}` };
+  }
+
+  function renderTrainingCompass(allSessions = []) {
+    const model = buildTrainingCompassModel(allSessions);
+    const strongest = [...model.areas].sort((a, b) => b.score - a.score)[0] || model.areas[0];
+    return `<details class="mobile-fitness-section fitness-compass-section" data-fitness-section="compass" open>
+      <summary><span>Training Compass</span><small>${escapeHtml(model.weakest.label)} braucht Fokus · ${model.balance}% Balance</small></summary>
+      <section class="training-compass-card fitness-intelligence-card">
+        <div class="training-compass-head">
+          <div><p class="eyebrow">Training Compass</p><h3>Wochenbalance statt Trainingsliste</h3><span>Kraft, Ausdauer, Mobility und Regeneration aus deinen bestehenden Logs.</span></div>
+          <span class="badge muted">${escapeHtml(model.weekLabel)}</span>
+        </div>
+        <div class="training-compass-body">
+          <div class="training-compass-dial" style="--needle-angle:${model.weakest.angle}deg" aria-label="Unterversorgter Bereich: ${escapeHtml(model.weakest.label)}">
+            <span class="training-compass-ring"></span>
+            <span class="training-compass-needle"></span>
+            <div class="training-compass-center"><small>Fokus</small><strong>${escapeHtml(model.weakest.label)}</strong><span>${model.balance}% Balance</span></div>
+          </div>
+          <div class="training-compass-quadrants">
+            ${model.areas.map(area => `<article class="training-compass-area is-${escapeHtml(area.key)} is-${escapeHtml(area.tone)}">
+              <div class="training-compass-area-head"><span class="training-compass-area-icon" aria-hidden="true">${svgIcon(area.icon, 'ui-icon')}</span><div><strong>${escapeHtml(area.label)}</strong><small>${escapeHtml(area.metric)}</small></div><b>${area.score}%</b></div>
+              <div class="training-compass-bar"><i style="width:${area.score}%"></i></div>
+              <p>${escapeHtml(area.cue)}</p>
+            </article>`).join('')}
+          </div>
+        </div>
+        <div class="training-compass-footer"><strong>Next Best Move</strong><span>${escapeHtml(model.weakest.cue)}</span><em>Stärkster Bereich: ${escapeHtml(strongest.label)} · ${strongest.score}%</em></div>
+      </section>
+    </details>`;
+  }
+
+  function formatMonthKeyLabel(monthKey = '') {
+    const [year, month] = String(monthKey || '').split('-').map(Number);
+    if (!year || !month) return '–';
+    return new Date(year, month - 1, 15).toLocaleDateString('de-CH', { month: 'short', year: 'numeric' });
+  }
+
+  function monthKeyFromDate(value) {
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  }
+
+  function buildBestSmokePause() {
+    const cigarettes = [...visibleCigarettes()].sort((a, b) => new Date(a.smoked_at) - new Date(b.smoked_at));
+    let bestMinutes = 0;
+    let bestLabel = '';
+    cigarettes.forEach((cigarette, index) => {
+      const previous = cigarettes[index - 1];
+      if (!previous) return;
+      const minutes = minutesBetweenIfNotPaused(previous.smoked_at, cigarette.smoked_at, { scope: 'smoke' });
+      if (minutes != null && minutes > bestMinutes) {
+        bestMinutes = minutes;
+        bestLabel = `${formatDateTime(previous.smoked_at)} → ${formatDateTime(cigarette.smoked_at)}`;
+      }
+    });
+    const latest = cigarettes.at(-1);
+    if (latest) {
+      const currentMinutes = minutesBetweenIfNotPaused(latest.smoked_at, nowIso(), { scope: 'smoke' });
+      if (currentMinutes != null && currentMinutes > bestMinutes) {
+        bestMinutes = currentMinutes;
+        bestLabel = `läuft seit ${formatDateTime(latest.smoked_at)}`;
+      }
+    }
+    return bestMinutes ? { value: formatDurationLabel(bestMinutes), detail: bestLabel || 'längste dokumentierte Pause' } : { value: 'Noch offen', detail: 'Sobald zwei Rauchlogs existieren, erscheint hier deine längste Pause.' };
+  }
+
+  function buildBestRunningWeek(joggingSessions = []) {
+    const weeks = new Map();
+    joggingSessions.forEach(session => {
+      const info = isoWeekInfo(session.date);
+      if (!info.key) return;
+      const current = weeks.get(info.key) || { key: info.key, week: info.week, year: info.year, km: 0, sessions: 0 };
+      current.km += Number(session.distanceKm || 0);
+      current.sessions += 1;
+      weeks.set(info.key, current);
+    });
+    const best = [...weeks.values()].sort((a, b) => b.km - a.km || b.sessions - a.sessions)[0];
+    return best ? { value: formatKmValue(best.km), detail: `KW ${best.week} · ${best.sessions} Run${best.sessions === 1 ? '' : 's'}` } : { value: 'Noch offen', detail: 'Logge Jogging-Distanzen, dann entsteht deine beste Laufwoche.' };
+  }
+
+  function buildStrongestPointsMonth() {
+    const months = new Map();
+    visibleLedgerPoints().forEach(point => {
+      const key = monthKeyFromDate(point.earned_at);
+      if (!key) return;
+      months.set(key, (months.get(key) || 0) + Number(point.points || 0));
+    });
+    visibleCigarettes()
+      .filter(cigarette => !state.pointsLedger.some(point => point.source_type === 'cigarette' && point.source_id === cigarette.id))
+      .forEach(cigarette => {
+        const key = monthKeyFromDate(cigarette.smoked_at);
+        if (!key) return;
+        months.set(key, (months.get(key) || 0) + Number(cigarette.points || 0));
+      });
+    const best = [...months.entries()].sort((a, b) => b[1] - a[1])[0];
+    return best ? { value: `${Math.round(best[1]).toLocaleString('de-CH')} Pkt.`, detail: formatMonthKeyLabel(best[0]) } : { value: 'Noch offen', detail: 'Der stärkste Monat entsteht aus deinem Punkte-Ledger.' };
+  }
+
+  function buildLongestTaskStreak() {
+    const keys = [...new Set(state.tasks.map(normalizeTask)
+      .filter(task => task.status === 'done' && (task.completed_at || task.updated_at))
+      .map(task => toDateKey(task.completed_at || task.updated_at))
+      .filter(Boolean))].sort();
+    let best = 0;
+    let current = 0;
+    let previousTime = 0;
+    keys.forEach(key => {
+      const time = new Date(`${key}T12:00:00`).getTime();
+      current = previousTime && Math.round((time - previousTime) / DAY_MS) === 1 ? current + 1 : 1;
+      best = Math.max(best, current);
+      previousTime = time;
+    });
+    return best ? { value: `${best} Tag${best === 1 ? '' : 'e'}`, detail: 'längste Serie mit erledigten Aufgaben' } : { value: 'Noch offen', detail: 'Erledigte Aufgaben bauen hier eine Serie auf.' };
+  }
+
+  function buildFitnessPersonalBests(allSessions = []) {
+    const hikeSessions = allSessions.filter(session => session.type === 'hiking');
+    const joggingSessions = allSessions.filter(session => session.type === 'jogging');
+    const bestHikeAscent = [...hikeSessions].sort((a, b) => Number(b.ascent || 0) - Number(a.ascent || 0))[0] || null;
+    const mountainCollection = buildMountainCollection(hikeSessions);
+    return [
+      { key: 'smoke', label: 'Längste Rauchpause', icon: 'smoke', ...buildBestSmokePause() },
+      { key: 'ascent', label: 'Meiste Höhenmeter', icon: 'hiking', value: bestHikeAscent ? formatMetersValue(bestHikeAscent.ascent) : 'Noch offen', detail: bestHikeAscent ? `${escapeHtml(bestHikeAscent.dateLabel)} · kumuliert ${formatMetersValue(mountainCollection.totalAscent)}` : 'Eine Wanderung mit hm schaltet diesen Pokal frei.' },
+      { key: 'runweek', label: 'Beste Laufwoche', icon: 'jogging', ...buildBestRunningWeek(joggingSessions) },
+      { key: 'month', label: 'Stärkster Monat', icon: 'reward', ...buildStrongestPointsMonth() },
+      { key: 'tasks', label: 'Task-Serie', icon: 'tasks', ...buildLongestTaskStreak() }
+    ];
+  }
+
+  function renderPersonalBestMuseum(allSessions = []) {
+    const bests = buildFitnessPersonalBests(allSessions);
+    const unlocked = bests.filter(best => !String(best.value || '').includes('Noch offen')).length;
+    return `<details class="mobile-fitness-section fitness-bests-section" data-fitness-section="bests" open>
+      <summary><span>Personal Best Museum</span><small>${unlocked}/${bests.length} Pokale sichtbar</small></summary>
+      <section class="personal-best-museum fitness-intelligence-card">
+        <div class="personal-best-head">
+          <div><p class="eyebrow">Personal Best Museum</p><h3>Deine Ruhmeshalle</h3><span>Automatisch aus Konsum, Fitness, Tasks und Punkten berechnet.</span></div>
+          <span class="personal-best-badge">${unlocked}/${bests.length}</span>
+        </div>
+        <div class="personal-best-grid">
+          ${bests.map(best => `<article class="personal-best-card is-${escapeHtml(best.key)} ${String(best.value || '').includes('Noch offen') ? 'is-locked' : 'is-unlocked'}">
+            <div class="personal-best-icon" aria-hidden="true">${svgIcon(best.icon, 'ui-icon')}</div>
+            <small>${escapeHtml(best.label)}</small>
+            <strong>${escapeHtml(best.value)}</strong>
+            <span>${escapeHtml(best.detail)}</span>
+          </article>`).join('')}
+        </div>
+      </section>
+    </details>`;
+  }
+
   function renderFitnessHub() {
     if (!els.fitnessHubContent) return;
     syncHabitsExperienceUi();
@@ -7741,6 +7954,10 @@
       <section class="fitness-journey-grid">
         ${renderFitnessJourneyCard('jogging', joggingSessions, runningHabit)}
         ${renderFitnessJourneyCard('hiking', hikingSessions, hikingHabit)}
+      </section>
+      <section class="fitness-intelligence-grid" aria-label="Training Compass und persönliche Bestleistungen">
+        ${renderTrainingCompass(allSessions)}
+        ${renderPersonalBestMuseum(allSessions)}
       </section>
       <details class="mobile-fitness-section fitness-summary-section" data-fitness-section="summary" open>
         <summary><span>Summary</span><small>${selectedSession ? `${escapeHtml(selectedSession.meta.label)} · ${formatKmValue(selectedSession.distanceKm)}` : 'Session-Fokus'}</small></summary>

@@ -3682,3 +3682,228 @@ body.light .task-detail-facts article,body.light .task-detail-image{background:r
   .task-image-grid{grid-template-columns:1fr}
   .task-detail-image img{height:auto;max-height:58vh}
 }
+
+/* v114 · Training Compass + Personal Best Museum */
+.fitness-intelligence-grid{
+  display:grid;
+  grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);
+  gap:14px;
+  align-items:stretch;
+}
+.fitness-intelligence-card{
+  min-width:0;
+  height:100%;
+  padding:18px;
+  border-radius:30px;
+  background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.032));
+  border:1px solid rgba(255,255,255,.075);
+  box-shadow:0 18px 42px rgba(0,0,0,.08),inset 0 1px 0 rgba(255,255,255,.06);
+  overflow:hidden;
+}
+.training-compass-head,
+.personal-best-head{
+  display:flex;
+  justify-content:space-between;
+  gap:14px;
+  align-items:flex-start;
+  margin-bottom:16px;
+}
+.training-compass-head h3,
+.personal-best-head h3{margin:2px 0 5px;font-size:1.18rem;letter-spacing:-.035em}
+.training-compass-head span:not(.badge),
+.personal-best-head span:not(.personal-best-badge){display:block;color:var(--muted);line-height:1.38;font-weight:720}
+.training-compass-body{
+  display:grid;
+  grid-template-columns:220px minmax(0,1fr);
+  gap:16px;
+  align-items:center;
+}
+.training-compass-dial{
+  --needle-angle:45deg;
+  position:relative;
+  width:100%;
+  max-width:220px;
+  aspect-ratio:1;
+  margin-inline:auto;
+  display:grid;
+  place-items:center;
+  border-radius:50%;
+  background:
+    radial-gradient(circle at 50% 50%,rgba(11,24,37,.92) 0 38%,transparent 39%),
+    conic-gradient(from -45deg,rgba(143,240,167,.32),rgba(37,193,120,.24),rgba(244,182,63,.26),rgba(74,215,209,.28),rgba(143,240,167,.32));
+  border:1px solid rgba(255,255,255,.1);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.1),0 22px 50px rgba(0,0,0,.18);
+}
+.training-compass-ring{
+  position:absolute;
+  inset:16px;
+  border-radius:50%;
+  border:1px dashed rgba(255,255,255,.2);
+}
+.training-compass-dial:before,
+.training-compass-dial:after{
+  content:"";
+  position:absolute;
+  background:rgba(255,255,255,.16);
+  border-radius:999px;
+}
+.training-compass-dial:before{width:72%;height:1px;left:14%;top:50%}
+.training-compass-dial:after{height:72%;width:1px;left:50%;top:14%}
+.training-compass-needle{
+  position:absolute;
+  left:50%;
+  top:50%;
+  width:4px;
+  height:42%;
+  border-radius:999px;
+  transform-origin:50% 0;
+  transform:rotate(var(--needle-angle)) translateY(-2px);
+  background:linear-gradient(180deg,#fff,rgba(102,231,255,.82));
+  box-shadow:0 0 18px rgba(102,231,255,.35);
+}
+.training-compass-needle:after{
+  content:"";
+  position:absolute;
+  left:50%;
+  bottom:-6px;
+  width:14px;
+  height:14px;
+  border-radius:50%;
+  transform:translateX(-50%);
+  background:#fff;
+  box-shadow:0 0 0 5px rgba(74,215,209,.16);
+}
+.training-compass-center{
+  position:relative;
+  z-index:2;
+  width:116px;
+  min-height:116px;
+  border-radius:38px;
+  display:grid;
+  place-items:center;
+  align-content:center;
+  gap:3px;
+  text-align:center;
+  background:linear-gradient(135deg,rgba(74,215,209,.95),rgba(143,240,167,.9));
+  color:#00131c;
+  box-shadow:0 18px 36px rgba(0,0,0,.2);
+}
+.training-compass-center small,
+.training-compass-center span{text-transform:uppercase;letter-spacing:.1em;font-size:.62rem;font-weight:950;opacity:.7}
+.training-compass-center strong{font-size:1.05rem;letter-spacing:-.04em}
+.training-compass-quadrants{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.training-compass-area{
+  min-width:0;
+  padding:13px;
+  border-radius:22px;
+  background:rgba(255,255,255,.055);
+  border:1px solid rgba(255,255,255,.07);
+  display:grid;
+  gap:9px;
+}
+.training-compass-area.is-low{border-color:rgba(255,112,112,.22);background:linear-gradient(135deg,rgba(255,112,112,.09),rgba(255,255,255,.04))}
+.training-compass-area.is-watch{border-color:rgba(255,184,77,.22);background:linear-gradient(135deg,rgba(255,184,77,.09),rgba(255,255,255,.04))}
+.training-compass-area.is-good,.training-compass-area.is-strong{border-color:rgba(143,240,167,.18)}
+.training-compass-area-head{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:9px;align-items:center}
+.training-compass-area-icon{width:38px;height:38px;border-radius:15px;display:grid;place-items:center;background:rgba(74,215,209,.12);color:var(--primary)}
+.training-compass-area-icon .ui-icon{width:20px;height:20px}
+.training-compass-area strong{display:block;font-size:.95rem}
+.training-compass-area small{display:block;color:var(--muted);font-size:.72rem;font-weight:850;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.training-compass-area b{font-size:.95rem;color:var(--primary)}
+.training-compass-bar{height:7px;border-radius:999px;background:rgba(255,255,255,.075);overflow:hidden}
+.training-compass-bar i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--primary),#8ff0a7)}
+.training-compass-area p{margin:0;color:var(--muted);font-size:.8rem;line-height:1.34}
+.training-compass-footer{
+  margin-top:14px;
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto;
+  gap:10px;
+  align-items:center;
+  padding:12px 14px;
+  border-radius:20px;
+  background:rgba(74,215,209,.075);
+  border:1px solid rgba(74,215,209,.12);
+}
+.training-compass-footer strong{color:var(--primary)}
+.training-compass-footer span{color:var(--text);font-weight:820;line-height:1.34}
+.training-compass-footer em{font-style:normal;color:var(--muted);font-size:.78rem;font-weight:850;white-space:nowrap}
+.personal-best-head{margin-bottom:14px}
+.personal-best-badge{
+  min-width:54px;
+  height:54px;
+  border-radius:20px;
+  display:grid;
+  place-items:center;
+  color:#00131c;
+  background:linear-gradient(135deg,var(--primary),#8ff0a7);
+  font-weight:950;
+  box-shadow:0 18px 34px rgba(74,215,209,.2);
+}
+.personal-best-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.personal-best-card{
+  position:relative;
+  min-width:0;
+  min-height:146px;
+  display:grid;
+  align-content:start;
+  gap:7px;
+  padding:14px;
+  border-radius:23px;
+  background:rgba(255,255,255,.055);
+  border:1px solid rgba(255,255,255,.07);
+  overflow:hidden;
+}
+.personal-best-card:after{
+  content:"";
+  position:absolute;
+  right:-28px;
+  top:-28px;
+  width:84px;
+  height:84px;
+  border-radius:50%;
+  background:rgba(143,240,167,.08);
+}
+.personal-best-card.is-unlocked{border-color:rgba(143,240,167,.18);background:linear-gradient(135deg,rgba(143,240,167,.08),rgba(255,255,255,.04))}
+.personal-best-card.is-locked{opacity:.78}
+.personal-best-icon{position:relative;z-index:1;width:40px;height:40px;border-radius:16px;display:grid;place-items:center;background:rgba(74,215,209,.12);color:var(--primary)}
+.personal-best-icon .ui-icon{width:21px;height:21px}
+.personal-best-card small,.personal-best-card strong,.personal-best-card span{position:relative;z-index:1}
+.personal-best-card small{color:var(--muted);text-transform:uppercase;letter-spacing:.1em;font-size:.65rem;font-weight:950}
+.personal-best-card strong{font-size:1.25rem;letter-spacing:-.045em;line-height:1.05}
+.personal-best-card span{color:var(--muted);font-size:.78rem;line-height:1.32;font-weight:760}
+body.light .fitness-intelligence-card,
+body.light .training-compass-area,
+body.light .personal-best-card{
+  background:rgba(255,255,255,.74);
+  border-color:rgba(17,36,58,.08);
+}
+body.light .training-compass-dial{
+  background:
+    radial-gradient(circle at 50% 50%,rgba(255,255,255,.95) 0 38%,transparent 39%),
+    conic-gradient(from -45deg,rgba(89,201,123,.3),rgba(37,193,120,.2),rgba(244,182,63,.22),rgba(74,215,209,.24),rgba(89,201,123,.3));
+  border-color:rgba(17,36,58,.08);
+  box-shadow:0 22px 50px rgba(42,78,104,.1);
+}
+body.light .training-compass-ring{border-color:rgba(17,36,58,.14)}
+body.light .training-compass-dial:before,
+body.light .training-compass-dial:after{background:rgba(17,36,58,.12)}
+body.light .training-compass-bar{background:rgba(17,36,58,.075)}
+body.light .training-compass-footer{background:rgba(74,215,209,.09);border-color:rgba(13,151,149,.12)}
+@media (max-width:1180px){
+  .fitness-intelligence-grid{grid-template-columns:1fr}
+  .training-compass-body{grid-template-columns:200px minmax(0,1fr)}
+}
+@media (max-width:760px){
+  .fitness-intelligence-grid{display:grid;grid-template-columns:1fr;gap:12px}
+  .fitness-intelligence-card{padding:15px;border-radius:24px}
+  .training-compass-head,
+  .personal-best-head{flex-direction:column;gap:10px}
+  .training-compass-body{grid-template-columns:1fr;gap:14px}
+  .training-compass-dial{max-width:192px}
+  .training-compass-center{width:104px;min-height:104px;border-radius:34px}
+  .training-compass-quadrants{grid-template-columns:1fr}
+  .training-compass-footer{grid-template-columns:1fr;align-items:start}
+  .training-compass-footer em{white-space:normal}
+  .personal-best-grid{grid-template-columns:1fr}
+  .personal-best-card{min-height:0;border-radius:21px}
+}
