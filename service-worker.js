@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v121-task-card-action-polish';
+const CACHE_NAME = 'habitflow-v122-task-link-typography';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/state.js',
