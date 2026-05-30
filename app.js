@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v115-monthly-magazine-review';
+  const APP_DATA_SCHEMA_VERSION = 'v134-sleep-aware-smoking-score';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -1912,6 +1912,70 @@
     return Math.max(0, Math.round((endMs - startMs) / 60000));
   }
 
+  const SMOKE_SLEEP_START_HOUR = 23;
+  const SMOKE_SLEEP_END_HOUR = 7;
+  const SMOKE_SLEEP_BRIDGE_MINUTES = 240;
+  const SMOKE_SLEEP_WAKE_MIN_HOUR = 5;
+
+  function sleepWindowForSmokeScoring(dateValue) {
+    const start = dateValue instanceof Date ? new Date(dateValue) : new Date(dateValue || nowIso());
+    if (Number.isNaN(start.getTime())) return null;
+    start.setHours(SMOKE_SLEEP_START_HOUR, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+    end.setHours(SMOKE_SLEEP_END_HOUR, 0, 0, 0);
+    return { start, end };
+  }
+
+  function sleepMinutesBetweenForSmokeScoring(startValue, endValue) {
+    const startMs = new Date(startValue || 0).getTime();
+    const endMs = new Date(endValue || 0).getTime();
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return 0;
+    let total = 0;
+    const cursor = new Date(startMs);
+    cursor.setDate(cursor.getDate() - 1);
+    cursor.setHours(12, 0, 0, 0);
+    for (let guard = 0; guard < 14 && cursor.getTime() <= endMs + 86400000; guard += 1) {
+      const sleepWindow = sleepWindowForSmokeScoring(cursor);
+      if (sleepWindow) {
+        const overlapStart = Math.max(startMs, sleepWindow.start.getTime());
+        const overlapEnd = Math.min(endMs, sleepWindow.end.getTime());
+        if (overlapEnd > overlapStart) total += Math.round((overlapEnd - overlapStart) / 60000);
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return total;
+  }
+
+  function isPostSleepSmokeWakeTime(value) {
+    const date = new Date(value || 0);
+    if (Number.isNaN(date.getTime())) return false;
+    const hour = date.getHours();
+    return hour >= SMOKE_SLEEP_WAKE_MIN_HOUR && hour < 12;
+  }
+
+  function smokeIntervalScoring(previousCigarette, cigarette, options = {}) {
+    const startValue = previousCigarette?.smoked_at || previousCigarette?.created_at || null;
+    const endValue = cigarette?.smoked_at || cigarette?.created_at || null;
+    if (!startValue || !endValue) {
+      return { interval: null, scoringInterval: null, sleepMinutes: 0, sleepBridge: false, crossesPause: false };
+    }
+    const startMs = new Date(startValue).getTime();
+    const endMs = new Date(endValue).getTime();
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
+      return { interval: null, scoringInterval: null, sleepMinutes: 0, sleepBridge: false, crossesPause: false };
+    }
+    const crossesPause = intervalCrossesPause(startValue, endValue, { scope: 'smoke', ...options });
+    const interval = Math.max(0, Math.round((endMs - startMs) / 60000));
+    if (crossesPause) {
+      return { interval: null, scoringInterval: null, sleepMinutes: 0, sleepBridge: false, crossesPause: true };
+    }
+    const sleepMinutes = sleepMinutesBetweenForSmokeScoring(startValue, endValue);
+    const sleepBridge = interval >= SMOKE_SLEEP_BRIDGE_MINUTES && sleepMinutes >= SMOKE_SLEEP_BRIDGE_MINUTES && isPostSleepSmokeWakeTime(endValue);
+    const scoringInterval = sleepBridge ? Math.max(0, interval - sleepMinutes) : interval;
+    return { interval, scoringInterval, sleepMinutes: sleepBridge ? sleepMinutes : 0, sleepBridge, crossesPause: false };
+  }
+
   function activePauseNow(scope, targetId = null) {
     return activePausePeriods({ scope, targetId }).find(period => isWithinPauseAt(nowIso(), { scope, targetId: period.scope === 'habit' ? targetId : null })) || null;
   }
@@ -2685,6 +2749,7 @@
 
   function saveState({ skipRender = false } = {}) {
     if (state?.deletedRemoteIds) state.deletedRemoteIds = combineDeletedRemoteIds(state.deletedRemoteIds, readRemoteDeleteArchive());
+    if (Array.isArray(state?.cigarettes) && state.cigarettes.length) recalculateSmokeIntervals({ markUpdated: false });
     writeRemoteDeleteArchive(state.deletedRemoteIds);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     if (!skipRender) queueRender();
@@ -5516,7 +5581,7 @@
       return `<article class="list-card ${isEditing ? 'is-editing' : ''}">
         <div class="list-card-main">
           <h4>${formatDateTime(c.smoked_at)}</h4>
-          <p class="meta">Pause davor: <strong>${c.interval_minutes == null ? '–' : formatDuration(c.interval_minutes)}</strong>${c.alcohol_context ? ' · Alkohol-Kontext' : ''}</p>
+          <p class="meta">Pause davor: <strong>${c.interval_minutes == null ? '–' : formatDuration(c.interval_minutes)}</strong>${Number(c.scoring_sleep_deducted_minutes || 0) > 0 ? ` · aktiv gewertet: ${formatDuration(Number(c.scoring_interval_minutes || 0))}` : ''}${c.alcohol_context ? ' · Alkohol-Kontext' : ''}</p>
           ${editBlock}
         </div>
         <div class="list-actions">
@@ -10105,14 +10170,26 @@
   function recordCigarette() {
     const smokedAt = nowIso();
     const last = getLastCigarette();
-    const interval = last ? Math.max(0, Math.round((new Date(smokedAt) - new Date(last.smoked_at)) / 60000)) : null;
     const scoringContext = smokingScoringContext(last, { smoked_at: smokedAt });
-    const points = cigarettePoints(interval, scoringContext);
+    const interval = scoringContext.interval;
+    const points = cigarettePoints(scoringContext.scoringInterval, scoringContext);
     const todayAlcohol = Boolean(alcoholForDate(toDateKey(new Date()))?.consumed || alcoholUnitsOnDate(toDateKey(new Date())).length);
-    const entry = { id: uid(), smoked_at: smokedAt, interval_minutes: interval, alcohol_context: todayAlcohol, points, note: '', created_at: smokedAt, updated_at: smokedAt, synced: false };
+    const entry = {
+      id: uid(),
+      smoked_at: smokedAt,
+      interval_minutes: interval,
+      scoring_interval_minutes: scoringContext.scoringInterval,
+      scoring_sleep_deducted_minutes: scoringContext.sleepMinutes,
+      alcohol_context: todayAlcohol,
+      points,
+      note: '',
+      created_at: smokedAt,
+      updated_at: smokedAt,
+      synced: false
+    };
     state.cigarettes.push(entry);
     pendingTriggerSmokeId = entry.id;
-    addPoints('cigarette', entry.id, points, cigarettePointReason(interval, scoringContext), smokedAt);
+    addPoints('cigarette', entry.id, points, cigarettePointReason(scoringContext.scoringInterval, scoringContext), smokedAt);
     saveState();
     toast(points > 0 ? `Zigarette erfasst · +${points} Punkte` : `Zigarette erfasst · ${points} Punkte`);
     syncWithSupabase({ silent: true });
@@ -10216,21 +10293,27 @@
     const sorted = [...visibleCigarettes()].sort((a, b) => new Date(a.smoked_at) - new Date(b.smoked_at));
     sorted.forEach((c, index) => {
       const prev = sorted[index - 1] || null;
-      const crossesPause = Boolean(prev && intervalCrossesPause(prev.smoked_at, c.smoked_at, { scope: 'smoke' }));
-      const interval = prev && !crossesPause ? Math.max(0, Math.round((new Date(c.smoked_at) - new Date(prev.smoked_at)) / 60000)) : null;
-      const scoringContext = smokingScoringContext(prev && !crossesPause ? prev : null, c);
-      const points = cigarettePoints(interval, scoringContext);
-      const hasChanged = c.interval_minutes !== interval || Number(c.points || 0) !== points;
+      const scoringContext = smokingScoringContext(prev, c);
+      const interval = scoringContext.interval;
+      const scoringInterval = scoringContext.scoringInterval;
+      const sleepMinutes = scoringContext.sleepMinutes;
+      const points = cigarettePoints(scoringInterval, scoringContext);
+      const hasChanged = c.interval_minutes !== interval
+        || c.scoring_interval_minutes !== scoringInterval
+        || c.scoring_sleep_deducted_minutes !== sleepMinutes
+        || Number(c.points || 0) !== points;
       if (hasChanged) {
         c.interval_minutes = interval;
+        c.scoring_interval_minutes = scoringInterval;
+        c.scoring_sleep_deducted_minutes = sleepMinutes;
         c.points = points;
         changed = true;
       }
-      if (markUpdated && hasChanged) {
-        c.updated_at = touchedAt;
+      if (hasChanged) {
         c.synced = false;
+        if (markUpdated) c.updated_at = touchedAt;
       }
-      if (addPoints('cigarette', c.id, c.points, cigarettePointReason(interval, scoringContext), c.smoked_at)) changed = true;
+      if (addPoints('cigarette', c.id, c.points, cigarettePointReason(scoringInterval, scoringContext), c.smoked_at)) changed = true;
     });
     return changed;
   }
@@ -11600,9 +11683,15 @@ async function deleteAlcoholLog(id) {
   }
 
   function addPoints(sourceType, sourceId, points, reason, earnedAt = nowIso()) {
-    const existing = state.pointsLedger.find(p => p.source_type === sourceType && p.source_id === sourceId);
+    const matches = state.pointsLedger.filter(p => p.source_type === sourceType && p.source_id === sourceId);
+    const existing = matches[0] || null;
     if (existing) {
-      const changed = Number(existing.points || 0) !== Number(points || 0) || existing.reason !== reason || existing.earned_at !== earnedAt;
+      const duplicateIds = new Set(matches.slice(1).map(p => p.id));
+      if (duplicateIds.size) state.pointsLedger = state.pointsLedger.filter(p => !duplicateIds.has(p.id));
+      const changed = Number(existing.points || 0) !== Number(points || 0)
+        || existing.reason !== reason
+        || existing.earned_at !== earnedAt
+        || duplicateIds.size > 0;
       if (!changed) return false;
       existing.points = points;
       existing.reason = reason;
@@ -11616,8 +11705,9 @@ async function deleteAlcoholLog(id) {
     return true;
   }
 
-  function cigarettePoints(minutes, { isDaytimeInterval = false } = {}) {
+  function cigarettePoints(minutes, { sleepBridge = false } = {}) {
     if (minutes == null) return 0;
+    if (sleepBridge && minutes < 30) return 0;
     if (minutes < 30) return -40;
     if (minutes < 60) return -20;
     if (minutes < 120) return 0;
@@ -11627,10 +11717,16 @@ async function deleteAlcoholLog(id) {
   }
 
   function smokingScoringContext(previousCigarette, cigarette) {
+    const scoring = smokeIntervalScoring(previousCigarette, cigarette);
     return {
       previousSmokedAt: previousCigarette?.smoked_at || null,
       smokedAt: cigarette?.smoked_at || null,
-      isDaytimeInterval: isDaytimeSmokeInterval(previousCigarette?.smoked_at, cigarette?.smoked_at)
+      isDaytimeInterval: isDaytimeSmokeInterval(previousCigarette?.smoked_at, cigarette?.smoked_at),
+      interval: scoring.interval,
+      scoringInterval: scoring.scoringInterval,
+      sleepMinutes: scoring.sleepMinutes,
+      sleepBridge: scoring.sleepBridge,
+      crossesPause: scoring.crossesPause
     };
   }
 
@@ -11642,8 +11738,10 @@ async function deleteAlcoholLog(id) {
     return toDateKey(prev) === toDateKey(current);
   }
 
-  function cigarettePointReason(minutes, { isDaytimeInterval = false } = {}) {
+  function cigarettePointReason(minutes, { sleepBridge = false, sleepMinutes = 0, crossesPause = false } = {}) {
+    if (crossesPause) return 'Rauchpause: pausierter Zeitraum';
     if (minutes == null) return 'Erste Zigarette erfasst';
+    if (sleepBridge) return `Pause ${formatDuration(minutes)} aktiv · ${formatDuration(sleepMinutes)} Schlafzeit neutralisiert`;
     if (minutes >= 480) return `Pause ${formatDuration(minutes)} · 8h+ Bonus`;
     if (minutes >= 240) return `Pause ${formatDuration(minutes)} · 4h+ Bonus`;
     return `Pause ${formatDuration(minutes)}`;
@@ -11747,10 +11845,16 @@ async function deleteAlcoholLog(id) {
     const sorted = [...visibleCigarettes()].sort((a, b) => new Date(a.smoked_at) - new Date(b.smoked_at));
     return sorted.map((c, index) => {
       const prev = sorted[index - 1] || null;
-      const crossesPause = Boolean(prev && intervalCrossesPause(prev.smoked_at, c.smoked_at, { scope: 'smoke' }));
-      const interval = prev && !crossesPause ? minutesBetweenIfNotPaused(prev.smoked_at, c.smoked_at, { scope: 'smoke' }) : null;
-      const scoringContext = smokingScoringContext(prev && !crossesPause ? prev : null, c);
-      return { cigarette: c, previous: prev, interval_minutes: interval, interval_is_paused_bridge: crossesPause, ...scoringContext };
+      const scoringContext = smokingScoringContext(prev, c);
+      return {
+        cigarette: c,
+        previous: prev,
+        interval_minutes: scoringContext.interval,
+        scoring_interval_minutes: scoringContext.scoringInterval,
+        scoring_sleep_deducted_minutes: scoringContext.sleepMinutes,
+        interval_is_paused_bridge: scoringContext.crossesPause,
+        ...scoringContext
+      };
     });
   }
 
@@ -12950,6 +13054,7 @@ async function deleteAlcoholLog(id) {
       state.weeklyReviews = remoteWeeklyReviewRows.map(mapRemoteWeeklyReview).map(normalizeWeeklyReview);
       state.monthlyMissions = remoteMonthlyMissionRows.map(mapRemoteMonthlyMission).map(normalizeMonthlyMission);
       dedupeStateCollections(state);
+      migrateCigaretteScoring();
       return;
     }
 
@@ -12969,6 +13074,7 @@ async function deleteAlcoholLog(id) {
     state.weeklyReviews = mergeById(state.weeklyReviews || [], remoteWeeklyReviewRows, mapRemoteWeeklyReview).map(normalizeWeeklyReview);
     state.monthlyMissions = mergeById(state.monthlyMissions || [], remoteMonthlyMissionRows, mapRemoteMonthlyMission).map(normalizeMonthlyMission);
     dedupeStateCollections(state);
+    migrateCigaretteScoring();
   }
 
   async function fetchRemoteTable(table) {
