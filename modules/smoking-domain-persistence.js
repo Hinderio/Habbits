@@ -25,6 +25,14 @@
     return null;
   }
 
+  function ledgerPath(state) {
+    if (Array.isArray(state?.pointsLedger)) return ['pointsLedger'];
+    if (Array.isArray(state?.points_ledger)) return ['points_ledger'];
+    if (Array.isArray(state?.gamification?.pointsLedger)) return ['gamification', 'pointsLedger'];
+    if (Array.isArray(state?.points?.ledger)) return ['points', 'ledger'];
+    return null;
+  }
+
   function getAtPath(object, path) {
     return path.reduce((current, key) => current?.[key], object);
   }
@@ -36,6 +44,48 @@
       current = current[key];
     });
     current[path[path.length - 1]] = value;
+  }
+
+  function cigaretteReason(score) {
+    const facade = window.HabitFlowRuntime?.appDomainFacade;
+    const suffix = score?.sleepBridge ? ' · Schlafzeit neutralisiert' : '';
+    const label = facade?.getPointLabel ? facade.getPointLabel(score?.points || 0) : `${Number(score?.points || 0) > 0 ? '+' : ''}${Number(score?.points || 0)} PKT.`;
+    return `Rauchpause ${label}${suffix}`;
+  }
+
+  function normalizeLedger(state, nextState, normalizedRows) {
+    const path = ledgerPath(nextState);
+    if (!path) return false;
+    const rows = getAtPath(nextState, path);
+    if (!Array.isArray(rows) || !rows.length) return false;
+
+    const byId = new Map(normalizedRows.map(row => [row.id || row.local_id || row.smoked_at || row.created_at, row]));
+    let changed = false;
+    const nextLedger = rows.map(entry => {
+      const sourceType = entry?.source_type || entry?.sourceType;
+      const sourceId = entry?.source_id || entry?.sourceId;
+      if (sourceType !== 'cigarette' || !sourceId || !byId.has(sourceId)) return entry;
+      const cigarette = byId.get(sourceId);
+      const nextPoints = Number(cigarette.points || 0);
+      const nextReason = cigaretteReason({ points: nextPoints, sleepBridge: Boolean(cigarette.scoring_sleep_deducted_minutes) });
+      const patched = Object.assign({}, entry);
+      if (Number(patched.points || 0) !== nextPoints) {
+        patched.points = nextPoints;
+        changed = true;
+      }
+      if (patched.reason && patched.reason !== nextReason) {
+        patched.reason = nextReason;
+        changed = true;
+      }
+      if (changed) {
+        patched.updated_at = patched.updated_at || new Date().toISOString();
+        patched.synced = false;
+      }
+      return patched;
+    });
+
+    if (changed) setAtPath(nextState, path, nextLedger);
+    return changed;
   }
 
   function normalizeState(state) {
@@ -65,9 +115,10 @@
       return patched;
     });
 
-    if (!changed) return { state, changed: false };
-    const nextState = clone(state);
+    const nextState = changed ? clone(state) : clone(state);
     setAtPath(nextState, path, nextRows);
+    const ledgerChanged = normalizeLedger(state, nextState, nextRows);
+    if (!changed && !ledgerChanged) return { state, changed: false };
     return { state: nextState, changed: true };
   }
 
@@ -98,7 +149,7 @@
   };
 
   modules.register('smoking-domain-persistence', {
-    description: 'Uses smoking-domain scoring as a safe local state persistence normalizer. No UI or sync calls are triggered directly.',
+    description: 'Uses smoking-domain scoring as a safe local state and cigarette ledger normalizer. No UI or sync calls are triggered directly.',
     active: true,
     storageKey: STORAGE_KEY
   });
