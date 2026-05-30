@@ -5,9 +5,15 @@
   if (!modules || modules.has('alcohol-domain-persistence')) return;
 
   const STORAGE_KEY = 'habitflow-state-v1';
+  const DISABLE_KEY = 'habitflow-disable-alcohol-domain-persistence';
   const nativeSetItem = window.localStorage?.setItem?.bind(window.localStorage);
   const nativeGetItem = window.localStorage?.getItem?.bind(window.localStorage);
+  const nativeRemoveItem = window.localStorage?.removeItem?.bind(window.localStorage);
   if (!nativeSetItem || !nativeGetItem) return;
+
+  function isDisabled() {
+    return nativeGetItem(DISABLE_KEY) === '1' || window.HABITFLOW_DISABLE_ALCOHOL_DOMAIN_PERSISTENCE === true;
+  }
 
   function clone(value) {
     try {
@@ -57,6 +63,7 @@
   }
 
   function normalizeState(state) {
+    if (isDisabled()) return { state, changed: false, disabled: true };
     const alcohol = window.HabitFlowDomains?.alcohol;
     if (!state || typeof state !== 'object' || !alcohol?.countUnitsForDay) return { state, changed: false };
     const rows = alcoholRows(state);
@@ -102,10 +109,16 @@
   window.HabitFlowRuntime.normalizeAlcoholStateWithDomain = function normalizeAlcoholStateWithDomain(state) {
     return normalizeState(state).state;
   };
+  window.HabitFlowRuntime.setAlcoholDomainPersistenceEnabled = function setAlcoholDomainPersistenceEnabled(enabled) {
+    if (enabled && nativeRemoveItem) nativeRemoveItem(DISABLE_KEY);
+    if (!enabled) nativeSetItem(DISABLE_KEY, '1');
+    return !isDisabled();
+  };
 
   modules.register('alcohol-domain-persistence', {
     description: 'Uses alcohol-domain helpers as a conservative local aggregate normalizer. Alcohol events are never mutated.',
     active: true,
-    storageKey: STORAGE_KEY
+    storageKey: STORAGE_KEY,
+    disableKey: DISABLE_KEY
   });
 })(window);
