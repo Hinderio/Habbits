@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v116-modular-shell';
+const CACHE_NAME = 'habitflow-v117-fitness-coach-label';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/state.js',
