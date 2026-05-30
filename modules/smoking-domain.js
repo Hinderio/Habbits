@@ -56,7 +56,14 @@
   function scoreInterval(previousValue, currentValue) {
     const interval = minutesBetween(previousValue, currentValue);
     if (interval == null) {
-      return Object.freeze({ intervalMinutes: null, scoringIntervalMinutes: null, sleepDeductedMinutes: 0, sleepBridge: false, points: 0, reason: 'Rauchpause: erster Eintrag' });
+      return Object.freeze({
+        intervalMinutes: null,
+        scoringIntervalMinutes: null,
+        sleepDeductedMinutes: 0,
+        sleepBridge: false,
+        points: 0,
+        reason: 'Erste Zigarette erfasst'
+      });
     }
     const sleep = sleepMinutesBetween(previousValue, currentValue);
     const sleepBridge = interval >= MIN_SLEEP_BRIDGE_MINUTES && sleep >= MIN_SLEEP_BRIDGE_MINUTES && isMorningAfterSleep(currentValue);
@@ -68,13 +75,13 @@
       sleepDeductedMinutes: sleepBridge ? sleep : 0,
       sleepBridge,
       points,
-      reason: reasonForPoints(points, { sleepBridge })
+      reason: reasonForPoints(points, { sleepBridge, scoringInterval, sleepMinutes: sleep })
     });
   }
 
   function pointsForScoringInterval(minutes, options = {}) {
     if (minutes == null) return 0;
-    if (options.sleepBridge) return 0;
+    if (options.sleepBridge && minutes < 30) return 0;
     if (minutes < 30) return -40;
     if (minutes < 60) return -20;
     if (minutes < 120) return 0;
