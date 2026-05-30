@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v142-persistence-safety';
+const CACHE_NAME = 'habitflow-v143-app-domain-facade-hooks';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',

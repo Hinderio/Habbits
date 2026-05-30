@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v134-sleep-aware-smoking-score';
+  const APP_DATA_SCHEMA_VERSION = 'v143-app-domain-facade-hooks';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -83,6 +83,10 @@
     { file: 'stage-23.png', label: 'Peak Issue', minScore: 75 }
   ]);
   const SUPABASE_CONFIG = window.HABITFLOW_SUPABASE_CONFIG || {};
+
+  function appDomainFacade() {
+    return window.HabitFlowRuntime?.appDomainFacade || null;
+  }
   const MEDITATION_TECHNIQUES = [
     { key: '7-3-11', title: '7-3-11 Atemtechnik', subtitle: 'Runterfahren mit langer Ausatmung', minutes: 6, pattern: '7 ein · 3 halten · 11 aus' },
     { key: 'box', title: 'Box Breathing', subtitle: 'Klarer Fokus vor schwierigen Momenten', minutes: 5, pattern: '4 · 4 · 4 · 4' },
@@ -1970,6 +1974,18 @@
     if (crossesPause) {
       return { interval: null, scoringInterval: null, sleepMinutes: 0, sleepBridge: false, crossesPause: true };
     }
+
+    const facadeScore = appDomainFacade()?.getSmokingScore?.(startValue, endValue, null);
+    if (facadeScore && typeof facadeScore === 'object') {
+      return {
+        interval: facadeScore.intervalMinutes ?? interval,
+        scoringInterval: facadeScore.scoringIntervalMinutes ?? interval,
+        sleepMinutes: facadeScore.sleepDeductedMinutes ?? 0,
+        sleepBridge: Boolean(facadeScore.sleepBridge),
+        crossesPause: false
+      };
+    }
+
     const sleepMinutes = sleepMinutesBetweenForSmokeScoring(startValue, endValue);
     const sleepBridge = interval >= SMOKE_SLEEP_BRIDGE_MINUTES && sleepMinutes >= SMOKE_SLEEP_BRIDGE_MINUTES && isPostSleepSmokeWakeTime(endValue);
     const scoringInterval = sleepBridge ? Math.max(0, interval - sleepMinutes) : interval;
@@ -5602,9 +5618,10 @@
       .sort((a, b) => sortDate(b.occurred_at || b.created_at) - sortDate(a.occurred_at || a.created_at));
     const todayKey = toDateKey(new Date());
     const todayUnits = units.filter(unit => toDateKey(unit.occurred_at || unit.created_at) === todayKey);
-    const todayCount = todayUnits.length;
-    const units7 = units.filter(unit => daysBack(7).includes(toDateKey(unit.occurred_at || unit.created_at))).length;
-    const activeDays7 = new Set(units.filter(unit => daysBack(7).includes(toDateKey(unit.occurred_at || unit.created_at))).map(unit => toDateKey(unit.occurred_at || unit.created_at))).size;
+    const alcoholStats7 = appDomainFacade()?.getAlcoholStats?.(units, { days: 7, date: new Date() }) || null;
+    const todayCount = Number.isFinite(Number(alcoholStats7?.todayUnits)) ? Number(alcoholStats7.todayUnits) : todayUnits.length;
+    const units7 = Number.isFinite(Number(alcoholStats7?.totalUnits)) ? Number(alcoholStats7.totalUnits) : units.filter(unit => daysBack(7).includes(toDateKey(unit.occurred_at || unit.created_at))).length;
+    const activeDays7 = Number.isFinite(Number(alcoholStats7?.activeDays)) ? Number(alcoholStats7.activeDays) : new Set(units.filter(unit => daysBack(7).includes(toDateKey(unit.occurred_at || unit.created_at))).map(unit => toDateKey(unit.occurred_at || unit.created_at))).size;
     const todayPoints = sum(todayUnits.map(unit => alcoholPointsForUnit(unit.id)));
     const lastUnit = units[0] || null;
     const recentMarkup = units.slice(0, 3).length
@@ -11707,6 +11724,8 @@ async function deleteAlcoholLog(id) {
 
   function cigarettePoints(minutes, { sleepBridge = false } = {}) {
     if (minutes == null) return 0;
+    const facadePoints = appDomainFacade()?.getSmokingPointsForInterval?.(minutes, { sleepBridge }, Number.NaN);
+    if (Number.isFinite(Number(facadePoints))) return Number(facadePoints);
     if (sleepBridge && minutes < 30) return 0;
     if (minutes < 30) return -40;
     if (minutes < 60) return -20;
