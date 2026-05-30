@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v125-consumption-time-distribution';
+const CACHE_NAME = 'habitflow-v126-rollback-consumption-distribution';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/state.js',
