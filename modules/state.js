@@ -78,4 +78,5 @@
   });
 
   loadPreAppModule('modules/weekly-autosave.js');
+  loadPreAppModule('modules/remote-cache-reconcile.js');
 })(window);
