@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v129-sleep-aware-smoking-points';
+const CACHE_NAME = 'habitflow-v130-short-night-intervals-active';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/state.js',
@@ -16,6 +16,7 @@ const MODULE_ASSETS = [
 ];
 const ASSETS = ['./', './index.html', './style.css', './app.js', './supabase-config.js', './supabase-schema.js', './manifest.json', './icons/coach-clean.svg', './data/activity-ideas.json', ...MODULE_ASSETS];
 const NETWORK_FIRST_PATHS = new Set(['/', '/index.html', '/app.js', '/style.css', '/supabase-config.js', '/supabase-schema.js', '/manifest.json', ...MODULE_ASSETS.map(path => path.replace(/^\./, ''))]);
+const MIN_SLEEP_BRIDGE_MINUTES = 240;
 
 function replaceRequired(source, needle, replacement, flags) {
   if (!source.includes(needle)) flags.ok = false;
@@ -61,10 +62,17 @@ function patchAppRuntimeSource(source) {
     return total;
   }
 
+  function scoringSleepDeductionMinutes(startValue, endValue) {
+    const activeMinutes = minutesBetweenIfNotPaused(startValue, endValue, { scope: 'smoke' });
+    if (activeMinutes == null) return 0;
+    const sleepMinutes = sleepMinutesBetween(startValue, endValue);
+    return activeMinutes >= ${MIN_SLEEP_BRIDGE_MINUTES} && sleepMinutes >= ${MIN_SLEEP_BRIDGE_MINUTES} ? sleepMinutes : 0;
+  }
+
   function smokingScoringIntervalMinutes(startValue, endValue, options = {}) {
     const activeMinutes = minutesBetweenIfNotPaused(startValue, endValue, options);
     if (activeMinutes == null) return null;
-    return Math.max(0, activeMinutes - sleepMinutesBetween(startValue, endValue));
+    return Math.max(0, activeMinutes - scoringSleepDeductionMinutes(startValue, endValue));
   }`;
 
   let next = replaceRequired(source, minutesNeedle, minutesReplacement, flags);
