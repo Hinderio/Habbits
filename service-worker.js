@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v130-short-night-intervals-active';
+const CACHE_NAME = 'habitflow-v131-smoking-capture-polish';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/state.js',
