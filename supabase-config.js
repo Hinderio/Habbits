@@ -15,6 +15,7 @@ window.HABITFLOW_SUPABASE_CONFIG = Object.freeze({
     'modules/alcohol-domain.js',
     'modules/domain-runtime.js',
     'modules/smoking-scoring-parity.js',
+    'modules/smoking-domain-persistence.js',
     'modules/state.js',
     'modules/sync.js',
     'modules/dashboard.js',
