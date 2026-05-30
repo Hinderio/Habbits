@@ -5,9 +5,15 @@
   if (!modules || modules.has('smoking-domain-persistence')) return;
 
   const STORAGE_KEY = 'habitflow-state-v1';
+  const DISABLE_KEY = 'habitflow-disable-smoking-domain-persistence';
   const nativeSetItem = window.localStorage?.setItem?.bind(window.localStorage);
   const nativeGetItem = window.localStorage?.getItem?.bind(window.localStorage);
+  const nativeRemoveItem = window.localStorage?.removeItem?.bind(window.localStorage);
   if (!nativeSetItem || !nativeGetItem) return;
+
+  function isDisabled() {
+    return nativeGetItem(DISABLE_KEY) === '1' || window.HABITFLOW_DISABLE_SMOKING_DOMAIN_PERSISTENCE === true;
+  }
 
   function clone(value) {
     try {
@@ -69,17 +75,19 @@
       const nextPoints = Number(cigarette.points || 0);
       const nextReason = cigaretteReason({ points: nextPoints, sleepBridge: Boolean(cigarette.scoring_sleep_deducted_minutes) });
       const patched = Object.assign({}, entry);
+      let rowChanged = false;
       if (Number(patched.points || 0) !== nextPoints) {
         patched.points = nextPoints;
-        changed = true;
+        rowChanged = true;
       }
       if (patched.reason && patched.reason !== nextReason) {
         patched.reason = nextReason;
-        changed = true;
+        rowChanged = true;
       }
-      if (changed) {
+      if (rowChanged) {
         patched.updated_at = patched.updated_at || new Date().toISOString();
         patched.synced = false;
+        changed = true;
       }
       return patched;
     });
@@ -89,6 +97,7 @@
   }
 
   function normalizeState(state) {
+    if (isDisabled()) return { state, changed: false, disabled: true };
     const smoking = window.HabitFlowDomains?.smoking;
     if (!state || typeof state !== 'object' || !smoking?.recalculateEvents) return { state, changed: false };
     const path = collectionPath(state);
@@ -115,7 +124,7 @@
       return patched;
     });
 
-    const nextState = changed ? clone(state) : clone(state);
+    const nextState = clone(state);
     setAtPath(nextState, path, nextRows);
     const ledgerChanged = normalizeLedger(state, nextState, nextRows);
     if (!changed && !ledgerChanged) return { state, changed: false };
@@ -147,10 +156,16 @@
   window.HabitFlowRuntime.normalizeSmokingStateWithDomain = function normalizeSmokingStateWithDomain(state) {
     return normalizeState(state).state;
   };
+  window.HabitFlowRuntime.setSmokingDomainPersistenceEnabled = function setSmokingDomainPersistenceEnabled(enabled) {
+    if (enabled && nativeRemoveItem) nativeRemoveItem(DISABLE_KEY);
+    if (!enabled) nativeSetItem(DISABLE_KEY, '1');
+    return !isDisabled();
+  };
 
   modules.register('smoking-domain-persistence', {
     description: 'Uses smoking-domain scoring as a safe local state and cigarette ledger normalizer. No UI or sync calls are triggered directly.',
     active: true,
-    storageKey: STORAGE_KEY
+    storageKey: STORAGE_KEY,
+    disableKey: DISABLE_KEY
   });
 })(window);
