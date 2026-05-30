@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v137-smoking-parity';
+const CACHE_NAME = 'habitflow-v139-domain-stabilized';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -6,6 +6,11 @@ const MODULE_ASSETS = [
   './modules/alcohol-domain.js',
   './modules/domain-runtime.js',
   './modules/smoking-scoring-parity.js',
+  './modules/smoking-domain-persistence.js',
+  './modules/alcohol-domain-parity.js',
+  './modules/alcohol-domain-persistence.js',
+  './modules/points-domain-parity.js',
+  './modules/domain-diagnostics.js',
   './modules/state.js',
   './modules/sync.js',
   './modules/weekly-autosave.js',
