@@ -44,6 +44,24 @@
         font-weight: 500 !important;
       }
 
+      #screen-tasks .task-overdue-dots small,
+      #screen-tasks .task-due-overdue,
+      #screen-tasks .task-due-label,
+      #screen-tasks [class*="overdue"] small {
+        font-weight: 500 !important;
+        letter-spacing: -.01em !important;
+      }
+
+      #screen-tasks .activity-finder-card label span,
+      #screen-tasks .activity-finder label span,
+      #screen-tasks .activity-filter-grid label span,
+      #screen-tasks .leisure-filter-grid label span,
+      #screen-tasks .task-ideas-shell label span,
+      #screen-tasks #activityFinderForm label span {
+        font-weight: 500 !important;
+        letter-spacing: .055em !important;
+      }
+
       .task-detail-modal .badge,
       .task-detail-modal .task-badges .badge,
       .task-detail-modal .task-detail-meta,
@@ -75,6 +93,8 @@
       hideRedundantDetailsButton: true,
       softerTaskButtonTypography: true,
       softerTaskLinks: true,
+      softerOverdueTypography: true,
+      softerIdeaFinderTypography: true,
       softerTaskDetailTypography: true,
       hideTaskDetailCloseAction: true
     })
