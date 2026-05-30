@@ -2,33 +2,14 @@
   'use strict';
 
   const STORAGE_KEY = 'habitflow-state-v1';
-  const MARKER_KEY = 'habitflow-smoking-points-repair-v1';
+  const MARKER_KEY = 'habitflow-smoking-points-repair-v2';
+  const RELOAD_KEY = 'habitflow-smoking-points-repair-reload-v2';
   const MIN_SLEEP_BRIDGE_MINUTES = 240;
+  let internalWrite = false;
+  let repairTimer = null;
 
   function safeArray(value) {
     return Array.isArray(value) ? value : [];
-  }
-
-  function readState() {
-    try {
-      const raw = window.localStorage?.getItem(STORAGE_KEY);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      return parsed && typeof parsed === 'object' ? parsed : null;
-    } catch (error) {
-      console.warn('[HabitFlow/smoking-points-repair] State konnte nicht gelesen werden.', error);
-      return null;
-    }
-  }
-
-  function writeState(state) {
-    try {
-      window.localStorage?.setItem(STORAGE_KEY, JSON.stringify(state));
-      return true;
-    } catch (error) {
-      console.warn('[HabitFlow/smoking-points-repair] State konnte nicht gespeichert werden.', error);
-      return false;
-    }
   }
 
   function toDate(value) {
@@ -69,8 +50,7 @@
     if (!start || !end || end <= start) return false;
     return safeArray(state.pausePeriods).some(period => {
       const scope = String(period.scope || period.type || '').trim().toLowerCase() || 'smoke';
-      if (scope !== 'smoke') return false;
-      if (period.is_archived) return false;
+      if (scope !== 'smoke' || period.is_archived) return false;
       const pauseStart = toDate(period.starts_at || period.startsAt || period.start || period.from);
       const pauseEnd = period.ends_at || period.endsAt || period.end || period.until ? toDate(period.ends_at || period.endsAt || period.end || period.until) : null;
       if (!pauseStart) return false;
@@ -95,7 +75,7 @@
 
   function canonicalSmokingPoints(scoringInterval, meta = {}) {
     if (scoringInterval == null) return 0;
-    if (meta.sleepBridge && scoringInterval < 120) return 0;
+    if (meta.sleepBridge) return 0;
     if (scoringInterval < 30) return -40;
     if (scoringInterval < 60) return -20;
     if (scoringInterval < 120) return 0;
@@ -151,9 +131,8 @@
     return changed;
   }
 
-  function repair() {
-    const state = readState();
-    if (!state || !safeArray(state.cigarettes).length) return { changed: false };
+  function repairStateObject(state) {
+    if (!state || typeof state !== 'object' || !safeArray(state.cigarettes).length) return { state, changed: false };
     let changed = false;
     const visible = safeArray(state.cigarettes)
       .filter(item => item && !item.deleted_at)
@@ -169,7 +148,7 @@
         cigarette.scoring_interval_minutes = meta.scoringInterval;
         cigarette.scoring_sleep_deducted_minutes = meta.sleepDeducted;
         cigarette.points = points;
-        cigarette.updated_at = cigarette.updated_at || cigarette.smoked_at || cigarette.created_at || new Date().toISOString();
+        cigarette.updated_at = new Date().toISOString();
         cigarette.synced = false;
         changed = true;
       }
@@ -181,23 +160,92 @@
     state.pointsLedger = safeArray(state.pointsLedger).filter(point => point.source_type !== 'cigarette' || validIds.has(point.source_id));
     if (state.pointsLedger.length !== before) changed = true;
 
-    if (changed) {
-      state.updated_at = new Date().toISOString();
-      writeState(state);
-    }
-    try {
-      window.localStorage?.setItem(MARKER_KEY, JSON.stringify({ checked_at: new Date().toISOString(), changed }));
-    } catch {}
-    return { changed };
+    if (changed) state.updated_at = new Date().toISOString();
+    return { state, changed };
   }
 
-  const result = repair();
+  function parseState(raw) {
+    try {
+      const parsed = raw ? JSON.parse(raw) : null;
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function writeRepairedState(state) {
+    internalWrite = true;
+    try {
+      window.localStorage?.setItem(STORAGE_KEY, JSON.stringify(state));
+    } finally {
+      internalWrite = false;
+    }
+  }
+
+  function repairStoredState({ reloadOnChange = false } = {}) {
+    const raw = window.localStorage?.getItem(STORAGE_KEY);
+    const parsed = parseState(raw);
+    const result = repairStateObject(parsed);
+    if (result.changed) {
+      writeRepairedState(result.state);
+      try { window.localStorage?.setItem(MARKER_KEY, JSON.stringify({ checked_at: new Date().toISOString(), changed: true })); } catch {}
+      if (reloadOnChange) scheduleOneSafeReload();
+    }
+    return result;
+  }
+
+  function scheduleOneSafeReload() {
+    try {
+      if (window.sessionStorage?.getItem(RELOAD_KEY) === 'done') return;
+      window.sessionStorage?.setItem(RELOAD_KEY, 'done');
+      window.setTimeout(() => window.location.reload(), 220);
+    } catch {}
+  }
+
+  function installStateWriteGuard() {
+    const storage = window.localStorage;
+    if (!storage || storage.__habitflowSmokingPointsGuard) return;
+    const originalSetItem = storage.setItem.bind(storage);
+    Object.defineProperty(storage, '__habitflowSmokingPointsGuard', { value: true, configurable: false });
+    storage.setItem = function guardedSetItem(key, value) {
+      if (!internalWrite && key === STORAGE_KEY) {
+        const parsed = parseState(value);
+        const result = repairStateObject(parsed);
+        if (result.changed) {
+          originalSetItem(key, JSON.stringify(result.state));
+          try { originalSetItem(MARKER_KEY, JSON.stringify({ checked_at: new Date().toISOString(), changed: true, guarded: true })); } catch {}
+          return;
+        }
+      }
+      return originalSetItem(key, value);
+    };
+  }
+
+  function scheduleRepair(delay = 400, reloadOnChange = true) {
+    clearTimeout(repairTimer);
+    repairTimer = window.setTimeout(() => repairStoredState({ reloadOnChange }), delay);
+  }
+
+  installStateWriteGuard();
+  const initial = repairStoredState({ reloadOnChange: false });
+  window.addEventListener('focus', () => scheduleRepair(120, true));
+  window.addEventListener('storage', event => { if (event.key === STORAGE_KEY) scheduleRepair(120, true); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) scheduleRepair(120, true); });
+  document.addEventListener('click', event => {
+    const action = event.target?.closest?.('[data-action]')?.dataset?.action || '';
+    if (/smoke|cigarette|sync|history/i.test(action)) scheduleRepair(600, true);
+  }, true);
+  window.setTimeout(() => repairStoredState({ reloadOnChange: true }), 1800);
+  window.setInterval(() => repairStoredState({ reloadOnChange: false }), 30000);
+
   const modules = window.HabitFlowModules;
   if (modules && !modules.has('smoking-points-repair')) {
     modules.register('smoking-points-repair', {
-      description: 'Repairs cigarette rows and points ledger so stale +40 legacy values cannot survive.',
+      description: 'Repairs cigarette rows and points ledger after local or remote writes so sleep bridges never create bonuses.',
       minSleepBridgeMinutes: MIN_SLEEP_BRIDGE_MINUTES,
-      lastRun: Object.freeze(result)
+      sleepBridgePoints: 0,
+      writeGuard: true,
+      lastRun: Object.freeze(initial)
     });
   }
 })(window);
