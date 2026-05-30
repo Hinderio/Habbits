@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v132-smoking-points-repair';
+const CACHE_NAME = 'habitflow-v133-sync-safe-smoking-repair';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/state.js',
