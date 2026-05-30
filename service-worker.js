@@ -1,10 +1,9 @@
-const CACHE_NAME = 'habitflow-v133-sync-safe-smoking-repair';
+const CACHE_NAME = 'habitflow-v134-sleep-aware-smoking-score';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/state.js',
   './modules/sync.js',
   './modules/weekly-autosave.js',
-  './modules/smoking-points-repair.js',
   './modules/remote-cache-reconcile.js',
   './modules/dashboard.js',
   './modules/habits.js',
