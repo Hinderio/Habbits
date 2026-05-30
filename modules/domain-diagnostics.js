@@ -26,6 +26,20 @@
     return Boolean(report?.ready) && Array.isArray(report?.mismatches) && report.mismatches.length === 0;
   }
 
+  function persistenceStatus() {
+    const storage = window.localStorage;
+    return Object.freeze({
+      smoking: Object.freeze({
+        enabled: storage?.getItem('habitflow-disable-smoking-domain-persistence') !== '1' && window.HABITFLOW_DISABLE_SMOKING_DOMAIN_PERSISTENCE !== true,
+        canToggle: typeof window.HabitFlowRuntime?.setSmokingDomainPersistenceEnabled === 'function'
+      }),
+      alcohol: Object.freeze({
+        enabled: storage?.getItem('habitflow-disable-alcohol-domain-persistence') !== '1' && window.HABITFLOW_DISABLE_ALCOHOL_DOMAIN_PERSISTENCE !== true,
+        canToggle: typeof window.HabitFlowRuntime?.setAlcoholDomainPersistenceEnabled === 'function'
+      })
+    });
+  }
+
   function verify() {
     const missingModules = EXPECTED_MODULES.filter(name => !hasModule(name));
     const domains = window.HabitFlowDomains || {};
@@ -44,6 +58,8 @@
     if (!runtime.verifyAlcoholDomainParity) missingApis.push('HabitFlowRuntime.verifyAlcoholDomainParity');
     if (!runtime.verifyPointsDomainParity) missingApis.push('HabitFlowRuntime.verifyPointsDomainParity');
     if (!runtime.verifyAppDomainFacadeParity) missingApis.push('HabitFlowRuntime.verifyAppDomainFacadeParity');
+    if (!runtime.setSmokingDomainPersistenceEnabled) missingApis.push('HabitFlowRuntime.setSmokingDomainPersistenceEnabled');
+    if (!runtime.setAlcoholDomainPersistenceEnabled) missingApis.push('HabitFlowRuntime.setAlcoholDomainPersistenceEnabled');
 
     const smokingParity = runtime.verifySmokingScoringParity?.() || runtime.smokingParity || null;
     const alcoholParity = runtime.verifyAlcoholDomainParity?.() || runtime.alcoholParity || null;
@@ -52,7 +68,8 @@
 
     const parityReports = { smokingParity, alcoholParity, pointsParity, facadeParity };
     const parityClean = Object.values(parityReports).every(report => report === null || isCleanParity(report));
-    const migrationReady = missingModules.length === 0 && missingApis.length === 0 && parityClean;
+    const persistence = persistenceStatus();
+    const migrationReady = missingModules.length === 0 && missingApis.length === 0 && parityClean && persistence.smoking.enabled && persistence.alcohol.enabled;
 
     const report = {
       ready: missingModules.length === 0 && missingApis.length === 0,
@@ -60,6 +77,7 @@
       missingModules,
       missingApis,
       parityClean,
+      persistence,
       smokingParity,
       alcoholParity,
       pointsParity,
@@ -90,7 +108,7 @@
   window.HabitFlowRuntime.verifyDomainDiagnostics = verify;
 
   modules.register('domain-diagnostics', {
-    description: 'Runtime diagnostics for domain modules and migration readiness. Passive only.',
+    description: 'Runtime diagnostics for domain modules, persistence safety status and migration readiness. Passive only.',
     passive: true,
     exports: Object.freeze(['window.HabitFlowRuntime.verifyDomainDiagnostics'])
   });
