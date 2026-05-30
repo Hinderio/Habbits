@@ -1,8 +1,9 @@
-const CACHE_NAME = 'habitflow-v118-fitness-coach-mobile-pill';
+const CACHE_NAME = 'habitflow-v119-weekly-autosave';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/state.js',
   './modules/sync.js',
+  './modules/weekly-autosave.js',
   './modules/dashboard.js',
   './modules/habits.js',
   './modules/tasks.js',
