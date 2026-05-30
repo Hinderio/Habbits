@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v120-remote-cache-reconcile';
+const CACHE_NAME = 'habitflow-v121-task-card-action-polish';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/state.js',
