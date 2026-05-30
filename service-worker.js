@@ -1,10 +1,11 @@
-const CACHE_NAME = 'habitflow-v139-domain-stabilized';
+const CACHE_NAME = 'habitflow-v140-app-domain-facade';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
   './modules/smoking-domain.js',
   './modules/alcohol-domain.js',
   './modules/domain-runtime.js',
+  './modules/app-domain-facade.js',
   './modules/smoking-scoring-parity.js',
   './modules/smoking-domain-persistence.js',
   './modules/alcohol-domain-parity.js',
