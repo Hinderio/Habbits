@@ -1,0 +1,26 @@
+#screen-habits .habit-card,
+#screen-habits .habit-card h3,
+#screen-habits .habit-card h4,
+#screen-habits .habit-card strong,
+#screen-habits .habit-card small,
+#screen-habits .habit-card p,
+#screen-habits .habit-card span,
+#screen-habits .habit-card .badge,
+#screen-habits .habit-card .mini-btn,
+#screen-habits .habit-title strong,
+#screen-habits .habit-title small {
+  font-weight: 520 !important;
+}
+
+#screen-habits .habit-card h3,
+#screen-habits .habit-card h4,
+#screen-habits .habit-card strong,
+#screen-habits .habit-title strong {
+  font-weight: 560 !important;
+}
+
+#screen-habits .habit-card small,
+#screen-habits .habit-card .meta,
+#screen-habits .habit-card p {
+  font-weight: 480 !important;
+}
