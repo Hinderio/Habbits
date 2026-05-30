@@ -1,9 +1,10 @@
-const CACHE_NAME = 'habitflow-v135-consumption-domains';
+const CACHE_NAME = 'habitflow-v136-domain-runtime';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
   './modules/smoking-domain.js',
   './modules/alcohol-domain.js',
+  './modules/domain-runtime.js',
   './modules/state.js',
   './modules/sync.js',
   './modules/weekly-autosave.js',
