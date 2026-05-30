@@ -78,6 +78,5 @@
   });
 
   loadPreAppModule('modules/weekly-autosave.js');
-  loadPreAppModule('modules/smoking-points-repair.js');
   loadPreAppModule('modules/remote-cache-reconcile.js');
 })(window);
