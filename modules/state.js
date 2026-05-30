@@ -59,6 +59,11 @@
     }
   }
 
+  function loadPreAppModule(src) {
+    if (!window.document || window.document.readyState === 'complete') return;
+    window.document.write(`<script src="${src}"><\/script>`);
+  }
+
   modules.register('state', {
     description: 'Central registry for state keys and safe localStorage access. Does not replace app.js state yet.',
     sourceOfTruth: Object.freeze({
@@ -71,4 +76,6 @@
     writeJson,
     remove
   });
+
+  loadPreAppModule('modules/weekly-autosave.js');
 })(window);
