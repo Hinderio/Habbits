@@ -1,9 +1,13 @@
-const CACHE_NAME = 'habitflow-v134-sleep-aware-smoking-score';
+const CACHE_NAME = 'habitflow-v135-consumption-domains';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
+  './modules/points-domain.js',
+  './modules/smoking-domain.js',
+  './modules/alcohol-domain.js',
   './modules/state.js',
   './modules/sync.js',
   './modules/weekly-autosave.js',
+  './modules/quick-capture-button-style.js',
   './modules/remote-cache-reconcile.js',
   './modules/dashboard.js',
   './modules/habits.js',
