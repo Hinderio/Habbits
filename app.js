@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const APP_DATA_SCHEMA_KEY = 'habitflow-app-data-schema-version';
-  const APP_DATA_SCHEMA_VERSION = 'v143-app-domain-facade-hooks';
+  const APP_DATA_SCHEMA_VERSION = 'v144-points-rework';
   const SETTINGS_KEY = 'habitflow-settings-v1';
   const THEME_KEY = 'habitflow-theme';
   const TREND_METRIC_KEY = 'habitflow-trend-metric';
@@ -26,6 +26,14 @@
   const REMOTE_DELETE_ARCHIVE_KEY = 'habitflow-remote-delete-archive-v1';
   const MONTHLY_MISSION_FORM_KEY = 'habitflow-monthly-mission-form-v1';
   const EVOLUTION_LEVEL_RULES = Object.freeze({ maxStage: 20, baseCost: 250, growth: 1.18 });
+  const HIKING_POINTS_BASE = 50;
+  const HIKING_POINTS_PER_KM = 10;
+  const HIKING_POINTS_PER_100M = 10;
+  const SMOKE_RECOVERY_REPEAT_MINUTES = 120;
+  const SMOKE_RECOVERY_REPEAT_BONUS = 10;
+  const SMOKE_DAILY_TARGET = 10;
+  const SMOKE_DAILY_BASE_BONUS = 50;
+  const SMOKE_DAILY_BONUS_PER_LESS = 10;
   const TASK_RECURRENCE_MARKER_RE = /\n?\s*<!--hf-task-rec:([^>]+)-->/;
   const TASK_MEDIA_MARKER_RE = /\n?\s*<!--hf-task-media:([^>]+)-->/;
   const TASK_IMAGE_LIMIT = 3;
@@ -958,6 +966,7 @@
     showScreen(document.querySelector('.nav-btn.active')?.dataset.target || 'dashboard', { refresh: false });
     renderStaticIcons();
     loadLeisureCatalog({ allowJsonFallback: !isSupabaseConfigured() });
+    migrateHabitScoring({ markUpdated: false });
     migrateCigaretteScoring();
     migrateAlcoholScoring();
     await initSupabase();
@@ -1353,6 +1362,14 @@
       if (!actionEl) return;
       const { action, id } = actionEl.dataset;
       if (action === 'close-points-rules') setPointsRulesPopoverOpen(false);
+      if (action === 'toggle-points-detail') {
+        const details = els.pointsRulesPopover?.querySelector('.points-rules-detail-panel');
+        const button = actionEl;
+        const open = details?.classList.toggle('is-open');
+        if (details) details.hidden = !open;
+        button.setAttribute('aria-expanded', open ? 'true' : 'false');
+        button.textContent = open ? 'Detail-Logik ausblenden' : 'Detaillierte Punktelogik ansehen';
+      }
       if (action === 'complete-task') completeTask(id);
       if (action === 'move-task') moveTaskToStatus(id, actionEl.dataset.status);
       if (action === 'move-task-to-backlog') moveTaskToBacklog(id);
@@ -1680,6 +1697,9 @@
     // Supabase echo rows from resurrecting deleted logs after a hard refresh.
     state.deletedRemoteIds = combineDeletedRemoteIds(state.deletedRemoteIds, readRemoteDeleteArchive());
     writeRemoteDeleteArchive(state.deletedRemoteIds);
+    migrateHabitScoring({ markUpdated: false });
+    migrateCigaretteScoring();
+    migrateAlcoholScoring();
     localStorage.setItem(APP_DATA_SCHEMA_KEY, APP_DATA_SCHEMA_VERSION);
     saveState({ skipRender: true });
   }
@@ -3586,10 +3606,18 @@
       <article><small>Aktuelle Stufe</small><strong>${meta.stage}/20</strong><span>${total.toLocaleString('de-CH')} Pkt. total</span></article>
       <article><small>Nächster Schritt</small><strong>${escapeHtml(nextLabel)}</strong><span>${meta.stage >= EVOLUTION_LEVEL_RULES.maxStage ? 'kein weiterer Schwellenwert' : `${meta.pointsInStage.toLocaleString('de-CH')} / ${meta.currentStageCost.toLocaleString('de-CH')} Pkt. in dieser Stufe`}</span></article>
     </div>
-    <p class="points-rules-copy">Die Companion-Stufe wird direkt aus deinen gesammelten Punkten berechnet. Stufe 1→2 startet bei 250 Punkten; danach steigen die benötigten Punkte pro Stufe um 18%. Bei Rauchen zählen längere bewusste Abstände jetzt klarer: 4–8 Std. geben +60 Pkt., 8+ Std. geben +100 Pkt.</p>
+    <p class="points-rules-copy">Die Companion-Stufe wird direkt aus deinen gesammelten Punkten berechnet. Stufe 1→2 startet bei 250 Punkten; danach steigen die benötigten Punkte pro Stufe um 18%. Wandern zählt jetzt bewusst stärker: Touren starten bei +50 Pkt., jeder Kilometer bringt +10 Pkt. und je 100 Höhenmeter nochmals +10 Pkt.</p>
     <div class="points-rules-grid" aria-label="Nächste Stufenkosten">${sampleRows || '<span><b>20/20</b>Maximalstufe</span>'}</div>
+    <button class="points-rules-detail-toggle" type="button" data-action="toggle-points-detail" aria-expanded="false">Detaillierte Punktelogik ansehen</button>
+    <div class="points-rules-detail-panel" hidden>
+      <article><strong>Wandern</strong><span>Basis +50 Pkt. · +10 Pkt. pro km · +10 Pkt. pro 100 hm.</span></article>
+      <article><strong>Rauchen · Pausen</strong><span>2–4 Std. +20 · 4–8 Std. +60 · 8+ Std. +100. Zwei 2h+ Pausen direkt nacheinander geben zusätzlich +10 Pkt.</span></article>
+      <article><strong>Rauchen · Tagesziel</strong><span>Bei 1–10 Zigaretten pro Tag: +50 Pkt. bei 10; jede Zigarette weniger gibt +10 Pkt. extra. Beispiel: 7 Zigaretten = +80 Pkt.</span></article>
+      <article><strong>Aufgaben</strong><span>Aufwand ×20 plus Prioritätsbonus und +10 Pkt. bei rechtzeitigem Abschluss.</span></article>
+      <article><strong>Alkohol</strong><span>Alkohol-Einheiten geben Minuspunkte nach Typ, 7-Tage-Dichte und Streak.</span></article>
+    </div>
     <ul class="points-rules-list">
-      <li><strong>Pluspunkte:</strong> Habit-Logs, erledigte Aufgaben, Morgenroutine sowie Rauchpausen ab 2 Std. mit stärkerem Bonus ab 4 Std.</li>
+      <li><strong>Pluspunkte:</strong> Habit-Logs, erledigte Aufgaben, Morgenroutine, Fitness-Leistung sowie bewusste Rauchpausen.</li>
       <li><strong>Minuspunkte:</strong> kurze Rauchabstände und Alkohol-Logs können den Tageswert reduzieren.</li>
       <li><strong>Keine versteckten Sprünge:</strong> Level, Posterlinie und „nächste Stufe“ nutzen dieselbe exponentielle Kurve.</li>
     </ul>`;
@@ -10188,6 +10216,7 @@
     const smokedAt = nowIso();
     const last = getLastCigarette();
     const scoringContext = smokingScoringContext(last, { smoked_at: smokedAt });
+    scoringContext.consecutiveRecoveryBonus = smokeRecoveryRepeatBonus(last, scoringContext);
     const interval = scoringContext.interval;
     const points = cigarettePoints(scoringContext.scoringInterval, scoringContext);
     const todayAlcohol = Boolean(alcoholForDate(toDateKey(new Date()))?.consumed || alcoholUnitsOnDate(toDateKey(new Date())).length);
@@ -10197,6 +10226,7 @@
       interval_minutes: interval,
       scoring_interval_minutes: scoringContext.scoringInterval,
       scoring_sleep_deducted_minutes: scoringContext.sleepMinutes,
+      consecutive_recovery_bonus: scoringContext.consecutiveRecoveryBonus ? SMOKE_RECOVERY_REPEAT_BONUS : 0,
       alcohol_context: todayAlcohol,
       points,
       note: '',
@@ -10207,6 +10237,7 @@
     state.cigarettes.push(entry);
     pendingTriggerSmokeId = entry.id;
     addPoints('cigarette', entry.id, points, cigarettePointReason(scoringContext.scoringInterval, scoringContext), smokedAt);
+    recalculateSmokeDailyBonuses(new Set([toDateKey(smokedAt)]));
     saveState();
     toast(points > 0 ? `Zigarette erfasst · +${points} Punkte` : `Zigarette erfasst · ${points} Punkte`);
     syncWithSupabase({ silent: true });
@@ -10304,6 +10335,16 @@
     syncWithSupabase({ silent: true, pullFirst: false });
   }
 
+  function smokeRecoveryRepeatBonus(previousCigarette, scoringContext = {}) {
+    if (!previousCigarette || scoringContext.crossesPause) return false;
+    const currentMinutes = Number(scoringContext.scoringInterval);
+    const previousMinutes = Number(previousCigarette.scoring_interval_minutes ?? previousCigarette.interval_minutes);
+    return Number.isFinite(currentMinutes)
+      && Number.isFinite(previousMinutes)
+      && currentMinutes >= SMOKE_RECOVERY_REPEAT_MINUTES
+      && previousMinutes >= SMOKE_RECOVERY_REPEAT_MINUTES;
+  }
+
   function recalculateSmokeIntervals({ markUpdated = false } = {}) {
     const touchedAt = nowIso();
     let changed = false;
@@ -10311,18 +10352,22 @@
     sorted.forEach((c, index) => {
       const prev = sorted[index - 1] || null;
       const scoringContext = smokingScoringContext(prev, c);
+      scoringContext.consecutiveRecoveryBonus = smokeRecoveryRepeatBonus(prev, scoringContext);
       const interval = scoringContext.interval;
       const scoringInterval = scoringContext.scoringInterval;
       const sleepMinutes = scoringContext.sleepMinutes;
+      const recoveryBonus = scoringContext.consecutiveRecoveryBonus ? SMOKE_RECOVERY_REPEAT_BONUS : 0;
       const points = cigarettePoints(scoringInterval, scoringContext);
       const hasChanged = c.interval_minutes !== interval
         || c.scoring_interval_minutes !== scoringInterval
         || c.scoring_sleep_deducted_minutes !== sleepMinutes
+        || Number(c.consecutive_recovery_bonus || 0) !== recoveryBonus
         || Number(c.points || 0) !== points;
       if (hasChanged) {
         c.interval_minutes = interval;
         c.scoring_interval_minutes = scoringInterval;
         c.scoring_sleep_deducted_minutes = sleepMinutes;
+        c.consecutive_recovery_bonus = recoveryBonus;
         c.points = points;
         changed = true;
       }
@@ -10332,6 +10377,7 @@
       }
       if (addPoints('cigarette', c.id, c.points, cigarettePointReason(scoringInterval, scoringContext), c.smoked_at)) changed = true;
     });
+    if (recalculateSmokeDailyBonuses()) changed = true;
     return changed;
   }
 
@@ -10445,6 +10491,53 @@
 
   function alcoholUnitsOnDate(key) {
     return visibleAlcoholUnits().filter(unit => toDateKey(unit.occurred_at) === key);
+  }
+
+  function smokeDailyBonusSourceId(key) {
+    return `smoke-daily-bonus-${key}`;
+  }
+
+  function isSmokeDailyBonusEntry(entry = {}) {
+    return entry.source_type === 'bonus' && String(entry.source_id || '').startsWith('smoke-daily-bonus-');
+  }
+
+  function smokeDailyBonusPoints(count) {
+    const cigarettes = Number(count || 0);
+    if (!Number.isFinite(cigarettes) || cigarettes < 1 || cigarettes > SMOKE_DAILY_TARGET) return 0;
+    return SMOKE_DAILY_BASE_BONUS + Math.max(0, SMOKE_DAILY_TARGET - cigarettes) * SMOKE_DAILY_BONUS_PER_LESS;
+  }
+
+  function smokeDailyBonusReason(count, points) {
+    return `Rauchziel: ${count} Zigarette${count === 1 ? '' : 'n'} · ${formatSignedPoints(points)} Tagesbonus`;
+  }
+
+  function recalculateSmokeDailyBonuses(keys = null) {
+    const byDay = new Map();
+    visibleCigarettes().forEach(cigarette => {
+      const key = toDateKey(cigarette.smoked_at || cigarette.created_at);
+      if (!key) return;
+      byDay.set(key, (byDay.get(key) || 0) + 1);
+    });
+    const targetKeys = new Set(keys ? [...keys] : [...byDay.keys()]);
+    state.pointsLedger.filter(isSmokeDailyBonusEntry).forEach(entry => {
+      const key = String(entry.source_id || '').replace('smoke-daily-bonus-', '');
+      if (key) targetKeys.add(key);
+    });
+    let changed = false;
+    targetKeys.forEach(key => {
+      const count = byDay.get(key) || 0;
+      const points = smokeDailyBonusPoints(count);
+      const sourceId = smokeDailyBonusSourceId(key);
+      const existing = state.pointsLedger.find(entry => entry.source_type === 'bonus' && entry.source_id === sourceId);
+      if (points > 0) {
+        if (addPoints('bonus', sourceId, points, smokeDailyBonusReason(count, points), `${key}T23:59:00.000Z`)) changed = true;
+      } else if (existing) {
+        state.pointsLedger = state.pointsLedger.filter(entry => entry.id !== existing.id);
+        markRemoteDeleted('points_ledger', existing.id);
+        changed = true;
+      }
+    });
+    return changed;
   }
 
   function ensureAlcoholDayLog(key, note = '') {
@@ -11722,17 +11815,19 @@ async function deleteAlcoholLog(id) {
     return true;
   }
 
-  function cigarettePoints(minutes, { sleepBridge = false } = {}) {
+  function cigarettePoints(minutes, { sleepBridge = false, consecutiveRecoveryBonus = false } = {}) {
     if (minutes == null) return 0;
-    const facadePoints = appDomainFacade()?.getSmokingPointsForInterval?.(minutes, { sleepBridge }, Number.NaN);
+    const bonus = consecutiveRecoveryBonus ? SMOKE_RECOVERY_REPEAT_BONUS : 0;
+    const facadePoints = appDomainFacade()?.getSmokingPointsForInterval?.(minutes, { sleepBridge, consecutiveRecoveryBonus }, Number.NaN);
     if (Number.isFinite(Number(facadePoints))) return Number(facadePoints);
-    if (sleepBridge && minutes < 30) return 0;
-    if (minutes < 30) return -40;
-    if (minutes < 60) return -20;
-    if (minutes < 120) return 0;
-    if (minutes < 240) return 20;
-    if (minutes < 480) return 60;
-    return 100;
+    let base = 100;
+    if (sleepBridge && minutes < 30) base = 0;
+    else if (minutes < 30) base = -40;
+    else if (minutes < 60) base = -20;
+    else if (minutes < 120) base = 0;
+    else if (minutes < 240) base = 20;
+    else if (minutes < 480) base = 60;
+    return base + bonus;
   }
 
   function smokingScoringContext(previousCigarette, cigarette) {
@@ -11757,19 +11852,45 @@ async function deleteAlcoholLog(id) {
     return toDateKey(prev) === toDateKey(current);
   }
 
-  function cigarettePointReason(minutes, { sleepBridge = false, sleepMinutes = 0, crossesPause = false } = {}) {
+  function cigarettePointReason(minutes, { sleepBridge = false, sleepMinutes = 0, crossesPause = false, consecutiveRecoveryBonus = false } = {}) {
+    const repeat = consecutiveRecoveryBonus ? ` · Folgepause +${SMOKE_RECOVERY_REPEAT_BONUS}` : '';
     if (crossesPause) return 'Rauchpause: pausierter Zeitraum';
     if (minutes == null) return 'Erste Zigarette erfasst';
-    if (sleepBridge) return `Pause ${formatDuration(minutes)} aktiv · ${formatDuration(sleepMinutes)} Schlafzeit neutralisiert`;
-    if (minutes >= 480) return `Pause ${formatDuration(minutes)} · 8h+ Bonus`;
-    if (minutes >= 240) return `Pause ${formatDuration(minutes)} · 4h+ Bonus`;
-    return `Pause ${formatDuration(minutes)}`;
+    if (sleepBridge) return `Pause ${formatDuration(minutes)} aktiv · ${formatDuration(sleepMinutes)} Schlafzeit neutralisiert${repeat}`;
+    if (minutes >= 480) return `Pause ${formatDuration(minutes)} · 8h+ Bonus${repeat}`;
+    if (minutes >= 240) return `Pause ${formatDuration(minutes)} · 4h+ Bonus${repeat}`;
+    if (minutes >= 120) return `Pause ${formatDuration(minutes)} · 2h+${repeat}`;
+    return `Pause ${formatDuration(minutes)}${repeat}`;
   }
 
   function migrateCigaretteScoring() {
     if (!visibleCigarettes().length) return false;
     const changed = recalculateSmokeIntervals({ markUpdated: true });
     if (changed) saveState({ skipRender: true });
+    return changed;
+  }
+
+  function migrateHabitScoring({ markUpdated = false } = {}) {
+    let changed = false;
+    const activeEntryIds = new Set(state.habitEntries.map(entry => entry.id));
+    const removedIds = state.pointsLedger
+      .filter(entry => entry.source_type === 'habit' && !activeEntryIds.has(entry.source_id))
+      .map(entry => entry.id);
+    if (removedIds.length) {
+      state.pointsLedger = state.pointsLedger.filter(entry => !(entry.source_type === 'habit' && !activeEntryIds.has(entry.source_id)));
+      markRemoteDeletedMany('points_ledger', removedIds);
+      changed = true;
+    }
+    state.habitEntries.forEach(entry => {
+      const habit = state.habits.find(item => item.id === entry.habit_id);
+      if (!habit) return;
+      const points = habitPoints(habit, entry);
+      if (addPoints('habit', entry.id, points, `${habit.name} geloggt`, entry.occurred_at || entry.created_at || nowIso())) changed = true;
+      if (markUpdated) {
+        entry.updated_at = nowIso();
+        entry.synced = false;
+      }
+    });
     return changed;
   }
 
@@ -11780,8 +11901,16 @@ async function deleteAlcoholLog(id) {
     return points;
   }
 
+  function hikingPoints(entry = {}) {
+    const kilometers = Math.abs(Number(entry.value_num || 0));
+    if (!Number.isFinite(kilometers) || kilometers <= 0) return 0;
+    const ascent = Math.max(0, Number(parseFitnessAscentNote(entry.note) || 0));
+    return Math.round(HIKING_POINTS_BASE + kilometers * HIKING_POINTS_PER_KM + (ascent / 100) * HIKING_POINTS_PER_100M);
+  }
+
   function habitPoints(habit, entry) {
     if (habit.type === 'boolean' && !isFitnessDistanceHabit(habit)) return 12;
+    if (isFitnessDistanceHabit(habit) && fitnessHabitType(habit) === 'hiking') return Math.max(HIKING_POINTS_BASE, hikingPoints(entry));
     const value = Math.abs(Number(entry.value_num || 0));
     if (habit.target) {
       const ratio = Math.min(1, value / Math.abs(Number(habit.target)));
@@ -12403,6 +12532,7 @@ async function deleteAlcoholLog(id) {
       if (!effectivePullOnly) {
         wroteRemote = await flushRemoteDeletes() || wroteRemote;
         dedupeStateCollections(state);
+        migrateHabitScoring({ markUpdated: false });
         migrateCigaretteScoring();
         migrateAlcoholScoring();
         wroteRemote = await flushRemoteDeletes() || wroteRemote;
