@@ -50,6 +50,17 @@
     return loadOrder.map(name => registry.get(name));
   }
 
+  function preloadModule(src, id) {
+    if (!window.document || window.document.readyState === 'complete') return;
+    if (id && window.document.getElementById(id)) return;
+    const script = window.document.createElement('script');
+    if (id) script.id = id;
+    script.src = src;
+    script.async = false;
+    const parent = window.document.currentScript?.parentNode || window.document.head || window.document.documentElement;
+    parent.insertBefore(script, window.document.currentScript?.nextSibling || null);
+  }
+
   window.HabitFlowModules = Object.freeze({
     __isHabitFlowRegistry: true,
     register,
@@ -57,4 +68,6 @@
     has,
     list
   });
+
+  preloadModule('modules/points-ledger-remote-authority.js', 'pointsLedgerRemoteAuthorityScript');
 })(window);
