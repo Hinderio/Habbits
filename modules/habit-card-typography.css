@@ -25,62 +25,67 @@
   font-weight: 480 !important;
 }
 
-/* Deep Smoke Map: keep the existing matrix logic, but render intensity areas as flat colors instead of gradients. */
-#cigaretteHeatmapVisual .level-1,
-#cigaretteHeatmapVisual [class*="level-1"] {
-  background: rgba(74, 215, 209, .18) !important;
+/* Deep Smoke Map: existing data/render logic stays untouched; only the level colors are flattened. */
+#cigaretteHeatmapVisual {
+  --hf-smoke-level-1: rgba(143, 240, 167, .38);
+  --hf-smoke-level-2: rgba(74, 215, 209, .36);
+  --hf-smoke-level-3: rgba(157, 176, 195, .46);
+  --hf-smoke-level-4: rgba(255, 184, 77, .42);
+  --hf-smoke-level-5: rgba(255, 112, 112, .42);
+  --hf-smoke-level-1-solid: #8ff0a7;
+  --hf-smoke-level-2-solid: #4ad7d1;
+  --hf-smoke-level-3-solid: #9db0c3;
+  --hf-smoke-level-4-solid: #ffb84d;
+  --hf-smoke-level-5-solid: #ff7070;
+}
+
+#cigaretteHeatmapVisual .level-1:not(.smoke-pulse-bar),
+#cigaretteHeatmapVisual [class*="level-1"]:not(.smoke-pulse-bar) {
+  background: var(--hf-smoke-level-1) !important;
   background-image: none !important;
 }
 
-#cigaretteHeatmapVisual .level-2,
-#cigaretteHeatmapVisual [class*="level-2"] {
-  background: rgba(74, 215, 209, .30) !important;
+#cigaretteHeatmapVisual .level-2:not(.smoke-pulse-bar),
+#cigaretteHeatmapVisual [class*="level-2"]:not(.smoke-pulse-bar) {
+  background: var(--hf-smoke-level-2) !important;
   background-image: none !important;
 }
 
-#cigaretteHeatmapVisual .level-3,
-#cigaretteHeatmapVisual [class*="level-3"] {
-  background: rgba(143, 240, 167, .36) !important;
+#cigaretteHeatmapVisual .level-3:not(.smoke-pulse-bar),
+#cigaretteHeatmapVisual [class*="level-3"]:not(.smoke-pulse-bar) {
+  background: var(--hf-smoke-level-3) !important;
   background-image: none !important;
 }
 
-#cigaretteHeatmapVisual .level-4,
-#cigaretteHeatmapVisual [class*="level-4"] {
-  background: rgba(255, 184, 77, .38) !important;
+#cigaretteHeatmapVisual .level-4:not(.smoke-pulse-bar),
+#cigaretteHeatmapVisual [class*="level-4"]:not(.smoke-pulse-bar) {
+  background: var(--hf-smoke-level-4) !important;
   background-image: none !important;
 }
 
-#cigaretteHeatmapVisual .level-5,
-#cigaretteHeatmapVisual [class*="level-5"] {
-  background: rgba(255, 112, 112, .40) !important;
+#cigaretteHeatmapVisual .level-5:not(.smoke-pulse-bar),
+#cigaretteHeatmapVisual [class*="level-5"]:not(.smoke-pulse-bar) {
+  background: var(--hf-smoke-level-5) !important;
   background-image: none !important;
 }
 
-#cigaretteHeatmapVisual [style*="linear-gradient"] {
+#cigaretteHeatmapVisual .smoke-pulse-bar[class*="level-"] {
+  background: transparent !important;
   background-image: none !important;
 }
 
-body.light #cigaretteHeatmapVisual .level-1,
-body.light #cigaretteHeatmapVisual [class*="level-1"] {
-  background: rgba(74, 215, 209, .18) !important;
+#cigaretteHeatmapVisual .smoke-pulse-bar i,
+#cigaretteHeatmapVisual .smoke-signature-track i {
+  background-image: none !important;
 }
 
-body.light #cigaretteHeatmapVisual .level-2,
-body.light #cigaretteHeatmapVisual [class*="level-2"] {
-  background: rgba(74, 215, 209, .26) !important;
-}
-
-body.light #cigaretteHeatmapVisual .level-3,
-body.light #cigaretteHeatmapVisual [class*="level-3"] {
-  background: rgba(143, 240, 167, .30) !important;
-}
-
-body.light #cigaretteHeatmapVisual .level-4,
-body.light #cigaretteHeatmapVisual [class*="level-4"] {
-  background: rgba(255, 184, 77, .30) !important;
-}
-
-body.light #cigaretteHeatmapVisual .level-5,
-body.light #cigaretteHeatmapVisual [class*="level-5"] {
-  background: rgba(255, 112, 112, .32) !important;
-}
+#cigaretteHeatmapVisual .smoke-pulse-bar.level-1 i,
+#cigaretteHeatmapVisual .smoke-signature-track i.level-1 { background: var(--hf-smoke-level-1-solid) !important; }
+#cigaretteHeatmapVisual .smoke-pulse-bar.level-2 i,
+#cigaretteHeatmapVisual .smoke-signature-track i.level-2 { background: var(--hf-smoke-level-2-solid) !important; }
+#cigaretteHeatmapVisual .smoke-pulse-bar.level-3 i,
+#cigaretteHeatmapVisual .smoke-signature-track i.level-3 { background: var(--hf-smoke-level-3-solid) !important; }
+#cigaretteHeatmapVisual .smoke-pulse-bar.level-4 i,
+#cigaretteHeatmapVisual .smoke-signature-track i.level-4 { background: var(--hf-smoke-level-4-solid) !important; }
+#cigaretteHeatmapVisual .smoke-pulse-bar.level-5 i,
+#cigaretteHeatmapVisual .smoke-signature-track i.level-5 { background: var(--hf-smoke-level-5-solid) !important; }
