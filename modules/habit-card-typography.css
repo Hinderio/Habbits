@@ -25,7 +25,7 @@
   font-weight: 480 !important;
 }
 
-/* Deep Smoke Map: existing data/render logic stays untouched; only the level colors are flattened. */
+/* Smoke visuals: scoped replacements only; rendering, data and event logic stay untouched. */
 #cigaretteHeatmapVisual {
   --hf-smoke-level-1: rgba(143, 240, 167, .38);
   --hf-smoke-level-2: rgba(74, 215, 209, .36);
@@ -89,3 +89,44 @@
 #cigaretteHeatmapVisual .smoke-signature-track i.level-4 { background: var(--hf-smoke-level-4-solid) !important; }
 #cigaretteHeatmapVisual .smoke-pulse-bar.level-5 i,
 #cigaretteHeatmapVisual .smoke-signature-track i.level-5 { background: var(--hf-smoke-level-5-solid) !important; }
+
+#screen-smoking .smoke-control-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--card) !important;
+  background-image: none !important;
+}
+
+#screen-smoking .smoke-button {
+  order: 3;
+  background: #e59a5d !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+#screen-smoking .craving-coach-card {
+  order: 4;
+  background: rgba(74, 215, 209, .12) !important;
+  background-image: none !important;
+}
+
+#screen-smoking .smoke-ring {
+  background: var(--card) !important;
+  background-image: none !important;
+}
+
+body.light #screen-smoking .smoke-control-card,
+body.light #screen-smoking .smoke-ring {
+  background: rgba(255, 255, 255, .86) !important;
+  border-color: rgba(17, 36, 58, .08) !important;
+}
+
+body.light #screen-smoking .craving-coach-card {
+  background: rgba(74, 215, 209, .12) !important;
+  border-color: rgba(74, 215, 209, .14) !important;
+}
+
+body:not(.light) #screen-smoking .smoke-button {
+  background: #c67d44 !important;
+  color: #fff2df !important;
+}
