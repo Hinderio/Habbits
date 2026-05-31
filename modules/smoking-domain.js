@@ -81,22 +81,25 @@
 
   function pointsForScoringInterval(minutes, options = {}) {
     if (minutes == null) return 0;
-    if (options.sleepBridge && minutes < 30) return 0;
-    if (minutes < 30) return -40;
-    if (minutes < 60) return -20;
-    if (minutes < 120) return 0;
-    if (minutes < 240) return 20;
-    if (minutes < 480) return 60;
-    return 100;
+    const repeatBonus = options.consecutiveRecoveryBonus ? 10 : 0;
+    let base = 100;
+    if (options.sleepBridge && minutes < 30) base = 0;
+    else if (minutes < 30) base = -40;
+    else if (minutes < 60) base = -20;
+    else if (minutes < 120) base = 0;
+    else if (minutes < 240) base = 20;
+    else if (minutes < 480) base = 60;
+    return base + repeatBonus;
   }
 
   function reasonForPoints(points, options = {}) {
-    if (options.sleepBridge) return 'Rauchpause: Schlafzeit neutralisiert';
-    if (points >= 100) return 'Rauchpause: 8+ Stunden';
-    if (points >= 60) return 'Rauchpause: 4–8 Stunden';
-    if (points >= 20) return 'Rauchpause: 2–4 Stunden';
+    const suffix = options.consecutiveRecoveryBonus ? ' · Folgepause' : '';
+    if (options.sleepBridge) return `Rauchpause: Schlafzeit neutralisiert${suffix}`;
+    if (points >= 100) return `Rauchpause: 8+ Stunden${suffix}`;
+    if (points >= 60) return `Rauchpause: 4–8 Stunden${suffix}`;
+    if (points >= 20) return `Rauchpause: 2–4 Stunden${suffix}`;
     if (points < 0) return 'Rauchabstand zu kurz';
-    return 'Rauchpause: neutral';
+    return `Rauchpause: neutral${suffix}`;
   }
 
   function sortEvents(events, direction = 'asc') {
