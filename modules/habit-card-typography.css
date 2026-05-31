@@ -130,3 +130,28 @@ body:not(.light) #screen-smoking .smoke-button {
   background: #c67d44 !important;
   color: #fff2df !important;
 }
+
+/* Primary action buttons: use the calm matte turquoise and stronger type from the Craving-Coach buttons without changing button shapes. */
+:where(.pill.primary, .mini-btn.primary, .craving-actions .mini-btn, .habit-detail-primary .mini-btn.primary, .habit-detail-done, .task-toolbar-actions .pill.is-active) {
+  background: #64d0cb !important;
+  background-image: none !important;
+  color: #071521 !important;
+  font-weight: 950 !important;
+  font-size: clamp(1rem, 2.45vw, 1.22rem) !important;
+  line-height: 1.05 !important;
+  letter-spacing: .01em !important;
+  text-shadow: none !important;
+}
+
+:where(.pill.primary.large) {
+  font-size: clamp(1.04rem, 2.6vw, 1.26rem) !important;
+}
+
+:where(.mini-btn.primary) {
+  font-size: clamp(.96rem, 2.1vw, 1.1rem) !important;
+}
+
+body:not(.light) :where(.pill.primary, .mini-btn.primary, .craving-actions .mini-btn, .habit-detail-primary .mini-btn.primary, .habit-detail-done, .task-toolbar-actions .pill.is-active) {
+  background: #64d0cb !important;
+  color: #071521 !important;
+}
