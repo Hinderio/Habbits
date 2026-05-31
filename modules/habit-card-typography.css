@@ -132,7 +132,7 @@ body:not(.light) #screen-smoking .smoke-button {
 }
 
 /* Primary action buttons: calm matte turquoise + clear, but not overly heavy, typography. */
-:where(.pill.primary, .mini-btn.primary, .craving-actions .mini-btn, .habit-detail-primary .mini-btn.primary, .habit-detail-done, .task-toolbar-actions .pill.is-active) {
+:where(.pill.primary, .mini-btn.primary, .craving-actions .mini-btn, .habit-detail-primary .mini-btn.primary, .habit-detail-done, .task-toolbar-actions .pill.is-active, .mobile-quick-add > summary, .mobile-quick-sheet button:not(.is-danger)) {
   background: #64d0cb !important;
   background-image: none !important;
   color: #071521 !important;
@@ -151,7 +151,13 @@ body:not(.light) #screen-smoking .smoke-button {
   font-size: clamp(.96rem, 2.1vw, 1.1rem) !important;
 }
 
-body:not(.light) :where(.pill.primary, .mini-btn.primary, .craving-actions .mini-btn, .habit-detail-primary .mini-btn.primary, .habit-detail-done, .task-toolbar-actions .pill.is-active) {
+:where(.mobile-quick-add > summary span, .mobile-quick-sheet button .quick-action-icon) {
+  background: rgba(7, 21, 33, .10) !important;
+  color: #071521 !important;
+  font-weight: 820 !important;
+}
+
+body:not(.light) :where(.pill.primary, .mini-btn.primary, .craving-actions .mini-btn, .habit-detail-primary .mini-btn.primary, .habit-detail-done, .task-toolbar-actions .pill.is-active, .mobile-quick-add > summary, .mobile-quick-sheet button:not(.is-danger)) {
   background: #64d0cb !important;
   color: #071521 !important;
 }
