@@ -2,6 +2,7 @@
   'use strict';
 
   const STORAGE_KEY = 'habitflow-state-v1';
+  const MIGRATION_SUMMARY_KEY = 'habitflow-points-ledger-cleanup-summary-v1';
   const SMOKE_DAILY_PREFIX = 'smoke-daily-bonus-';
   const SMOKE_DAILY_UUID_PREFIX = '00000000-0000-4000-8001-0000';
   const MORNING_ROUTINE_UUID_PREFIX = '00000000-0000-4000-8000-0000';
@@ -28,6 +29,16 @@
 
   function morningRoutineSourceId(key) {
     return `${MORNING_ROUTINE_UUID_PREFIX}${compactDateKey(key)}`;
+  }
+
+  function rowTime(row = {}) {
+    const value = new Date(row.updated_at || row.updatedAt || row.created_at || row.createdAt || row.earned_at || row.earnedAt || 0).getTime();
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  function numericPoints(row = {}) {
+    const value = Number(row.points || 0);
+    return Number.isFinite(value) ? value : 0;
   }
 
   function isSmokeDailyBonus(row = {}) {
@@ -67,14 +78,42 @@
     return next;
   }
 
+  function shouldKeepLedgerCandidate(previous, current) {
+    const previousTime = rowTime(previous);
+    const currentTime = rowTime(current);
+    if (currentTime !== previousTime) return currentTime > previousTime;
+    return Math.abs(numericPoints(current)) >= Math.abs(numericPoints(previous));
+  }
+
   function dedupeLedgerRows(rows = []) {
     const bySource = new Map();
     const keepOrder = [];
+    const stats = {
+      before: Array.isArray(rows) ? rows.length : 0,
+      after: 0,
+      removed: 0,
+      smokeDailyBefore: 0,
+      smokeDailyAfter: 0,
+      smokeDailyRemoved: 0,
+      smokeDailyPointsBefore: 0,
+      smokeDailyPointsAfter: 0,
+      changedSourceIds: 0
+    };
     let changed = false;
 
     rows.forEach(row => {
+      const wasSmokeDaily = isSmokeDailyBonus(row);
+      if (wasSmokeDaily) {
+        stats.smokeDailyBefore += 1;
+        stats.smokeDailyPointsBefore += numericPoints(row);
+      }
+
       const canonical = canonicalLedgerRow(row);
-      if (canonical !== row || canonical.source_id !== row?.source_id) changed = true;
+      if (canonical !== row || canonical.source_id !== row?.source_id) {
+        changed = true;
+        stats.changedSourceIds += 1;
+      }
+
       const sourceType = canonical?.source_type || canonical?.sourceType || '';
       const sourceId = canonical?.source_id || canonical?.sourceId || '';
       const key = sourceType && sourceId ? `${sourceType}::${sourceId}` : `id::${canonical?.id || keepOrder.length}`;
@@ -84,27 +123,38 @@
         keepOrder.push(key);
         return;
       }
+
       changed = true;
-      const previousTime = new Date(previous.updated_at || previous.created_at || previous.earned_at || 0).getTime();
-      const currentTime = new Date(canonical.updated_at || canonical.created_at || canonical.earned_at || 0).getTime();
-      if ((Number.isFinite(currentTime) ? currentTime : 0) >= (Number.isFinite(previousTime) ? previousTime : 0)) {
+      if (wasSmokeDaily) stats.smokeDailyRemoved += 1;
+      if (shouldKeepLedgerCandidate(previous, canonical)) {
         bySource.set(key, { ...canonical, synced: false });
       }
     });
 
-    return { rows: keepOrder.map(key => bySource.get(key)), changed };
+    const normalizedRows = keepOrder.map(key => bySource.get(key));
+    stats.after = normalizedRows.length;
+    stats.removed = Math.max(0, stats.before - stats.after);
+    normalizedRows.forEach(row => {
+      if (isSmokeDailyBonus(row)) {
+        stats.smokeDailyAfter += 1;
+        stats.smokeDailyPointsAfter += numericPoints(row);
+      }
+    });
+    stats.smokeDailyRemoved = Math.max(stats.smokeDailyRemoved, stats.smokeDailyBefore - stats.smokeDailyAfter);
+
+    return { rows: normalizedRows, changed, stats };
   }
 
   function normalizeStateObject(state) {
-    if (!state || typeof state !== 'object') return { state, changed: false };
+    if (!state || typeof state !== 'object') return { state, changed: false, stats: null };
     const ledger = Array.isArray(state.pointsLedger) ? state.pointsLedger : Array.isArray(state.points_ledger) ? state.points_ledger : null;
-    if (!ledger) return { state, changed: false };
+    if (!ledger) return { state, changed: false, stats: null };
     const normalized = dedupeLedgerRows(ledger);
-    if (!normalized.changed) return { state, changed: false };
+    if (!normalized.changed) return { state, changed: false, stats: normalized.stats };
     const next = { ...state };
     if (Array.isArray(state.pointsLedger)) next.pointsLedger = normalized.rows;
     if (Array.isArray(state.points_ledger)) next.points_ledger = normalized.rows;
-    return { state: next, changed: true };
+    return { state: next, changed: true, stats: normalized.stats };
   }
 
   function normalizeStateJson(value) {
@@ -115,6 +165,34 @@
       return normalized.changed ? JSON.stringify(normalized.state) : value;
     } catch {
       return value;
+    }
+  }
+
+  function writeCleanupSummary(stats = {}) {
+    try {
+      window.localStorage?.setItem(MIGRATION_SUMMARY_KEY, JSON.stringify({
+        ...stats,
+        cleaned_at: new Date().toISOString()
+      }));
+    } catch (error) {
+      console.warn('[HabitFlow/points-ledger-sync-guard] Cleanup-Zusammenfassung konnte nicht gespeichert werden.', error);
+    }
+  }
+
+  function cleanupStoredStateOnce() {
+    const storage = window.localStorage;
+    if (!storage) return;
+    const raw = storage.getItem(STORAGE_KEY);
+    if (typeof raw !== 'string' || !raw.trim().startsWith('{')) return;
+    try {
+      const parsed = JSON.parse(raw);
+      const normalized = normalizeStateObject(parsed);
+      if (!normalized.changed) return;
+      storage.setItem(STORAGE_KEY, JSON.stringify(normalized.state));
+      writeCleanupSummary(normalized.stats);
+      console.info('[HabitFlow/points-ledger-sync-guard] Lokale Points-Ledger-Duplikate bereinigt.', normalized.stats);
+    } catch (error) {
+      console.warn('[HabitFlow/points-ledger-sync-guard] Lokale Points-Ledger-Bereinigung übersprungen.', error);
     }
   }
 
@@ -185,6 +263,7 @@
     return true;
   }
 
+  cleanupStoredStateOnce();
   installLocalStateGuard();
   if (!patchSupabaseCreateClient()) {
     document?.addEventListener('DOMContentLoaded', patchSupabaseCreateClient, { once: true });
@@ -196,8 +275,9 @@
   const modules = window.HabitFlowModules;
   if (modules && !modules.has('points-ledger-sync-guard')) {
     modules.register('points-ledger-sync-guard', {
-      description: 'Normalizes deterministic daily bonus ledger source IDs and protects Supabase points_ledger sync from duplicate bonus rows.',
-      active: true
+      description: 'Normalizes deterministic daily bonus ledger source IDs and cleans duplicate local smoke daily bonus rows before the app reads state.',
+      active: true,
+      summaryKey: MIGRATION_SUMMARY_KEY
     });
   }
 })(window, document);
