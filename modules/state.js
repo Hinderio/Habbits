@@ -26,7 +26,8 @@
     fitnessMobileSections: 'habitflow-fitness-mobile-sections-v1',
     fitnessCoachState: 'habitflow-fitness-coach-state-v1',
     remoteDeleteArchive: 'habitflow-remote-delete-archive-v1',
-    monthlyMissionForm: 'habitflow-monthly-mission-form-v1'
+    monthlyMissionForm: 'habitflow-monthly-mission-form-v1',
+    learningVault: 'habitflow-learning-vault-v1'
   });
 
   function readJson(key, fallback = null) {
@@ -80,4 +81,5 @@
   loadPreAppModule('modules/weekly-autosave.js');
   loadPreAppModule('modules/quick-capture-button-style.js');
   loadPreAppModule('modules/remote-cache-reconcile.js');
+  loadPreAppModule('modules/learning-vault.js');
 })(window);
