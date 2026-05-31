@@ -24,3 +24,63 @@
 #screen-habits .habit-card p {
   font-weight: 480 !important;
 }
+
+/* Deep Smoke Map: keep the existing matrix logic, but render intensity areas as flat colors instead of gradients. */
+#cigaretteHeatmapVisual .level-1,
+#cigaretteHeatmapVisual [class*="level-1"] {
+  background: rgba(74, 215, 209, .18) !important;
+  background-image: none !important;
+}
+
+#cigaretteHeatmapVisual .level-2,
+#cigaretteHeatmapVisual [class*="level-2"] {
+  background: rgba(74, 215, 209, .30) !important;
+  background-image: none !important;
+}
+
+#cigaretteHeatmapVisual .level-3,
+#cigaretteHeatmapVisual [class*="level-3"] {
+  background: rgba(143, 240, 167, .36) !important;
+  background-image: none !important;
+}
+
+#cigaretteHeatmapVisual .level-4,
+#cigaretteHeatmapVisual [class*="level-4"] {
+  background: rgba(255, 184, 77, .38) !important;
+  background-image: none !important;
+}
+
+#cigaretteHeatmapVisual .level-5,
+#cigaretteHeatmapVisual [class*="level-5"] {
+  background: rgba(255, 112, 112, .40) !important;
+  background-image: none !important;
+}
+
+#cigaretteHeatmapVisual [style*="linear-gradient"] {
+  background-image: none !important;
+}
+
+body.light #cigaretteHeatmapVisual .level-1,
+body.light #cigaretteHeatmapVisual [class*="level-1"] {
+  background: rgba(74, 215, 209, .18) !important;
+}
+
+body.light #cigaretteHeatmapVisual .level-2,
+body.light #cigaretteHeatmapVisual [class*="level-2"] {
+  background: rgba(74, 215, 209, .26) !important;
+}
+
+body.light #cigaretteHeatmapVisual .level-3,
+body.light #cigaretteHeatmapVisual [class*="level-3"] {
+  background: rgba(143, 240, 167, .30) !important;
+}
+
+body.light #cigaretteHeatmapVisual .level-4,
+body.light #cigaretteHeatmapVisual [class*="level-4"] {
+  background: rgba(255, 184, 77, .30) !important;
+}
+
+body.light #cigaretteHeatmapVisual .level-5,
+body.light #cigaretteHeatmapVisual [class*="level-5"] {
+  background: rgba(255, 112, 112, .32) !important;
+}
