@@ -6,7 +6,16 @@
 
   const STORAGE_KEY = 'habitflow-learning-vault-v1';
   const UI_KEY = 'habitflow-learning-vault-open-v1';
+  const TABLE_NAME = 'learning_vault';
   const MAX_ITEMS = 120;
+  const MAX_CACHE_ITEMS = 180;
+  const REMOTE_SELECT = 'id,user_id,title,body,context,tags,is_archived,created_at,updated_at';
+
+  let supabaseClient = null;
+  let authSubscription = null;
+  let remoteSupported = true;
+  let syncInFlight = false;
+  let syncTimer = null;
 
   function uid() {
     if (window.crypto?.randomUUID) return window.crypto.randomUUID();
@@ -17,25 +26,77 @@
     return new Date().toISOString();
   }
 
+  function validIsoOrFallback(value, fallback = nowIso()) {
+    const date = new Date(value || fallback);
+    return Number.isNaN(date.getTime()) ? fallback : date.toISOString();
+  }
+
   function escapeHtml(value = '') {
     return String(value || '').replace(/[&<>'"]/g, char => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
     }[char]));
   }
 
-  function readItems() {
+  function normalizeTags(value = '') {
+    return (Array.isArray(value) ? value.join(',') : String(value || ''))
+      .split(/[#,]/)
+      .map(tag => tag.trim().replace(/^#/, ''))
+      .filter(Boolean)
+      .slice(0, 5);
+  }
+
+  function titleFromBody(body = '') {
+    const firstSentence = String(body || '').split(/[.!?\n]/).find(Boolean)?.trim() || body;
+    return String(firstSentence || 'Learning').slice(0, 72);
+  }
+
+  function normalizeItem(item = {}) {
+    const body = String(item.body || '').trim().slice(0, 420);
+    if (!body) return null;
+    const createdAt = validIsoOrFallback(item.created_at || item.createdAt || nowIso());
+    return {
+      id: String(item.id || uid()),
+      title: String(item.title || titleFromBody(body)).trim().slice(0, 120),
+      body,
+      context: String(item.context || '').trim().slice(0, 80),
+      tags: normalizeTags(item.tags),
+      is_archived: Boolean(item.is_archived || item.isArchived),
+      created_at: createdAt,
+      updated_at: validIsoOrFallback(item.updated_at || item.updatedAt || createdAt, createdAt),
+      synced: item.synced === true
+    };
+  }
+
+  function sortByUpdated(items = []) {
+    return [...items].sort((a, b) => new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0));
+  }
+
+  function readCache() {
     try {
       const parsed = JSON.parse(window.localStorage?.getItem(STORAGE_KEY) || '[]');
-      return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+      if (!Array.isArray(parsed)) return [];
+      return parsed.map(normalizeItem).filter(Boolean);
     } catch (error) {
       console.warn('[HabitFlow/learning-vault] Learnings konnten nicht gelesen werden.', error);
       return [];
     }
   }
 
-  function writeItems(items) {
+  function visibleItems() {
+    return sortByUpdated(readCache().filter(item => !item.is_archived));
+  }
+
+  function pruneCache(items = []) {
+    const byId = new Map();
+    sortByUpdated(items.map(normalizeItem).filter(Boolean)).forEach(item => {
+      if (!byId.has(item.id)) byId.set(item.id, item);
+    });
+    return Array.from(byId.values()).slice(0, MAX_CACHE_ITEMS);
+  }
+
+  function writeCache(items) {
     try {
-      window.localStorage?.setItem(STORAGE_KEY, JSON.stringify(items.slice(0, MAX_ITEMS)));
+      window.localStorage?.setItem(STORAGE_KEY, JSON.stringify(pruneCache(items)));
       return true;
     } catch (error) {
       console.warn('[HabitFlow/learning-vault] Learnings konnten nicht gespeichert werden.', error);
@@ -49,12 +110,151 @@
     return new Intl.DateTimeFormat('de-CH', { day: '2-digit', month: '2-digit', year: '2-digit' }).format(date);
   }
 
-  function normalizeTags(value = '') {
-    return String(value || '')
-      .split(/[#,]/)
-      .map(tag => tag.trim().replace(/^#/, ''))
-      .filter(Boolean)
-      .slice(0, 5);
+  function getSupabaseClient() {
+    if (supabaseClient) return supabaseClient;
+    const config = window.HABITFLOW_SUPABASE_CONFIG || {};
+    if (!config.url || !config.anonKey || !window.supabase?.createClient) return null;
+    supabaseClient = window.supabase.createClient(config.url, config.anonKey, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+    });
+    return supabaseClient;
+  }
+
+  async function currentUserId() {
+    const client = getSupabaseClient();
+    if (!client) return null;
+    try {
+      const { data } = await client.auth.getUser();
+      return data?.user?.id || null;
+    } catch (error) {
+      console.warn('[HabitFlow/learning-vault] Auth-Status konnte nicht gelesen werden.', error);
+      return null;
+    }
+  }
+
+  function isMissingLearningVaultRelationError(error) {
+    const text = `${error?.code || ''} ${error?.message || ''} ${error?.details || ''}`.toLowerCase();
+    return text.includes('42p01') || text.includes('pgrst205') || text.includes(TABLE_NAME);
+  }
+
+  function rowForRemote(item, userId) {
+    const normalized = normalizeItem(item);
+    if (!normalized || !userId) return null;
+    return {
+      id: normalized.id,
+      user_id: userId,
+      title: normalized.title,
+      body: normalized.body,
+      context: normalized.context || null,
+      tags: normalized.tags,
+      is_archived: Boolean(normalized.is_archived),
+      created_at: normalized.created_at,
+      updated_at: normalized.updated_at
+    };
+  }
+
+  function mergeItems(localItems = [], remoteItems = []) {
+    const map = new Map();
+    localItems.map(normalizeItem).filter(Boolean).forEach(item => map.set(item.id, item));
+    remoteItems.map(item => normalizeItem({ ...item, synced: true })).filter(Boolean).forEach(remote => {
+      const local = map.get(remote.id);
+      if (!local) {
+        map.set(remote.id, remote);
+        return;
+      }
+      const remoteMs = new Date(remote.updated_at || remote.created_at || 0).getTime();
+      const localMs = new Date(local.updated_at || local.created_at || 0).getTime();
+      if (Number.isFinite(remoteMs) && remoteMs >= localMs) map.set(remote.id, remote);
+    });
+    return pruneCache(Array.from(map.values()));
+  }
+
+  function setSyncStatus(text) {
+    document.querySelectorAll('[data-learning-sync-status]').forEach(node => {
+      node.textContent = text;
+    });
+  }
+
+  async function fetchRemoteItems(userId) {
+    const client = getSupabaseClient();
+    if (!client || !userId || !remoteSupported) return null;
+    const { data, error } = await client
+      .from(TABLE_NAME)
+      .select(REMOTE_SELECT)
+      .eq('user_id', userId)
+      .order('updated_at', { ascending: false })
+      .limit(MAX_CACHE_ITEMS);
+    if (error) {
+      if (isMissingLearningVaultRelationError(error)) {
+        remoteSupported = false;
+        setSyncStatus('Lokal gespeichert · Supabase-SQL fehlt');
+        console.warn('[HabitFlow/learning-vault] Supabase-Tabelle fehlt. Learnings bleiben lokal, bis sql/add-learning-vault.sql ausgeführt wurde.', error);
+        return null;
+      }
+      throw error;
+    }
+    return Array.isArray(data) ? data : [];
+  }
+
+  async function upsertRemoteItems(items = [], userId) {
+    const client = getSupabaseClient();
+    if (!client || !userId || !remoteSupported || !items.length) return false;
+    const rows = items.map(item => rowForRemote(item, userId)).filter(Boolean);
+    if (!rows.length) return false;
+    const { error } = await client.from(TABLE_NAME).upsert(rows, { onConflict: 'user_id,id' });
+    if (error) {
+      if (isMissingLearningVaultRelationError(error)) {
+        remoteSupported = false;
+        setSyncStatus('Lokal gespeichert · Supabase-SQL fehlt');
+        return false;
+      }
+      throw error;
+    }
+    const syncedIds = new Set(rows.map(row => row.id));
+    writeCache(readCache().map(item => syncedIds.has(item.id) ? { ...item, synced: true } : item));
+    return true;
+  }
+
+  async function syncWithRemote() {
+    if (syncInFlight || !remoteSupported) return;
+    syncInFlight = true;
+    try {
+      const userId = await currentUserId();
+      if (!userId) {
+        setSyncStatus('Lokal gespeichert · Sync nach Login');
+        return;
+      }
+      setSyncStatus('Sync läuft · bewusst ohne Punkte');
+      const localBeforePull = readCache();
+      const remoteRows = await fetchRemoteItems(userId);
+      if (!Array.isArray(remoteRows)) return;
+      const merged = mergeItems(localBeforePull, remoteRows);
+      writeCache(merged);
+      const pending = merged.filter(item => item.synced !== true);
+      if (pending.length) await upsertRemoteItems(pending, userId);
+      setSyncStatus('Mit Supabase synchronisiert · ohne Punkte');
+      renderList(document);
+    } catch (error) {
+      console.warn('[HabitFlow/learning-vault] Remote-Sync fehlgeschlagen.', error);
+      setSyncStatus('Lokal gespeichert · Sync später erneut');
+    } finally {
+      syncInFlight = false;
+    }
+  }
+
+  function scheduleRemoteSync(delay = 400) {
+    if (syncTimer) window.clearTimeout(syncTimer);
+    syncTimer = window.setTimeout(syncWithRemote, delay);
+  }
+
+  function syncSingleItem(item) {
+    scheduleRemoteSync(250);
+    currentUserId().then(userId => {
+      if (!userId) return;
+      return upsertRemoteItems([item], userId);
+    }).catch(error => {
+      console.warn('[HabitFlow/learning-vault] Learning konnte nicht sofort remote gespeichert werden.', error);
+    }).finally(() => renderList(document));
   }
 
   function injectStyles() {
@@ -101,7 +301,7 @@
     const list = root.querySelector('[data-learning-list]');
     const count = root.querySelector('[data-learning-count]');
     if (!list) return;
-    const items = readItems().sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+    const items = visibleItems();
     if (count) count.textContent = items.length ? `${items.length} Notiz${items.length === 1 ? '' : 'en'}` : 'bereit';
     if (!items.length) {
       list.innerHTML = `<div class="learning-vault-empty">Noch keine Learnings gespeichert. Gute Sätze, Modelle oder Beobachtungen landen hier, ohne daraus sofort eine Aufgabe zu machen.</div>`;
@@ -143,7 +343,7 @@
               <input name="tags" maxlength="80" placeholder="Tags · Fokus, Arbeit, Leben" />
             </div>
             <div class="learning-vault-actions">
-              <span class="subtle">Privat lokal gespeichert · bewusst ohne Punkte</span>
+              <span class="subtle" data-learning-sync-status>Lokal gespeichert · Sync nach Login</span>
               <button class="pill primary" type="submit">Learning speichern</button>
             </div>
           </form>
@@ -184,6 +384,7 @@
     if (!panel) return;
     panel.open = true;
     window.localStorage?.setItem(UI_KEY, 'open');
+    scheduleRemoteSync(50);
     panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     window.setTimeout(() => panel.querySelector('textarea')?.focus({ preventScroll: true }), 220);
     document.getElementById('mobileQuickAdd')?.removeAttribute('open');
@@ -197,19 +398,22 @@
       const data = new FormData(form);
       const body = String(data.get('body') || '').trim();
       if (!body) return;
-      const firstSentence = body.split(/[.!?\n]/).find(Boolean)?.trim() || body;
-      const item = {
+      const item = normalizeItem({
         id: uid(),
-        title: firstSentence.slice(0, 72),
         body,
         context: String(data.get('context') || '').trim().slice(0, 80),
         tags: normalizeTags(data.get('tags')),
-        created_at: nowIso()
-      };
-      const next = [item, ...readItems()].slice(0, MAX_ITEMS);
-      if (writeItems(next)) {
+        created_at: nowIso(),
+        updated_at: nowIso(),
+        synced: false
+      });
+      if (!item) return;
+      const next = [item, ...readCache()];
+      if (writeCache(next)) {
         form.reset();
         renderList(document);
+        setSyncStatus('Lokal gespeichert · Sync läuft im Hintergrund');
+        syncSingleItem(item);
         window.dispatchEvent(new CustomEvent('habitflow:learning-saved', { detail: item }));
       }
     });
@@ -224,15 +428,33 @@
       const deleteButton = event.target.closest('[data-learning-delete]');
       if (!deleteButton) return;
       const id = deleteButton.getAttribute('data-learning-delete');
-      writeItems(readItems().filter(item => item.id !== id));
+      const cache = readCache();
+      const existing = cache.find(item => item.id === id);
+      if (!existing) return;
+      const archived = { ...existing, is_archived: true, updated_at: nowIso(), synced: false };
+      writeCache([archived, ...cache.filter(item => item.id !== id)]);
       renderList(document);
+      setSyncStatus('Gelöscht · Sync läuft im Hintergrund');
+      syncSingleItem(archived);
     });
 
     document.addEventListener('toggle', event => {
       if (event.target?.id === 'learningVaultSection') {
         window.localStorage?.setItem(UI_KEY, event.target.open ? 'open' : 'closed');
+        if (event.target.open) scheduleRemoteSync(100);
       }
     }, true);
+  }
+
+  function bindRemoteRefresh() {
+    const client = getSupabaseClient();
+    if (client && !authSubscription) {
+      const { data } = client.auth.onAuthStateChange(() => scheduleRemoteSync(300));
+      authSubscription = data?.subscription || null;
+    }
+    window.addEventListener('online', () => scheduleRemoteSync(300));
+    window.addEventListener('focus', () => scheduleRemoteSync(300));
+    window.setInterval(() => scheduleRemoteSync(300), 60_000);
   }
 
   function init() {
@@ -240,6 +462,8 @@
     ensurePanel();
     ensureQuickAction();
     renderList(document);
+    bindRemoteRefresh();
+    scheduleRemoteSync(700);
   }
 
   if (document.readyState === 'loading') {
@@ -250,8 +474,10 @@
   bindEvents();
 
   modules.register('learning-vault', {
-    description: 'Lightweight local-first capture space for quotes, mental models and observations without turning them into tasks.',
+    description: 'Local-first capture space for quotes, mental models and observations. Syncs to Supabase learning_vault after login without creating tasks or points.',
     storageKey: STORAGE_KEY,
-    maxItems: MAX_ITEMS
+    tableName: TABLE_NAME,
+    maxItems: MAX_ITEMS,
+    syncNow: syncWithRemote
   });
 })(window, document);
