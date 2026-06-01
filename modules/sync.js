@@ -17,6 +17,7 @@
     'task_ideas',
     'activity_ideas',
     'appointments',
+    'learning_vault',
     'points_ledger'
   ]);
 
@@ -30,7 +31,7 @@
   }
 
   modules.register('sync', {
-    description: 'Sync contract and Supabase table map. app.js remains the active sync runner.',
+    description: 'Sync contract and Supabase table map. app.js remains the active sync runner; feature modules may use their own local-first remote sync.',
     dependsOn: Object.freeze(['state']),
     policy: Object.freeze({
       primarySource: 'Supabase after login',
