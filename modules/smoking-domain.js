@@ -143,3 +143,101 @@
     exports: Object.freeze(['scoreInterval', 'recalculateEvents', 'pointsForScoringInterval'])
   });
 })(window);
+
+(function enhanceSmokeIntervalStrikes(window, document) {
+  'use strict';
+
+  const STYLE_ID = 'smokeIntervalStrikeStyles';
+  const VISUAL_SELECTOR = '#smokeIntervalVisual';
+  const BAR_SELECTOR = '.interval-skyline-bar';
+
+  function injectStrikeStyles() {
+    if (document.getElementById(STYLE_ID)) return;
+    const style = document.createElement('style');
+    style.id = STYLE_ID;
+    style.textContent = `
+      #smokeIntervalVisual .smoke-strike-grid{grid-template-columns:repeat(2,minmax(0,1fr));margin:14px 0 4px;}
+      #smokeIntervalVisual .smoke-strike-card{position:relative;overflow:hidden;}
+      #smokeIntervalVisual .smoke-strike-card:after{content:"";position:absolute;inset:auto 14px 12px auto;width:54px;height:54px;border-radius:50%;background:rgba(100,208,203,.14);pointer-events:none;}
+      #smokeIntervalVisual .smoke-strike-card strong{font-size:clamp(1.75rem,4vw,2.45rem);letter-spacing:-.06em;}
+      #smokeIntervalVisual .smoke-strike-card small{color:var(--muted);}
+      #smokeIntervalVisual .smoke-strike-card.is-current{border-color:rgba(100,208,203,.24);background:linear-gradient(135deg,rgba(100,208,203,.12),rgba(255,255,255,.045));}
+      body.light #smokeIntervalVisual .smoke-strike-card.is-current{background:linear-gradient(135deg,rgba(100,208,203,.16),rgba(255,255,255,.78));}
+    `;
+    document.head.appendChild(style);
+  }
+
+  function isStrikeBar(bar) {
+    return Boolean(bar && !bar.classList.contains('is-critical') && !bar.classList.contains('is-warning'));
+  }
+
+  function buildStrikeStats(bars) {
+    let best = 0;
+    let run = 0;
+    let current = 0;
+    bars.forEach(bar => {
+      if (isStrikeBar(bar)) {
+        run += 1;
+        best = Math.max(best, run);
+      } else {
+        run = 0;
+      }
+    });
+    for (let index = bars.length - 1; index >= 0; index -= 1) {
+      if (!isStrikeBar(bars[index])) break;
+      current += 1;
+    }
+    return { best, current, total: bars.length };
+  }
+
+  function strikeSignature(bars) {
+    return bars.map(bar => isStrikeBar(bar) ? '1' : '0').join('');
+  }
+
+  function renderStrikeCards() {
+    const visual = document.querySelector(VISUAL_SELECTOR);
+    if (!visual) return;
+    const skyline = visual.querySelector('.interval-skyline');
+    if (!skyline) return;
+    const bars = Array.from(skyline.querySelectorAll(BAR_SELECTOR));
+    const existing = visual.querySelector('.smoke-strike-grid');
+    if (!bars.length) {
+      if (existing) existing.remove();
+      return;
+    }
+    const signature = strikeSignature(bars);
+    if (existing && existing.dataset.strikeSignature === signature) return;
+    const stats = buildStrikeStats(bars);
+    const strikeGrid = document.createElement('div');
+    strikeGrid.className = 'smoke-strike-grid smoking-visual-summary-grid';
+    strikeGrid.dataset.strikeSignature = signature;
+    strikeGrid.innerHTML = `
+      <article class="smoke-strike-card"><small>Bester Strike</small><strong>${stats.best}×</strong><p>Längste Serie ohne rote oder orange Pausen in der sichtbaren Sequenz.</p></article>
+      <article class="smoke-strike-card is-current"><small>Aktueller Strike</small><strong>${stats.current}×</strong><p>Vom neuesten Balken rückwärts gezählt. Rot oder Orange startet neu.</p></article>
+    `;
+    const summary = visual.querySelector('.smoking-visual-summary-grid');
+    if (existing) existing.replaceWith(strikeGrid);
+    else if (summary) summary.insertAdjacentElement('afterend', strikeGrid);
+  }
+
+  function scheduleRender() {
+    window.cancelAnimationFrame(scheduleRender.frame);
+    scheduleRender.frame = window.requestAnimationFrame(() => {
+      injectStrikeStyles();
+      renderStrikeCards();
+    });
+  }
+
+  function init() {
+    injectStrikeStyles();
+    renderStrikeCards();
+    const observer = new MutationObserver(scheduleRender);
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init, { once: true });
+  } else {
+    init();
+  }
+})(window, document);
