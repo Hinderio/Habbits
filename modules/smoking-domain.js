@@ -246,10 +246,11 @@
 (function enhanceMonthlyMissionSuggestions(window, document) {
   'use strict';
 
+  const STORAGE_KEY = 'habitflow-state-v1';
   const STYLE_ID = 'monthlyMissionSuggestionStyles';
   const EXTRA_PRESETS = [
-    { id: 'weight-goal', title: 'Gewicht-Ziel', source: 'Gesundheit · Gewicht', target: '1' },
-    { id: 'pushups-goal', title: 'Liegestütze-Ziel', source: 'Fitness · Liegestütze', target: '100' }
+    { id: 'weight-goal', title: 'Gewicht-Ziel', source: 'Ernährung · Gewicht messen', type: 'weight' },
+    { id: 'pushups-goal', title: 'Liegestütze-Ziel', source: 'Fitness · Liegestütze', type: 'pushups' }
   ];
 
   function injectStyles() {
@@ -257,13 +258,184 @@
     const style = document.createElement('style');
     style.id = STYLE_ID;
     style.textContent = `
-      #monthlyMissions .monthly-custom-row [data-action="create-monthly-mission-custom"]{font-weight:560!important;}
-      #monthlyMissions #monthlyMissionMetric,
-      #monthlyMissions #monthlyMissionMetric option,
-      #monthlyMissions .monthly-preset-btn span{font-weight:520!important;}
       #monthlyMissions .monthly-preset-btn.hf-monthly-extra-preset{background:rgba(255,255,255,.052);background-image:none;}
+      #monthlyMissions .monthly-mission-card.hf-habit-linked .monthly-mission-counter{display:none!important;}
     `;
     document.head.appendChild(style);
+  }
+
+  function readAppState() {
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || '{}');
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (error) {
+      return {};
+    }
+  }
+
+  function normalizedText(value = '') {
+    return String(value || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/ü/g, 'u')
+      .replace(/ä/g, 'a')
+      .replace(/ö/g, 'o')
+      .replace(/ß/g, 'ss');
+  }
+
+  function dateKey(value) {
+    const date = value ? new Date(value) : null;
+    if (!date || Number.isNaN(date.getTime())) return '';
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  }
+
+  function currentMonthKey() {
+    return dateKey(new Date()).slice(0, 7);
+  }
+
+  function activeRows(rows) {
+    return Array.isArray(rows) ? rows.filter(row => row && !row.deleted_at && !row.archived_at && !row.is_archived) : [];
+  }
+
+  function habitLabel(habit = {}) {
+    return normalizedText(`${habit.name || ''} ${habit.icon || ''} ${habit.type || ''} ${habit.unit || ''}`);
+  }
+
+  function findHabit(state, type) {
+    const habits = activeRows(state.habits);
+    if (type === 'weight') {
+      return habits.find(habit => habit.type === 'weight')
+        || habits.find(habit => habitLabel(habit).includes('gewicht') || habitLabel(habit).includes('weight'))
+        || null;
+    }
+    return habits.find(habit => {
+      const text = habitLabel(habit);
+      return text.includes('pushup') || text.includes('push-up') || text.includes('push up') || text.includes('liegestutz') || text.includes('liegestuetz');
+    }) || null;
+  }
+
+  function entriesForHabit(state, habit, { monthKey = null } = {}) {
+    if (!habit?.id) return [];
+    return activeRows(state.habitEntries)
+      .filter(entry => entry.habit_id === habit.id)
+      .filter(entry => !monthKey || dateKey(entry.occurred_at || entry.created_at).slice(0, 7) === monthKey)
+      .sort((a, b) => new Date(a.occurred_at || a.created_at || 0) - new Date(b.occurred_at || b.created_at || 0));
+  }
+
+  function entryNumber(entry, fallback = 1) {
+    const value = Number(entry?.value ?? entry?.amount ?? entry?.count ?? fallback);
+    return Number.isFinite(value) ? value : fallback;
+  }
+
+  function formatNumber(value, digits = 0) {
+    const number = Number(value || 0);
+    return number.toLocaleString('de-CH', {
+      maximumFractionDigits: digits,
+      minimumFractionDigits: digits && !Number.isInteger(number) ? 1 : 0
+    });
+  }
+
+  function clamp(value, min = 0, max = 100) {
+    return Math.max(min, Math.min(max, Number(value) || 0));
+  }
+
+  function missionIdFromCard(card) {
+    return card.querySelector('[data-id]')?.dataset?.id || '';
+  }
+
+  function missionTitleFromCard(card) {
+    return card.querySelector('.monthly-mission-card-head strong')?.textContent?.trim() || '';
+  }
+
+  function findMission(state, card) {
+    const id = missionIdFromCard(card);
+    const title = missionTitleFromCard(card);
+    return activeRows(state.monthlyMissions).find(mission => mission.id === id)
+      || activeRows(state.monthlyMissions).find(mission => String(mission.title || '').trim() === title)
+      || { title, target: Number(card.querySelector('.monthly-mission-meta span')?.textContent?.match(/\d+(?:[.,]\d+)?/g)?.at(-1) || 1), month_key: currentMonthKey() };
+  }
+
+  function buildWeightMissionView(state, mission) {
+    const habit = findHabit(state, 'weight');
+    const entries = entriesForHabit(state, habit);
+    const target = Number(mission.target || 0);
+    if (!habit || !entries.length || !Number.isFinite(target) || target <= 0) {
+      return { source: 'Ernährung · Gewicht messen', ratio: 0, meta: `0/${target || '–'} kg`, label: 'knapp', status: 'Noch kein Gewicht-Habit-Log für dieses Ziel gefunden.' };
+    }
+    const start = entryNumber(entries[0], 0);
+    const latest = entryNumber(entries[entries.length - 1], 0);
+    const wantsDown = target < start;
+    const wantsUp = target > start;
+    const total = Math.abs(start - target);
+    const progress = wantsDown ? start - latest : wantsUp ? latest - start : 0;
+    const completed = wantsDown ? latest <= target : wantsUp ? latest >= target : Math.abs(latest - target) < 0.05;
+    const ratio = completed ? 100 : total > 0 ? clamp((progress / total) * 100) : 0;
+    const remaining = Math.max(0, Math.abs(latest - target));
+    return {
+      source: `Ernährung · ${habit.name || 'Gewicht messen'}`,
+      ratio,
+      meta: `${formatNumber(latest, 1)}/${formatNumber(target, 1)} kg`,
+      label: completed ? 'geschafft' : ratio >= 70 ? 'auf Kurs' : 'knapp',
+      status: completed ? 'Gewichtsziel erreicht. Stark dokumentiert.' : `Noch ${formatNumber(remaining, 1)} kg bis zum Ziel · ${entries.length} Wiegepunkt${entries.length === 1 ? '' : 'e'} gespeichert.`
+    };
+  }
+
+  function buildPushupMissionView(state, mission) {
+    const habit = findHabit(state, 'pushups');
+    const target = Math.max(1, Number(mission.target || 1));
+    const monthKey = mission.month_key || currentMonthKey();
+    const entries = entriesForHabit(state, habit, { monthKey });
+    const total = entries.reduce((sum, entry) => sum + Math.max(0, entryNumber(entry, 1)), 0);
+    const ratio = clamp((total / target) * 100);
+    const remaining = Math.max(0, Math.ceil(target - total));
+    return {
+      source: `Fitness · ${habit?.name || 'Liegestütze'}`,
+      ratio,
+      meta: `${formatNumber(total)}/${formatNumber(target)} Liegestütze`,
+      label: ratio >= 100 ? 'geschafft' : ratio >= 70 ? 'auf Kurs' : 'knapp',
+      status: habit ? (ratio >= 100 ? 'Liegestütze-Ziel abgeschlossen. Saubere Kraft-Serie.' : `Noch ${formatNumber(remaining)} Liegestütze aus deinem Habit bis zum Monatsziel.`) : 'Noch kein Liegestütze-Habit gefunden.'
+    };
+  }
+
+  function applyMissionView(card, view) {
+    const signature = JSON.stringify(view);
+    if (card.dataset.hfHabitMissionSignature === signature) return;
+    card.dataset.hfHabitMissionSignature = signature;
+    card.classList.add('hf-habit-linked');
+    card.classList.remove('is-complete', 'is-track', 'is-behind');
+    card.classList.add(view.ratio >= 100 ? 'is-complete' : view.ratio >= 70 ? 'is-track' : 'is-behind');
+    const source = card.querySelector('.monthly-mission-card-head small');
+    const percent = card.querySelector('.monthly-mission-card-head em');
+    const progress = card.querySelector('.monthly-mission-progress i');
+    const meta = card.querySelector('.monthly-mission-meta span');
+    const label = card.querySelector('.monthly-mission-meta b');
+    const paragraph = Array.from(card.children).find(child => child.tagName === 'P');
+    if (source) source.textContent = view.source;
+    if (percent) percent.textContent = `${Math.round(view.ratio)}%`;
+    if (progress) progress.style.width = `${clamp(view.ratio)}%`;
+    if (meta) meta.textContent = view.meta;
+    if (label) label.textContent = view.label;
+    if (paragraph) paragraph.textContent = view.status;
+    card.querySelector('.monthly-mission-counter')?.remove();
+  }
+
+  function enhanceMissionCards() {
+    const state = readAppState();
+    document.querySelectorAll('#monthlyMissions .monthly-mission-card').forEach(card => {
+      const title = normalizedText(missionTitleFromCard(card));
+      const mission = findMission(state, card);
+      if (title.includes('gewicht')) applyMissionView(card, buildWeightMissionView(state, mission));
+      if (title.includes('liegestutz') || title.includes('liegestuetz') || title.includes('pushup')) applyMissionView(card, buildPushupMissionView(state, mission));
+    });
+  }
+
+  function suggestedWeightTarget() {
+    const state = readAppState();
+    const habit = findHabit(state, 'weight');
+    const entries = entriesForHabit(state, habit);
+    const latest = entries.length ? entryNumber(entries[entries.length - 1], 0) : 0;
+    return latest ? String(Math.max(1, Math.floor(latest - 2))) : '82';
   }
 
   function fillCustomMission(preset) {
@@ -272,7 +444,7 @@
     const metricSelect = document.getElementById('monthlyMissionMetric');
     if (!titleInput || !targetInput || !metricSelect) return;
     titleInput.value = preset.title;
-    targetInput.value = preset.target;
+    targetInput.value = preset.type === 'weight' ? suggestedWeightTarget() : '100';
     metricSelect.value = 'manual_count';
     titleInput.dispatchEvent(new Event('input', { bubbles: true }));
     targetInput.dispatchEvent(new Event('input', { bubbles: true }));
@@ -284,17 +456,19 @@
   function enhancePresetGrid() {
     injectStyles();
     const grid = document.querySelector('#monthlyMissions .monthly-preset-grid');
-    if (!grid) return;
-    EXTRA_PRESETS.forEach(preset => {
-      if (grid.querySelector(`[data-hf-monthly-preset="${preset.id}"]`)) return;
-      const button = document.createElement('button');
-      button.className = 'monthly-preset-btn hf-monthly-extra-preset';
-      button.type = 'button';
-      button.dataset.hfMonthlyPreset = preset.id;
-      button.innerHTML = `<strong>${preset.title}</strong><span>${preset.source}</span>`;
-      button.addEventListener('click', () => fillCustomMission(preset));
-      grid.appendChild(button);
-    });
+    if (grid) {
+      EXTRA_PRESETS.forEach(preset => {
+        if (grid.querySelector(`[data-hf-monthly-preset="${preset.id}"]`)) return;
+        const button = document.createElement('button');
+        button.className = 'monthly-preset-btn hf-monthly-extra-preset';
+        button.type = 'button';
+        button.dataset.hfMonthlyPreset = preset.id;
+        button.innerHTML = `<strong>${preset.title}</strong><span>${preset.source}</span>`;
+        button.addEventListener('click', () => fillCustomMission(preset));
+        grid.appendChild(button);
+      });
+    }
+    enhanceMissionCards();
   }
 
   function scheduleEnhance() {
