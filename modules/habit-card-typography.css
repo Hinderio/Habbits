@@ -25,7 +25,6 @@
   font-weight: 480 !important;
 }
 
-/* Smoke visuals: scoped replacements only; rendering, data and event logic stay untouched. */
 #cigaretteHeatmapVisual {
   --hf-smoke-level-1: rgba(143, 240, 167, .38);
   --hf-smoke-level-2: rgba(74, 215, 209, .36);
@@ -131,7 +130,6 @@ body:not(.light) #screen-smoking .smoke-button {
   color: #fff2df !important;
 }
 
-/* Primary action buttons: calm matte turquoise + clear, but not overly heavy, typography. */
 :where(.pill.primary, .mini-btn.primary, .craving-actions .mini-btn, .habit-detail-primary .mini-btn.primary, .habit-detail-done, .task-toolbar-actions .pill.is-active, .mobile-quick-add > summary, .mobile-quick-sheet button:not(.is-danger)) {
   background: #64d0cb !important;
   background-image: none !important;
@@ -161,3 +159,12 @@ body:not(.light) :where(.pill.primary, .mini-btn.primary, .craving-actions .mini
   background: #64d0cb !important;
   color: #071521 !important;
 }
+
+:root{--hf-risk-orange-solid:#E89160;--hf-risk-orange-text:#7A4A20;--hf-capture-green:#64D0CB;}
+#urgeForecastBadge.badge,#coachRiskBadge.badge,.risk-badge,.dashboard-risk-badge,.risk-pill{background:var(--hf-risk-orange-solid)!important;background-image:none!important;border-color:var(--hf-risk-orange-solid)!important;color:var(--hf-risk-orange-text)!important;opacity:1!important;box-shadow:none!important;}
+#habitHeatmap .heatmap-cell,.habit-heatmap-cell,.heatmap-cell{background-image:none!important;opacity:1!important;}
+#habitHeatmap .heatmap-cell.is-empty{background:rgba(255,255,255,.055)!important;}
+#habitHeatmap .heatmap-cell.is-low,.heatmap-cell--low{background:rgba(100,208,203,.22)!important;}
+#habitHeatmap .heatmap-cell.is-mid,.heatmap-cell--mid{background:rgba(100,208,203,.42)!important;}
+#habitHeatmap .heatmap-cell.is-high,.heatmap-cell--high{background:rgba(100,208,203,.68)!important;}
+#habitHeatmap .heatmap-cell.is-full,.heatmap-cell--full,.heatmap-cell--done,.heatmap-cell--active{background:var(--hf-capture-green)!important;}
