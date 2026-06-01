@@ -203,593 +203,112 @@
             <button type="button" data-action="record-cigarette"><span class="quick-action-icon">+</span><strong>Zigarette</strong></button>
             <button type="button" data-action="open-morning-routine"><span class="quick-action-icon">→</span><strong>Morgenroutine</strong></button>
             <button type="button" data-action="open-task-form"><span class="quick-action-icon">+</span><strong>Aufgabe</strong></button>
-            <button type="button" data-action="open-appointment-form"><span class="quick-action-icon">+</span><strong>Termin / Tagesplanung</strong></button>
-            <button type="button" data-action="open-coach"><span class="quick-action-icon">→</span><strong>Coach</strong></button>
-            <button class="is-danger" type="button" data-action="start-emergency-craving"><span class="quick-action-icon">!</span><strong>Ich will jetzt rauchen</strong></button>
+            <button type="button" data-action="open-appointment-form"><span class="quick-action-icon">+"</span><strong>Termin</strong></button>
+            <button type="button" data-action="start-emergency-craving"><span class="quick-action-icon">!</span><strong>Craving-Hilfe</strong></button>
           </div>
         </details>
+
       </section>
 
       <section id="screen-smoking" class="screen" data-screen="smoking" hidden aria-hidden="true">
-        <section class="consumption-mobile-head glass" aria-label="Konsum Überblick">
-          <div>
-            <p class="eyebrow">Konsum</p>
-            <h2>Ruhig steuern statt reagieren</h2>
-            <p>Rauchen und Alkohol bleiben getrennt, schnell erfassbar und mobil als klares Command Center lesbar.</p>
-          </div>
+        <div class="consumption-tabs glass" role="tablist" aria-label="Konsum-Bereich wählen">
+          <button class="consumption-switch-btn is-active" type="button" data-action="switch-consumption-mode" data-mode="smoke">Rauchen</button>
+          <button class="consumption-switch-btn" type="button" data-action="switch-consumption-mode" data-mode="alcohol">Alkohol</button>
+        </div>
+
+        <div id="consumption-pane-smoke" class="consumption-pane is-active" data-consumption-pane="smoke">
+        <div class="smoke-hero-card glass smoke-control-card">
+          <div class="smoke-ring"><div><span id="smokePauseLive">–</span><small>seit letzter Zigarette</small></div></div>
+          <div class="smoke-copy"><p class="eyebrow">Rauchen</p><h2>Impulse sichtbar machen.</h2><p id="smokePauseHint">Noch kein Eintrag vorhanden</p><div id="smokePauseStatus" class="pause-status-card"></div><div class="mini-stat-row" id="smokeMobileKpis"></div></div>
+          <button id="recordSmokeBtn" class="smoke-button" type="button">+ Zigarette</button>
+        </div>
+
+        <details class="mobile-consumption-section" data-mobile-open open>
+          <summary><span>Soforthilfe</span><small>Delay & Trigger</small></summary>
+        <section class="panel glass craving-coach-card">
+          <div class="panel-head"><div><p class="eyebrow">Craving Coach</p><h3>Vor der nächsten Zigarette</h3></div><button class="mini-btn" type="button" data-action="rotate-craving-tip">neuer Tipp</button></div>
+          <div class="craving-tip"><span id="cravingTipMeta">Delay</span><strong id="cravingTipTitle">10-Minuten-Verzögerung</strong><p id="cravingTipBody">Stell dir innerlich nur ein kleines Ziel: nicht nie wieder, sondern jetzt 10 Minuten später.</p><button class="mini-btn primary" type="button" data-action="start-emergency-craving">90 Sek. begleiten</button></div>
         </section>
-
-        <div class="consumption-switch glass" role="tablist" aria-label="Konsum-Modus wechseln">
-          <button class="consumption-switch-btn is-active" type="button" role="tab" aria-selected="true" data-action="switch-consumption-mode" data-mode="smoke">
-            <span data-icon="smoke"></span>
-            <strong>Rauchen</strong>
-            <small>Pause, Verlauf & Analyse</small>
-          </button>
-          <button class="consumption-switch-btn" type="button" role="tab" aria-selected="false" data-action="switch-consumption-mode" data-mode="alcohol">
-            <span data-icon="alcohol"></span>
-            <strong>Alkohol</strong>
-            <small>Einheiten, Punkte & Muster</small>
-          </button>
-        </div>
-
-        <div class="consumption-pane is-active" data-consumption-pane="smoke">
-          <div class="grid two-columns smoking-layout">
-            <section class="panel glass smoke-control-card">
-              <div class="panel-head compact"><div><p class="eyebrow">Rauchen & Kontext</p><h3>Schnell erfassen</h3></div></div>
-              <div class="smoke-ring" aria-live="polite">
-                <small>Aktuelle Pause</small>
-                <strong id="smokePauseLive">–</strong>
-                <span id="smokePauseHint">Noch kein Eintrag vorhanden</span>
-              </div>
-              <div class="pause-status-row">
-                <div id="smokePauseStatus" class="pause-status-pill" aria-live="polite"></div>
-                <button class="mini-btn" type="button" data-action="open-pause-modal" data-scope="smoke">Rauchen pausieren</button>
-              </div>
-              <div id="smokeMobileInsight" class="consumption-command-insight" aria-live="polite"></div>
-              <div id="smokeMobileKpis" class="mobile-consumption-kpis" aria-label="Rauch-Kennzahlen"></div>
-              <div class="craving-coach-card" aria-live="polite">
-                <div class="craving-coach-head">
-                  <div><p class="eyebrow">Craving-Coach</p><h4 id="cravingTipTitle">Pause verlängern</h4></div>
-                  <span id="cravingTipMeta" class="badge muted">Mini-Ziel</span>
-                </div>
-                <p id="cravingTipBody">Ein kurzer Reset hilft dir, die nächste Pause bewusst ein paar Minuten zu verlängern.</p>
-                <div class="craving-actions">
-                  <button class="mini-btn primary" type="button" data-action="rotate-craving-tip">Tipp</button>
-                  <button class="mini-btn primary" type="button" data-action="open-coach">Coach</button>
-                </div>
-              </div>
-              <button id="recordSmokeBtn" class="smoke-button" type="button">
-                <span>+</span>
-                Zigarette
-              </button>
-              <div id="triggerCaptureCard" class="trigger-capture-card hidden"></div>
-            </section>
-
-            <details class="mobile-consumption-section" data-mobile-open="true">
-              <summary><span>Verlauf & Kosten</span><small>bei Bedarf öffnen</small></summary>
-              <section class="panel glass consumption-history-panel">
-                <div class="panel-head"><div><p class="eyebrow">Rauchen</p><h3>Logs bei Bedarf</h3></div><span id="lastSmokePoints" class="badge muted">0 Einträge</span></div>
-                <div id="smokeHistory" class="history-launch-area"></div>
-              </section>
-            </details>
-          </div>
-
-          <div class="grid two-columns smoking-intelligence-grid">
-            <details class="mobile-consumption-section" data-mobile-open="true">
-              <summary><span>Deep Smoke Map</span><small>Wochen & Tage</small></summary>
-              <section class="panel glass smoking-visual-panel">
-                <div class="panel-head">
-                  <div><p class="eyebrow">Deep Smoke Map</p><h3>Zigaretten nach Kalenderwoche & Tag</h3></div>
-                  <span id="cigaretteHeatmapBadge" class="subtle">12 KW</span>
-                </div>
-                <div id="cigaretteHeatmapVisual" class="smoking-visual-body"></div>
-              </section>
-            </details>
-
-            <details class="mobile-consumption-section">
-              <summary><span>Interval Intelligence</span><small>Pausenqualität</small></summary>
-              <section class="panel glass smoking-visual-panel">
-                <div class="panel-head">
-                  <div><p class="eyebrow">Interval Intelligence</p><h3>Qualität der Pausen</h3></div>
-                  <span id="smokeIntervalQuality" class="badge muted">lernt</span>
-                </div>
-                <div id="smokeIntervalVisual" class="smoking-visual-body"></div>
-              </section>
-            </details>
-          </div>
-        </div>
-
-        <div class="consumption-pane" data-consumption-pane="alcohol">
-          <div class="grid two-columns smoking-layout">
-            <section class="panel glass alcohol-control-card">
-              <div class="panel-head compact"><div><p class="eyebrow">Alkohol</p><h3>Einheit per Tap speichern</h3></div></div>
-              <div class="alcohol-ring" aria-live="polite">
-                <small>Heute</small>
-                <strong id="alcoholTodayUnits">0</strong>
-                <span id="alcoholTodayHint">Noch keine Einheit erfasst</span>
-              </div>
-              <div class="pause-status-row">
-                <div id="alcoholPauseStatus" class="pause-status-pill" aria-live="polite"></div>
-                <button class="mini-btn" type="button" data-action="open-pause-modal" data-scope="alcohol">Alkohol pausieren</button>
-              </div>
-              <div id="alcoholMobileInsight" class="consumption-command-insight" aria-live="polite"></div>
-              <div id="alcoholMobileKpis" class="mobile-consumption-kpis" aria-label="Alkohol-Kennzahlen"></div>
-              <div class="alcohol-unit-grid" aria-label="Alkohol-Einheit speichern">
-                <button class="alcohol-unit-btn" type="button" data-action="log-alcohol-unit" data-drink-type="beer"><span data-icon="beer"></span><strong>Bier</strong><small>-20</small></button>
-                <button class="alcohol-unit-btn" type="button" data-action="log-alcohol-unit" data-drink-type="wine"><span data-icon="wine"></span><strong>Wein</strong><small>-20</small></button>
-                <button class="alcohol-unit-btn" type="button" data-action="log-alcohol-unit" data-drink-type="cocktail"><span data-icon="cocktail"></span><strong>Cocktail</strong><small>-30</small></button>
-                <button class="alcohol-unit-btn" type="button" data-action="log-alcohol-unit" data-drink-type="shot"><span data-icon="shot"></span><strong>Shot</strong><small>-25</small></button>
-                <button class="alcohol-unit-btn" type="button" data-action="log-alcohol-unit" data-drink-type="other"><span data-icon="alcohol"></span><strong>Anderes</strong><small>-25</small></button>
-              </div>
-            </section>
-
-            <details class="mobile-consumption-section" data-mobile-open="true">
-              <summary><span>Einheiten-Logs</span><small>bei Bedarf öffnen</small></summary>
-              <section class="panel glass consumption-history-panel">
-                <div class="panel-head"><div><p class="eyebrow">Alkohol</p><h3>Einheiten-Logs</h3></div><span id="lastAlcoholPoints" class="badge muted">0 Einheiten</span></div>
-                <div id="alcoholUnitHistory" class="stack-list alcohol-history-list"></div>
-              </section>
-            </details>
-          </div>
-
-          <div class="grid two-columns smoking-intelligence-grid">
-            <details class="mobile-consumption-section" data-mobile-open="true">
-              <summary><span>Deep Alcohol Map</span><small>Wochen & Tage</small></summary>
-              <section class="panel glass smoking-visual-panel">
-                <div class="panel-head">
-                  <div><p class="eyebrow">Deep Alcohol Map</p><h3>Einheiten nach Kalenderwoche & Tag</h3></div>
-                  <span id="alcoholHeatmapBadge" class="subtle">12 KW</span>
-                </div>
-                <div id="alcoholHeatmapVisual" class="smoking-visual-body"></div>
-              </section>
-            </details>
-
-            <details class="mobile-consumption-section">
-              <summary><span>Alcohol Intelligence</span><small>Konsumfolge</small></summary>
-              <section class="panel glass smoking-visual-panel">
-                <div class="panel-head">
-                  <div><p class="eyebrow">Alcohol Intelligence</p><h3>Qualität der Konsumfolge</h3></div>
-                  <span id="alcoholIntervalQuality" class="badge muted">lernt</span>
-                </div>
-                <div id="alcoholIntervalVisual" class="smoking-visual-body"></div>
-              </section>
-            </details>
-          </div>
-        </div>
-
-        <details class="mobile-consumption-section pause-overview-mobile-section" open>
-          <summary><span>Pausen</span><small>Logs & Planung</small></summary>
-          <section class="panel glass pause-overview-panel">
-            <div class="panel-head"><div><p class="eyebrow">Pausen</p><h3>Konsum bewusst aussetzen</h3></div><span class="subtle">auch rueckwirkend</span></div>
-            <div id="consumptionPauseList" class="pause-card-list"></div>
-          </section>
         </details>
 
-        <details class="mobile-consumption-section consumption-rules-section">
-          <summary><span>Regelwerk</span><small>Punkte-Logik</small></summary>
-          <section class="panel glass">
-            <div class="panel-head rules-panel-head">
-            <div><p class="eyebrow">Regelwerk</p><h3>Rauchen & Alkohol → Punkte</h3></div>
-            <button id="toggleRulesBtn" class="mini-btn" type="button" aria-expanded="true">Regelwerk ausblenden</button>
-          </div>
-          <div id="rulesContent" class="rules-stack">
-            <div class="rules-block">
-              <div class="rules-subhead"><strong>Rauch-Pausen</strong><small>aktuelles Punktesystem</small></div>
-              <div class="score-rules-grid">
-                <article><strong>&lt; 30 Min.</strong><span>-40</span><small>zu kurzer Abstand</small></article>
-                <article><strong>30–59 Min.</strong><span>-20</span><small>noch zu nah dran</small></article>
-                <article><strong>1–2 Std.</strong><span>0</span><small>neutraler Bereich</small></article>
-                <article><strong>2–4 Std.</strong><span>+20</span><small>guter Abstand</small></article>
-                <article><strong>4–8 Std.</strong><span>+60</span><small>stark</small></article>
-                <article><strong>8+ Std.</strong><span>+100</span><small>starker Langpausen-Bonus</small></article>
-              </div>
-            </div>
-            <div class="rules-block alcohol-rules-panel">
-              <div class="rules-subhead"><strong>Alkohol</strong><small>automatische Minus-Punkte pro Einheit</small></div>
-              <div class="score-rules-grid alcohol-score-grid">
-                <article><strong>Bier</strong><span>-20</span><small>pro Einheit</small></article>
-                <article><strong>Shot</strong><span>-25</span><small>pro Einheit</small></article>
-                <article><strong>Cocktail</strong><span>-30</span><small>pro Einheit</small></article>
-                <article><strong>Wein</strong><span>-20</span><small>pro Einheit</small></article>
-                <article><strong>Anderes</strong><span>-25</span><small>pro Einheit</small></article>
-                <article><strong>Mehrere Tage</strong><span>-5 / -10</span><small>bei 3+ bzw. 5+ Tagen in Folge</small></article>
-              </div>
-              <div class="alcohol-rules-note">
-                <strong>Zusatzabzug bei laufend viel Konsum:</strong>
-                <span>ab 5 Einheiten in 7 Tagen −5, ab 8 Einheiten −10, ab 12 Einheiten −15 Punkte pro weiterem Log.</span>
-              </div>
-            </div>
-          </div>
-          </section>
+        <details class="mobile-consumption-section" open>
+          <summary><span>Analyse</span><small id="smokeMobileInsight">Heatmap & Pausen</small></summary>
+        <section class="panel glass smoke-visual-panel">
+          <div class="panel-head"><div><p class="eyebrow">Deep Smoke Analytics</p><h3>Rauchmuster sichtbar machen</h3></div><span id="cigaretteHeatmapBadge" class="badge muted">lernt</span></div>
+          <div id="cigaretteHeatmapVisual" class="smoke-heatmap-visual"></div>
+        </section>
+        <section class="panel glass smoke-interval-panel">
+          <div class="panel-head"><div><p class="eyebrow">Pausen-Qualität</p><h3>Abstände & Sequenzen</h3></div><span id="smokeIntervalQuality" class="badge muted">lernt</span></div>
+          <div id="smokeIntervalVisual" class="smoke-interval-visual"></div>
+        </section>
         </details>
+
+        <details class="mobile-consumption-section" open>
+          <summary><span>Trigger</span><small>nach Log erfassen</small></summary>
+        <section class="panel glass trigger-capture-card" id="triggerCaptureCard"></section>
+        </details>
+
+        <details class="mobile-consumption-section" open>
+          <summary><span>Verlauf</span><small>letzte Einträge</small></summary>
+        <section class="panel glass history-panel">
+          <div class="panel-head"><div><p class="eyebrow">Historie</p><h3>Letzte Einträge</h3></div><button class="mini-btn" type="button" data-action="open-smoke-history">Verlauf öffnen</button></div>
+          <div id="smokeHistory" class="stack-list"></div>
+        </section>
+        </details>
+        </div>
+
+        <div id="consumption-pane-alcohol" class="consumption-pane" data-consumption-pane="alcohol">
+        <div class="smoke-hero-card glass alcohol-control-card">
+          <div class="smoke-ring alcohol-ring"><div><span id="alcoholTodayUnits">0</span><small>Einheiten heute</small></div></div>
+          <div class="smoke-copy"><p class="eyebrow">Alkohol</p><h2>Kontext statt Autopilot.</h2><p id="alcoholTodayHint">Heute noch nichts erfasst</p><div id="alcoholPauseStatus" class="pause-status-card"></div><div class="mini-stat-row" id="alcoholMobileKpis"></div></div>
+          <div class="alcohol-log-row"><select id="alcoholTypeSelect" aria-label="Alkohol-Typ"><option value="beer">Bier</option><option value="wine">Wein</option><option value="cocktail">Cocktail</option><option value="shot">Shot</option><option value="other">Anderes</option></select><button id="recordAlcoholUnitBtn" class="pill primary" type="button">+ Einheit</button></div>
+        </div>
+
+        <details class="mobile-consumption-section" data-mobile-open open>
+          <summary><span>Überblick</span><small id="alcoholMobileInsight">Heute & letzter Log</small></summary>
+        <div class="grid cards-3">
+          <article class="metric-card glass"><span class="metric-label">Heute</span><strong id="alcoholTodayUnits">0</strong><small>Alkohol-Einheiten</small></article>
+          <article class="metric-card glass"><span class="metric-label">Letzte Punkte</span><strong id="lastAlcoholPoints">–</strong><small>bewerteter Log</small></article>
+        </div>
+        </details>
+
+        <details class="mobile-consumption-section" open>
+          <summary><span>Analyse</span><small>Heatmap & Abstände</small></summary>
+        <section class="panel glass smoke-visual-panel">
+          <div class="panel-head"><div><p class="eyebrow">Alcohol Analytics</p><h3>Alkoholmuster sichtbar machen</h3></div><span id="alcoholHeatmapBadge" class="badge muted">lernt</span></div>
+          <div id="alcoholHeatmapVisual" class="smoke-heatmap-visual alcohol-heatmap-visual"></div>
+        </section>
+        <section class="panel glass smoke-interval-panel">
+          <div class="panel-head"><div><p class="eyebrow">Abstände</p><h3>Alkohol-Sequenzen</h3></div><span id="alcoholIntervalQuality" class="badge muted">lernt</span></div>
+          <div id="alcoholIntervalVisual" class="smoke-interval-visual alcohol-interval-visual"></div>
+        </section>
+        </details>
+
+        <details class="mobile-consumption-section" open>
+          <summary><span>Verlauf</span><small>Einheiten</small></summary>
+        <section class="panel glass history-panel">
+          <div class="panel-head"><div><p class="eyebrow">Alkohol-Historie</p><h3>Letzte Einheiten</h3></div><button class="mini-btn" type="button" data-action="open-alcohol-history">Verlauf öffnen</button></div>
+          <div id="alcoholUnitHistory" class="stack-list"></div>
+        </section>
+        </details>
+        </div>
+
+        <section class="panel glass points-system-card">
+          <div class="panel-head"><div><p class="eyebrow">Punkte-System</p><h3>Regeln & Feedback</h3></div><button id="toggleRulesBtn" class="mini-btn" type="button">Regeln anzeigen</button></div>
+          <div id="rulesContent" class="rules-grid hidden"></div>
+        </section>
       </section>
-
-      <div id="pauseModal" class="coach-modal pause-modal hidden" role="dialog" aria-modal="true" aria-labelledby="pauseModalTitle">
-        <section class="coach-modal-card pause-modal-card">
-          <button id="pauseModalCloseBtn" class="icon-btn coach-close-btn" type="button" aria-label="Pause-Dialog schliessen">×</button>
-          <div class="pause-modal-head">
-            <p class="eyebrow">Pause planen</p>
-            <h2 id="pauseModalTitle">Pause speichern</h2>
-            <p>Setze Habits, Rauchen oder Alkohol fuer einen Zeitraum aus. Das funktioniert auch rueckwirkend und laesst bestehende Logs unangetastet.</p>
-          </div>
-          <form id="pauseForm" class="form-grid pause-form">
-            <input type="hidden" name="scope" />
-            <input type="hidden" name="target_id" />
-            <label><span>Bereich</span><input id="pauseScopeLabel" type="text" readonly /></label>
-            <label><span>Von</span><input name="starts_at" type="datetime-local" required /></label>
-            <label><span>Bis</span><input name="ends_at" type="datetime-local" /></label>
-            <label class="full"><span>Notiz</span><textarea name="note" rows="3" placeholder="optional: Ferien, Krankheit, bewusste Pause..."></textarea></label>
-            <div class="form-actions full"><button class="pill primary" type="submit">Pause speichern</button><button class="pill secondary" type="button" data-action="close-pause-modal">Abbrechen</button></div>
-          </form>
-        </section>
-      </div>
-
-      <div id="historyModal" class="coach-modal history-modal hidden" role="dialog" aria-modal="true" aria-labelledby="historyModalTitle">
-        <section class="coach-modal-card history-modal-card">
-          <button id="historyModalCloseBtn" class="icon-btn coach-close-btn" type="button" aria-label="Verlauf schliessen">×</button>
-          <div id="historyModalContent" class="history-modal-content"></div>
-        </section>
-      </div>
-
-      <div id="morningRoutineModal" class="coach-modal morning-routine-modal hidden" role="dialog" aria-modal="true" aria-labelledby="morningRoutineModalTitle">
-        <section class="coach-modal-card morning-routine-modal-card">
-          <button id="morningRoutineModalCloseBtn" class="icon-btn coach-close-btn" type="button" aria-label="Morgenroutine schliessen">×</button>
-          <div class="morning-routine-modal-head">
-            <p class="eyebrow">Morgenroutine · 15 Min.</p>
-            <h2 id="morningRoutineModalTitle">Dein kurzer Start in den Tag.</h2>
-            <p>Wasser, Mobility, Mini-Fitness, Fokus und Abschluss – als ruhiges Pop-up, ohne das Dashboard zu überladen.</p>
-          </div>
-          <div id="morningRoutineCard" class="morning-routine-card"></div>
-        </section>
-      </div>
-
-      <div id="coachModal" class="coach-modal hidden" role="dialog" aria-modal="true" aria-labelledby="coachModalTitle">
-        <section id="coachDialog" class="coach-modal-card">
-          <button id="coachCloseBtn" class="icon-btn coach-close-btn" type="button" aria-label="Coach schliessen">×</button>
-        <section class="panel glass coach-hero-panel">
-          <div class="coach-hero">
-            <div class="coach-avatar-wrap" aria-hidden="true">
-              <img src="icons/coach-clean.svg" alt="" class="coach-avatar" />
-            </div>
-            <div class="coach-hero-copy">
-              <p class="eyebrow">Clean Coach</p>
-              <h2 id="coachModalTitle">Der nächste bessere Entscheid.</h2>
-              <p>Der Coach verbindet Konsum, offene Aufgaben, Habit-Rhythmus und aktuelle Trigger zu einem konkreten Mini-Plan für genau jetzt.</p>
-            </div>
-          </div>
-        </section>
-
-        <div class="grid two-columns coach-layout">
-          <section class="panel glass coach-control-panel">
-            <div class="panel-head">
-              <div><p class="eyebrow">Jetzt</p><h3>Check-in</h3></div>
-              <span id="coachRiskBadge" class="badge muted">Bereit</span>
-            </div>
-            <div class="coach-check-grid">
-              <label><span>Drang</span><select id="coachUrgeLevel" aria-label="Aktuelle Drangstärke"><option value="1">1 · kaum spürbar</option><option value="2">2 · leicht</option><option value="3" selected>3 · mittel</option><option value="4">4 · stark</option><option value="5">5 · sehr stark</option></select></label>
-              <label><span>Trigger</span><select id="coachTrigger" aria-label="Aktueller Trigger"><option value="stress">Stress / Druck</option><option value="coffee">Kaffee / Routine</option><option value="alcohol">Alkohol / Ausgang</option><option value="boredom">Langeweile</option><option value="reward">Belohnung</option><option value="social">Sozialer Moment</option><option value="meal">Nach dem Essen</option><option value="tasks">Aufgaben-Druck</option><option value="habits">Habit-Check</option></select></label>
-            </div>
-            <div id="coachChallengeCard" class="coach-challenge-card"></div>
-            <div class="coach-actions">
-              <button class="pill primary" type="button" data-action="start-coach-delay">10 Min. halten</button>
-              <button class="pill secondary" type="button" data-action="coach-breath-reset">Atem-Reset loggen</button>
-              <button class="pill danger" type="button" data-action="coach-record-smoke">Trotzdem erfassen</button>
-            </div>
-          </section>
-
-          <section class="panel glass coach-result-panel">
-            <div class="panel-head">
-              <div><p class="eyebrow">Analyse</p><h3>Coach sagt</h3></div>
-              <div id="coachConfidence" class="coach-confidence-score"><strong>0%</strong><span>Risiko</span></div>
-            </div>
-            <div id="coachResult" class="coach-result"></div>
-          </section>
-        </div>
-
-        <section class="panel glass coach-plan-panel">
-          <div class="panel-head"><div><p class="eyebrow">Plan</p><h3>3-Schritt-Strategie</h3></div><span class="subtle">kurz, konkret, machbar</span></div>
-          <div id="coachPlanGrid" class="coach-plan-grid"></div>
-        </section>
-        </section>
-      </div>
 
       <section id="screen-habits" class="screen" data-screen="habits" hidden aria-hidden="true">
-        <div class="section-toolbar glass">
-          <div><p class="eyebrow">Flexible Habits</p><h3>Gewohnheiten, Meditation & Quick Logging</h3></div>
-          <button id="habitFormToggleBtn" class="bubble-add-btn" type="button" aria-label="Habit-Formular öffnen"><span data-icon="plus"></span></button>
-        </div>
-        <div id="habitsOverviewPane" class="habits-pane">
-          <section id="habitFormPanel" class="panel glass drawer-form-panel hidden">
-            <div class="panel-head"><div><p class="eyebrow">Flexible Habits</p><h3 id="habitFormTitle">Gewohnheit anlegen</h3></div><button id="habitFormCloseBtn" class="icon-btn" type="button" aria-label="Habit-Formular schliessen">×</button></div>
-            <form id="habitForm" class="form-grid">
-              <label><span>Name</span><input name="name" required placeholder="z. B. Gewicht, Wasser, Sport" /></label>
-              <label><span>Typ</span><select name="type"><option value="number">Anzahl / Zahl</option><option value="weight">Gewicht</option><option value="boolean">Ja/Nein</option><option value="duration">Dauer</option></select></label>
-              <label><span>Einheit</span><input name="unit" placeholder="kg, Stück, Minuten" /></label>
-              <label><span>Zielrichtung</span><select name="direction"><option value="increase">mehr ist besser</option><option value="decrease">weniger ist besser</option></select></label>
-              <label><span>Zielwert</span><input name="target" type="number" step="0.01" placeholder="optional" /></label>
-              <label><span>Zielperiode</span><select name="target_period"><option value="day">Tagesziel</option><option value="week">Wochenziel</option><option value="month">Monatsziel</option></select></label>
-              <label><span>Icon-Stil</span><input name="icon" value="number" placeholder="number, water, sport, standingDesk, pushups, bread, jogging, hiking, walking" /></label>
-              <label><span>Schwierigkeit</span><select name="dna_difficulty"><option value="1">1 · sehr leicht</option><option value="2" selected>2 · eher leicht</option><option value="3">3 · mittel</option><option value="4">4 · anspruchsvoll</option><option value="5">5 · sehr anspruchsvoll</option></select></label>
-              <label><span>Energielevel</span><select name="dna_energy"><option value="1">1 · sehr niedrig</option><option value="2">2 · niedrig</option><option value="3" selected>3 · mittel</option><option value="4">4 · hoch</option><option value="5">5 · sehr hoch</option></select></label>
-              <label><span>Ideale Tageszeit</span><select name="dna_preferred_time"><option value="flexible" selected>Flexibel</option><option value="early">Früh</option><option value="morning">Morgens</option><option value="midday">Mittags</option><option value="afternoon">Nachmittags</option><option value="evening">Abends</option><option value="late">Spät</option></select></label>
-              <label><span>Emotionale Hürde</span><select name="dna_emotional_hurdle"><option value="consistency" selected>Dranbleiben</option><option value="resistance">Innerer Widerstand</option><option value="stress">Stress / Druck</option><option value="perfectionism">Perfektionismus</option><option value="boredom">Langeweile</option><option value="tiredness">Müdigkeit</option></select></label>
-              <label><span>Auslöser</span><select name="dna_trigger"><option value="routine" selected>Routine</option><option value="wakeup">Nach dem Aufstehen</option><option value="coffee">Nach Kaffee</option><option value="workstart">Arbeitsstart</option><option value="meal">Nach dem Essen</option><option value="afterwork">Feierabend</option><option value="workout">Nach Bewegung</option><option value="bedtime">Vor dem Schlafen</option></select></label>
-              <label><span>Belohnung</span><select name="dna_reward"><option value="progress" selected>Fortschritt</option><option value="pride">Stolz</option><option value="calm">Ruhe</option><option value="clarity">Klarheit</option><option value="energy">Energie</option><option value="relief">Erleichterung</option></select></label>
-              <div class="full form-inline-hint"><span class="form-inline-icon" data-icon="jogging"></span><div><strong>Fitness-ready:</strong><span>Wenn du ein Habit wie Joggen oder Wandern mit Icon <em>jogging</em> oder <em>hiking</em> anlegst, interpretiert die App den Log als Strecke in km und zeigt automatisch die Motivationslinien im Fitness-Tab.</span></div></div>
-              <div class="form-actions full"><button id="habitSubmitBtn" class="pill primary" type="submit">Habit erstellen</button><button id="cancelHabitEditBtn" class="pill secondary hidden" type="button">Abbrechen</button></div>
-            </form>
-          </section>
-          <section class="panel glass">
-            <div class="panel-head"><div><p class="eyebrow">Habit DNA</p><h3>Muster statt nur Listen</h3></div><span class="subtle">lernt mit jedem Log</span></div>
-            <div id="habitDnaOverview" class="habit-dna-overview"></div>
-          </section>
-          <section class="panel glass">
-            <div class="panel-head"><div><p class="eyebrow">Heute</p><h3>Solide Kategorie-Tiles</h3></div><span class="subtle">antippen öffnet Details</span></div>
-            <div id="habitCards" class="habit-card-grid"></div>
-          </section>
-          <section class="panel glass habit-story-panel">
-            <div class="panel-head"><div><p class="eyebrow">Spielerische Stats</p><h3>Habits mit Story statt nur Zahlen</h3></div><span class="subtle">automatisch berechnet</span></div>
-            <div id="habitPlayfulStats" class="habit-playful-grid"></div>
-          </section>
-        </div>
-      </section>
-
-      <section id="screen-fitness" class="screen" data-screen="fitness" hidden aria-hidden="true">
-        <div class="section-toolbar glass fitness-toolbar">
-          <div><p class="eyebrow">Fitness</p><h3>Routen, Kilometer & Trainings-Story</h3></div>
-          <div class="fitness-toolbar-actions">
-            <span class="badge muted">Joggen · Wandern</span>
-          </div>
-        </div>
-        <button class="fitness-coach-fab" type="button" data-action="open-fitness-coach" aria-label="Fitness Coach öffnen">
-          <span data-icon="plus"></span>
-          <strong>Coach</strong>
-        </button>
-        <section class="panel glass fitness-screen-panel">
-          <div class="panel-head"><div><p class="eyebrow">Fitness Tab</p><h3>Luftlinien, Orte & Berg-Sammlung</h3></div><span class="subtle">Luftlinie ab Wil SG</span></div>
-          <div id="fitnessHubContent"></div>
-        </section>
-      </section>
-
-      <div id="fitnessCoachModal" class="coach-modal fitness-coach-modal hidden" role="dialog" aria-modal="true" aria-labelledby="fitnessCoachTitle">
-        <section class="coach-modal-card fitness-coach-card">
-          <button id="fitnessCoachCloseBtn" class="icon-btn coach-close-btn" type="button" aria-label="Fitness Coach schliessen">×</button>
-          <div id="fitnessCoachContent" class="fitness-coach-content"></div>
-        </section>
-      </div>
-
-      <section id="screen-tasks" class="screen" data-screen="tasks" hidden aria-hidden="true">
-        <div class="section-toolbar glass task-toolbar">
-          <div><p class="eyebrow">Tasks</p><h3>Aufgaben-Board</h3></div>
-          <div class="task-toolbar-actions" aria-label="Task-Aktionen">
-            <button id="taskIdeasToggleBtn" class="pill secondary" type="button" aria-expanded="false">Ideenpool <span id="taskIdeasCount" class="inline-count">0</span></button>
-            <button id="taskWeeklyToggleBtn" class="pill secondary" type="button" aria-expanded="false">Wochenplan</button>
-            <button id="taskBacklogToggleBtn" class="pill secondary" type="button" aria-expanded="false">Backlog <span id="taskBacklogCount" class="inline-count">0</span></button>
-            <button id="taskArchiveToggleBtn" class="pill secondary" type="button" aria-expanded="false">Archiv <span id="taskArchiveCount" class="inline-count">0</span></button>
-            <button id="taskTimelineToggleBtn" class="pill secondary" type="button" aria-expanded="false">Task-Kalender</button>
-            <button id="taskFormToggleBtn" class="bubble-add-btn" type="button" aria-label="Aufgaben-Formular öffnen"><span data-icon="plus"></span></button>
-          </div>
-        </div>
-        <section id="taskWeeklyPanel" class="panel glass task-weekly-panel hidden">
-          <div class="panel-head task-weekly-head">
-            <div>
-              <p class="eyebrow">Smart Weekly Planning</p>
-              <h3>Woche bewusst planen</h3>
-              <span id="taskWeeklyRange" class="subtle">Diese Woche</span>
-            </div>
-            <div class="action-row task-weekly-controls" aria-label="Wochenplanung steuern">
-              <button id="taskWeeklyPrevBtn" class="icon-btn" type="button" aria-label="Vorherige Woche">‹</button>
-              <button id="taskWeeklyTodayBtn" class="pill secondary" type="button">Diese Woche</button>
-              <button id="taskWeeklyNextBtn" class="icon-btn" type="button" aria-label="Nächste Woche">›</button>
+        <div class="section-toolbar glass habits-section-toolbar">
+          <div><p class="eyebrow">Habits</p><h3>Deine Gewohnheiten</h3></div>
+          <div class="habits-toolbar-actions">
+            <div class="habits-pane-switch" role="tablist" aria-label="Habit Ansicht wählen">
+              <button id="habitsOverviewTabBtn" class="habits-pane-btn is-active" type="button" data-habits-pane="overview" role="tab" aria-selected="true">Übersicht</button>
+              <button id="habitsFitnessTabBtn" class="habits-pane-btn" type="button" data-habits-pane="fitness" role="tab" aria-selected="false">Fitness</button>
             </div>
           </div>
-          <div id="taskWeeklyOverview" class="task-weekly-overview"></div>
-          <div class="task-weekly-layout">
-            <section class="task-weekly-column">
-              <div class="weekly-column-head">
-                <div><p class="eyebrow">Vorschläge</p><h4>Realistische Planung</h4></div>
-                <span class="subtle">ein Tap plant sauber ein</span>
-              </div>
-              <div id="taskWeeklySuggestions" class="task-weekly-suggestions"></div>
-            </section>
-            <section class="task-weekly-column task-weekly-days-column">
-              <div class="weekly-column-head">
-                <div><p class="eyebrow">Woche</p><h4>Tasks & Termine</h4></div>
-                <span class="subtle">Desktop als Raster, Mobile swipebar</span>
-              </div>
-              <div id="taskWeeklyDays" class="task-weekly-days"></div>
-            </section>
-          </div>
         </section>
-        <section id="taskIdeasPanel" class="panel glass task-ideas-panel hidden">
-          <div class="panel-head task-ideas-head">
-            <div><p class="eyebrow">Ideenpool</p><h3>Ideen bestätigen statt neu erfassen</h3></div>
-            <div class="action-row idea-head-actions">
-              <button class="mini-btn" type="button" data-action="refresh-leisure-ideas">Freizeit neu mischen</button>
-              <button class="mini-btn primary" type="button" data-action="generate-task-ideas">Vorschläge generieren</button>
-            </div>
-          </div>
-          <section class="activity-finder-card" aria-labelledby="activityFinderTitle">
-            <div class="activity-finder-copy">
-              <p class="eyebrow">Freizeit-Finder</p>
-              <h4 id="activityFinderTitle">Was machen wir gegen Langeweile?</h4>
-              <p>Beantworte ein paar kurze Fragen. Die App filtert aus deinem editierbaren Vorschlagspool passende Ausflüge, Events und Mini-Abenteuer.</p>
-            </div>
-            <form id="activityFinderForm" class="activity-finder-form">
-              <label><span>Worauf hast du Lust?</span><select name="mood"><option value="any">Egal</option><option value="active">Bewegung</option><option value="chill">Ruhig</option><option value="creative">Kreativ</option><option value="social">Sozial</option><option value="curious">Entdecken</option><option value="adventure">Mini-Abenteuer</option><option value="nightlife">Ausgang</option><option value="recovery">Recovery</option></select></label>
-              <label><span>Wie viel Zeit?</span><select name="duration"><option value="any">Egal</option><option value="15m">15 Min.</option><option value="30m">30 Min.</option><option value="1h">1 Std.</option><option value="2h">2 Std.</option><option value="halfday">Halbtag</option><option value="day">Ganzer Tag</option><option value="evening">Abend</option></select></label>
-              <label><span>Mit wem?</span><select name="people"><option value="any">Egal</option><option value="solo">Solo</option><option value="duo">Zu zweit</option><option value="friends">Freunde</option><option value="family">Familie</option><option value="club">Club</option></select></label>
-              <label><span>Wo passt es?</span><select name="setting"><option value="any">Egal</option><option value="outdoor">Draussen</option><option value="indoor">Drinnen</option><option value="mixed">Flexibel</option></select></label>
-              <label><span>Budget?</span><select name="budget"><option value="any">Egal</option><option value="free">Gratis</option><option value="low">Klein</option><option value="medium">Normal</option><option value="high">Premium</option></select></label>
-              <label><span>Energie?</span><select name="energy"><option value="any">Egal</option><option value="low">Low Energy</option><option value="medium">Normal</option><option value="high">Aktiv</option></select></label>
-              <label><span>Transport?</span><select name="transport"><option value="any">Egal</option><option value="home">Zuhause</option><option value="walk">Zu Fuss</option><option value="bike">Bike</option><option value="vespa">Vespa</option><option value="train">Zug</option><option value="public">ÖV</option><option value="car">Auto</option></select></label>
-              <label><span>Stichwort</span><input name="query" placeholder="z. B. Jass, Techno, Wandern" /></label>
-            </form>
-            <div class="activity-finder-actions">
-              <span id="activityFinderMeta" class="subtle">Lade Vorschläge...</span>
-              <div class="activity-finder-action-buttons">
-                <button class="mini-btn" type="button" data-action="reset-leisure-filters">Filter zurücksetzen</button>
-                <button class="mini-btn primary" type="button" data-action="toggle-activity-form">+ Vorschlag</button>
-              </div>
-            </div>
-            <section id="activityCatalogFormPanel" class="activity-catalog-form-panel hidden" aria-hidden="true">
-              <div class="panel-head compact-head">
-                <div><p class="eyebrow">Freizeit-Katalog</p><h4 id="activityCatalogFormTitle">Eigenen Vorschlag erfassen</h4></div>
-                <button class="icon-btn" type="button" data-action="cancel-activity-edit" aria-label="Freizeit-Vorschlag schliessen">×</button>
-              </div>
-              <form id="activityCatalogForm" class="activity-catalog-form">
-                <label class="full"><span>Titel</span><input name="title" required placeholder="z. B. Spontaner Zugtrip an den See" /></label>
-                <label class="full"><span>Beschreibung</span><textarea name="summary" rows="3" placeholder="Was macht die Idee spannend?"></textarea></label>
-                <label><span>Kategorie-Label</span><input name="category_label" placeholder="z. B. Mini-Abenteuer" /></label>
-                <label><span>Kategorie-Key</span><input name="category" placeholder="z. B. adventure" /></label>
-                <label><span>Stimmung</span><select name="mood"><option value="active">Bewegung</option><option value="chill">Ruhig</option><option value="creative">Kreativ</option><option value="social">Sozial</option><option value="curious" selected>Entdecken</option><option value="adventure">Mini-Abenteuer</option><option value="nightlife">Ausgang</option><option value="recovery">Recovery</option></select></label>
-                <label><span>Zeit</span><select name="duration_band"><option value="15m">15 Min.</option><option value="30m">30 Min.</option><option value="1h" selected>1 Std.</option><option value="2h">2 Std.</option><option value="halfday">Halbtag</option><option value="day">Ganzer Tag</option><option value="evening">Abend</option></select></label>
-                <label><span>Mit wem</span><input name="people" placeholder="solo, duo, friends" /></label>
-                <label><span>Ort</span><select name="setting"><option value="outdoor">Draussen</option><option value="indoor">Drinnen</option><option value="mixed" selected>Flexibel</option></select></label>
-                <label><span>Budget</span><select name="budget"><option value="free">Gratis</option><option value="low" selected>Klein</option><option value="medium">Normal</option><option value="high">Premium</option></select></label>
-                <label><span>Energie</span><select name="energy"><option value="low">Low Energy</option><option value="medium" selected>Normal</option><option value="high">Aktiv</option></select></label>
-                <label><span>Transport</span><input name="transport" placeholder="walk, train, vespa" /></label>
-                <label><span>Story Points</span><select name="story_points"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="5">5</option><option value="8">8</option></select></label>
-                <label><span>Priorität</span><select name="priority"><option value="low">Niedrig</option><option value="medium" selected>Normal</option><option value="high">Hoch</option><option value="urgent">Kritisch</option></select></label>
-                <label class="full"><span>Tags</span><input name="tags" placeholder="jass, techno, kreativ" /></label>
-                <div class="form-actions full"><button id="activityCatalogSubmitBtn" class="pill primary" type="submit">Vorschlag speichern</button><button class="pill secondary" type="button" data-action="cancel-activity-edit">Abbrechen</button></div>
-              </form>
-            </section>
-            <div id="activitySuggestionList" class="activity-suggestion-list"></div>
-          </section>
-          <div class="task-ideas-shell">
-            <form id="taskIdeaForm" class="form-grid task-idea-form">
-              <label class="full"><span>Idee</span><input name="title" required placeholder="z. B. Abend-Reset nach 20 Uhr" /></label>
-              <label><span>Kategorie</span><select name="category"><option value="focus">Fokus</option><option value="health">Gesundheit</option><option value="consumption">Konsum</option><option value="habit">Habit</option><option value="admin">Admin</option><option value="experiment">Experiment</option></select></label>
-              <label><span>Story Points</span><select name="story_points"><option value="1">1 · sehr klein</option><option value="2" selected>2 · klein</option><option value="3">3 · mittel</option><option value="5">5 · gross</option><option value="8">8 · sehr gross</option></select></label>
-              <label><span>Priorität</span><select name="priority"><option value="low">Niedrig</option><option value="medium" selected>Normal</option><option value="high">Hoch</option><option value="urgent">Kritisch</option></select></label>
-              <label class="full"><span>Notiz</span><textarea name="description" rows="3" placeholder="Warum ist diese Idee wertvoll?"></textarea></label>
-              <div class="form-actions full"><button class="pill primary" type="submit">Idee speichern</button></div>
-            </form>
-            <aside class="idea-generator-card">
-              <span class="habit-icon mini">💡</span>
-              <div>
-                <strong>Smart aus deinem System</strong>
-                <p>Erkennt überfällige Tasks, Backlog-Potenzial, Habit-Lücken und Konsum-Muster. Du entscheidest, was wirklich zur Aufgabe wird.</p>
-              </div>
-            </aside>
-          </div>
-          <div id="taskIdeaList" class="task-idea-list"></div>
-        </section>
-        <section id="taskFormPanel" class="panel glass drawer-form-panel hidden">
-          <div class="panel-head"><div><p class="eyebrow">Tasks</p><h3 id="taskFormTitle">Aufgabe erfassen</h3></div><button id="taskFormCloseBtn" class="icon-btn" type="button" aria-label="Aufgaben-Formular schliessen">×</button></div>
-          <form id="taskForm" class="form-grid">
-            <label class="full"><span>Titel</span><input name="title" required placeholder="Was willst du erledigen?" /></label>
-            <label><span>Aufwand</span><select name="effort"><option value="1">1 · sehr klein</option><option value="2">2 · klein</option><option value="3" selected>3 · mittel</option><option value="4">4 · gross</option><option value="5">5 · sehr gross</option></select></label>
-            <label><span>Priorität</span><select name="priority"><option value="low">Niedrig</option><option value="medium" selected>Normal</option><option value="high">Hoch</option><option value="urgent">Kritisch</option></select></label>
-            <label><span>Fällig</span><input name="due_at" type="datetime-local" /></label>
-            <label><span>Zyklus</span><select id="taskRecurrenceSelect" name="recurrence"><option value="none" selected>Einmalig</option><option value="monthly">Monatlich automatisch</option></select></label>
-            <div id="taskRecurrenceHint" class="task-cycle-hint full">Einmalige Aufgabe ohne automatische Folgekarten.</div>
-            <label class="full"><span>Notiz</span><textarea name="description" rows="3" placeholder="optional · Links werden automatisch klickbar"></textarea></label>
-            <label class="full task-image-upload"><span>Bildanhang</span><input name="images" type="file" accept="image/*" multiple /><small id="taskImageHint">Optional · bis zu 3 Bilder, komprimiert und nur im Task-Detail sichtbar.</small></label>
-            <label id="taskImageRemoveLabel" class="full task-image-remove hidden"><input name="remove_images" type="checkbox" value="1" /><span>Bestehende Bilder beim Speichern entfernen</span></label>
-            <div class="form-actions full"><button id="taskSubmitBtn" class="pill primary" type="submit">Aufgabe speichern</button><button id="cancelTaskEditBtn" class="pill secondary hidden" type="button">Abbrechen</button></div>
-          </form>
-        </section>
-        <section id="taskBacklogPanel" class="panel glass task-backlog-panel hidden">
-          <div class="panel-head">
-            <div><p class="eyebrow">Backlog</p><h3>Später priorisieren</h3></div>
-            <span class="subtle">Karten ziehen oder mobil mit ↑ / ↓ sortieren</span>
-          </div>
-          <div id="taskBacklogList" class="task-backlog-list" data-backlog-drop></div>
-        </section>
-        <section id="taskArchivePanel" class="panel glass task-archive-panel hidden">
-          <div class="panel-head">
-            <div><p class="eyebrow">Archiv</p><h3>Erledigte Aufgaben später ansehen</h3></div>
-            <span class="subtle">abgeschlossen, aus dem Board entfernt</span>
-          </div>
-          <div id="taskArchiveList" class="task-archive-list" data-task-archive-drop></div>
-        </section>
-        <section id="taskTimelinePanel" class="panel glass task-timeline-panel hidden">
-          <div class="panel-head">
-            <div><p class="eyebrow">Task-Kalender</p><h3>Fälligkeiten auf einen Blick</h3></div>
-            <span class="subtle">Offen & in Bearbeitung</span>
-          </div>
-          <div id="taskTimeline" class="task-timeline"></div>
-        </section>
-        <section class="panel glass">
-          <div class="panel-head"><div><p class="eyebrow">Kanban</p><h3>Aufgaben-Board</h3></div><span id="taskPointsPreview" class="badge muted">Aufwand × 20 Pkt.</span></div>
-          <div id="tasksList" class="kanban-shell"></div>
-        </section>
-      </section>
-
-      <div id="taskDetailModal" class="coach-modal task-detail-modal hidden" role="dialog" aria-modal="true" aria-labelledby="taskDetailTitle">
-        <section class="coach-modal-card task-detail-card">
-          <button id="taskDetailCloseBtn" class="icon-btn coach-close-btn" type="button" aria-label="Task-Detail schliessen">×</button>
-          <div id="taskDetailContent" class="task-detail-content"></div>
-        </section>
-      </div>
-
-      <section id="screen-calendar" class="screen" data-screen="calendar" hidden aria-hidden="true">
-        <div class="section-toolbar glass">
-          <div><p class="eyebrow">Kalender</p><h3>Termine & Tagesplanung</h3></div>
-          <button id="appointmentFormToggleBtn" class="bubble-add-btn" type="button" aria-label="Termin-Formular öffnen"><span data-icon="plus"></span></button>
-        </div>
-        <section id="appointmentFormPanel" class="panel glass drawer-form-panel hidden">
-          <div class="panel-head"><div><p class="eyebrow">Termin</p><h3 id="appointmentFormTitle">Termin erfassen</h3></div><button id="appointmentFormCloseBtn" class="icon-btn" type="button" aria-label="Termin-Formular schliessen">×</button></div>
-          <form id="appointmentForm" class="form-grid">
-            <label class="full"><span>Titel</span><input name="title" required placeholder="z. B. Arzttermin, Meeting, Dinner" /></label>
-            <label><span>Start</span><input name="starts_at" type="datetime-local" required /></label>
-            <label><span>Ende</span><input name="ends_at" type="datetime-local" /></label>
-            <label><span>Typ</span><select name="appointment_type"><option value="personal" selected>Privat</option><option value="work">Arbeit</option><option value="health">Gesundheit</option><option value="social">Sozial</option><option value="admin">Admin</option><option value="other">Sonstiges</option></select></label>
-            <label><span>Ort</span><input name="location" placeholder="optional" /></label>
-            <label class="full"><span>Notiz</span><textarea name="description" rows="3" placeholder="optional"></textarea></label>
-            <div class="form-actions full"><button id="appointmentSubmitBtn" class="pill primary" type="submit">Termin speichern</button><button id="cancelAppointmentEditBtn" class="pill secondary hidden" type="button">Abbrechen</button></div>
-          </form>
-        </section>
-        <section class="panel glass calendar-panel">
-          <div class="panel-head calendar-head">
-            <div><p class="eyebrow">Kalender</p><h3 id="calendarTitle">Monat</h3></div>
-            <div class="action-row">
-              <button id="prevMonthBtn" class="icon-btn" type="button" aria-label="Vorheriger Monat">‹</button>
-              <button id="todayMonthBtn" class="pill secondary" type="button">Heute</button>
-              <button id="nextMonthBtn" class="icon-btn" type="button" aria-label="Nächster Monat">›</button>
-            </div>
-          </div>
-          <div class="calendar-weekdays"><span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span></div>
-          <div id="calendarGrid" class="calendar-grid"></div>
-        </section>
-        <section class="panel glass">
-          <div class="panel-head"><div><p class="eyebrow">Tagesdetails</p><h3 id="selectedDateTitle">Heute</h3></div><button class="pill secondary" type="button" data-action="new-appointment-for-day">Termin anlegen</button></div>
-          <div id="dayDetails" class="stack-list"></div>
-        </section>
-      </section>
-
-      <section id="screen-settings" class="screen" data-screen="settings" hidden aria-hidden="true">
-        <div class="grid two-columns">
-          <section class="panel glass">
-            <div class="panel-head"><div><p class="eyebrow">Supabase Auth</p><h3>Privater Sync</h3></div><span id="syncStatus" class="badge muted">Verbinde…</span></div>
-            <form id="settingsForm" class="form-grid">
-              <div class="sync-live-card full">
-                <strong>Angemeldet als <span id="authUserEmail">–</span></strong>
-                <span>Die App synchronisiert erst nach E-Mail/Passwort-Login. Supabase RLS filtert jede Tabelle auf deinen Auth-User.</span>
-              </div>
-              <div class="form-actions full">
-                <button id="manualSyncBtn" class="pill primary" type="submit">Jetzt synchronisieren</button>
-                <button id="logoutBtn" class="pill secondary" type="button">Abmelden</button>
-              </div>
-            </form>
-            <div class="sync-info-grid">
-              <article><strong>Private Rows</strong><span>Neue Daten werden mit deiner User-ID gespeichert und sind für andere Logins unsichtbar.</span></article>
-              <article><strong>Offline zuerst</strong><span>Lokale Eingaben bleiben möglich und werden nach Login und Verbindung abgeglichen.</span></article>
-            </div>
-            <p class="settings-note">Für echte Sicherheit muss das neue supabase.sql angewendet und die alten public Policies entfernt sein.</p>
-          </section>
-
-          <section class="panel glass">
-            <div class="panel-head"><div><p class="eyebrow">Daten</p><h3>Backup & Restore</h3></div></div>
-            <div class="action-row data-actions">
-              <button id="exportBtn" class="pill secondary" type="button">JSON exportieren</button>
-              <label class="pill secondary file-input-pill">JSON importieren<input id="importInput" type="file" accept=".json,application/json" /></label>
-              <button id="resetBtn" class="pill danger" type="button">Demo zurücksetzen</button>
-            </div>
-          </section>
-        </div>
       </section>
     </main>
 
@@ -812,6 +331,7 @@
   <script src="modules/points-domain.js"></script>
   <script src="modules/smoking-domain.js"></script>
   <script src="modules/alcohol-domain.js"></script>
+  <script src="modules/dashboard-chart-colors.js"></script>
   
   <script src="app.js"></script>
 </body>
