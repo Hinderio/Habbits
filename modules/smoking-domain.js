@@ -157,12 +157,13 @@
     style.id = STYLE_ID;
     style.textContent = `
       #smokeIntervalVisual .smoke-strike-grid{grid-template-columns:repeat(2,minmax(0,1fr));margin:14px 0 4px;}
-      #smokeIntervalVisual .smoke-strike-card{position:relative;overflow:hidden;}
-      #smokeIntervalVisual .smoke-strike-card:after{content:"";position:absolute;inset:auto 14px 12px auto;width:54px;height:54px;border-radius:50%;background:rgba(100,208,203,.14);pointer-events:none;}
+      #smokeIntervalVisual .smoke-strike-card{position:relative;overflow:hidden;background:rgba(255,255,255,.052)!important;background-image:none!important;}
+      #smokeIntervalVisual .smoke-strike-card:after{display:none!important;content:none!important;}
       #smokeIntervalVisual .smoke-strike-card strong{font-size:clamp(1.75rem,4vw,2.45rem);letter-spacing:-.06em;}
       #smokeIntervalVisual .smoke-strike-card small{color:var(--muted);}
-      #smokeIntervalVisual .smoke-strike-card.is-current{border-color:rgba(100,208,203,.24);background:linear-gradient(135deg,rgba(100,208,203,.12),rgba(255,255,255,.045));}
-      body.light #smokeIntervalVisual .smoke-strike-card.is-current{background:linear-gradient(135deg,rgba(100,208,203,.16),rgba(255,255,255,.78));}
+      #smokeIntervalVisual .smoke-strike-card.is-current{border-color:rgba(100,208,203,.24);background:rgba(255,255,255,.052)!important;background-image:none!important;}
+      body.light #smokeIntervalVisual .smoke-strike-card,
+      body.light #smokeIntervalVisual .smoke-strike-card.is-current{background:rgba(255,255,255,.82)!important;background-image:none!important;}
     `;
     document.head.appendChild(style);
   }
