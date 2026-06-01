@@ -281,6 +281,97 @@
     document.head.appendChild(style);
   }
 
+  function injectYearOverviewMobilePolish(document) {
+    if (!document || document.getElementById('habitflow-year-overview-mobile-polish')) return;
+    const style = document.createElement('style');
+    style.id = 'habitflow-year-overview-mobile-polish';
+    style.textContent = `
+      @media (max-width: 760px) {
+        #screen-smoking .hf-consumption-year-card {
+          padding: 14px !important;
+          gap: 12px !important;
+          border-radius: 26px !important;
+          overflow: hidden;
+        }
+        #screen-smoking .hf-consumption-year-head {
+          display: grid !important;
+          grid-template-columns: minmax(0, 1fr);
+          gap: 6px !important;
+          align-items: start !important;
+        }
+        #screen-smoking .hf-consumption-year-head .badge {
+          justify-self: start;
+          max-width: 100%;
+          white-space: normal;
+        }
+        #screen-smoking .hf-consumption-year-stats {
+          grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          gap: 8px !important;
+        }
+        #screen-smoking .hf-consumption-year-stats article {
+          min-height: 68px !important;
+          padding: 11px !important;
+          border-radius: 20px !important;
+        }
+        #screen-smoking .hf-consumption-year-grid {
+          width: 100% !important;
+          aspect-ratio: auto !important;
+          grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+          grid-template-rows: none !important;
+          gap: 9px !important;
+          justify-self: stretch !important;
+        }
+        #screen-smoking .hf-consumption-month {
+          aspect-ratio: 1 / 1;
+          padding: 9px !important;
+          border-radius: 20px !important;
+          gap: 5px !important;
+        }
+        #screen-smoking .hf-consumption-month-head strong {
+          font-size: .74rem !important;
+        }
+        #screen-smoking .hf-consumption-month-head small,
+        #screen-smoking .hf-consumption-month > span {
+          font-size: .63rem !important;
+        }
+        #screen-smoking .hf-consumption-month-dots {
+          grid-template-columns: repeat(7, 4px) !important;
+          grid-auto-rows: 4px !important;
+          gap: 3px !important;
+          align-content: center !important;
+          justify-content: center !important;
+        }
+        #screen-smoking .hf-year-dot {
+          width: 4px !important;
+          height: 4px !important;
+        }
+        #screen-smoking .hf-consumption-year-card > p {
+          font-size: .82rem !important;
+          line-height: 1.42 !important;
+        }
+      }
+      @media (max-width: 380px) {
+        #screen-smoking .hf-consumption-year-grid {
+          gap: 7px !important;
+        }
+        #screen-smoking .hf-consumption-month {
+          padding: 8px !important;
+          border-radius: 18px !important;
+        }
+        #screen-smoking .hf-consumption-month-dots {
+          grid-template-columns: repeat(7, 3.5px) !important;
+          grid-auto-rows: 3.5px !important;
+          gap: 2.5px !important;
+        }
+        #screen-smoking .hf-year-dot {
+          width: 3.5px !important;
+          height: 3.5px !important;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
   function loadConsumptionTimeProfile(document) {
     if (!document || document.getElementById('habitflow-consumption-time-profile-script')) return;
     const script = document.createElement('script');
@@ -301,6 +392,7 @@
 
   injectTimeProfilePeakStyle(window.document);
   injectSmokingQuickCapturePolish(window.document);
+  injectYearOverviewMobilePolish(window.document);
   loadConsumptionTimeProfile(window.document);
   loadConsumptionYearOverview(window.document);
 
@@ -313,7 +405,8 @@
       loadsConsumptionTimeProfile: true,
       loadsConsumptionYearOverview: true,
       hidesPeakDot: true,
-      smokingQuickCapturePolish: true
+      smokingQuickCapturePolish: true,
+      yearOverviewMobilePolish: true
     })
   });
 })(window);
