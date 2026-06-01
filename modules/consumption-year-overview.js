@@ -215,14 +215,14 @@
       .hf-consumption-year-stats article{min-height:66px;padding:10px 11px;border-radius:18px;background:rgba(255,255,255,.052);border:1px solid rgba(255,255,255,.065);display:grid;align-content:space-between;}
       .hf-consumption-year-stats small{color:var(--muted);font-size:.64rem;font-weight:900;text-transform:uppercase;letter-spacing:.09em;}
       .hf-consumption-year-stats strong{font-size:1rem;letter-spacing:-.025em;white-space:nowrap;}
-      .hf-consumption-year-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:7px;}
-      .hf-consumption-month{min-width:0;padding:8px;border-radius:16px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055);display:grid;gap:6px;}
+      .hf-consumption-year-grid{width:min(100%,640px);aspect-ratio:1 / 1;justify-self:center;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:repeat(4,minmax(0,1fr));gap:10px;}
+      .hf-consumption-month{min-width:0;min-height:0;padding:10px;border-radius:18px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.055);display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:7px;overflow:hidden;}
       .hf-consumption-month.is-current{border-color:#4ad7d1;box-shadow:0 0 0 2px rgba(74,215,209,.12);}
       .hf-consumption-month-head{display:flex;align-items:center;justify-content:space-between;gap:6px;}
       .hf-consumption-month-head strong{font-size:.72rem;line-height:1;font-weight:950;text-transform:uppercase;letter-spacing:.06em;}
-      .hf-consumption-month-head small,.hf-consumption-month>span{color:var(--muted);font-size:.64rem;font-weight:850;white-space:nowrap;}
-      .hf-consumption-month-dots{display:grid;grid-template-columns:repeat(7,5px);grid-auto-rows:5px;gap:3px;align-content:start;min-height:38px;}
-      .hf-year-dot{width:5px;height:5px;border-radius:999px;background:rgba(157,176,195,.18);}
+      .hf-consumption-month-head small,.hf-consumption-month>span{color:var(--muted);font-size:.64rem;font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+      .hf-consumption-month-dots{display:grid;grid-template-columns:repeat(7,6px);grid-auto-rows:6px;gap:4px;align-content:center;justify-content:center;min-height:0;}
+      .hf-year-dot{width:6px;height:6px;border-radius:999px;background:rgba(157,176,195,.18);}
       .hf-year-dot.level-1{background:#d2f6dc;}
       .hf-year-dot.level-2{background:#bdeeed;}
       .hf-year-dot.level-3{background:#cbd8e2;}
@@ -232,8 +232,8 @@
       body.light .hf-consumption-year-card,body.light .hf-consumption-year-stats article,body.light .hf-consumption-month{background:rgba(255,255,255,.72);border-color:rgba(17,36,58,.08);}
       body.light .hf-year-dot{background:rgba(95,112,130,.16);}
       body.light .hf-year-dot.level-1{background:#d2f6dc;}body.light .hf-year-dot.level-2{background:#bdeeed;}body.light .hf-year-dot.level-3{background:#cbd8e2;}body.light .hf-year-dot.level-4{background:#ffdda8;}body.light .hf-year-dot.level-5{background:#ffb8b8;}
-      @media (max-width:980px){.hf-consumption-year-grid{grid-template-columns:repeat(6,minmax(0,1fr));}.hf-consumption-year-stats{grid-template-columns:repeat(2,minmax(0,1fr));}}
-      @media (max-width:520px){.hf-consumption-year-card{padding:12px;border-radius:22px;}.hf-consumption-year-grid{grid-template-columns:repeat(3,minmax(0,1fr));}.hf-consumption-month-dots{grid-template-columns:repeat(7,4px);grid-auto-rows:4px;gap:3px;}.hf-year-dot{width:4px;height:4px;}.hf-consumption-year-head{flex-direction:column;}.hf-consumption-year-head .badge{align-self:flex-start;}}
+      @media (max-width:980px){.hf-consumption-year-grid{width:min(100%,560px);}.hf-consumption-year-stats{grid-template-columns:repeat(2,minmax(0,1fr));}}
+      @media (max-width:520px){.hf-consumption-year-card{padding:12px;border-radius:22px;}.hf-consumption-year-grid{width:100%;gap:7px;}.hf-consumption-month{padding:8px;border-radius:16px;gap:5px;}.hf-consumption-month-dots{grid-template-columns:repeat(7,4px);grid-auto-rows:4px;gap:3px;}.hf-year-dot{width:4px;height:4px;}.hf-consumption-year-head{flex-direction:column;}.hf-consumption-year-head .badge{align-self:flex-start;}}
     `;
     document.head.appendChild(style);
   }
