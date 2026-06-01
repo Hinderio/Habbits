@@ -6,7 +6,8 @@
   const SMOKE_DAILY_PREFIX = 'smoke-daily-bonus-';
   const SMOKE_DAILY_UUID_PREFIX = '00000000-0000-4000-8001-0000';
   const MORNING_ROUTINE_UUID_PREFIX = '00000000-0000-4000-8000-0000';
-  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const SMOKE_DAY_CUTOFF_HOUR = 2;
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i;
 
   function isUuid(value) {
     return UUID_RE.test(String(value || ''));
@@ -14,9 +15,31 @@
 
   function dateKey(value) {
     if (!value) return '';
-    const date = value instanceof Date ? value : new Date(value);
+    const date = value instanceof Date ? new Date(value) : new Date(value);
     if (Number.isNaN(date.getTime())) return '';
-    return date.toISOString().slice(0, 10);
+    const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 10);
+  }
+
+  function smokeDailyEarnedDateKey(value) {
+    if (!value) return '';
+    const date = value instanceof Date ? new Date(value) : new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    if (date.getHours() < SMOKE_DAY_CUTOFF_HOUR + 1) date.setDate(date.getDate() - 1);
+    return dateKey(date);
+  }
+
+  function smokeDayClosesAt(key) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(key || ''))) return null;
+    const close = new Date(`${key}T${String(SMOKE_DAY_CUTOFF_HOUR).padStart(2, '0')}:00:00`);
+    if (Number.isNaN(close.getTime())) return null;
+    close.setDate(close.getDate() + 1);
+    return close;
+  }
+
+  function isSmokeDayClosed(key, now = new Date()) {
+    const close = smokeDayClosesAt(key);
+    return Boolean(close && now.getTime() >= close.getTime());
   }
 
   function compactDateKey(value) {
@@ -58,7 +81,7 @@
       const raw = sourceId.slice(SMOKE_DAILY_UUID_PREFIX.length);
       if (/^\d{8}$/.test(raw)) return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`;
     }
-    return dateKey(row.earned_at || row.earnedAt || row.created_at || row.createdAt);
+    return smokeDailyEarnedDateKey(row.earned_at || row.earnedAt || row.created_at || row.createdAt);
   }
 
   function isMorningRoutineBonus(row = {}) {
@@ -88,6 +111,7 @@
   function dedupeLedgerRows(rows = []) {
     const bySource = new Map();
     const keepOrder = [];
+    const now = new Date();
     const stats = {
       before: Array.isArray(rows) ? rows.length : 0,
       after: 0,
@@ -95,6 +119,7 @@
       smokeDailyBefore: 0,
       smokeDailyAfter: 0,
       smokeDailyRemoved: 0,
+      smokeDailyPendingRemoved: 0,
       smokeDailyPointsBefore: 0,
       smokeDailyPointsAfter: 0,
       changedSourceIds: 0
@@ -112,6 +137,16 @@
       if (canonical !== row || canonical.source_id !== row?.source_id) {
         changed = true;
         stats.changedSourceIds += 1;
+      }
+
+      if (isSmokeDailyBonus(canonical)) {
+        const key = smokeDailyKey(canonical);
+        if (!key || !isSmokeDayClosed(key, now)) {
+          changed = true;
+          stats.smokeDailyPendingRemoved += 1;
+          stats.smokeDailyRemoved += 1;
+          return;
+        }
       }
 
       const sourceType = canonical?.source_type || canonical?.sourceType || '';
@@ -216,6 +251,10 @@
 
   function normalizeRemoteLedgerRow(row = {}) {
     const normalized = canonicalLedgerRow(row);
+    if (isSmokeDailyBonus(normalized)) {
+      const key = smokeDailyKey(normalized);
+      if (!key || !isSmokeDayClosed(key)) return null;
+    }
     if (normalized.source_id && !isUuid(normalized.source_id)) {
       return { ...normalized, source_id: null };
     }
@@ -236,7 +275,8 @@
         const originalUpsert = builder.upsert.bind(builder);
         builder.upsert = async function guardedPointsLedgerUpsert(rows, options = {}) {
           const inputWasArray = Array.isArray(rows);
-          const normalizedRows = (inputWasArray ? rows : [rows]).map(normalizeRemoteLedgerRow);
+          const normalizedRows = (inputWasArray ? rows : [rows]).map(normalizeRemoteLedgerRow).filter(Boolean);
+          if (!normalizedRows.length) return { data: inputWasArray ? [] : null, error: null };
           const preparedRows = [];
           for (const row of normalizedRows) {
             const next = { ...row };
@@ -275,7 +315,7 @@
   const modules = window.HabitFlowModules;
   if (modules && !modules.has('points-ledger-sync-guard')) {
     modules.register('points-ledger-sync-guard', {
-      description: 'Normalizes deterministic daily bonus ledger source IDs and cleans duplicate local smoke daily bonus rows before the app reads state.',
+      description: 'Finalizes smoke daily bonus ledger rows only after the smoke day is closed and deduplicates deterministic bonus rows before the app reads state.',
       active: true,
       summaryKey: MIGRATION_SUMMARY_KEY
     });
