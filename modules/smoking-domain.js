@@ -242,3 +242,75 @@
     init();
   }
 })(window, document);
+
+(function enhanceMonthlyMissionSuggestions(window, document) {
+  'use strict';
+
+  const STYLE_ID = 'monthlyMissionSuggestionStyles';
+  const EXTRA_PRESETS = [
+    { id: 'weight-goal', title: 'Gewicht-Ziel', source: 'Gesundheit · Gewicht', target: '1' },
+    { id: 'pushups-goal', title: 'Liegestütze-Ziel', source: 'Fitness · Liegestütze', target: '100' }
+  ];
+
+  function injectStyles() {
+    if (document.getElementById(STYLE_ID)) return;
+    const style = document.createElement('style');
+    style.id = STYLE_ID;
+    style.textContent = `
+      #monthlyMissions .monthly-custom-row [data-action="create-monthly-mission-custom"]{font-weight:560!important;}
+      #monthlyMissions #monthlyMissionMetric,
+      #monthlyMissions #monthlyMissionMetric option,
+      #monthlyMissions .monthly-preset-btn span{font-weight:520!important;}
+      #monthlyMissions .monthly-preset-btn.hf-monthly-extra-preset{background:rgba(255,255,255,.052);background-image:none;}
+    `;
+    document.head.appendChild(style);
+  }
+
+  function fillCustomMission(preset) {
+    const titleInput = document.getElementById('monthlyMissionTitle');
+    const targetInput = document.getElementById('monthlyMissionTarget');
+    const metricSelect = document.getElementById('monthlyMissionMetric');
+    if (!titleInput || !targetInput || !metricSelect) return;
+    titleInput.value = preset.title;
+    targetInput.value = preset.target;
+    metricSelect.value = 'manual_count';
+    titleInput.dispatchEvent(new Event('input', { bubbles: true }));
+    targetInput.dispatchEvent(new Event('input', { bubbles: true }));
+    metricSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    targetInput.focus({ preventScroll: true });
+    targetInput.select?.();
+  }
+
+  function enhancePresetGrid() {
+    injectStyles();
+    const grid = document.querySelector('#monthlyMissions .monthly-preset-grid');
+    if (!grid) return;
+    EXTRA_PRESETS.forEach(preset => {
+      if (grid.querySelector(`[data-hf-monthly-preset="${preset.id}"]`)) return;
+      const button = document.createElement('button');
+      button.className = 'monthly-preset-btn hf-monthly-extra-preset';
+      button.type = 'button';
+      button.dataset.hfMonthlyPreset = preset.id;
+      button.innerHTML = `<strong>${preset.title}</strong><span>${preset.source}</span>`;
+      button.addEventListener('click', () => fillCustomMission(preset));
+      grid.appendChild(button);
+    });
+  }
+
+  function scheduleEnhance() {
+    window.cancelAnimationFrame(scheduleEnhance.frame);
+    scheduleEnhance.frame = window.requestAnimationFrame(enhancePresetGrid);
+  }
+
+  function init() {
+    enhancePresetGrid();
+    const observer = new MutationObserver(scheduleEnhance);
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init, { once: true });
+  } else {
+    init();
+  }
+})(window, document);
