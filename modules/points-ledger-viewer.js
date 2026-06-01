@@ -6,6 +6,9 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const MAX_ROWS = 80;
+  const SMOKE_DAILY_PREFIX = 'smoke-daily-bonus-';
+  const SMOKE_DAILY_UUID_PREFIX = '00000000-0000-4000-8001-0000';
+  const SMOKE_DAY_CUTOFF_HOUR = 2;
   let modal = null;
   let range = '30';
 
@@ -34,6 +37,33 @@
     return date && !Number.isNaN(date.getTime()) ? date : null;
   }
 
+  function dateKey(value) {
+    const date = value instanceof Date ? new Date(value) : new Date(value || 0);
+    if (Number.isNaN(date.getTime())) return '';
+    const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 10);
+  }
+
+  function smokeDailyEarnedDateKey(value) {
+    const date = value instanceof Date ? new Date(value) : new Date(value || 0);
+    if (Number.isNaN(date.getTime())) return '';
+    if (date.getHours() < SMOKE_DAY_CUTOFF_HOUR + 1) date.setDate(date.getDate() - 1);
+    return dateKey(date);
+  }
+
+  function smokeDayClosesAt(key) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(key || ''))) return null;
+    const close = new Date(`${key}T${String(SMOKE_DAY_CUTOFF_HOUR).padStart(2, '0')}:00:00`);
+    if (Number.isNaN(close.getTime())) return null;
+    close.setDate(close.getDate() + 1);
+    return close;
+  }
+
+  function isSmokeDayClosed(key) {
+    const close = smokeDayClosesAt(key);
+    return Boolean(close && Date.now() >= close.getTime());
+  }
+
   function points(row = {}) {
     const value = Number(row.points || 0);
     return Number.isFinite(value) ? value : 0;
@@ -59,18 +89,62 @@
     return `${source} · Punkte gebucht`;
   }
 
+  function isSmokeDailyBonus(row = {}) {
+    const sourceId = String(row.source_id || row.sourceId || row.sourceId || '');
+    const rowReason = String(row.reason || row.description || row.label || '');
+    return String(row.source_type || row.sourceType || '') === 'bonus' && (
+      sourceId.startsWith(SMOKE_DAILY_PREFIX) ||
+      sourceId.startsWith(SMOKE_DAILY_UUID_PREFIX) ||
+      rowReason.startsWith('Rauchziel:')
+    );
+  }
+
+  function smokeDailyKey(row = {}) {
+    const sourceId = String(row.source_id || row.sourceId || '');
+    if (sourceId.startsWith(SMOKE_DAILY_PREFIX)) return sourceId.slice(SMOKE_DAILY_PREFIX.length);
+    if (sourceId.startsWith(SMOKE_DAILY_UUID_PREFIX)) {
+      const raw = sourceId.slice(SMOKE_DAILY_UUID_PREFIX.length);
+      if (/^\d{8}$/.test(raw)) return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`;
+    }
+    return smokeDailyEarnedDateKey(row.earned_at || row.earnedAt || row.created_at || row.createdAt);
+  }
+
+  function normalizeRow(row = {}) {
+    const date = eventDate(row);
+    const sourceType = String(row.source_type || row.sourceType || '');
+    const sourceId = String(row.source_id || row.sourceId || '');
+    return {
+      id: String(row.id || `${sourceType}-${sourceId}-${row.earned_at || row.created_at || ''}`),
+      sourceId,
+      type: sourceType,
+      points: points(row),
+      reason: reason(row),
+      date: date?.toISOString() || '',
+      sortTime: new Date(row.updated_at || row.updatedAt || row.created_at || row.createdAt || row.earned_at || row.earnedAt || 0).getTime() || 0,
+      isPendingSmokeDaily: isSmokeDailyBonus(row) && !isSmokeDayClosed(smokeDailyKey(row)),
+      ledgerKey: isSmokeDailyBonus(row) ? `smoke-daily:${smokeDailyKey(row)}` : (sourceType && sourceId ? `${sourceType}:${sourceId}` : `id:${row.id || ''}`),
+      synced: row.synced === true
+    };
+  }
+
+  function dedupeRows(rawRows = []) {
+    const byKey = new Map();
+    rawRows.map(normalizeRow).filter(row => !row.isPendingSmokeDaily).forEach(row => {
+      const key = row.ledgerKey || row.id;
+      const existing = byKey.get(key);
+      if (!existing || row.sortTime >= existing.sortTime || Math.abs(row.points) > Math.abs(existing.points)) byKey.set(key, row);
+    });
+    return Array.from(byKey.values());
+  }
+
   function rows() {
     const state = readState();
     const ledger = Array.isArray(state?.pointsLedger) ? state.pointsLedger : Array.isArray(state?.points_ledger) ? state.points_ledger : [];
     const cutoff = range === 'all' ? 0 : Date.now() - Number(range) * 24 * 60 * 60 * 1000;
-    return ledger.map(row => ({
-      id: String(row.id || `${row.source_type || ''}-${row.source_id || ''}-${row.earned_at || row.created_at || ''}`),
-      type: String(row.source_type || row.sourceType || ''),
-      points: points(row),
-      reason: reason(row),
-      date: eventDate(row)?.toISOString() || '',
-      synced: row.synced === true
-    })).filter(row => range === 'all' || (row.date && new Date(row.date).getTime() >= cutoff)).sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)).slice(0, MAX_ROWS);
+    return dedupeRows(ledger)
+      .filter(row => range === 'all' || (row.date && new Date(row.date).getTime() >= cutoff))
+      .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
+      .slice(0, MAX_ROWS);
   }
 
   function rangeLabel(value) {
