@@ -290,9 +290,19 @@
     document.head.appendChild(script);
   }
 
+  function loadConsumptionYearOverview(document) {
+    if (!document || document.getElementById('habitflow-consumption-year-overview-script')) return;
+    const script = document.createElement('script');
+    script.id = 'habitflow-consumption-year-overview-script';
+    script.src = 'modules/consumption-year-overview.js';
+    script.defer = true;
+    document.head.appendChild(script);
+  }
+
   injectTimeProfilePeakStyle(window.document);
   injectSmokingQuickCapturePolish(window.document);
   loadConsumptionTimeProfile(window.document);
+  loadConsumptionYearOverview(window.document);
 
   modules.register('consumption', {
     description: 'Consumption domain boundary for smoking, alcohol, pauses, craving coach and deep analytics.',
@@ -301,6 +311,7 @@
     migrationMode: 'preserve quick capture and analytics while moving pure calculations first',
     uiPatch: Object.freeze({
       loadsConsumptionTimeProfile: true,
+      loadsConsumptionYearOverview: true,
       hidesPeakDot: true,
       smokingQuickCapturePolish: true
     })
