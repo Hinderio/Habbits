@@ -69,5 +69,6 @@
     list
   });
 
+  preloadModule('modules/dashboard-visual-tokens.js', 'dashboardVisualTokensModuleScript');
   preloadModule('modules/points-ledger-remote-authority.js', 'pointsLedgerRemoteAuthorityScript');
 })(window);
