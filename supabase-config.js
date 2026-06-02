@@ -30,6 +30,7 @@ window.HABITFLOW_SUPABASE_CONFIG = Object.freeze({
     'modules/tasks.js',
     'modules/fitness.js',
     'modules/consumption.js',
+    'modules/consumption-heatmap-flat-polish.js',
     'modules/gamification.js',
     'modules/monthly-missions.js'
   ];
