@@ -7,6 +7,7 @@
   const STORAGE_KEY = 'habitflow-state-v1';
   const VISUAL_SELECTOR = '#smokeIntervalVisual';
   const GRID_SELECTOR = '.smoke-strike-grid';
+  const STRIKE_THRESHOLD_MS = 60 * 60 * 1000;
   let renderTimer = null;
 
   function readState() {
@@ -35,27 +36,11 @@
       .map(item => item.row);
   }
 
-  function fallbackIntervalPoints(previous, current) {
-    const scoring = window.HabitFlowDomains?.smoking?.scoreInterval;
-    if (typeof scoring === 'function') {
-      const result = scoring(previous?.smoked_at || previous?.created_at, current?.smoked_at || current?.created_at);
-      if (Number.isFinite(Number(result?.points))) return Number(result.points);
-    }
-    const minutes = Number(current?.scoring_interval_minutes ?? current?.interval_minutes);
-    if (!Number.isFinite(minutes)) return 0;
-    if (minutes < 30) return -40;
-    if (minutes < 60) return -20;
-    if (minutes < 120) return 0;
-    if (minutes < 240) return 20;
-    if (minutes < 480) return 60;
-    return 100;
-  }
-
-  function isHealthyInterval(previous, current) {
-    const points = Number.isFinite(Number(current?.points))
-      ? Number(current.points)
-      : fallbackIntervalPoints(previous, current);
-    return points >= 0;
+  function isStrikeInterval(previous, current) {
+    const start = eventDate(previous);
+    const end = eventDate(current);
+    if (!start || !end || end <= start) return false;
+    return end.getTime() - start.getTime() >= STRIKE_THRESHOLD_MS;
   }
 
   function buildHistoryModel(state) {
@@ -64,7 +49,7 @@
     for (let index = 1; index < rows.length; index += 1) {
       intervals.push({
         id: rows[index].id || `${index}-${rows[index].smoked_at || rows[index].created_at || ''}`,
-        healthy: isHealthyInterval(rows[index - 1], rows[index]),
+        healthy: isStrikeInterval(rows[index - 1], rows[index]),
         at: rows[index].smoked_at || rows[index].created_at || '',
         points: Number(rows[index].points || 0)
       });
@@ -116,8 +101,8 @@
     grid.dataset.hfHistoryStrikeSignature = stats.signature;
     grid.dataset.hfHistoryStrike = 'full-history';
     grid.innerHTML = `
-      <article class="smoke-strike-card"><small>Bester Strike</small><strong>${stats.best}×</strong><p>Längste Serie ohne rote oder orange Pausen über die gesamte Rauch-Historie.</p></article>
-      <article class="smoke-strike-card is-current"><small>Aktueller Strike</small><strong>${stats.current}×</strong><p>Vom neuesten Eintrag rückwärts über alle gespeicherten Rauchpausen gezählt.</p></article>
+      <article class="smoke-strike-card"><small>Bester Strike</small><strong>${stats.best}×</strong><p>Längste Serie mit Rauchpausen ab 1 Stunde über die gesamte Rauch-Historie.</p></article>
+      <article class="smoke-strike-card is-current"><small>Aktueller Strike</small><strong>${stats.current}×</strong><p>Vom neuesten Eintrag rückwärts über alle gespeicherten Rauchpausen ab 1 Stunde gezählt.</p></article>
     `;
   }
 
