@@ -83,4 +83,5 @@
   loadPreAppModule('modules/remote-cache-reconcile.js');
   loadPreAppModule('modules/learning-vault.js');
   loadPreAppModule('modules/' + 'pause-' + 'period-' + 'edit.js');
+  loadPreAppModule('modules/' + 'smoke-' + 'active-' + 'pause-' + 'metric.js');
 })(window);
