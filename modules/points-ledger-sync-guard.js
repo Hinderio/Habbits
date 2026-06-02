@@ -3,11 +3,15 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const MIGRATION_SUMMARY_KEY = 'habitflow-points-ledger-cleanup-summary-v1';
+  const REMOTE_CLEANUP_SUMMARY_KEY = 'habitflow-points-ledger-remote-cleanup-summary-v1';
   const SMOKE_DAILY_PREFIX = 'smoke-daily-bonus-';
   const SMOKE_DAILY_UUID_PREFIX = '00000000-0000-4000-8001-0000';
   const MORNING_ROUTINE_UUID_PREFIX = '00000000-0000-4000-8000-0000';
   const SMOKE_DAY_CUTOFF_HOUR = 2;
-  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i;
+  const REMOTE_CLEANUP_LIMIT = 1500;
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  let remoteCleanupInFlight = false;
+  let remoteCleanupLastAt = 0;
 
   function isUuid(value) {
     return UUID_RE.test(String(value || ''));
@@ -67,7 +71,7 @@
   function isSmokeDailyBonus(row = {}) {
     const sourceId = String(row.source_id || row.sourceId || '');
     const reason = String(row.reason || '');
-    return row.source_type === 'bonus' && (
+    return (row.source_type || row.sourceType) === 'bonus' && (
       sourceId.startsWith(SMOKE_DAILY_PREFIX) ||
       sourceId.startsWith(SMOKE_DAILY_UUID_PREFIX) ||
       reason.startsWith('Rauchziel:')
@@ -85,7 +89,7 @@
   }
 
   function isMorningRoutineBonus(row = {}) {
-    return row.source_type === 'bonus' && String(row.reason || '').trim().toLowerCase().startsWith('morgenroutine');
+    return (row.source_type || row.sourceType) === 'bonus' && String(row.reason || '').trim().toLowerCase().startsWith('morgenroutine');
   }
 
   function canonicalLedgerRow(row = {}) {
@@ -161,9 +165,7 @@
 
       changed = true;
       if (wasSmokeDaily) stats.smokeDailyRemoved += 1;
-      if (shouldKeepLedgerCandidate(previous, canonical)) {
-        bySource.set(key, { ...canonical, synced: false });
-      }
+      if (shouldKeepLedgerCandidate(previous, canonical)) bySource.set(key, { ...canonical, synced: false });
     });
 
     const normalizedRows = keepOrder.map(key => bySource.get(key));
@@ -203,12 +205,9 @@
     }
   }
 
-  function writeCleanupSummary(stats = {}) {
+  function writeSummary(key, stats = {}) {
     try {
-      window.localStorage?.setItem(MIGRATION_SUMMARY_KEY, JSON.stringify({
-        ...stats,
-        cleaned_at: new Date().toISOString()
-      }));
+      window.localStorage?.setItem(key, JSON.stringify({ ...stats, cleaned_at: new Date().toISOString() }));
     } catch (error) {
       console.warn('[HabitFlow/points-ledger-sync-guard] Cleanup-Zusammenfassung konnte nicht gespeichert werden.', error);
     }
@@ -224,7 +223,7 @@
       const normalized = normalizeStateObject(parsed);
       if (!normalized.changed) return;
       storage.setItem(STORAGE_KEY, JSON.stringify(normalized.state));
-      writeCleanupSummary(normalized.stats);
+      writeSummary(MIGRATION_SUMMARY_KEY, normalized.stats);
       console.info('[HabitFlow/points-ledger-sync-guard] Lokale Points-Ledger-Duplikate bereinigt.', normalized.stats);
     } catch (error) {
       console.warn('[HabitFlow/points-ledger-sync-guard] Lokale Points-Ledger-Bereinigung übersprungen.', error);
@@ -255,10 +254,103 @@
       const key = smokeDailyKey(normalized);
       if (!key || !isSmokeDayClosed(key)) return null;
     }
-    if (normalized.source_id && !isUuid(normalized.source_id)) {
-      return { ...normalized, source_id: null };
-    }
+    if (normalized.source_id && !isUuid(normalized.source_id)) return { ...normalized, source_id: null };
     return normalized;
+  }
+
+  function remoteCleanupKey(row = {}) {
+    if (isSmokeDailyBonus(row)) return `smoke-daily::${smokeDailyKey(row)}`;
+    const sourceType = row?.source_type || row?.sourceType || '';
+    const sourceId = row?.source_id || row?.sourceId || '';
+    return sourceType && sourceId ? `${sourceType}::${sourceId}` : '';
+  }
+
+  async function deleteRemoteRows(originalFrom, ids = []) {
+    const uniqueIds = [...new Set(ids.filter(Boolean))];
+    if (!uniqueIds.length) return 0;
+    for (let index = 0; index < uniqueIds.length; index += 100) {
+      const slice = uniqueIds.slice(index, index + 100);
+      const { error } = await originalFrom('points_ledger').delete().in('id', slice);
+      if (error) throw error;
+    }
+    return uniqueIds.length;
+  }
+
+  async function patchRemoteRow(originalFrom, row) {
+    if (!row?.id || !row?.source_id) return false;
+    const { error } = await originalFrom('points_ledger').update({ source_id: row.source_id }).eq('id', row.id);
+    if (error) throw error;
+    return true;
+  }
+
+  async function cleanupRemotePointsLedger(client, originalFrom, { force = false } = {}) {
+    if (!client?.auth?.getUser || typeof originalFrom !== 'function') return;
+    if (remoteCleanupInFlight) return;
+    if (!force && Date.now() - remoteCleanupLastAt < 45_000) return;
+    remoteCleanupInFlight = true;
+    try {
+      const { data: userData } = await client.auth.getUser();
+      if (!userData?.user?.id) return;
+      const { data, error } = await originalFrom('points_ledger')
+        .select('id,source_type,source_id,points,reason,earned_at,created_at')
+        .limit(REMOTE_CLEANUP_LIMIT);
+      if (error || !Array.isArray(data) || !data.length) return;
+
+      const byKey = new Map();
+      const deleteIds = [];
+      const updateRows = [];
+      const now = new Date();
+
+      data.forEach(raw => {
+        const canonical = canonicalLedgerRow(raw);
+        if (isSmokeDailyBonus(canonical)) {
+          const key = smokeDailyKey(canonical);
+          if (!key || !isSmokeDayClosed(key, now)) {
+            deleteIds.push(raw.id);
+            return;
+          }
+        }
+        const key = remoteCleanupKey(canonical);
+        if (!key) return;
+        const previous = byKey.get(key);
+        if (!previous) {
+          byKey.set(key, { raw, canonical });
+          return;
+        }
+        if (shouldKeepLedgerCandidate(previous.raw, raw)) {
+          deleteIds.push(previous.raw.id);
+          byKey.set(key, { raw, canonical });
+        } else {
+          deleteIds.push(raw.id);
+        }
+      });
+
+      byKey.forEach(({ raw, canonical }) => {
+        if (canonical.source_id && canonical.source_id !== raw.source_id && isUuid(canonical.source_id)) {
+          updateRows.push({ id: raw.id, source_id: canonical.source_id });
+        }
+      });
+
+      const deleted = await deleteRemoteRows(originalFrom, deleteIds);
+      let updated = 0;
+      for (const row of updateRows) {
+        if (await patchRemoteRow(originalFrom, row)) updated += 1;
+      }
+      if (deleted || updated) {
+        writeSummary(REMOTE_CLEANUP_SUMMARY_KEY, { remote_rows_seen: data.length, remote_deleted: deleted, remote_source_ids_updated: updated });
+        console.info('[HabitFlow/points-ledger-sync-guard] Remote Points Ledger bereinigt.', { deleted, updated });
+      }
+    } catch (error) {
+      console.warn('[HabitFlow/points-ledger-sync-guard] Remote Points-Ledger-Bereinigung übersprungen.', error);
+    } finally {
+      remoteCleanupLastAt = Date.now();
+      remoteCleanupInFlight = false;
+    }
+  }
+
+  function scheduleRemoteCleanup(client, originalFrom, force = false) {
+    window.setTimeout(() => cleanupRemotePointsLedger(client, originalFrom, { force }), 1200);
+    window.setTimeout(() => cleanupRemotePointsLedger(client, originalFrom, { force: false }), 8000);
   }
 
   function patchSupabaseCreateClient() {
@@ -297,6 +389,10 @@
         return builder;
       };
       client.__habitFlowPointsLedgerGuard = true;
+      scheduleRemoteCleanup(client, originalFrom, true);
+      client.auth?.onAuthStateChange?.((event, session) => {
+        if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) scheduleRemoteCleanup(client, originalFrom, true);
+      });
       return client;
     };
     supabase.__habitFlowPointsLedgerGuard = true;
@@ -305,9 +401,7 @@
 
   cleanupStoredStateOnce();
   installLocalStateGuard();
-  if (!patchSupabaseCreateClient()) {
-    document?.addEventListener('DOMContentLoaded', patchSupabaseCreateClient, { once: true });
-  }
+  if (!patchSupabaseCreateClient()) document?.addEventListener('DOMContentLoaded', patchSupabaseCreateClient, { once: true });
 
   window.HabitFlowRuntime = window.HabitFlowRuntime || {};
   window.HabitFlowRuntime.normalizePointsLedgerState = normalizeStateObject;
@@ -315,9 +409,10 @@
   const modules = window.HabitFlowModules;
   if (modules && !modules.has('points-ledger-sync-guard')) {
     modules.register('points-ledger-sync-guard', {
-      description: 'Finalizes smoke daily bonus ledger rows only after the smoke day is closed and deduplicates deterministic bonus rows before the app reads state.',
+      description: 'Finalizes smoke daily bonus ledger rows only after the smoke day is closed, deduplicates deterministic bonus rows locally and cleans old remote smoke-daily duplicates.',
       active: true,
-      summaryKey: MIGRATION_SUMMARY_KEY
+      summaryKey: MIGRATION_SUMMARY_KEY,
+      remoteSummaryKey: REMOTE_CLEANUP_SUMMARY_KEY
     });
   }
 })(window, document);
