@@ -3,9 +3,30 @@
 -- Purpose:
 -- 1) Collapse legacy Rauchziel/Tagesbonus rows that synced with source_id = null.
 -- 2) Give the remaining deterministic bonus rows a stable UUID source_id.
--- 3) Protect future deterministic rows with a partial unique index.
+-- 3) Install a DB-level guard so future Rauchziel/Tagesbonus rows cannot be inserted with source_id = null.
+-- 4) Protect future deterministic rows with a partial unique index.
 
 begin;
+
+-- DB guard: canonicalize Rauchziel/Tagesbonus source_id before insert/update.
+-- This protects the database even if an old cached client still sends source_id = null.
+create or replace function public.canonicalize_points_ledger_source_id()
+returns trigger as $$
+begin
+  if new.source_type = 'bonus'
+     and new.reason like 'Rauchziel:%Tagesbonus%'
+     and new.earned_at is not null then
+    new.source_id := ('00000000-0000-4000-8001-0000' || to_char(new.earned_at::date, 'YYYYMMDD'))::uuid;
+  end if;
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists canonicalize_points_ledger_source_id on public.points_ledger;
+create trigger canonicalize_points_ledger_source_id
+before insert or update of source_type, source_id, reason, earned_at
+on public.points_ledger
+for each row execute function public.canonicalize_points_ledger_source_id();
 
 -- 1) Delete duplicate smoke daily bonus rows first.
 -- Keeps the newest/final row per user/day. This also removes older same-day
