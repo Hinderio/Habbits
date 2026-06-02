@@ -208,6 +208,9 @@
       #screen-smoking .smoke-week-cell.level-5,#screen-smoking .smoke-hour-legend i.level-5{background:#ffb8b8!important;border-color:#ff8d8d!important;color:#0d1827!important;opacity:1!important;}
       #screen-smoking .smoke-week-cell[class*="level-"]{box-shadow:inset 0 1px 0 rgba(255,255,255,.5)!important;}
       #screen-smoking .smoke-week-cell[class*="level-"] em{color:#0d1827!important;}
+      #screen-smoking .smoke-week-grid-wrap{scrollbar-width:none!important;-ms-overflow-style:none!important;padding-bottom:0!important;border-bottom:0!important;}
+      #screen-smoking .smoke-week-grid-wrap::-webkit-scrollbar{display:none!important;width:0!important;height:0!important;}
+      #screen-smoking .smoke-week-grid-wrap::after{display:none!important;}
       .hf-consumption-year-card{display:grid;gap:12px;margin:13px 0 12px;padding:14px;border-radius:26px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.07);box-shadow:inset 0 1px 0 rgba(255,255,255,.05);}
       .hf-consumption-year-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
       .hf-consumption-year-head h4{margin:2px 0 0;font-size:1.05rem;letter-spacing:-.025em;}
@@ -222,16 +225,16 @@
       .hf-consumption-month-head strong{font-size:.72rem;line-height:1;font-weight:950;text-transform:uppercase;letter-spacing:.06em;}
       .hf-consumption-month-head small,.hf-consumption-month>span{color:var(--muted);font-size:.64rem;font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
       .hf-consumption-month-dots{display:grid;grid-template-columns:repeat(7,6px);grid-auto-rows:6px;gap:4px;align-content:center;justify-content:center;min-height:0;}
-      .hf-year-dot{width:6px;height:6px;border-radius:999px;background:rgba(157,176,195,.18);}
-      .hf-year-dot.level-1{background:#d2f6dc;}
-      .hf-year-dot.level-2{background:#bdeeed;}
-      .hf-year-dot.level-3{background:#cbd8e2;}
-      .hf-year-dot.level-4{background:#ffdda8;}
-      .hf-year-dot.level-5{background:#ffb8b8;}
+      .hf-year-dot{width:6px;height:6px;border-radius:999px;background:#e4eaf0;opacity:1;box-shadow:none;}
+      .hf-year-dot.level-1{background:#bff1cc;}
+      .hf-year-dot.level-2{background:#94e6e2;}
+      .hf-year-dot.level-3{background:#b9c9d6;}
+      .hf-year-dot.level-4{background:#ffd083;}
+      .hf-year-dot.level-5{background:#ff9999;}
       .hf-consumption-year-card p{margin:0;color:var(--muted);font-size:.86rem;line-height:1.45;}
       body.light .hf-consumption-year-card,body.light .hf-consumption-year-stats article,body.light .hf-consumption-month{background:rgba(255,255,255,.72);border-color:rgba(17,36,58,.08);}
-      body.light .hf-year-dot{background:rgba(95,112,130,.16);}
-      body.light .hf-year-dot.level-1{background:#d2f6dc;}body.light .hf-year-dot.level-2{background:#bdeeed;}body.light .hf-year-dot.level-3{background:#cbd8e2;}body.light .hf-year-dot.level-4{background:#ffdda8;}body.light .hf-year-dot.level-5{background:#ffb8b8;}
+      body.light .hf-year-dot{background:#e4eaf0;opacity:1;}
+      body.light .hf-year-dot.level-1{background:#bff1cc;}body.light .hf-year-dot.level-2{background:#94e6e2;}body.light .hf-year-dot.level-3{background:#b9c9d6;}body.light .hf-year-dot.level-4{background:#ffd083;}body.light .hf-year-dot.level-5{background:#ff9999;}
       @media (max-width:980px){.hf-consumption-year-grid{width:min(100%,560px);}.hf-consumption-year-stats{grid-template-columns:repeat(2,minmax(0,1fr));}}
       @media (max-width:520px){.hf-consumption-year-card{padding:12px;border-radius:22px;}.hf-consumption-year-grid{width:100%;gap:7px;}.hf-consumption-month{padding:8px;border-radius:16px;gap:5px;}.hf-consumption-month-dots{grid-template-columns:repeat(7,4px);grid-auto-rows:4px;gap:3px;}.hf-year-dot{width:4px;height:4px;}.hf-consumption-year-head{flex-direction:column;}.hf-consumption-year-head .badge{align-self:flex-start;}}
     `;
