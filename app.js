@@ -5599,8 +5599,7 @@
 
   function renderSmokeHistoryList() {
     const items = [...visibleCigarettes()]
-      .sort((a, b) => new Date(b.smoked_at) - new Date(a.smoked_at))
-      .slice(0, 25);
+      .sort((a, b) => new Date(b.smoked_at) - new Date(a.smoked_at));
 
     if (!items.length) {
       return '<div class="empty-state">Noch keine Zigarette erfasst. Neue Einträge erscheinen hier und können später bearbeitet oder gelöscht werden.</div>';
@@ -5683,8 +5682,7 @@
 
   function renderAlcoholUnitHistoryList() {
     const units = [...visibleAlcoholUnits()]
-      .sort((a, b) => sortDate(b.occurred_at || b.created_at) - sortDate(a.occurred_at || a.created_at))
-      .slice(0, 50);
+      .sort((a, b) => sortDate(b.occurred_at || b.created_at) - sortDate(a.occurred_at || a.created_at));
     if (!units.length) {
       return '<div class="empty-state">Noch keine Alkohol-Einheit erfasst. Neue Einheiten erscheinen hier und können später gelöscht werden.</div>';
     }
