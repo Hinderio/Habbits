@@ -203,12 +203,18 @@
     });
   }
 
-  document.addEventListener('DOMContentLoaded', () => {
+  function initHabitStoryCoverage() {
     queueEnsureHabitStories();
     const observer = new MutationObserver(queueEnsureHabitStories);
     ['habitCards', 'habitPlayfulStats'].forEach(id => {
       const node = document.getElementById(id);
       if (node) observer.observe(node, { childList: true, subtree: true });
     });
-  });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initHabitStoryCoverage, { once: true });
+  } else {
+    initHabitStoryCoverage();
+  }
 })();
