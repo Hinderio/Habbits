@@ -78,3 +78,15 @@
     exports: Object.freeze(['countUnitsForDay', 'sortEvents', 'activeDrinkingDays', 'totalUnits'])
   });
 })(window);
+
+(function loadHabitStoryCoverage(window, document) {
+  'use strict';
+
+  if (window.__habitFlowStoryCoverageLoaded) return;
+  window.__habitFlowStoryCoverageLoaded = true;
+
+  const script = document.createElement('script');
+  script.src = 'modules/habit-story-coverage.js';
+  script.defer = true;
+  document.head.appendChild(script);
+})(window, document);
