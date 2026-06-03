@@ -6,6 +6,8 @@
 
   const STORAGE_KEY = 'habitflow-learning-vault-v1';
   const UI_KEY = 'habitflow-learning-vault-open-v1';
+  const EXPANDED_KEY = 'habitflow-learning-vault-expanded-v1';
+  const EDITING_KEY = 'habitflow-learning-vault-editing-v1';
   const TABLE_NAME = 'learning_vault';
   const MAX_ITEMS = 120;
   const MAX_CACHE_ITEMS = 180;
@@ -108,6 +110,30 @@
     const date = new Date(value || Date.now());
     if (Number.isNaN(date.getTime())) return 'gerade eben';
     return new Intl.DateTimeFormat('de-CH', { day: '2-digit', month: '2-digit', year: '2-digit' }).format(date);
+  }
+
+  function readExpandedId() {
+    return window.localStorage?.getItem(EXPANDED_KEY) || '';
+  }
+
+  function setExpandedId(id = '') {
+    if (id) window.localStorage?.setItem(EXPANDED_KEY, id);
+    else window.localStorage?.removeItem(EXPANDED_KEY);
+  }
+
+  function readEditingId() {
+    return window.localStorage?.getItem(EDITING_KEY) || '';
+  }
+
+  function setEditingId(id = '') {
+    if (id) window.localStorage?.setItem(EDITING_KEY, id);
+    else window.localStorage?.removeItem(EDITING_KEY);
+  }
+
+  function previewText(value = '', maxLength = 132) {
+    const text = String(value || '').replace(/\s+/g, ' ').trim();
+    if (text.length <= maxLength) return text;
+    return `${text.slice(0, maxLength - 1).trim()}…`;
   }
 
   function getSupabaseClient() {
@@ -263,24 +289,62 @@
     style.id = 'learningVaultStyles';
     style.textContent = `
       .learning-vault-section { margin-top: var(--space-4, 1rem); }
-      .learning-vault-card { display: grid; gap: 1rem; }
+      .learning-vault-card { display: grid; gap: 1rem; overflow: hidden; }
       .learning-vault-hero { display: grid; gap: .55rem; }
       .learning-vault-hero p { margin: 0; color: var(--muted); line-height: 1.55; }
       .learning-vault-form { display: grid; gap: .75rem; }
       .learning-vault-form textarea,
-      .learning-vault-form input {
+      .learning-vault-form input,
+      .learning-vault-edit-form textarea,
+      .learning-vault-edit-form input {
         width: 100%; border: 1px solid rgba(100, 116, 139, .16); border-radius: 24px;
         background: rgba(255,255,255,.78); color: var(--text); padding: 1rem 1.1rem;
         font: inherit; box-shadow: inset 0 1px 0 rgba(255,255,255,.55);
       }
-      .learning-vault-form textarea { min-height: 98px; resize: vertical; line-height: 1.45; }
+      .learning-vault-form textarea,
+      .learning-vault-edit-form textarea { min-height: 98px; resize: vertical; line-height: 1.45; }
       .learning-vault-form-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, .8fr); gap: .75rem; }
       .learning-vault-actions { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; }
-      .learning-vault-list { display: grid; gap: .7rem; }
-      .learning-vault-item { border: 1px solid rgba(100, 116, 139, .13); border-radius: 26px; padding: 1rem; background: rgba(255,255,255,.55); }
-      .learning-vault-item-head { display: flex; justify-content: space-between; gap: .75rem; align-items: flex-start; margin-bottom: .45rem; }
-      .learning-vault-item strong { color: var(--text); font-size: 1rem; line-height: 1.25; }
-      .learning-vault-item p { color: var(--muted); margin: .35rem 0 0; line-height: 1.5; }
+      .learning-vault-list {
+        display: grid;
+        gap: .78rem;
+        max-height: clamp(360px, 42vh, 690px);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding: .12rem .18rem .25rem 0;
+        scrollbar-width: thin;
+      }
+      .learning-vault-list::-webkit-scrollbar { width: 8px; }
+      .learning-vault-list::-webkit-scrollbar-thumb { background: rgba(100, 116, 139, .25); border-radius: 999px; }
+      .learning-vault-item {
+        position: relative;
+        border: 1px solid rgba(100, 116, 139, .13);
+        border-radius: 26px;
+        padding: 1rem;
+        background: linear-gradient(180deg, rgba(255,255,255,.7), rgba(255,255,255,.48));
+        box-shadow: 0 16px 32px rgba(15, 23, 42, .05), inset 0 1px 0 rgba(255,255,255,.62);
+        transition: transform .18s ease, border-color .18s ease, background .18s ease, box-shadow .18s ease;
+      }
+      .learning-vault-item:hover { transform: translateY(-1px); border-color: rgba(74, 215, 209, .28); box-shadow: 0 18px 38px rgba(15, 23, 42, .08), inset 0 1px 0 rgba(255,255,255,.66); }
+      .learning-vault-item.is-expanded { border-color: rgba(74, 215, 209, .38); background: linear-gradient(180deg, rgba(255,255,255,.82), rgba(245,253,253,.58)); }
+      .learning-vault-item.is-editing { border-color: rgba(74, 215, 209, .52); box-shadow: 0 0 0 3px rgba(74,215,209,.12), 0 18px 38px rgba(15,23,42,.08); }
+      .learning-vault-item-toggle {
+        width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .85rem; align-items: start;
+        border: 0; padding: 0; background: transparent; color: inherit; text-align: left;
+      }
+      .learning-vault-item-copy { min-width: 0; display: grid; gap: .45rem; }
+      .learning-vault-title-row { display: flex; align-items: center; gap: .55rem; min-width: 0; }
+      .learning-vault-title-row strong { color: var(--text); font-size: 1.02rem; line-height: 1.24; overflow-wrap: anywhere; }
+      .learning-vault-chevron { color: var(--primary); font-weight: 950; transition: transform .18s ease; }
+      .learning-vault-item.is-expanded .learning-vault-chevron { transform: rotate(180deg); }
+      .learning-vault-meta { display: flex; align-items: center; gap: .45rem; flex-wrap: wrap; }
+      .learning-vault-dot { opacity: .55; }
+      .learning-vault-preview, .learning-vault-body { color: var(--muted); line-height: 1.5; overflow-wrap: anywhere; }
+      .learning-vault-preview { margin-top: .12rem; }
+      .learning-vault-body { margin-top: .85rem; color: var(--text); }
+      .learning-vault-card-actions { display: flex; align-items: center; justify-content: flex-end; gap: .5rem; flex-wrap: wrap; margin-top: .95rem; }
+      .learning-vault-edit-form { display: grid; gap: .75rem; margin-top: .95rem; padding-top: .95rem; border-top: 1px solid rgba(100, 116, 139, .12); }
+      .learning-vault-edit-actions { display: flex; align-items: center; justify-content: flex-end; gap: .55rem; flex-wrap: wrap; }
       .learning-vault-tags { display: flex; gap: .35rem; flex-wrap: wrap; margin-top: .7rem; }
       .learning-vault-tags span { border-radius: 999px; padding: .24rem .55rem; background: rgba(100, 208, 203, .16); color: var(--text); font-size: .78rem; font-weight: 750; }
       .learning-vault-delete { border: 0; background: rgba(255,112,112,.12); color: #b84949; border-radius: 999px; padding: .35rem .55rem; font-weight: 800; cursor: pointer; }
@@ -288,13 +352,71 @@
       .learning-vault-open-btn { text-align: left; }
       body:not(.light) .learning-vault-form textarea,
       body:not(.light) .learning-vault-form input,
+      body:not(.light) .learning-vault-edit-form textarea,
+      body:not(.light) .learning-vault-edit-form input,
       body:not(.light) .learning-vault-item { background: rgba(15, 23, 42, .42); border-color: rgba(148, 163, 184, .16); }
+      body:not(.light) .learning-vault-item { background: linear-gradient(180deg, rgba(15,23,42,.52), rgba(15,23,42,.34)); box-shadow: inset 0 1px 0 rgba(255,255,255,.04); }
+      body:not(.light) .learning-vault-item.is-expanded { background: linear-gradient(180deg, rgba(15,23,42,.68), rgba(20,38,54,.44)); }
+      @media (min-width: 1160px) { .learning-vault-list { max-height: clamp(390px, 46vh, 720px); } }
       @media (max-width: 720px) {
         .learning-vault-form-row { grid-template-columns: 1fr; }
         .learning-vault-actions .pill { width: 100%; justify-content: center; }
+        .learning-vault-list { max-height: min(54vh, 560px); padding-right: 0; }
+        .learning-vault-item { border-radius: 22px; padding: .9rem; }
+        .learning-vault-item-toggle { grid-template-columns: 1fr auto; }
+        .learning-vault-card-actions .mini-btn, .learning-vault-edit-actions .mini-btn { flex: 1 1 100%; }
       }
     `;
     document.head.appendChild(style);
+  }
+
+  function renderTags(tags = []) {
+    return tags?.length ? `<div class="learning-vault-tags">${tags.map(tag => `<span>#${escapeHtml(tag)}</span>`).join('')}</div>` : '';
+  }
+
+  function renderEditForm(item) {
+    return `
+      <form class="learning-vault-edit-form" data-learning-edit-form="${escapeHtml(item.id)}">
+        <textarea name="body" required maxlength="420" aria-label="Learning Text bearbeiten">${escapeHtml(item.body || '')}</textarea>
+        <div class="learning-vault-form-row">
+          <input name="context" maxlength="80" value="${escapeHtml(item.context || '')}" placeholder="Kontext" aria-label="Learning Kontext bearbeiten" />
+          <input name="tags" maxlength="80" value="${escapeHtml((item.tags || []).join(', '))}" placeholder="Tags" aria-label="Learning Tags bearbeiten" />
+        </div>
+        <div class="learning-vault-edit-actions">
+          <button class="mini-btn" type="button" data-learning-edit-cancel="${escapeHtml(item.id)}">Abbrechen</button>
+          <button class="mini-btn primary" type="submit">Speichern</button>
+        </div>
+      </form>
+    `;
+  }
+
+  function renderLearningCard(item, expandedId, editingId) {
+    const isExpanded = expandedId === item.id;
+    const isEditing = editingId === item.id;
+    const title = escapeHtml(item.title || 'Learning');
+    const meta = `${escapeHtml(dateLabel(item.created_at))}${item.context ? `<span class="learning-vault-dot">·</span><span>${escapeHtml(item.context)}</span>` : ''}`;
+    return `
+      <article class="learning-vault-item ${isExpanded ? 'is-expanded' : ''} ${isEditing ? 'is-editing' : ''}" data-learning-card="${escapeHtml(item.id)}">
+        <button class="learning-vault-item-toggle" type="button" data-learning-toggle="${escapeHtml(item.id)}" aria-expanded="${isExpanded ? 'true' : 'false'}">
+          <span class="learning-vault-item-copy">
+            <span class="learning-vault-title-row"><strong>${title}</strong></span>
+            <span class="learning-vault-meta subtle">${meta}</span>
+            ${isExpanded ? '' : `<span class="learning-vault-preview">${escapeHtml(previewText(item.body || ''))}</span>`}
+          </span>
+          <span class="learning-vault-chevron" aria-hidden="true">⌄</span>
+        </button>
+        ${isExpanded ? `
+          ${isEditing ? renderEditForm(item) : `
+            <p class="learning-vault-body">${escapeHtml(item.body || '')}</p>
+            ${renderTags(item.tags)}
+            <div class="learning-vault-card-actions">
+              <button class="mini-btn" type="button" data-learning-edit="${escapeHtml(item.id)}">Bearbeiten</button>
+              <button class="learning-vault-delete" type="button" data-learning-delete="${escapeHtml(item.id)}" aria-label="Learning löschen">×</button>
+            </div>
+          `}
+        ` : renderTags(item.tags)}
+      </article>
+    `;
   }
 
   function renderList(root) {
@@ -307,17 +429,11 @@
       list.innerHTML = `<div class="learning-vault-empty">Noch keine Learnings gespeichert. Gute Sätze, Modelle oder Beobachtungen landen hier, ohne daraus sofort eine Aufgabe zu machen.</div>`;
       return;
     }
-    list.innerHTML = items.slice(0, 6).map(item => `
-      <article class="learning-vault-item">
-        <div class="learning-vault-item-head">
-          <strong>${escapeHtml(item.title || 'Learning')}</strong>
-          <button class="learning-vault-delete" type="button" data-learning-delete="${escapeHtml(item.id)}" aria-label="Learning löschen">×</button>
-        </div>
-        <small class="subtle">${escapeHtml(dateLabel(item.created_at))}${item.context ? ` · ${escapeHtml(item.context)}` : ''}</small>
-        <p>${escapeHtml(item.body || '')}</p>
-        ${item.tags?.length ? `<div class="learning-vault-tags">${item.tags.map(tag => `<span>#${escapeHtml(tag)}</span>`).join('')}</div>` : ''}
-      </article>
-    `).join('');
+    const itemIds = new Set(items.map(item => item.id));
+    const expandedId = itemIds.has(readExpandedId()) ? readExpandedId() : '';
+    const editingId = expandedId && readEditingId() === expandedId ? readEditingId() : '';
+    if (!expandedId) setEditingId('');
+    list.innerHTML = items.map(item => renderLearningCard(item, expandedId, editingId)).join('');
   }
 
   function panelHtml() {
@@ -390,8 +506,46 @@
     document.getElementById('mobileQuickAdd')?.removeAttribute('open');
   }
 
+  function updateLearningItem(id, patch) {
+    const cache = readCache();
+    const existing = cache.find(item => item.id === id);
+    if (!existing) return null;
+    const updated = normalizeItem({
+      ...existing,
+      ...patch,
+      title: patch.title || titleFromBody(patch.body || existing.body),
+      updated_at: nowIso(),
+      synced: false
+    });
+    if (!updated) return null;
+    writeCache([updated, ...cache.filter(item => item.id !== id)]);
+    return updated;
+  }
+
   function bindEvents() {
     document.addEventListener('submit', event => {
+      const editForm = event.target.closest('[data-learning-edit-form]');
+      if (editForm) {
+        event.preventDefault();
+        const id = editForm.getAttribute('data-learning-edit-form');
+        const data = new FormData(editForm);
+        const body = String(data.get('body') || '').trim();
+        if (!body) return;
+        const updated = updateLearningItem(id, {
+          body,
+          context: String(data.get('context') || '').trim().slice(0, 80),
+          tags: normalizeTags(data.get('tags'))
+        });
+        if (!updated) return;
+        setExpandedId(updated.id);
+        setEditingId('');
+        renderList(document);
+        setSyncStatus('Bearbeitet · Sync läuft im Hintergrund');
+        syncSingleItem(updated);
+        window.dispatchEvent(new CustomEvent('habitflow:learning-updated', { detail: updated }));
+        return;
+      }
+
       const form = event.target.closest('[data-learning-form]');
       if (!form) return;
       event.preventDefault();
@@ -411,6 +565,8 @@
       const next = [item, ...readCache()];
       if (writeCache(next)) {
         form.reset();
+        setExpandedId(item.id);
+        setEditingId('');
         renderList(document);
         setSyncStatus('Lokal gespeichert · Sync läuft im Hintergrund');
         syncSingleItem(item);
@@ -425,14 +581,50 @@
         openPanel();
         return;
       }
+
+      const toggleButton = event.target.closest('[data-learning-toggle]');
+      if (toggleButton) {
+        event.preventDefault();
+        const id = toggleButton.getAttribute('data-learning-toggle');
+        const nextId = readExpandedId() === id ? '' : id;
+        setExpandedId(nextId);
+        setEditingId('');
+        renderList(document);
+        return;
+      }
+
+      const editButton = event.target.closest('[data-learning-edit]');
+      if (editButton) {
+        event.preventDefault();
+        const id = editButton.getAttribute('data-learning-edit');
+        setExpandedId(id);
+        setEditingId(id);
+        renderList(document);
+        window.setTimeout(() => document.querySelector(`[data-learning-edit-form="${CSS.escape(id)}"] textarea`)?.focus({ preventScroll: true }), 30);
+        return;
+      }
+
+      const cancelEditButton = event.target.closest('[data-learning-edit-cancel]');
+      if (cancelEditButton) {
+        event.preventDefault();
+        const id = cancelEditButton.getAttribute('data-learning-edit-cancel');
+        setExpandedId(id);
+        setEditingId('');
+        renderList(document);
+        return;
+      }
+
       const deleteButton = event.target.closest('[data-learning-delete]');
       if (!deleteButton) return;
+      event.preventDefault();
       const id = deleteButton.getAttribute('data-learning-delete');
       const cache = readCache();
       const existing = cache.find(item => item.id === id);
       if (!existing) return;
       const archived = { ...existing, is_archived: true, updated_at: nowIso(), synced: false };
       writeCache([archived, ...cache.filter(item => item.id !== id)]);
+      if (readExpandedId() === id) setExpandedId('');
+      if (readEditingId() === id) setEditingId('');
       renderList(document);
       setSyncStatus('Gelöscht · Sync läuft im Hintergrund');
       syncSingleItem(archived);
