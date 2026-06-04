@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v144-points-rework';
+const CACHE_NAME = 'habitflow-v145-project-tab';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -25,10 +25,12 @@ const MODULE_ASSETS = [
   './modules/consumption.js',
   './modules/consumption-time-profile.js',
   './modules/gamification.js',
-  './modules/monthly-missions.js'
+  './modules/monthly-missions.js',
+  './modules/projects.js',
+  './modules/projects.css'
 ];
-const ASSETS = ['./', './index.html', './style.css', './app.js', './supabase-config.js', './supabase-schema.js', './manifest.json', './icons/coach-clean.svg', './data/activity-ideas.json', ...MODULE_ASSETS];
-const NETWORK_FIRST_PATHS = new Set(['/', '/index.html', '/app.js', '/style.css', '/supabase-config.js', '/supabase-schema.js', '/manifest.json', ...MODULE_ASSETS.map(path => path.replace(/^\./, ''))]);
+const ASSETS = ['./', './index.html', './style.css', './app.js', './supabase-config.js', './supabase-schema.js', './manifest.json', './icons/coach-clean.svg', './data/activity-ideas.json', './sql/add-projects.sql', ...MODULE_ASSETS];
+const NETWORK_FIRST_PATHS = new Set(['/', '/index.html', '/app.js', '/style.css', '/supabase-config.js', '/supabase-schema.js', '/manifest.json', '/sql/add-projects.sql', ...MODULE_ASSETS.map(path => path.replace(/^\./, ''))]);
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
