@@ -12,6 +12,7 @@ create table if not exists public.projects (
   end_date date,
   status text not null default 'planned' check (status in ('planned','active','paused','done')),
   outcome_note text,
+  color text not null default '#4ad7d1',
   is_archived boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -32,6 +33,7 @@ create table if not exists public.project_phases (
   constraint project_phases_time_check check (end_date >= start_date)
 );
 
+alter table public.projects add column if not exists color text not null default '#4ad7d1';
 alter table public.tasks add column if not exists project_id uuid references public.projects(id) on delete set null;
 alter table public.tasks add column if not exists user_id uuid references auth.users(id) on delete cascade;
 alter table public.tasks alter column user_id set default auth.uid();
