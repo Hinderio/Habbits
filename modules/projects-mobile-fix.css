@@ -1,12 +1,12 @@
 @media (max-width: 760px) {
-  .project-detail-modal.project-mobile-detail-modal:not(.hidden) {
+  .project-detail-modal:not(.hidden) {
     position: fixed !important;
     inset: 0 !important;
     z-index: 999 !important;
     display: block !important;
     width: 100vw !important;
-    min-height: 100vh !important;
-    min-height: 100svh !important;
+    height: 100vh !important;
+    height: 100svh !important;
     padding: calc(env(safe-area-inset-top, 0px) + 12px) 10px 96px !important;
     overflow-x: hidden !important;
     overflow-y: auto !important;
@@ -16,7 +16,7 @@
     box-sizing: border-box !important;
   }
 
-  .project-detail-modal.project-mobile-detail-modal .project-detail-card {
+  .project-detail-modal:not(.hidden) .project-detail-card {
     display: block !important;
     position: relative !important;
     width: 100% !important;
@@ -37,19 +37,20 @@
     box-sizing: border-box !important;
   }
 
-  .project-detail-modal.project-mobile-detail-modal #projectDetailContent {
+  .project-detail-modal:not(.hidden) #projectDetailContent {
     display: block !important;
+    min-height: 1px !important;
     opacity: 1 !important;
     visibility: visible !important;
     color: #101827 !important;
   }
 
-  .project-detail-modal.project-mobile-detail-modal .project-detail-card * {
+  .project-detail-modal:not(.hidden) .project-detail-card * {
     max-width: 100% !important;
     box-sizing: border-box !important;
   }
 
-  .project-detail-modal.project-mobile-detail-modal .project-detail-close {
+  .project-detail-modal:not(.hidden) .project-detail-close {
     position: fixed !important;
     top: calc(env(safe-area-inset-top, 0px) + 12px) !important;
     right: 14px !important;
@@ -58,34 +59,35 @@
     color: #101827 !important;
   }
 
-  .project-detail-modal.project-mobile-detail-modal .project-detail-head,
-  .project-detail-modal.project-mobile-detail-modal .project-detail-grid,
-  .project-detail-modal.project-mobile-detail-modal .project-section-head,
-  .project-detail-modal.project-mobile-detail-modal .phase-form,
-  .project-detail-modal.project-mobile-detail-modal .phase-card,
-  .project-detail-modal.project-mobile-detail-modal .project-task-tools,
-  .project-detail-modal.project-mobile-detail-modal .project-task-row,
-  .project-detail-modal.project-mobile-detail-modal .project-task-list,
-  .project-detail-modal.project-mobile-detail-modal .form-actions {
+  .project-detail-modal:not(.hidden) .project-detail-head,
+  .project-detail-modal:not(.hidden) .project-detail-grid,
+  .project-detail-modal:not(.hidden) .project-section-head,
+  .project-detail-modal:not(.hidden) .phase-form,
+  .project-detail-modal:not(.hidden) .phase-card,
+  .project-detail-modal:not(.hidden) .project-task-tools,
+  .project-detail-modal:not(.hidden) .project-task-row,
+  .project-detail-modal:not(.hidden) .project-task-list,
+  .project-detail-modal:not(.hidden) .form-actions {
     display: grid !important;
     grid-template-columns: 1fr !important;
     width: 100% !important;
     min-width: 0 !important;
+    gap: 10px !important;
   }
 
-  .project-detail-modal.project-mobile-detail-modal .project-detail-head {
+  .project-detail-modal:not(.hidden) .project-detail-head {
     padding-right: 0 !important;
   }
 
-  .project-detail-modal.project-mobile-detail-modal .phase-timeline,
-  .project-detail-modal.project-mobile-detail-modal .phase-timeline-track,
-  .project-detail-modal.project-mobile-detail-modal .project-progress-track {
+  .project-detail-modal:not(.hidden) .phase-timeline,
+  .project-detail-modal:not(.hidden) .phase-timeline-track,
+  .project-detail-modal:not(.hidden) .project-progress-track {
     min-width: 0 !important;
     width: 100% !important;
   }
 
-  .project-detail-modal.project-mobile-detail-modal .project-task-tools .list-actions,
-  .project-detail-modal.project-mobile-detail-modal .phase-card .list-actions {
+  .project-detail-modal:not(.hidden) .project-task-tools .list-actions,
+  .project-detail-modal:not(.hidden) .phase-card .list-actions {
     display: grid !important;
     grid-template-columns: 1fr !important;
     gap: 8px !important;
