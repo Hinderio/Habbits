@@ -8,6 +8,7 @@
   const DAY_MS = 86400000;
   let client;
   let currentProjectId = '';
+  let openTimer = 0;
 
   function readState() {
     try {
@@ -192,6 +193,13 @@
     if (currentProjectId === projectId) render(projectId);
   }
 
+  function scheduleOpen(projectId) {
+    window.clearTimeout(openTimer);
+    openTimer = window.setTimeout(() => {
+      if (render(projectId)) hydrateRemote(projectId);
+    }, 40);
+  }
+
   function rerenderSoon(projectId = currentProjectId) {
     if (!projectId) return;
     window.setTimeout(() => {
@@ -203,9 +211,7 @@
   document.addEventListener('click', event => {
     const opener = event.target.closest?.('[data-action="open-project-detail"]');
     if (!opener?.dataset?.id) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    if (render(opener.dataset.id)) hydrateRemote(opener.dataset.id);
+    scheduleOpen(opener.dataset.id);
   }, true);
 
   document.addEventListener('submit', event => {
@@ -213,6 +219,11 @@
   });
 
   document.addEventListener('click', event => {
+    if (event.target?.id === 'projectDetailModal') {
+      currentProjectId = '';
+      document.getElementById('projectDetailModal')?.classList.remove('project-mobile-detail-modal');
+      return;
+    }
     const action = event.target.closest?.('[data-action]')?.dataset?.action;
     if (action === 'close-project-detail') {
       currentProjectId = '';
