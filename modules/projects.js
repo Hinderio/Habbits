@@ -183,18 +183,18 @@
     if (phase) return phase.name;
     const task = projectTasks(state, project.id).find(item => !taskDone(item));
     if (task) return task.title;
-    return project.status === 'done' ? 'Abgeschlossen' : 'Naechsten Schritt definieren';
+    return project.status === 'done' ? 'Abgeschlossen' : 'Nächsten Schritt definieren';
   }
 
   function nextStep(project, state, progress) {
     const phases = projectPhases(state, project.id);
     const tasks = projectTasks(state, project.id);
     if (!phases.length) return 'Erstelle die erste Projektphase.';
-    if (!tasks.length) return 'Lege konkrete Tasks fuer dieses Projekt an.';
+    if (!tasks.length) return 'Lege konkrete Tasks für dieses Projekt an.';
     const end = project.end_date ? new Date(`${project.end_date}T23:59:59`).getTime() : null;
     if (end && end - Date.now() <= 7 * 86400000 && progress < 50) return 'Enddatum ist bald erreicht und der Fortschritt ist niedrig. Reduziere Scope oder plane den wichtigsten Task neu.';
     if (progress >= 100) return 'Alle Tasks oder Phasen sind erledigt. Das Projekt kann abgeschlossen werden.';
-    return `Naechster Meilenstein: ${nextMilestone(project, state)}.`;
+    return `Nächster Meilenstein: ${nextMilestone(project, state)}.`;
   }
 
   function ensureCss() {
@@ -241,10 +241,10 @@
   }
 
   function renderScreenShell() {
-    return `<section class="projects-hero glass"><div><p class="eyebrow">Projektmanagement</p><h2>Projekte planen und ruhig steuern</h2><p>Start, Ende, Phasen, Fortschritt und verknuepfte Tasks in einem schlanken Cockpit.</p></div><button class="pill primary" type="button" data-action="toggle-project-form">Projekt erstellen</button></section>
+    return `<section class="projects-hero glass"><div><p class="eyebrow">Projektmanagement</p><h2>Projekte planen und ruhig steuern</h2><p>Start, Ende, Phasen, Fortschritt und verknüpfte Tasks in einem schlanken Cockpit.</p></div><button class="pill primary" type="button" data-action="toggle-project-form">Projekt erstellen</button></section>
     <section id="projectFormPanel" class="panel glass project-form-panel hidden" aria-hidden="true"><div class="panel-head"><div><p class="eyebrow">Projekt</p><h3 id="projectFormTitle">Projekt erstellen</h3></div><button class="icon-btn" type="button" data-action="close-project-form" aria-label="Projektformular schliessen">×</button></div><form id="projectForm" class="project-form-grid"><label class="full"><span>Titel</span><input name="title" required placeholder="z. B. Portfolio Relaunch" /></label><label class="full"><span>Beschreibung</span><textarea name="description" rows="3" placeholder="Worum geht es, und warum ist es wichtig?"></textarea></label><label><span>Startdatum</span><input name="start_date" type="date" required /></label><label><span>Enddatum</span><input name="end_date" type="date" /></label><label><span>Status</span><select name="status"><option value="planned">Geplant</option><option value="active">Aktiv</option><option value="paused">Pausiert</option><option value="done">Abgeschlossen</option></select></label><label class="full"><span>Zielnotiz / Outcome</span><textarea name="outcome_note" rows="2" placeholder="Woran erkennst du, dass das Projekt gelungen ist?"></textarea></label><div id="projectFormError" class="project-error full" role="status"></div><div class="form-actions full"><button class="pill primary" type="submit">Projekt speichern</button><button class="pill secondary" type="button" data-action="cancel-project-edit">Abbrechen</button></div></form></section>
     <section class="projects-summary" id="projectsSummary" aria-label="Projekt Kennzahlen"></section>
-    <section class="panel glass"><div class="panel-head"><div><p class="eyebrow">Portfolio</p><h3>Projekt-Uebersicht</h3></div><span id="projectSyncStatus" class="badge muted">bereit</span></div><div id="projectsGrid" class="project-grid"></div></section>`;
+    <section class="panel glass"><div class="panel-head"><div><p class="eyebrow">Portfolio</p><h3>Projekt-Übersicht</h3></div><span id="projectSyncStatus" class="badge muted">bereit</span></div><div id="projectsGrid" class="project-grid"></div></section>`;
   }
 
   function render() {
@@ -262,14 +262,14 @@
     const planned = state.projects.filter(project => project.status === 'planned').length;
     const done = state.projects.filter(project => project.status === 'done').length;
     const tasks = state.projects.reduce((count, project) => count + projectTasks(state, project.id).length, 0);
-    node.innerHTML = `<article><small>Aktiv</small><strong>${active}</strong></article><article><small>Geplant</small><strong>${planned}</strong></article><article><small>Abgeschlossen</small><strong>${done}</strong></article><article><small>Verknuepfte Tasks</small><strong>${tasks}</strong></article>`;
+    node.innerHTML = `<article><small>Aktiv</small><strong>${active}</strong></article><article><small>Geplant</small><strong>${planned}</strong></article><article><small>Abgeschlossen</small><strong>${done}</strong></article><article><small>Verknüpfte Tasks</small><strong>${tasks}</strong></article>`;
   }
 
   function renderProjectCard(project, state) {
     const progress = progressFor(project, state);
     const tasks = projectTasks(state, project.id);
     const status = STATUS[project.status] || STATUS.planned;
-    return `<button class="project-card" type="button" data-action="open-project-detail" data-id="${escapeHtml(project.id)}"><div class="project-card-head"><div><small>Projekt</small><h3>${escapeHtml(project.title)}</h3></div><span class="badge ${status.cls}">${status.label}</span></div><p>${escapeHtml(project.description || 'Noch keine Kurzbeschreibung hinterlegt.')}</p><div class="project-progress-track" aria-label="Fortschritt ${progress}%"><i style="width:${progress}%"></i></div><div class="project-card-meta"><div><small>Start</small><strong>${dateLabel(project.start_date)}</strong></div><div><small>Ende</small><strong>${dateLabel(project.end_date)}</strong></div><div><small>Fortschritt</small><strong>${progress}%</strong></div><div><small>Tasks</small><strong>${tasks.length}</strong></div></div><div class="project-card-footer"><span class="subtle">${escapeHtml(nextMilestone(project, state))}</span><span class="mini-btn">Oeffnen</span></div></button>`;
+    return `<button class="project-card" type="button" data-action="open-project-detail" data-id="${escapeHtml(project.id)}"><div class="project-card-head"><div><small>Projekt</small><h3>${escapeHtml(project.title)}</h3></div><span class="badge ${status.cls}">${status.label}</span></div><p>${escapeHtml(project.description || 'Noch keine Kurzbeschreibung hinterlegt.')}</p><div class="project-progress-track" aria-label="Fortschritt ${progress}%"><i style="width:${progress}%"></i></div><div class="project-card-meta"><div><small>Start</small><strong>${dateLabel(project.start_date)}</strong></div><div><small>Ende</small><strong>${dateLabel(project.end_date)}</strong></div><div><small>Fortschritt</small><strong>${progress}%</strong></div><div><small>Tasks</small><strong>${tasks.length}</strong></div></div><div class="project-card-footer"><span class="subtle">${escapeHtml(nextMilestone(project, state))}</span><span class="mini-btn">Öffnen</span></div></button>`;
   }
 
   function renderDetail(projectId) {
@@ -282,7 +282,7 @@
     const tasks = projectTasks(state, project.id);
     const phases = projectPhases(state, project.id);
     const status = STATUS[project.status] || STATUS.planned;
-    node.innerHTML = `<div class="project-detail-head"><p class="eyebrow">Projekt</p><h2>${escapeHtml(project.title)}</h2><p>${escapeHtml(project.description || 'Noch keine Beschreibung.')}</p></div><div class="project-detail-grid"><article class="project-detail-box"><small>Status</small><h3><span class="badge ${status.cls}">${status.label}</span></h3><p class="subtle">${dateLabel(project.start_date)} bis ${dateLabel(project.end_date)}</p></article><article class="project-detail-box"><small>Fortschritt</small><h3>${progress}%</h3><div class="project-progress-track"><i style="width:${progress}%"></i></div></article><article class="project-detail-box"><small>Ziel / Outcome</small><p class="subtle">${escapeHtml(project.outcome_note || 'Noch kein Outcome notiert.')}</p></article><article class="project-detail-box project-next-step"><small>Naechster sinnvoller Schritt</small><p>${escapeHtml(nextStep(project, state, progress))}</p></article></div><div class="project-section-head"><div><p class="eyebrow">Phasen / Gantt MVP</p><h3>Timeline</h3></div><span class="badge muted">${phases.length} Phase${phases.length === 1 ? '' : 'n'}</span></div><form class="phase-form" data-project-phase-form data-project-id="${escapeHtml(project.id)}"><label><span>Phase</span><input name="name" required placeholder="z. B. Konzept" /></label><label><span>Start</span><input name="start_date" type="date" value="${escapeHtml(project.start_date || todayDate())}" required /></label><label><span>Ende</span><input name="end_date" type="date" value="${escapeHtml(project.end_date || project.start_date || todayDate())}" required /></label><label><span>Status</span><select name="status"><option value="open">Offen</option><option value="active">In Arbeit</option><option value="done">Erledigt</option></select></label><button class="mini-btn primary" type="submit">Phase speichern</button></form><div>${phases.length ? phases.map(phase => renderPhase(phase, project)).join('') : '<div class="project-empty">Noch keine Phasen. Erstelle die erste Projektphase.</div>'}</div><div class="project-section-head"><div><p class="eyebrow">Tasks</p><h3>Verknuepfte Aufgaben</h3></div><span class="badge muted">${tasks.length} Task${tasks.length === 1 ? '' : 's'}</span></div>${renderTaskTools(project, state)}<div class="project-task-list">${tasks.length ? tasks.map(task => renderTaskRow(task)).join('') : '<div class="project-empty">Noch keine Tasks verknuepft.</div>'}</div><div class="form-actions project-detail-actions"><button class="pill secondary" type="button" data-action="edit-project" data-id="${escapeHtml(project.id)}">Projekt bearbeiten</button><button class="pill secondary" type="button" data-action="mark-project-done" data-id="${escapeHtml(project.id)}">Als abgeschlossen markieren</button></div>`;
+    node.innerHTML = `<div class="project-detail-head"><p class="eyebrow">Projekt</p><h2>${escapeHtml(project.title)}</h2><p>${escapeHtml(project.description || 'Noch keine Beschreibung.')}</p></div><div class="project-detail-grid"><article class="project-detail-box"><small>Status</small><h3><span class="badge ${status.cls}">${status.label}</span></h3><p class="subtle">${dateLabel(project.start_date)} bis ${dateLabel(project.end_date)}</p></article><article class="project-detail-box"><small>Fortschritt</small><h3>${progress}%</h3><div class="project-progress-track"><i style="width:${progress}%"></i></div></article><article class="project-detail-box"><small>Ziel / Outcome</small><p class="subtle">${escapeHtml(project.outcome_note || 'Noch kein Outcome notiert.')}</p></article><article class="project-detail-box project-next-step"><small>Nächster sinnvoller Schritt</small><p>${escapeHtml(nextStep(project, state, progress))}</p></article></div><div class="project-section-head"><div><p class="eyebrow">Phasen / Gantt MVP</p><h3>Timeline</h3></div><span class="badge muted">${phases.length} Phase${phases.length === 1 ? '' : 'n'}</span></div><form class="phase-form" data-project-phase-form data-project-id="${escapeHtml(project.id)}"><label><span>Phase</span><input name="name" required placeholder="z. B. Konzept" /></label><label><span>Start</span><input name="start_date" type="date" value="${escapeHtml(project.start_date || todayDate())}" required /></label><label><span>Ende</span><input name="end_date" type="date" value="${escapeHtml(project.end_date || project.start_date || todayDate())}" required /></label><label><span>Status</span><select name="status"><option value="open">Offen</option><option value="active">In Arbeit</option><option value="done">Erledigt</option></select></label><button class="mini-btn primary" type="submit">Phase speichern</button></form><div>${phases.length ? phases.map(phase => renderPhase(phase, project)).join('') : '<div class="project-empty">Noch keine Phasen. Erstelle die erste Projektphase.</div>'}</div><div class="project-section-head"><div><p class="eyebrow">Tasks</p><h3>Verknüpfte Aufgaben</h3></div><span class="badge muted">${tasks.length} Task${tasks.length === 1 ? '' : 's'}</span></div>${renderTaskTools(project, state)}<div class="project-task-list">${tasks.length ? tasks.map(task => renderTaskRow(task)).join('') : '<div class="project-empty">Noch keine Tasks verknüpft.</div>'}</div><div class="form-actions project-detail-actions"><button class="pill secondary" type="button" data-action="edit-project" data-id="${escapeHtml(project.id)}">Projekt bearbeiten</button><button class="pill secondary" type="button" data-action="mark-project-done" data-id="${escapeHtml(project.id)}">Als abgeschlossen markieren</button></div>`;
   }
 
   function renderPhase(phase, project) {
@@ -293,17 +293,17 @@
     const span = Math.max(1, end - start);
     const left = Math.max(0, Math.min(96, ((phaseStart - start) / span) * 100));
     const width = Math.max(8, Math.min(100 - left, ((phaseEnd - phaseStart || 86400000) / span) * 100));
-    return `<article class="phase-card"><div><strong>${escapeHtml(phase.name)}</strong><span class="subtle">${PHASE_STATUS[phase.status]}</span></div><div class="phase-timeline"><div class="phase-timeline-track"><i style="margin-left:${left}%;width:${width}%"></i></div><div class="phase-timeline-dates"><span>${dateLabel(phase.start_date)}</span><span>${dateLabel(phase.end_date)}</span></div></div><div class="list-actions"><button class="mini-btn" type="button" data-action="edit-phase" data-id="${escapeHtml(phase.id)}">Bearbeiten</button><button class="mini-btn danger" type="button" data-action="delete-phase" data-id="${escapeHtml(phase.id)}">Loeschen</button></div></article>`;
+    return `<article class="phase-card"><div><strong>${escapeHtml(phase.name)}</strong><span class="subtle">${PHASE_STATUS[phase.status]}</span></div><div class="phase-timeline"><div class="phase-timeline-track"><i style="margin-left:${left}%;width:${width}%"></i></div><div class="phase-timeline-dates"><span>${dateLabel(phase.start_date)}</span><span>${dateLabel(phase.end_date)}</span></div></div><div class="list-actions"><button class="mini-btn" type="button" data-action="edit-phase" data-id="${escapeHtml(phase.id)}">Bearbeiten</button><button class="mini-btn danger" type="button" data-action="delete-phase" data-id="${escapeHtml(phase.id)}">Löschen</button></div></article>`;
   }
 
   function renderTaskTools(project, state) {
     const available = state.tasks.filter(task => !task.project_id && (task.status || 'open') !== 'archived');
     const options = available.map(task => `<option value="${escapeHtml(task.id)}">${escapeHtml(task.title)}</option>`).join('');
-    return `<div class="project-task-tools"><label><span class="subtle">Bestehenden Task verbinden</span><select id="projectTaskSelect"><option value="">Task auswaehlen</option>${options}</select></label><div class="list-actions"><button class="mini-btn" type="button" data-action="link-selected-task" data-id="${escapeHtml(project.id)}">Verbinden</button><button class="mini-btn primary" type="button" data-action="create-project-task" data-id="${escapeHtml(project.id)}">Task fuer Projekt erstellen</button></div></div>`;
+    return `<div class="project-task-tools"><label><span class="subtle">Bestehenden Task verbinden</span><select id="projectTaskSelect"><option value="">Task auswählen</option>${options}</select></label><div class="list-actions"><button class="mini-btn" type="button" data-action="link-selected-task" data-id="${escapeHtml(project.id)}">Verbinden</button><button class="mini-btn primary" type="button" data-action="create-project-task" data-id="${escapeHtml(project.id)}">Task für Projekt erstellen</button></div></div>`;
   }
 
   function renderTaskRow(task) {
-    return `<article class="project-task-row ${taskDone(task) ? 'is-done' : ''}"><div><strong>${escapeHtml(task.title)}</strong><span class="subtle">${escapeHtml(task.status || 'open')}${task.due_at ? ` · faellig ${escapeHtml(dateLabel(task.due_at))}` : ''}</span></div><button class="mini-btn" type="button" data-action="unlink-task" data-id="${escapeHtml(task.id)}">Loesen</button></article>`;
+    return `<article class="project-task-row ${taskDone(task) ? 'is-done' : ''}"><div><strong>${escapeHtml(task.title)}</strong><span class="subtle">${escapeHtml(task.status || 'open')}${task.due_at ? ` · fällig ${escapeHtml(dateLabel(task.due_at))}` : ''}</span></div><button class="mini-btn" type="button" data-action="unlink-task" data-id="${escapeHtml(task.id)}">Lösen</button></article>`;
   }
 
   function openForm(projectId = '') {
@@ -385,7 +385,7 @@
     const name = String(data.get('name') || '').trim();
     const start = validDate(data.get('start_date'));
     const end = validDate(data.get('end_date'));
-    if (!projectId) return toast('Projekt konnte fuer die Phase nicht gefunden werden.');
+    if (!projectId) return toast('Projekt konnte für die Phase nicht gefunden werden.');
     if (!name || !start || !end) return toast('Phase braucht Name, Start und Ende.');
     if (end < start) return toast('Phasenende darf nicht vor Start liegen.');
 
@@ -420,7 +420,7 @@
     const end = prompt('Enddatum YYYY-MM-DD', phase.end_date);
     if (end == null) return;
     const status = prompt('Status: open, active, done', phase.status);
-    if (!String(name).trim() || !validDate(start) || !validDate(end) || validDate(end) < validDate(start)) return toast('Ungueltige Phasendaten.');
+    if (!String(name).trim() || !validDate(start) || !validDate(end) || validDate(end) < validDate(start)) return toast('Ungültige Phasendaten.');
     try {
       const updated = normalizePhase({ ...phase, name, start_date: start, end_date: end, status, updated_at: nowIso(), synced: true });
       const { supabase, userId } = await requireRemoteUser();
@@ -449,14 +449,14 @@
       writeState(state);
       renderDetail(phase.project_id);
       render();
-      toast('Phase geloescht');
+      toast('Phase gelöscht');
     } catch (error) {
-      toast(error.message || 'Phase konnte nicht geloescht werden.');
+      toast(error.message || 'Phase konnte nicht gelöscht werden.');
     }
   }
 
   async function linkTask(projectId, taskId) {
-    if (!taskId) return toast('Bitte Task auswaehlen.');
+    if (!taskId) return toast('Bitte Task auswählen.');
     try {
       const { supabase } = await requireRemoteUser();
       const { error } = await supabase.from('tasks').update({ project_id: projectId, updated_at: nowIso() }).eq('id', taskId);
@@ -466,9 +466,9 @@
       writeState(state);
       renderDetail(projectId);
       render();
-      toast('Task verknuepft');
+      toast('Task verknüpft');
     } catch (error) {
-      toast(error.message || 'Task konnte nicht verknuepft werden.');
+      toast(error.message || 'Task konnte nicht verknüpft werden.');
     }
   }
 
@@ -484,14 +484,14 @@
       writeState(state);
       renderDetail(task.project_id);
       render();
-      toast('Task geloest');
+      toast('Task gelöst');
     } catch (error) {
-      toast(error.message || 'Task konnte nicht geloest werden.');
+      toast(error.message || 'Task konnte nicht gelöst werden.');
     }
   }
 
   async function createProjectTask(projectId) {
-    const title = prompt('Task-Titel fuer dieses Projekt');
+    const title = prompt('Task-Titel für dieses Projekt');
     if (!String(title || '').trim()) return;
     try {
       const now = nowIso();
