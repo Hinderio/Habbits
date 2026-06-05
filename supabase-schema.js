@@ -46,6 +46,9 @@
     if (!document.querySelector('script[src="modules/projects-phases-remote-fix.js"]')) {
       document.write('<script src="modules/projects-phases-remote-fix.js"><\/script>');
     }
+    if (!document.querySelector('script[src="modules/projects-mobile-detail.js"]')) {
+      document.write('<script src="modules/projects-mobile-detail.js"><\/script>');
+    }
     if (!document.querySelector('script[src="modules/projects.js"]')) {
       document.write('<script src="modules/projects.js"><\/script>');
     }
