@@ -139,13 +139,49 @@
     if (hiddenFormPanel && typeof active.blur === 'function') active.blur();
   }
 
+  function ensureDetailModal() {
+    let modal = document.getElementById('projectDetailModal');
+    let content = document.getElementById('projectDetailContent');
+    if (modal && content) return { modal, content };
+
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'projectDetailModal';
+      modal.className = 'project-detail-modal hidden';
+      modal.setAttribute('role', 'dialog');
+      modal.setAttribute('aria-modal', 'true');
+      modal.innerHTML = '<section class="project-detail-card"><button class="icon-btn project-detail-close" type="button" data-action="close-project-detail" aria-label="Projekt schliessen">×</button><div id="projectDetailContent"></div></section>';
+      (document.querySelector('main.content') || document.body).appendChild(modal);
+      content = modal.querySelector('#projectDetailContent');
+    }
+
+    if (!content) {
+      const card = modal.querySelector('.project-detail-card') || modal.appendChild(document.createElement('section'));
+      card.classList.add('project-detail-card');
+      content = document.createElement('div');
+      content.id = 'projectDetailContent';
+      card.appendChild(content);
+    }
+
+    if (!modal.querySelector('[data-action="close-project-detail"]')) {
+      const close = document.createElement('button');
+      close.className = 'icon-btn project-detail-close';
+      close.type = 'button';
+      close.dataset.action = 'close-project-detail';
+      close.setAttribute('aria-label', 'Projekt schliessen');
+      close.textContent = '×';
+      modal.querySelector('.project-detail-card')?.prepend(close);
+    }
+
+    return { modal, content };
+  }
+
   function render(projectId) {
     blurHiddenFormFocus();
     const state = readState();
     const id = String(projectId || '');
     const project = (Array.isArray(state.projects) ? state.projects : []).find(item => String(item.id) === id && !item.is_archived);
-    const modal = document.getElementById('projectDetailModal');
-    const content = document.getElementById('projectDetailContent');
+    const { modal, content } = ensureDetailModal();
     if (!modal || !content) return false;
     if (!project) {
       currentProjectId = '';
@@ -177,6 +213,7 @@
       <div class="form-actions" style="margin-top:16px"><button class="pill secondary" type="button" data-action="edit-project" data-id="${escapeHtml(project.id)}">Projekt bearbeiten</button><button class="pill secondary" type="button" data-action="mark-project-done" data-id="${escapeHtml(project.id)}">Als abgeschlossen markieren</button></div>`;
     modal.classList.remove('hidden');
     modal.classList.add('project-mobile-detail-modal');
+    modal.removeAttribute('aria-hidden');
     document.body.classList.add('project-modal-open');
     return true;
   }
@@ -216,6 +253,7 @@
     const projectId = projectIdFromEvent(event);
     if (!projectId) return;
     blurHiddenFormFocus();
+    ensureDetailModal();
     scheduleOpen(projectId, event.type === 'click' ? 40 : 0);
   }
 
