@@ -7,6 +7,7 @@
   const STORAGE_KEY = 'habitflow-state-v1';
   const LEARNING_KEY = 'habitflow-coach-interventions-v1';
   const TRIGGER_KEYS = ['coffee', 'alcohol', 'reward', 'boredom', 'stress', 'social', 'meal', 'morning', 'habits', 'unknown'];
+  const TIP_TRIGGER_SEQUENCE = ['reward', 'stress', 'coffee', 'boredom', 'social', 'alcohol', 'meal', 'unknown'];
   const TRIGGER_LABELS = Object.freeze({
     coffee: 'Kaffee', alcohol: 'Alkohol', reward: 'Reward', boredom: 'Langeweile', stress: 'Stress', social: 'Sozial', meal: 'Essen', morning: 'Morgen', habits: 'Habits', tasks: 'Tasks', unknown: 'Autopilot'
   });
@@ -34,9 +35,29 @@
     tasks: { title: 'Aufgaben-Druck ist gerade der Trigger.', body: 'Du brauchst nicht die Zigarette, sondern eine Grenze. Schreib genau den nachsten Task-Schritt auf, dann 10 Minuten Abstand.', actions: [{ key: 'timer10', label: '10-Minuten-Abstand' }, { key: 'open_tasks', label: 'Task ansehen' }, { key: 'name_stress', label: 'Druck benennen' }] },
     unknown: { title: 'Autopilot erkannt.', body: 'Du musst gerade nicht uber den ganzen Tag entscheiden. Gewinne nur 10 Minuten. Danach darfst du neu wahlen.', actions: [{ key: 'timer10', label: '10-Minuten-Timer' }, { key: 'choose_trigger', label: 'Trigger wahlen' }, { key: 'log_smoke', label: 'Trotzdem loggen' }] }
   });
+  const ACTION_GUIDES = Object.freeze({
+    water: { title: 'Wasser zuerst.', body: 'Ein Glas Wasser, dann 7 ruhige Atemzuge. Erst danach neu entscheiden. Du verschiebst nicht das Leben, nur den Autopilot.' },
+    move_water: { title: 'Wasser + Ortswechsel.', body: 'Nimm Wasser in die Hand und wechsle den Ort: andere Seite vom Raum, kurz vor die Tur oder ans Fenster. Kontextwechsel ist der Hebel.' },
+    reward_alt: { title: 'Ersatzbelohnung wahlen.', body: 'Wahle eine kleine Belohnung ohne Zigarette: Musik, Tee, kurze Nachricht oder 3 Minuten gehen. Danach darfst du neu entscheiden.' },
+    decide_later: { title: 'Spater entscheiden.', body: 'Kein Ja oder Nein fur den ganzen Tag. Nur jetzt: Entscheidung vertagen, 10 Minuten Abstand, dann bewusst prufen.' },
+    mini_walk: { title: 'Mini-Walk.', body: 'Steh auf, geh 90 Sekunden langsam. Kein Podcast, kein Scrollen. Nur Beine bewegen und den Drang auslaufen lassen.' },
+    name_stress: { title: 'Stress benennen.', body: 'Schreib oder sag einen Satz: Was stresst mich wirklich? Danach eine konkrete Grenze: kleiner, spater oder delegieren.' },
+    keep_open: { title: 'Coach bleibt offen.', body: 'Bleib kurz im Coach. Der Punkt ist nicht ein perfekter Entscheid, sondern die nachste bewusste Minute.' },
+    change_place: { title: 'Ort wechseln.', body: 'Verlasse die Rauch-Szene kurz. Hol Wasser, geh ans Fenster oder stell dich zu jemandem ohne Zigarette. Nicht kampfen, Szene andern.' },
+    support_msg: { title: 'Support-Nachricht.', body: 'Kurzer Text: "Ich will gerade rauchen. Ich gewinne 10 Minuten. Schreib mir kurz was Normales." Kein Drama, nur Unterbrechung.' },
+    gum_water: { title: 'Kaugummi / Wasser.', body: 'Neuer Abschluss nach dem Essen: Wasser, Kaugummi oder Zahne putzen. Der alte Abschluss darf warten.' },
+    mark_alcohol: { title: 'Alkohol-Kontext gemerkt.', body: 'Heute zahlt Abstand. Nach jedem Drink erst Wasser oder Ortswechsel. Keine Zigarette direkt anschliessen.' },
+    choose_trigger: { title: 'Trigger wahlen.', body: 'Wahle unten den wahrscheinlichsten Trigger-Chip. Je genauer der Kontext, desto weniger zufallig wird der nachste Coach-Schritt.' },
+    open_habits: { title: 'Habit als Pattern Break.', body: 'Ein kleiner Habit-Haken reicht. Ziel ist nicht Produktivitat, sondern den Rauch-Autopilot zu unterbrechen.' },
+    open_tasks: { title: 'Task-Druck klein machen.', body: 'Nimm genau den nachsten Schritt, nicht die ganze Aufgabe. Druck wird kleiner, wenn er konkret wird.' },
+    morning_routine: { title: 'Morgenroutine als Anker.', body: 'Wasser zuerst, dann ein kurzer Startschritt. Die erste Zigarette setzt den Rhythmus, also verschieben wir nur den Start.' },
+    log_smoke: { title: 'Bewusst loggen.', body: 'Wenn du rauchst, dann bewusst und geloggt. Keine Scham, keine Verdrangung. Daraus lernt dein System.' }
+  });
 
   let selectedTrigger = null;
   let activeMode = 'context';
+  let activeActionKey = null;
+  let tipIndex = -1;
   let timer = null;
   let renderTimer = null;
 
@@ -237,7 +258,7 @@
     const style = document.createElement('style');
     style.id = 'habitflow-craving-coach-v2-style';
     style.textContent = `
-      .hf-coach-v2-extra{display:grid;gap:12px;margin-top:2px}.hf-coach-v2-situation{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.hf-coach-v2-situation .badge{min-height:32px}.hf-coach-v2-pause{padding:11px 12px;border-radius:18px;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.07);color:var(--muted);font-size:.9rem;line-height:1.42}.hf-coach-v2-actions,.hf-coach-v2-feedback,.hf-coach-v2-chips{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.hf-coach-v2-actions .mini-btn,.hf-coach-v2-feedback .mini-btn,.hf-coach-v2-chips .mini-btn{min-height:44px;white-space:normal;line-height:1.2}.hf-coach-v2-chips{grid-template-columns:repeat(3,minmax(0,1fr))}.hf-coach-v2-timer{display:grid;gap:9px;padding:12px;border-radius:20px;background:rgba(74,215,209,.09);border:1px solid rgba(74,215,209,.16)}.hf-coach-v2-timer strong{font-size:1.1rem}.hf-coach-v2-timer-track{height:8px;border-radius:999px;background:rgba(255,255,255,.09);overflow:hidden}.hf-coach-v2-timer-track i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--primary),var(--accent));border-radius:inherit}.coach-result .hf-coach-v2-extra{margin-top:0}.hf-coach-v2-modal-card{display:grid;gap:13px}.hf-coach-v2-modal-card h3{font-size:1.24rem}.hf-coach-v2-modal-card p{color:var(--muted);line-height:1.48}.hf-coach-v2-learning{padding:12px;border-radius:18px;background:rgba(143,240,167,.08);border:1px solid rgba(143,240,167,.14);color:var(--muted);line-height:1.4}.hf-coach-v2-risk-low{color:var(--accent)}.hf-coach-v2-risk-medium{color:var(--warning)}.hf-coach-v2-risk-high{color:var(--danger)}body.light .hf-coach-v2-pause,body.light .hf-coach-v2-timer,body.light .hf-coach-v2-learning{background:rgba(255,255,255,.66);border-color:rgba(17,36,58,.08)}@media (max-width:760px){.hf-coach-v2-actions,.hf-coach-v2-feedback,.hf-coach-v2-chips{grid-template-columns:1fr}.hf-coach-v2-situation{align-items:stretch}.hf-coach-v2-situation .badge{width:100%;justify-content:center}.craving-actions{grid-template-columns:1fr!important}}
+      .hf-coach-v2-extra{display:grid;gap:12px;margin-top:2px}.hf-coach-v2-situation{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.hf-coach-v2-situation .badge{min-height:32px}.hf-coach-v2-pause{padding:11px 12px;border-radius:18px;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.07);color:var(--muted);font-size:.9rem;line-height:1.42}.hf-coach-v2-actions,.hf-coach-v2-feedback,.hf-coach-v2-chips{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.hf-coach-v2-actions .mini-btn,.hf-coach-v2-feedback .mini-btn,.hf-coach-v2-chips .mini-btn{min-height:44px;white-space:normal;line-height:1.2}.hf-coach-v2-chips{grid-template-columns:repeat(3,minmax(0,1fr))}.hf-coach-v2-timer{display:grid;gap:9px;padding:12px;border-radius:20px;background:rgba(74,215,209,.09);border:1px solid rgba(74,215,209,.16)}.hf-coach-v2-timer strong{font-size:1.1rem}.hf-coach-v2-timer-track{height:8px;border-radius:999px;background:rgba(255,255,255,.09);overflow:hidden}.hf-coach-v2-timer-track i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--primary),var(--accent));border-radius:inherit}.coach-result .hf-coach-v2-extra{margin-top:0}.hf-coach-v2-modal-card{display:grid;gap:13px}.hf-coach-v2-modal-card h3{font-size:1.24rem}.hf-coach-v2-modal-card p{color:var(--muted);line-height:1.48}.hf-coach-v2-learning{padding:12px;border-radius:18px;background:rgba(143,240,167,.08);border:1px solid rgba(143,240,167,.14);color:var(--muted);line-height:1.4}.hf-coach-v2-action-response{position:relative;display:grid;gap:7px;padding:12px 13px;border-radius:18px;background:rgba(158,220,206,.18);border:1px solid rgba(158,220,206,.34);color:var(--muted);line-height:1.42}.hf-coach-v2-action-response strong{color:var(--text);font-size:.98rem;letter-spacing:-.01em;padding-right:42px}.hf-coach-v2-action-response p{margin:0!important;color:var(--muted)!important;font-size:.9rem!important}.hf-coach-v2-action-response .hf-coach-v2-feedback{margin-top:6px}.hf-coach-v2-action-close{position:absolute;top:10px;right:10px;display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:999px;border:1px solid rgba(7,17,26,.12);background:rgba(255,255,255,.82);color:#07111a;font:inherit;font-size:1.12rem;font-weight:800;line-height:1;cursor:pointer;box-shadow:0 8px 18px rgba(7,17,26,.08)}.hf-coach-v2-action-close:hover,.hf-coach-v2-action-close:focus-visible{background:rgba(255,255,255,.96);outline:2px solid rgba(7,17,26,.18);outline-offset:2px}.hf-coach-v2-risk-low{color:var(--accent)}.hf-coach-v2-risk-medium{color:var(--warning)}.hf-coach-v2-risk-high{color:var(--danger)}body.light .hf-coach-v2-pause,body.light .hf-coach-v2-timer,body.light .hf-coach-v2-learning{background:rgba(255,255,255,.66);border-color:rgba(17,36,58,.08)}body.light .hf-coach-v2-action-response{background:rgba(158,220,206,.28);border-color:rgba(91,154,141,.2)}@media (max-width:760px){.hf-coach-v2-actions,.hf-coach-v2-feedback,.hf-coach-v2-chips{grid-template-columns:1fr}.hf-coach-v2-situation{align-items:stretch}.hf-coach-v2-situation .badge{width:100%;justify-content:center}.craving-actions{grid-template-columns:1fr!important}}
     `;
     document.head.appendChild(style);
   }
@@ -253,6 +274,17 @@
 
   function feedbackHtml(actionKey) {
     return `<div class="hf-coach-v2-feedback" aria-label="Coach Feedback">${Object.entries(OUTCOME_LABELS).map(([key, label]) => `<button class="mini-btn" type="button" data-coach-feedback="${key}" data-action-key="${escapeHtml(actionKey || 'manual')}">${escapeHtml(label)}</button>`).join('')}</div>`;
+  }
+
+  function actionResponseHtml(actionKey) {
+    const guide = ACTION_GUIDES[actionKey];
+    if (!guide) return '';
+    return `<div class="hf-coach-v2-action-response" data-hf-coach-v2-action-response="${escapeHtml(actionKey)}">
+      <button class="hf-coach-v2-action-close" type="button" data-coach-dismiss="response" aria-label="Hinweis schliessen">&times;</button>
+      <strong>${escapeHtml(guide.title)}</strong>
+      <p>${escapeHtml(guide.body)}</p>
+      ${feedbackHtml(actionKey)}
+    </div>`;
   }
 
   function timerHtml() {
@@ -275,6 +307,7 @@
       <div class="hf-coach-v2-pause">${escapeHtml(PAUSE_HINTS[context.pauseBand] || PAUSE_HINTS.none)}</div>
       ${timerHtml()}
       ${actionButtonsHtml(recommendation)}
+      ${activeActionKey && !TIMER_SECONDS[activeActionKey] ? actionResponseHtml(activeActionKey) : ''}
       ${context.inferredTrigger === 'unknown' || options.showChips ? triggerChipsHtml(context) : ''}
       ${hint ? `<div class="hf-coach-v2-learning">${escapeHtml(hint)}</div>` : ''}
     </div>`;
@@ -361,6 +394,7 @@
 
   function startDelay(actionKey) {
     const seconds = TIMER_SECONDS[actionKey] || 600;
+    activeActionKey = null;
     timer = { actionKey, seconds, startsAt: Date.now(), endsAt: Date.now() + seconds * 1000 };
     clearInterval(startDelay.interval);
     startDelay.interval = window.setInterval(() => {
@@ -379,17 +413,28 @@
     if (button) button.click();
   }
 
+  function rotateTip() {
+    tipIndex = (tipIndex + 1) % TIP_TRIGGER_SEQUENCE.length;
+    selectedTrigger = TIP_TRIGGER_SEQUENCE[tipIndex];
+    activeActionKey = null;
+    timer = null;
+    clearInterval(startDelay.interval);
+    renderAll();
+  }
+
   function handleAction(actionKey) {
     if (TIMER_SECONDS[actionKey]) { startDelay(actionKey); return; }
-    if (actionKey === 'cancel_timer') { timer = null; clearInterval(startDelay.interval); renderAll(); return; }
-    if (actionKey === 'log_smoke') { document.getElementById('recordSmokeBtn')?.click(); return; }
+    if (actionKey === 'cancel_timer') { timer = null; activeActionKey = null; clearInterval(startDelay.interval); renderAll(); return; }
+    if (actionKey === 'log_smoke') { activeActionKey = null; document.getElementById('recordSmokeBtn')?.click(); return; }
+    activeActionKey = ACTION_GUIDES[actionKey] ? actionKey : null;
     if (actionKey === 'choose_trigger') { selectedTrigger = 'unknown'; showToast('Wahle den wahrscheinlichsten Trigger.'); renderAll(); return; }
     if (actionKey === 'mark_alcohol') { selectedTrigger = 'alcohol'; showToast('Alkohol-Kontext fur den Coach gemerkt.'); renderAll(); return; }
-    if (actionKey === 'morning_routine') { document.getElementById('heroMorningRoutineBtn')?.click(); return; }
-    if (actionKey === 'open_habits') { openScreen('habits'); return; }
-    if (actionKey === 'open_tasks') { openScreen('tasks'); return; }
-    if (actionKey === 'keep_open') { showToast('Coach bleibt offen. Nur den nachsten kleinen Schritt.'); return; }
+    if (actionKey === 'morning_routine') { renderAll(); document.getElementById('heroMorningRoutineBtn')?.click(); return; }
+    if (actionKey === 'open_habits') { renderAll(); openScreen('habits'); return; }
+    if (actionKey === 'open_tasks') { renderAll(); openScreen('tasks'); return; }
+    if (actionKey === 'keep_open') { showToast('Coach bleibt offen. Nur den nachsten kleinen Schritt.'); renderAll(); return; }
     showToast(actionLabelFor(actionKey));
+    renderAll();
   }
 
   function handleFeedback(outcome, actionKey) {
@@ -401,34 +446,38 @@
       trigger: context.inferredTrigger,
       dayPart: context.dayPart,
       pauseMinutes: context.pauseMinutes,
-      actionKey: actionKey || timer?.actionKey || 'manual',
+      actionKey: actionKey || timer?.actionKey || activeActionKey || 'manual',
       outcome,
       alcoholContext: context.alcoholContext,
       todayCount: context.todayCount
     });
+    activeActionKey = null;
     if (outcome === 'smoked') document.getElementById('recordSmokeBtn')?.click();
     timer = null;
     clearInterval(startDelay.interval);
-    scheduleRender(40);
+    renderAll();
   }
 
   function handleClick(event) {
-    const coachAction = event.target?.closest?.('[data-coach-action]')?.dataset?.coachAction;
-    if (coachAction) { event.preventDefault(); handleAction(coachAction); return; }
+    const dismiss = event.target?.closest?.('[data-coach-dismiss]');
+    if (dismiss) { event.preventDefault(); event.stopImmediatePropagation(); activeActionKey = null; renderAll(); return; }
     const feedback = event.target?.closest?.('[data-coach-feedback]');
-    if (feedback) { event.preventDefault(); handleFeedback(feedback.dataset.coachFeedback, feedback.dataset.actionKey); return; }
+    if (feedback) { event.preventDefault(); event.stopImmediatePropagation(); handleFeedback(feedback.dataset.coachFeedback, feedback.dataset.actionKey); return; }
+    const coachAction = event.target?.closest?.('[data-coach-action]')?.dataset?.coachAction;
+    if (coachAction) { event.preventDefault(); event.stopImmediatePropagation(); handleAction(coachAction); return; }
     const trigger = event.target?.closest?.('[data-coach-trigger]')?.dataset?.coachTrigger;
-    if (trigger) { event.preventDefault(); selectedTrigger = normalizeTrigger(trigger) || 'unknown'; showToast(`${TRIGGER_LABELS[selectedTrigger] || 'Trigger'} erkannt.`); renderAll(); return; }
+    if (trigger) { event.preventDefault(); event.stopImmediatePropagation(); selectedTrigger = normalizeTrigger(trigger) || 'unknown'; activeActionKey = null; showToast(`${TRIGGER_LABELS[selectedTrigger] || 'Trigger'} erkannt.`); renderAll(); return; }
     const action = event.target?.closest?.('[data-action]')?.dataset?.action || '';
+    if (action === 'rotate-craving-tip') { event.preventDefault(); event.stopImmediatePropagation(); rotateTip(); return; }
     if (action === 'start-emergency-craving') activeMode = 'acute';
     if (action === 'open-coach') activeMode = 'context';
-    if (['open-coach', 'start-emergency-craving', 'rotate-craving-tip', 'record-cigarette', 'coach-record-smoke', 'start-coach-delay', 'coach-breath-reset'].includes(action)) scheduleRender(180);
+    if (['open-coach', 'start-emergency-craving', 'record-cigarette', 'coach-record-smoke', 'start-coach-delay', 'coach-breath-reset'].includes(action)) scheduleRender(180);
   }
 
   function bindControls() {
     document.addEventListener('click', handleClick, true);
     document.addEventListener('change', event => {
-      if (event.target?.id === 'coachTrigger') { selectedTrigger = normalizeTrigger(event.target.value) || selectedTrigger; scheduleRender(40); }
+      if (event.target?.id === 'coachTrigger') { selectedTrigger = normalizeTrigger(event.target.value) || selectedTrigger; activeActionKey = null; scheduleRender(40); }
       if (event.target?.id === 'coachUrgeLevel') scheduleRender(40);
     }, true);
     window.addEventListener('storage', event => { if (event.key === STORAGE_KEY || event.key === LEARNING_KEY) scheduleRender(120); });
