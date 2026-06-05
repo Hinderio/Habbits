@@ -133,7 +133,14 @@
     return tasks.map(task => `<article class="project-task-row ${taskDone(task) ? 'is-done' : ''}"><div><strong>${escapeHtml(task.title)}</strong><span class="subtle">${escapeHtml(task.status || 'open')}${task.due_at ? ` · faellig ${escapeHtml(dateLabel(task.due_at))}` : ''}</span></div><button class="mini-btn" type="button" data-action="unlink-task" data-id="${escapeHtml(task.id)}">Loesen</button></article>`).join('');
   }
 
+  function blurHiddenFormFocus() {
+    const active = document.activeElement;
+    const hiddenFormPanel = active?.closest?.('#projectFormPanel.hidden, #projectFormPanel[aria-hidden="true"]');
+    if (hiddenFormPanel && typeof active.blur === 'function') active.blur();
+  }
+
   function render(projectId) {
+    blurHiddenFormFocus();
     const state = readState();
     const id = String(projectId || '');
     const project = (Array.isArray(state.projects) ? state.projects : []).find(item => String(item.id) === id && !item.is_archived);
@@ -193,11 +200,23 @@
     if (currentProjectId === projectId) render(projectId);
   }
 
-  function scheduleOpen(projectId) {
+  function scheduleOpen(projectId, delay = 0) {
     window.clearTimeout(openTimer);
     openTimer = window.setTimeout(() => {
       if (render(projectId)) hydrateRemote(projectId);
-    }, 40);
+    }, delay);
+  }
+
+  function projectIdFromEvent(event) {
+    const opener = event.target.closest?.('[data-action="open-project-detail"], .project-card');
+    return opener?.dataset?.id || '';
+  }
+
+  function openFromEvent(event) {
+    const projectId = projectIdFromEvent(event);
+    if (!projectId) return;
+    blurHiddenFormFocus();
+    scheduleOpen(projectId, event.type === 'click' ? 40 : 0);
   }
 
   function rerenderSoon(projectId = currentProjectId) {
@@ -208,11 +227,9 @@
     }, 80);
   }
 
-  document.addEventListener('click', event => {
-    const opener = event.target.closest?.('[data-action="open-project-detail"]');
-    if (!opener?.dataset?.id) return;
-    scheduleOpen(opener.dataset.id);
-  }, true);
+  document.addEventListener('pointerup', openFromEvent, true);
+  document.addEventListener('touchend', openFromEvent, true);
+  document.addEventListener('click', openFromEvent, true);
 
   document.addEventListener('submit', event => {
     if (event.target?.matches?.('[data-project-phase-form]')) rerenderSoon(event.target.dataset.projectId || currentProjectId);
@@ -230,6 +247,7 @@
       document.getElementById('projectDetailModal')?.classList.remove('project-mobile-detail-modal');
       return;
     }
+    if (action === 'close-project-form' || action === 'cancel-project-edit') window.setTimeout(blurHiddenFormFocus, 0);
     if (['edit-phase', 'delete-phase', 'link-selected-task', 'unlink-task', 'create-project-task', 'mark-project-done'].includes(action)) rerenderSoon();
   });
 })(window, document);
