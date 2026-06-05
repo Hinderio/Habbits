@@ -91,6 +91,7 @@ window.HABITFLOW_SUPABASE_CONFIG = Object.freeze({
     'modules/consumption.js',
     'modules/consumption-heatmap-flat-polish.js',
     'modules/smoke-strike-history.js',
+    'modules/craving-coach-v2.js',
     'modules/gamification.js',
     'modules/monthly-missions.js'
   ];
