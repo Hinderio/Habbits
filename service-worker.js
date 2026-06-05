@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v163-project-single-source';
+const CACHE_NAME = 'habitflow-v164-project-stable-modal';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
