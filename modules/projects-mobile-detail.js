@@ -9,6 +9,7 @@
   let client;
   let currentProjectId = '';
   let openTimer = 0;
+  let lastOpenedAt = 0;
 
   function readState() {
     try {
@@ -19,59 +20,18 @@
     }
   }
 
-  function writeState(state) {
-    window.localStorage?.setItem(STORAGE_KEY, JSON.stringify(state));
-  }
-
-  function escapeHtml(value = '') {
-    return String(value || '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
-  }
-
-  function validDate(value) {
-    const text = String(value || '').slice(0, 10);
-    return /^\d{4}-\d{2}-\d{2}$/.test(text) && !Number.isNaN(new Date(`${text}T12:00:00`).getTime()) ? text : '';
-  }
-
-  function dateMs(value) {
-    const date = validDate(value);
-    if (!date) return NaN;
-    return new Date(`${date}T12:00:00`).getTime();
-  }
-
-  function todayDate() {
-    return new Date().toISOString().slice(0, 10);
-  }
-
-  function dateLabel(value) {
-    const date = new Date(`${String(value || '').slice(0, 10)}T12:00:00`);
-    return Number.isNaN(date.getTime()) ? '-' : date.toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit', year: '2-digit' });
-  }
-
-  function statusLabel(status) {
-    return { planned: 'Geplant', active: 'Aktiv', paused: 'Pausiert', done: 'Abgeschlossen' }[status] || 'Geplant';
-  }
-
-  function statusClass(status) {
-    return { planned: 'project-status-planned', active: 'project-status-active', paused: 'project-status-paused', done: 'project-status-done' }[status] || 'project-status-planned';
-  }
-
-  function phaseLabel(status) {
-    return { open: 'Offen', active: 'In Arbeit', done: 'Erledigt' }[status] || 'Offen';
-  }
-
-  function taskDone(task = {}) {
-    return (task.status || 'open') === 'done';
-  }
-
-  function projectTasks(state, projectId) {
-    return (Array.isArray(state.tasks) ? state.tasks : []).filter(task => task.project_id === projectId);
-  }
-
-  function projectPhases(state, projectId) {
-    return (Array.isArray(state.projectPhases) ? state.projectPhases : [])
-      .filter(phase => phase.project_id === projectId && !phase.is_archived)
-      .sort((a, b) => String(a.start_date || '').localeCompare(String(b.start_date || '')));
-  }
+  function writeState(state) { window.localStorage?.setItem(STORAGE_KEY, JSON.stringify(state)); }
+  function escapeHtml(value = '') { return String(value || '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char])); }
+  function validDate(value) { const text = String(value || '').slice(0, 10); return /^\d{4}-\d{2}-\d{2}$/.test(text) && !Number.isNaN(new Date(`${text}T12:00:00`).getTime()) ? text : ''; }
+  function dateMs(value) { const date = validDate(value); return date ? new Date(`${date}T12:00:00`).getTime() : NaN; }
+  function todayDate() { return new Date().toISOString().slice(0, 10); }
+  function dateLabel(value) { const date = new Date(`${String(value || '').slice(0, 10)}T12:00:00`); return Number.isNaN(date.getTime()) ? '-' : date.toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit', year: '2-digit' }); }
+  function statusLabel(status) { return { planned: 'Geplant', active: 'Aktiv', paused: 'Pausiert', done: 'Abgeschlossen' }[status] || 'Geplant'; }
+  function statusClass(status) { return { planned: 'project-status-planned', active: 'project-status-active', paused: 'project-status-paused', done: 'project-status-done' }[status] || 'project-status-planned'; }
+  function phaseLabel(status) { return { open: 'Offen', active: 'In Arbeit', done: 'Erledigt' }[status] || 'Offen'; }
+  function taskDone(task = {}) { return (task.status || 'open') === 'done'; }
+  function projectTasks(state, projectId) { return (Array.isArray(state.tasks) ? state.tasks : []).filter(task => task.project_id === projectId); }
+  function projectPhases(state, projectId) { return (Array.isArray(state.projectPhases) ? state.projectPhases : []).filter(phase => phase.project_id === projectId && !phase.is_archived).sort((a, b) => String(a.start_date || '').localeCompare(String(b.start_date || ''))); }
 
   function progressFor(project, state) {
     const tasks = projectTasks(state, project.id).filter(task => (task.status || 'open') !== 'archived');
@@ -107,8 +67,7 @@
     const endDate = ends[ends.length - 1] || startDate;
     const start = dateMs(startDate);
     const rawEnd = dateMs(endDate);
-    const end = Number.isFinite(rawEnd) && rawEnd > start ? rawEnd : start + DAY_MS;
-    return { start, end };
+    return { start, end: Number.isFinite(rawEnd) && rawEnd > start ? rawEnd : start + DAY_MS };
   }
 
   function renderPhase(phase, bounds) {
@@ -143,7 +102,6 @@
     let modal = document.getElementById('projectDetailModal');
     let content = document.getElementById('projectDetailContent');
     if (modal && content) return { modal, content };
-
     if (!modal) {
       modal = document.createElement('div');
       modal.id = 'projectDetailModal';
@@ -154,7 +112,6 @@
       (document.querySelector('main.content') || document.body).appendChild(modal);
       content = modal.querySelector('#projectDetailContent');
     }
-
     if (!content) {
       const card = modal.querySelector('.project-detail-card') || modal.appendChild(document.createElement('section'));
       card.classList.add('project-detail-card');
@@ -162,7 +119,6 @@
       content.id = 'projectDetailContent';
       card.appendChild(content);
     }
-
     if (!modal.querySelector('[data-action="close-project-detail"]')) {
       const close = document.createElement('button');
       close.className = 'icon-btn project-detail-close';
@@ -172,8 +128,19 @@
       close.textContent = '×';
       modal.querySelector('.project-detail-card')?.prepend(close);
     }
-
     return { modal, content };
+  }
+
+  function closeDetailModal() {
+    currentProjectId = '';
+    window.clearTimeout(openTimer);
+    const modal = document.getElementById('projectDetailModal');
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.classList.remove('project-mobile-detail-modal');
+      modal.setAttribute('aria-hidden', 'true');
+    }
+    document.body.classList.remove('project-modal-open');
   }
 
   function render(projectId) {
@@ -184,11 +151,8 @@
     const { modal, content } = ensureDetailModal();
     if (!modal || !content) return false;
     if (!project) {
-      currentProjectId = '';
       content.innerHTML = '';
-      modal.classList.add('hidden');
-      modal.classList.remove('project-mobile-detail-modal');
-      document.body.classList.remove('project-modal-open');
+      closeDetailModal();
       return false;
     }
 
@@ -215,6 +179,7 @@
     modal.classList.add('project-mobile-detail-modal');
     modal.removeAttribute('aria-hidden');
     document.body.classList.add('project-modal-open');
+    lastOpenedAt = Date.now();
     return true;
   }
 
@@ -237,11 +202,11 @@
     if (currentProjectId === projectId) render(projectId);
   }
 
-  function scheduleOpen(projectId, delay = 0) {
+  function openProject(projectId) {
     window.clearTimeout(openTimer);
     openTimer = window.setTimeout(() => {
       if (render(projectId)) hydrateRemote(projectId);
-    }, delay);
+    }, 0);
   }
 
   function projectIdFromEvent(event) {
@@ -249,12 +214,19 @@
     return opener?.dataset?.id || '';
   }
 
+  function consume(event) {
+    event.preventDefault?.();
+    event.stopPropagation?.();
+    event.stopImmediatePropagation?.();
+  }
+
   function openFromEvent(event) {
     const projectId = projectIdFromEvent(event);
     if (!projectId) return;
+    consume(event);
     blurHiddenFormFocus();
     ensureDetailModal();
-    scheduleOpen(projectId, event.type === 'click' ? 40 : 0);
+    openProject(projectId);
   }
 
   function rerenderSoon(projectId = currentProjectId) {
@@ -265,27 +237,34 @@
     }, 80);
   }
 
-  document.addEventListener('pointerup', openFromEvent, true);
-  document.addEventListener('touchend', openFromEvent, true);
   document.addEventListener('click', openFromEvent, true);
-
-  document.addEventListener('submit', event => {
-    if (event.target?.matches?.('[data-project-phase-form]')) rerenderSoon(event.target.dataset.projectId || currentProjectId);
-  });
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    openFromEvent(event);
+  }, true);
 
   document.addEventListener('click', event => {
-    if (event.target?.id === 'projectDetailModal') {
-      currentProjectId = '';
-      document.getElementById('projectDetailModal')?.classList.remove('project-mobile-detail-modal');
-      return;
-    }
+    const modal = document.getElementById('projectDetailModal');
     const action = event.target.closest?.('[data-action]')?.dataset?.action;
-    if (action === 'close-project-detail') {
-      currentProjectId = '';
-      document.getElementById('projectDetailModal')?.classList.remove('project-mobile-detail-modal');
+    const backdropClick = modal && event.target === modal;
+    if (action === 'close-project-detail' || backdropClick) {
+      consume(event);
+      if (Date.now() - lastOpenedAt < 250) return;
+      closeDetailModal();
       return;
     }
     if (action === 'close-project-form' || action === 'cancel-project-edit') window.setTimeout(blurHiddenFormFocus, 0);
     if (['edit-phase', 'delete-phase', 'link-selected-task', 'unlink-task', 'create-project-task', 'mark-project-done'].includes(action)) rerenderSoon();
+  }, true);
+
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && !document.getElementById('projectDetailModal')?.classList.contains('hidden')) {
+      consume(event);
+      closeDetailModal();
+    }
+  }, true);
+
+  document.addEventListener('submit', event => {
+    if (event.target?.matches?.('[data-project-phase-form]')) rerenderSoon(event.target.dataset.projectId || currentProjectId);
   });
 })(window, document);
