@@ -6,6 +6,7 @@
   const TABLE_PHASES = 'project_phases';
   const DEFAULT_PROJECT_COLOR = '#4ad7d1';
   const PROJECT_META_RE = /\n?\s*<!--hf-project-meta:([^>]+)-->/;
+  const CLOSED_TASK_STATUSES = new Set(['done', 'archived', 'closed', 'completed']);
   const STATUS = {
     planned: { label: 'Geplant', cls: 'project-status-planned' },
     active: { label: 'Aktiv', cls: 'project-status-active' },
@@ -19,6 +20,7 @@
   let syncing = false;
   let client = null;
   let taskBadgeRaf = 0;
+  let taskLinkRefreshTimer = 0;
 
   function uid(prefix = 'project') {
     if (window.crypto?.randomUUID) return window.crypto.randomUUID();
@@ -68,6 +70,17 @@
   function isMissingRemoteColumnError(error, column) {
     const text = `${error?.message || ''} ${error?.details || ''} ${error?.hint || ''}`.toLowerCase();
     return text.includes(column.toLowerCase()) && (text.includes('schema cache') || text.includes('column'));
+  }
+
+  function dedupeById(items = []) {
+    if (!Array.isArray(items)) return [];
+    const map = new Map();
+    items.forEach(item => {
+      if (!item?.id) return;
+      const current = map.get(item.id);
+      if (!current || new Date(item.updated_at || item.created_at || 0) >= new Date(current.updated_at || current.created_at || 0)) map.set(item.id, item);
+    });
+    return Array.from(map.values());
   }
 
   function projectInitials(title = '') {
@@ -146,9 +159,10 @@
 
   function normalizeState(input = {}) {
     const next = { ...input };
-    next.tasks = Array.isArray(next.tasks) ? next.tasks.map(normalizeTask) : [];
+    next.tasks = Array.isArray(next.tasks) ? dedupeById(next.tasks.map(normalizeTask)) : [];
     next.projects = Array.isArray(next.projects) ? next.projects.map(normalizeProject).filter(project => project.id && project.title && !project.is_archived) : [];
     next.projectPhases = Array.isArray(next.projectPhases) ? next.projectPhases.map(normalizePhase).filter(phase => phase.id && phase.project_id && phase.name && !phase.is_archived) : [];
+    if (Array.isArray(next.pointsLedger)) next.pointsLedger = dedupeById(next.pointsLedger);
     return next;
   }
 
@@ -209,6 +223,11 @@
 
   function taskDone(task = {}) { return (task.status || 'open') === 'done'; }
 
+  function taskClosedForLinking(task = {}) {
+    const status = String(task.status || task.state || '').toLowerCase();
+    return CLOSED_TASK_STATUSES.has(status) || Boolean(task.is_archived) || Boolean(task.done_archived_at) || status === 'archived';
+  }
+
   function progressFor(project, state) {
     const tasks = projectTasks(state, project.id);
     if (tasks.length) return Math.round((tasks.filter(taskDone).length / tasks.length) * 100);
@@ -237,9 +256,11 @@
   }
 
   function projectBadge(project, mode = 'full') {
+    if (mode === 'mark') {
+      return `<span class="project-chip-mark project-chip-mark-only" style="--project-color:${project.color}">${escapeHtml(projectInitials(project.title))}</span>`;
+    }
     const classes = mode === 'chip' ? 'project-chip project-chip-inline' : 'project-chip';
-    const label = mode === 'mark' ? '' : `<span class="project-chip-label">${escapeHtml(project.title)}</span>`;
-    return `<span class="${classes}" style="--project-color:${project.color}"><span class="project-chip-mark">${escapeHtml(projectInitials(project.title))}</span>${label}</span>`;
+    return `<span class="${classes}" style="--project-color:${project.color}"><span class="project-chip-mark">${escapeHtml(projectInitials(project.title))}</span><span class="project-chip-label">${escapeHtml(project.title)}</span></span>`;
   }
 
   function scheduleTaskBadgePaint() {
@@ -248,6 +269,14 @@
       taskBadgeRaf = 0;
       decorateTaskProjectBadges();
     });
+  }
+
+  function scheduleTaskLinkRefresh() {
+    if (taskLinkRefreshTimer) return;
+    taskLinkRefreshTimer = window.setTimeout(() => {
+      taskLinkRefreshTimer = 0;
+      pullRemoteProjectData('', { silent: true }).catch(error => console.warn('[HabitFlow/projects] Task-Projekt-Links konnten nicht nachgeladen werden.', error));
+    }, 250);
   }
 
   function inferTaskId(card, taskMap) {
@@ -267,11 +296,21 @@
       const task = taskMap.get(taskId);
       const project = task?.project_id ? projectMap.get(task.project_id) : null;
       if (!project) {
+        if (existing?.dataset.projectId && !existing.dataset.pendingRemoval) {
+          existing.dataset.pendingRemoval = 'true';
+          scheduleTaskLinkRefresh();
+          window.setTimeout(() => {
+            const freshState = readState();
+            const freshTask = freshState.tasks.find(item => item.id === taskId);
+            if (freshTask?.project_id) scheduleTaskBadgePaint(); else existing.remove();
+          }, 1000);
+          return;
+        }
         if (existing) existing.remove();
         return;
       }
       const markup = document.createElement('div');
-      markup.innerHTML = `<div data-project-badge-root>${projectBadge(project, 'chip')}</div>`;
+      markup.innerHTML = `<div data-project-badge-root data-project-id="${escapeHtml(project.id)}">${projectBadge(project, 'mark')}</div>`;
       const badge = markup.firstElementChild;
       if (existing) {
         existing.replaceWith(badge);
@@ -394,7 +433,7 @@
   }
 
   function renderTaskTools(project, state) {
-    const available = state.tasks.filter(task => !task.project_id && (task.status || 'open') !== 'archived');
+    const available = state.tasks.filter(task => !task.project_id && !taskClosedForLinking(task));
     const options = available.map(task => `<option value="${escapeHtml(task.id)}">${escapeHtml(task.title)}</option>`).join('');
     return `<div class="project-task-tools"><label><span class="subtle">Bestehenden Task verbinden</span><select id="projectTaskSelect"><option value="">Task auswählen</option>${options}</select></label><div class="list-actions"><button class="mini-btn" type="button" data-action="link-selected-task" data-id="${escapeHtml(project.id)}">Verbinden</button><button class="mini-btn primary" type="button" data-action="create-project-task" data-id="${escapeHtml(project.id)}">Task für Projekt erstellen</button></div></div>`;
   }
@@ -731,12 +770,15 @@
 
   function boot() {
     patchStatePersistence();
+    const initialState = readState();
+    writeState(initialState);
     injectShell();
     bindEvents();
     bindTaskBadgeObserver();
     render();
     setTimeout(() => pullRemoteProjectData(), 500);
     setTimeout(() => pullRemoteProjectData('', { silent: true }), 2500);
+    setTimeout(() => pullRemoteProjectData('', { silent: true }), 6000);
     setTimeout(() => scheduleTaskBadgePaint(), 900);
   }
 
