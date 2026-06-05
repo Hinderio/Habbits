@@ -18,40 +18,26 @@
     });
   }
 
+  function ensureStylesheet(href) {
+    if (document.querySelector(`link[href="${href}"]`)) return;
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = href;
+    document.head.appendChild(link);
+  }
+
+  function writeScript(src) {
+    if (document.querySelector(`script[src="${src}"]`)) return;
+    document.write(`<script src="${src}"><\/script>`);
+  }
+
   function loadProjectAssets() {
-    if (!document.querySelector('link[href="modules/projects.css"]')) {
-      const link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = 'modules/projects.css';
-      document.head.appendChild(link);
-    }
-    if (!document.querySelector('link[href="modules/projects-mobile-fix.css"]')) {
-      const mobileLink = document.createElement('link');
-      mobileLink.rel = 'stylesheet';
-      mobileLink.href = 'modules/projects-mobile-fix.css';
-      document.head.appendChild(mobileLink);
-    }
-    if (!document.querySelector('script[src="modules/projects-supabase-fix.js"]')) {
-      document.write('<script src="modules/projects-supabase-fix.js"><\/script>');
-    }
-    if (!document.querySelector('script[src="modules/projects-submit-listener-fix.js"]')) {
-      document.write('<script src="modules/projects-submit-listener-fix.js"><\/script>');
-    }
-    if (!document.querySelector('script[src="modules/projects-submit-currenttarget-fix.js"]')) {
-      document.write('<script src="modules/projects-submit-currenttarget-fix.js"><\/script>');
-    }
-    if (!document.querySelector('script[src="modules/projects-formdata-fix.js"]')) {
-      document.write('<script src="modules/projects-formdata-fix.js"><\/script>');
-    }
-    if (!document.querySelector('script[src="modules/projects-phases-remote-fix.js"]')) {
-      document.write('<script src="modules/projects-phases-remote-fix.js"><\/script>');
-    }
-    if (!document.querySelector('script[src="modules/projects-mobile-detail.js"]')) {
-      document.write('<script src="modules/projects-mobile-detail.js"><\/script>');
-    }
-    if (!document.querySelector('script[src="modules/projects.js"]')) {
-      document.write('<script src="modules/projects.js"><\/script>');
-    }
+    ensureStylesheet('modules/projects.css');
+    ensureStylesheet('modules/projects-mobile-fix.css');
+
+    // Project UI, navigation, cards, modal and actions are intentionally owned by projects.js only.
+    // Legacy project sidecars used to register competing listeners and made detail opening unstable.
+    writeScript('modules/projects.js');
   }
 
   loadSqlPreview();
