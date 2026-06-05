@@ -4,6 +4,7 @@
   const STORAGE_KEY = 'habitflow-state-v1';
   const TABLE_PROJECTS = 'projects';
   const TABLE_PHASES = 'project_phases';
+  const DEFAULT_PROJECT_COLOR = '#4ad7d1';
   const STATUS = {
     planned: { label: 'Geplant', cls: 'project-status-planned' },
     active: { label: 'Aktiv', cls: 'project-status-active' },
@@ -16,6 +17,7 @@
   let selectedProjectId = '';
   let syncing = false;
   let client = null;
+  let taskBadgeRaf = 0;
 
   function uid(prefix = 'project') {
     if (window.crypto?.randomUUID) return window.crypto.randomUUID();
@@ -38,6 +40,18 @@
     if (!value) return '';
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? '' : date.toISOString();
+  }
+
+  function normalizeProjectColor(value) {
+    const color = String(value || '').trim();
+    return /^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/.test(color) ? color : DEFAULT_PROJECT_COLOR;
+  }
+
+  function projectInitials(title = '') {
+    const words = String(title || '').trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return 'PR';
+    if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+    return `${words[0][0] || ''}${words[1][0] || ''}`.toUpperCase();
   }
 
   function dateLabel(value) {
@@ -82,6 +96,7 @@
       end_date: validDate(project.end_date || project.endDate) || '',
       status: STATUS[project.status] ? project.status : 'planned',
       outcome_note: String(project.outcome_note || project.outcomeNote || '').trim().slice(0, 500),
+      color: normalizeProjectColor(project.color),
       is_archived: Boolean(project.is_archived),
       created_at: created,
       updated_at: validIso(project.updated_at || project.updatedAt) || created,
@@ -197,6 +212,63 @@
     return `Nächster Meilenstein: ${nextMilestone(project, state)}.`;
   }
 
+  function projectBadge(project, mode = 'full') {
+    const classes = mode === 'chip' ? 'project-chip project-chip-inline' : 'project-chip';
+    const label = mode === 'mark' ? '' : `<span class="project-chip-label">${escapeHtml(project.title)}</span>`;
+    return `<span class="${classes}" style="--project-color:${project.color}"><span class="project-chip-mark">${escapeHtml(projectInitials(project.title))}</span>${label}</span>`;
+  }
+
+  function scheduleTaskBadgePaint() {
+    if (taskBadgeRaf) return;
+    taskBadgeRaf = window.requestAnimationFrame(() => {
+      taskBadgeRaf = 0;
+      decorateTaskProjectBadges();
+    });
+  }
+
+  function inferTaskId(card, taskMap) {
+    const direct = card.dataset.taskId || card.dataset.id;
+    if (direct && taskMap.has(direct)) return direct;
+    const candidate = Array.from(card.querySelectorAll('[data-id]')).map(node => node.dataset.id).find(id => taskMap.has(id));
+    return candidate || '';
+  }
+
+  function decorateTaskProjectBadges() {
+    const state = readState();
+    const taskMap = new Map(state.tasks.map(task => [task.id, normalizeTask(task)]));
+    const projectMap = new Map(state.projects.map(project => [project.id, project]));
+    document.querySelectorAll('#screen-tasks .task-card, #screen-tasks .kanban-card, .task-detail-modal .task-detail-card').forEach(card => {
+      const existing = card.querySelector('[data-project-badge-root]');
+      const taskId = inferTaskId(card, taskMap);
+      const task = taskMap.get(taskId);
+      const project = task?.project_id ? projectMap.get(task.project_id) : null;
+      if (!project) {
+        if (existing) existing.remove();
+        return;
+      }
+      const markup = document.createElement('div');
+      markup.innerHTML = `<div data-project-badge-root>${projectBadge(project, 'chip')}</div>`;
+      const badge = markup.firstElementChild;
+      if (existing) {
+        existing.replaceWith(badge);
+        return;
+      }
+      const heading = card.querySelector('h1, h2, h3, h4, strong');
+      if (heading?.parentElement) {
+        heading.insertAdjacentElement('afterend', badge);
+      } else {
+        card.prepend(badge);
+      }
+    });
+  }
+
+  function bindTaskBadgeObserver() {
+    if (window.__habitFlowProjectBadgeObserverBound) return;
+    window.__habitFlowProjectBadgeObserverBound = true;
+    const observer = new MutationObserver(() => scheduleTaskBadgePaint());
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+
   function ensureCss() {
     ['modules/projects.css', 'modules/projects-mobile-fix.css'].forEach(href => {
       if (document.querySelector(`link[href="${href}"]`)) return;
@@ -242,7 +314,7 @@
 
   function renderScreenShell() {
     return `<section class="projects-hero glass"><div><p class="eyebrow">Projektmanagement</p><h2>Projekte planen und ruhig steuern</h2><p>Start, Ende, Phasen, Fortschritt und verknüpfte Tasks in einem schlanken Cockpit.</p></div><button class="pill primary" type="button" data-action="toggle-project-form">Projekt erstellen</button></section>
-    <section id="projectFormPanel" class="panel glass project-form-panel hidden" aria-hidden="true"><div class="panel-head"><div><p class="eyebrow">Projekt</p><h3 id="projectFormTitle">Projekt erstellen</h3></div><button class="icon-btn" type="button" data-action="close-project-form" aria-label="Projektformular schliessen">×</button></div><form id="projectForm" class="project-form-grid"><label class="full"><span>Titel</span><input name="title" required placeholder="z. B. Portfolio Relaunch" /></label><label class="full"><span>Beschreibung</span><textarea name="description" rows="3" placeholder="Worum geht es, und warum ist es wichtig?"></textarea></label><label><span>Startdatum</span><input name="start_date" type="date" required /></label><label><span>Enddatum</span><input name="end_date" type="date" /></label><label><span>Status</span><select name="status"><option value="planned">Geplant</option><option value="active">Aktiv</option><option value="paused">Pausiert</option><option value="done">Abgeschlossen</option></select></label><label class="full"><span>Zielnotiz / Outcome</span><textarea name="outcome_note" rows="2" placeholder="Woran erkennst du, dass das Projekt gelungen ist?"></textarea></label><div id="projectFormError" class="project-error full" role="status"></div><div class="form-actions full"><button class="pill primary" type="submit">Projekt speichern</button><button class="pill secondary" type="button" data-action="cancel-project-edit">Abbrechen</button></div></form></section>
+    <section id="projectFormPanel" class="panel glass project-form-panel hidden" aria-hidden="true"><div class="panel-head"><div><p class="eyebrow">Projekt</p><h3 id="projectFormTitle">Projekt erstellen</h3></div><button class="icon-btn" type="button" data-action="close-project-form" aria-label="Projektformular schliessen">×</button></div><form id="projectForm" class="project-form-grid"><label class="full"><span>Titel</span><input name="title" required placeholder="z. B. Portfolio Relaunch" /></label><label class="full"><span>Beschreibung</span><textarea name="description" rows="3" placeholder="Worum geht es, und warum ist es wichtig?"></textarea></label><label><span>Startdatum</span><input name="start_date" type="date" required /></label><label><span>Enddatum</span><input name="end_date" type="date" /></label><label><span>Status</span><select name="status"><option value="planned">Geplant</option><option value="active">Aktiv</option><option value="paused">Pausiert</option><option value="done">Abgeschlossen</option></select></label><label><span>Projektfarbe</span><input name="color" type="color" value="${DEFAULT_PROJECT_COLOR}" /></label><label class="full"><span>Zielnotiz / Outcome</span><textarea name="outcome_note" rows="2" placeholder="Woran erkennst du, dass das Projekt gelungen ist?"></textarea></label><div id="projectFormError" class="project-error full" role="status"></div><div class="form-actions full"><button class="pill primary" type="submit">Projekt speichern</button><button class="pill secondary" type="button" data-action="cancel-project-edit">Abbrechen</button></div></form></section>
     <section class="projects-summary" id="projectsSummary" aria-label="Projekt Kennzahlen"></section>
     <section class="panel glass"><div class="panel-head"><div><p class="eyebrow">Portfolio</p><h3>Projekt-Übersicht</h3></div><span id="projectSyncStatus" class="badge muted">bereit</span></div><div id="projectsGrid" class="project-grid"></div></section>`;
   }
@@ -253,6 +325,7 @@
     const grid = document.getElementById('projectsGrid');
     if (grid) grid.innerHTML = state.projects.length ? state.projects.map(project => renderProjectCard(project, state)).join('') : '<div class="project-empty">Noch keine Projekte. Erstelle ein erstes Projekt mit Start, Ziel und den wichtigsten Phasen.</div>';
     if (selectedProjectId) renderDetail(selectedProjectId);
+    scheduleTaskBadgePaint();
   }
 
   function renderSummary(state) {
@@ -269,7 +342,7 @@
     const progress = progressFor(project, state);
     const tasks = projectTasks(state, project.id);
     const status = STATUS[project.status] || STATUS.planned;
-    return `<button class="project-card" type="button" data-action="open-project-detail" data-id="${escapeHtml(project.id)}"><div class="project-card-head"><div><small>Projekt</small><h3>${escapeHtml(project.title)}</h3></div><span class="badge ${status.cls}">${status.label}</span></div><p>${escapeHtml(project.description || 'Noch keine Kurzbeschreibung hinterlegt.')}</p><div class="project-progress-track" aria-label="Fortschritt ${progress}%"><i style="width:${progress}%"></i></div><div class="project-card-meta"><div><small>Start</small><strong>${dateLabel(project.start_date)}</strong></div><div><small>Ende</small><strong>${dateLabel(project.end_date)}</strong></div><div><small>Fortschritt</small><strong>${progress}%</strong></div><div><small>Tasks</small><strong>${tasks.length}</strong></div></div><div class="project-card-footer"><span class="subtle">${escapeHtml(nextMilestone(project, state))}</span><span class="mini-btn">Öffnen</span></div></button>`;
+    return `<button class="project-card" type="button" data-action="open-project-detail" data-id="${escapeHtml(project.id)}"><div class="project-card-head"><div>${projectBadge(project)}<small>Projekt</small><h3>${escapeHtml(project.title)}</h3></div><span class="badge ${status.cls}">${status.label}</span></div><p>${escapeHtml(project.description || 'Noch keine Kurzbeschreibung hinterlegt.')}</p><div class="project-progress-track" aria-label="Fortschritt ${progress}%"><i style="width:${progress}%"></i></div><div class="project-card-meta"><div><small>Start</small><strong>${dateLabel(project.start_date)}</strong></div><div><small>Ende</small><strong>${dateLabel(project.end_date)}</strong></div><div><small>Fortschritt</small><strong>${progress}%</strong></div><div><small>Tasks</small><strong>${tasks.length}</strong></div></div><div class="project-card-footer"><span class="subtle">${escapeHtml(nextMilestone(project, state))}</span><span class="mini-btn">Öffnen</span></div></button>`;
   }
 
   function renderDetail(projectId) {
@@ -282,7 +355,7 @@
     const tasks = projectTasks(state, project.id);
     const phases = projectPhases(state, project.id);
     const status = STATUS[project.status] || STATUS.planned;
-    node.innerHTML = `<div class="project-detail-head"><p class="eyebrow">Projekt</p><h2>${escapeHtml(project.title)}</h2><p>${escapeHtml(project.description || 'Noch keine Beschreibung.')}</p></div><div class="project-detail-grid"><article class="project-detail-box"><small>Status</small><h3><span class="badge ${status.cls}">${status.label}</span></h3><p class="subtle">${dateLabel(project.start_date)} bis ${dateLabel(project.end_date)}</p></article><article class="project-detail-box"><small>Fortschritt</small><h3>${progress}%</h3><div class="project-progress-track"><i style="width:${progress}%"></i></div></article><article class="project-detail-box"><small>Ziel / Outcome</small><p class="subtle">${escapeHtml(project.outcome_note || 'Noch kein Outcome notiert.')}</p></article><article class="project-detail-box project-next-step"><small>Nächster sinnvoller Schritt</small><p>${escapeHtml(nextStep(project, state, progress))}</p></article></div><div class="project-section-head"><div><p class="eyebrow">Phasen / Gantt MVP</p><h3>Timeline</h3></div><span class="badge muted">${phases.length} Phase${phases.length === 1 ? '' : 'n'}</span></div><form class="phase-form" data-project-phase-form data-project-id="${escapeHtml(project.id)}"><label><span>Phase</span><input name="name" required placeholder="z. B. Konzept" /></label><label><span>Start</span><input name="start_date" type="date" value="${escapeHtml(project.start_date || todayDate())}" required /></label><label><span>Ende</span><input name="end_date" type="date" value="${escapeHtml(project.end_date || project.start_date || todayDate())}" required /></label><label><span>Status</span><select name="status"><option value="open">Offen</option><option value="active">In Arbeit</option><option value="done">Erledigt</option></select></label><button class="mini-btn primary" type="submit">Phase speichern</button></form><div>${phases.length ? phases.map(phase => renderPhase(phase, project)).join('') : '<div class="project-empty">Noch keine Phasen. Erstelle die erste Projektphase.</div>'}</div><div class="project-section-head"><div><p class="eyebrow">Tasks</p><h3>Verknüpfte Aufgaben</h3></div><span class="badge muted">${tasks.length} Task${tasks.length === 1 ? '' : 's'}</span></div>${renderTaskTools(project, state)}<div class="project-task-list">${tasks.length ? tasks.map(task => renderTaskRow(task)).join('') : '<div class="project-empty">Noch keine Tasks verknüpft.</div>'}</div><div class="form-actions project-detail-actions"><button class="pill secondary" type="button" data-action="edit-project" data-id="${escapeHtml(project.id)}">Projekt bearbeiten</button><button class="pill secondary" type="button" data-action="mark-project-done" data-id="${escapeHtml(project.id)}">Als abgeschlossen markieren</button></div>`;
+    node.innerHTML = `<div class="project-detail-head">${projectBadge(project)}<p class="eyebrow">Projekt</p><h2>${escapeHtml(project.title)}</h2><p>${escapeHtml(project.description || 'Noch keine Beschreibung.')}</p></div><div class="project-detail-grid"><article class="project-detail-box"><small>Status</small><h3><span class="badge ${status.cls}">${status.label}</span></h3><p class="subtle">${dateLabel(project.start_date)} bis ${dateLabel(project.end_date)}</p></article><article class="project-detail-box"><small>Fortschritt</small><h3>${progress}%</h3><div class="project-progress-track"><i style="width:${progress}%"></i></div></article><article class="project-detail-box"><small>Ziel / Outcome</small><p class="subtle">${escapeHtml(project.outcome_note || 'Noch kein Outcome notiert.')}</p></article><article class="project-detail-box project-next-step"><small>Nächster sinnvoller Schritt</small><p>${escapeHtml(nextStep(project, state, progress))}</p></article></div><div class="project-section-head"><div><p class="eyebrow">Phasen / Gantt MVP</p><h3>Timeline</h3></div><span class="badge muted">${phases.length} Phase${phases.length === 1 ? '' : 'n'}</span></div><form class="phase-form" data-project-phase-form data-project-id="${escapeHtml(project.id)}"><label><span>Phase</span><input name="name" required placeholder="z. B. Konzept" /></label><label><span>Start</span><input name="start_date" type="date" value="${escapeHtml(project.start_date || todayDate())}" required /></label><label><span>Ende</span><input name="end_date" type="date" value="${escapeHtml(project.end_date || project.start_date || todayDate())}" required /></label><label><span>Status</span><select name="status"><option value="open">Offen</option><option value="active">In Arbeit</option><option value="done">Erledigt</option></select></label><button class="mini-btn primary" type="submit">Phase speichern</button></form><div>${phases.length ? phases.map(phase => renderPhase(phase, project)).join('') : '<div class="project-empty">Noch keine Phasen. Erstelle die erste Projektphase.</div>'}</div><div class="project-section-head"><div><p class="eyebrow">Tasks</p><h3>Verknüpfte Aufgaben</h3></div><span class="badge muted">${tasks.length} Task${tasks.length === 1 ? '' : 's'}</span></div>${renderTaskTools(project, state)}<div class="project-task-list">${tasks.length ? tasks.map(task => renderTaskRow(task)).join('') : '<div class="project-empty">Noch keine Tasks verknüpft.</div>'}</div><div class="form-actions project-detail-actions"><button class="pill secondary" type="button" data-action="edit-project" data-id="${escapeHtml(project.id)}">Projekt bearbeiten</button><button class="pill secondary" type="button" data-action="mark-project-done" data-id="${escapeHtml(project.id)}">Als abgeschlossen markieren</button></div>`;
   }
 
   function renderPhase(phase, project) {
@@ -318,6 +391,7 @@
     form.elements.start_date.value = project?.start_date || todayDate();
     form.elements.end_date.value = project?.end_date || '';
     form.elements.status.value = project?.status || 'planned';
+    form.elements.color.value = project?.color || DEFAULT_PROJECT_COLOR;
     form.elements.outcome_note.value = project?.outcome_note || '';
     setProjectError('');
     panel.classList.remove('hidden');
@@ -360,9 +434,9 @@
       const state = readState();
       const existing = editingProjectId ? state.projects.find(item => item.id === editingProjectId) : null;
       const now = nowIso();
-      const project = normalizeProject({ ...(existing || {}), id: existing?.id || uid(), title, description: data.get('description'), start_date: start, end_date: end, status: data.get('status'), outcome_note: data.get('outcome_note'), created_at: existing?.created_at || now, updated_at: now, synced: true });
+      const project = normalizeProject({ ...(existing || {}), id: existing?.id || uid(), title, description: data.get('description'), start_date: start, end_date: end, status: data.get('status'), outcome_note: data.get('outcome_note'), color: data.get('color'), created_at: existing?.created_at || now, updated_at: now, synced: true });
       const { supabase, userId } = await requireRemoteUser();
-      const row = { id: project.id, user_id: userId, title: project.title, description: project.description || null, start_date: project.start_date || null, end_date: project.end_date || null, status: project.status, outcome_note: project.outcome_note || null, is_archived: false, created_at: project.created_at, updated_at: project.updated_at };
+      const row = { id: project.id, user_id: userId, title: project.title, description: project.description || null, start_date: project.start_date || null, end_date: project.end_date || null, status: project.status, outcome_note: project.outcome_note || null, color: project.color, is_archived: false, created_at: project.created_at, updated_at: project.updated_at };
       const { error } = await supabase.from(TABLE_PROJECTS).upsert(row, { onConflict: 'id' });
       if (error) throw error;
       state.projects = existing ? state.projects.map(item => item.id === project.id ? project : item) : [project, ...state.projects];
@@ -540,11 +614,13 @@
     await pullRemoteProjectData(projectId).catch(error => console.warn('[HabitFlow/projects] Projekt konnte nicht nachgeladen werden.', error));
   }
 
-  function closeDetail() {
+  function closeDetail(options = {}) {
     selectedProjectId = '';
     document.getElementById('projectDetailModal')?.classList.add('hidden');
     document.body.classList.remove('project-modal-open');
-    pullRemoteProjectData('', { silent: true }).catch(error => console.warn('[HabitFlow/projects] Projektliste konnte nicht nachgeladen werden.', error));
+    if (!options.skipSync) {
+      pullRemoteProjectData('', { silent: true }).catch(error => console.warn('[HabitFlow/projects] Projektliste konnte nicht nachgeladen werden.', error));
+    }
   }
 
   async function pullRemoteProjectData(projectId = '', options = {}) {
@@ -597,7 +673,10 @@
       if (action === 'close-project-form' || action === 'cancel-project-edit') closeForm();
       if (action === 'open-project-detail') openDetail(id);
       if (action === 'close-project-detail') closeDetail();
-      if (action === 'edit-project') openForm(id);
+      if (action === 'edit-project') {
+        closeDetail({ skipSync: true });
+        openForm(id);
+      }
       if (action === 'mark-project-done') markProjectDone(id);
       if (action === 'edit-phase') editPhase(id);
       if (action === 'delete-phase') deletePhase(id);
@@ -617,9 +696,11 @@
     patchStatePersistence();
     injectShell();
     bindEvents();
+    bindTaskBadgeObserver();
     render();
     setTimeout(() => pullRemoteProjectData(), 500);
     setTimeout(() => pullRemoteProjectData('', { silent: true }), 2500);
+    setTimeout(() => scheduleTaskBadgePaint(), 900);
   }
 
   patchStatePersistence();
