@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v152-project-tab';
+const CACHE_NAME = 'habitflow-v153-project-tab';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -32,7 +32,8 @@ const MODULE_ASSETS = [
   './modules/projects-submit-currenttarget-fix.js',
   './modules/projects-formdata-fix.js',
   './modules/projects-phases-remote-fix.js',
-  './modules/projects.css'
+  './modules/projects.css',
+  './modules/projects-mobile-fix.css'
 ];
 const ASSETS = ['./', './index.html', './style.css', './app.js', './supabase-config.js', './supabase-schema.js', './manifest.json', './icons/coach-clean.svg', './data/activity-ideas.json', './sql/add-projects.sql', ...MODULE_ASSETS];
 const NETWORK_FIRST_PATHS = new Set(['/', '/index.html', '/app.js', '/style.css', '/supabase-config.js', '/supabase-schema.js', '/manifest.json', '/sql/add-projects.sql', ...MODULE_ASSETS.map(path => path.replace(/^\./, ''))]);
