@@ -31,6 +31,11 @@
     return String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
   }
 
+  function clearResponse() {
+    lastAction = null;
+    document.querySelectorAll('[data-hf-coach-v2-action-response]').forEach(node => node.remove());
+  }
+
   function injectStyle() {
     if (document.getElementById('habitflow-craving-coach-v2-actions-polish-style')) return;
     const style = document.createElement('style');
@@ -56,6 +61,7 @@
         font-weight:760!important;
       }
       .hf-coach-v2-action-response {
+        position:relative;
         display:grid;
         gap:7px;
         padding:12px 13px;
@@ -69,6 +75,7 @@
         color:var(--text);
         font-size:.98rem;
         letter-spacing:-.01em;
+        padding-right:38px;
       }
       .hf-coach-v2-action-response p {
         margin:0!important;
@@ -77,6 +84,27 @@
       }
       .hf-coach-v2-action-response .hf-coach-v2-feedback {
         margin-top:6px;
+      }
+      .hf-coach-v2-action-close {
+        position:absolute;
+        top:10px;
+        right:10px;
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        width:30px;
+        height:30px;
+        border-radius:999px;
+        border:1px solid rgba(7,17,26,.08);
+        background:rgba(255,255,255,.72);
+        color:#07111a;
+        font:inherit;
+        font-size:1rem;
+        font-weight:700;
+        cursor:pointer;
+      }
+      .hf-coach-v2-action-close:hover {
+        background:rgba(255,255,255,.92);
       }
       body.light .hf-coach-v2-action-response {
         background:rgba(158,220,206,.28);
@@ -107,6 +135,7 @@
     const guide = ACTION_GUIDES[actionKey];
     if (!guide) return '';
     return `<div class="hf-coach-v2-action-response" data-hf-coach-v2-action-response="${escapeHtml(actionKey)}">
+      <button class="hf-coach-v2-action-close" type="button" data-coach-dismiss="response" aria-label="Hinweis schliessen">×</button>
       <strong>${escapeHtml(guide.title)}</strong>
       <p>${escapeHtml(guide.body)}</p>
       ${feedbackHtml(actionKey)}
@@ -132,10 +161,26 @@
   }
 
   function handleClick(event) {
+    const dismissButton = event.target?.closest?.('[data-coach-dismiss]');
+    if (dismissButton) {
+      event.preventDefault();
+      clearResponse();
+      return;
+    }
+
+    const feedbackButton = event.target?.closest?.('[data-coach-feedback]');
+    if (feedbackButton) {
+      clearResponse();
+      return;
+    }
+
     const button = event.target?.closest?.('[data-coach-action]');
     if (!button) return;
     const actionKey = button.dataset.coachAction;
-    if (!actionKey || TIMER_ACTIONS.has(actionKey)) return;
+    if (!actionKey || TIMER_ACTIONS.has(actionKey)) {
+      if (actionKey === 'cancel_timer') clearResponse();
+      return;
+    }
     lastAction = actionKey;
     scheduleRender(80);
     scheduleRender(240);
