@@ -25,6 +25,9 @@
       link.href = 'modules/projects.css';
       document.head.appendChild(link);
     }
+    if (!document.querySelector('script[src="modules/projects-supabase-fix.js"]')) {
+      document.write('<script src="modules/projects-supabase-fix.js"><\/script>');
+    }
     if (!document.querySelector('script[src="modules/projects-formdata-fix.js"]')) {
       document.write('<script src="modules/projects-formdata-fix.js"><\/script>');
     }
