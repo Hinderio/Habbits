@@ -6,6 +6,7 @@
 
   const TIMER_ACTIONS = new Set(['reset90', 'breathe3', 'timer7', 'timer10', 'cancel_timer']);
   let lastAction = null;
+  let dismissedUntil = 0;
   let renderTimer = null;
 
   const ACTION_GUIDES = Object.freeze({
@@ -29,6 +30,17 @@
 
   function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
+  }
+
+  function removeResponses() {
+    document.querySelectorAll('[data-hf-coach-v2-action-response]').forEach(node => node.remove());
+  }
+
+  function clearResponse(suppressMs = 1200) {
+    lastAction = null;
+    dismissedUntil = Date.now() + suppressMs;
+    clearTimeout(renderTimer);
+    removeResponses();
   }
 
   function injectStyle() {
@@ -56,6 +68,7 @@
         font-weight:760!important;
       }
       .hf-coach-v2-action-response {
+        position:relative;
         display:grid;
         gap:7px;
         padding:12px 13px;
@@ -69,6 +82,7 @@
         color:var(--text);
         font-size:.98rem;
         letter-spacing:-.01em;
+        padding-right:42px;
       }
       .hf-coach-v2-action-response p {
         margin:0!important;
@@ -77,6 +91,32 @@
       }
       .hf-coach-v2-action-response .hf-coach-v2-feedback {
         margin-top:6px;
+      }
+      .hf-coach-v2-action-close {
+        position:absolute;
+        top:10px;
+        right:10px;
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        width:32px;
+        height:32px;
+        border-radius:999px;
+        border:1px solid rgba(7,17,26,.12);
+        background:rgba(255,255,255,.82);
+        color:#07111a;
+        font:inherit;
+        font-size:1.12rem;
+        font-weight:800;
+        line-height:1;
+        cursor:pointer;
+        box-shadow:0 8px 18px rgba(7,17,26,.08);
+      }
+      .hf-coach-v2-action-close:hover,
+      .hf-coach-v2-action-close:focus-visible {
+        background:rgba(255,255,255,.96);
+        outline:2px solid rgba(7,17,26,.18);
+        outline-offset:2px;
       }
       body.light .hf-coach-v2-action-response {
         background:rgba(158,220,206,.28);
@@ -107,6 +147,7 @@
     const guide = ACTION_GUIDES[actionKey];
     if (!guide) return '';
     return `<div class="hf-coach-v2-action-response" data-hf-coach-v2-action-response="${escapeHtml(actionKey)}">
+      <button class="hf-coach-v2-action-close" type="button" data-coach-dismiss="response" aria-label="Hinweis schliessen">&times;</button>
       <strong>${escapeHtml(guide.title)}</strong>
       <p>${escapeHtml(guide.body)}</p>
       ${feedbackHtml(actionKey)}
@@ -115,7 +156,8 @@
 
   function renderResponse() {
     injectStyle();
-    document.querySelectorAll('[data-hf-coach-v2-action-response]').forEach(node => node.remove());
+    removeResponses();
+    if (Date.now() < dismissedUntil) return;
     if (!lastAction || TIMER_ACTIONS.has(lastAction) || !ACTION_GUIDES[lastAction]) return;
     document.querySelectorAll('.hf-coach-v2-extra').forEach(extra => {
       const actions = extra.querySelector('.hf-coach-v2-actions');
@@ -132,10 +174,31 @@
   }
 
   function handleClick(event) {
+    const dismissButton = event.target?.closest?.('[data-coach-dismiss]');
+    if (dismissButton) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      clearResponse(2500);
+      return;
+    }
+
+    const feedbackButton = event.target?.closest?.('[data-coach-feedback]');
+    if (feedbackButton) {
+      clearResponse(2500);
+      window.setTimeout(() => clearResponse(2500), 80);
+      window.setTimeout(() => clearResponse(2500), 260);
+      return;
+    }
+
     const button = event.target?.closest?.('[data-coach-action]');
     if (!button) return;
     const actionKey = button.dataset.coachAction;
-    if (!actionKey || TIMER_ACTIONS.has(actionKey)) return;
+    if (!actionKey || TIMER_ACTIONS.has(actionKey)) {
+      if (actionKey === 'cancel_timer') clearResponse(1200);
+      else removeResponses();
+      return;
+    }
+    dismissedUntil = 0;
     lastAction = actionKey;
     scheduleRender(80);
     scheduleRender(240);
@@ -144,7 +207,9 @@
   function start() {
     injectStyle();
     document.addEventListener('click', handleClick, true);
-    const observer = new MutationObserver(() => scheduleRender(80));
+    const observer = new MutationObserver(() => {
+      if (lastAction && Date.now() >= dismissedUntil) scheduleRender(80);
+    });
     observer.observe(document.body, { childList: true, subtree: true });
     scheduleRender(300);
   }
