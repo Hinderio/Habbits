@@ -1,6 +1,6 @@
 window.HABITFLOW_SUPABASE_CONFIG = Object.freeze({
   url: 'https://spzytdyottsicwmmwsbl.supabase.co',
-  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXp5dGR5b3R0c2ljd21td3NibCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzc2NTQxOTM5LCJleHAiOjIwOTIxMTc5Mzl9.9Ku9KU102YaX1UhWVPntA6q7vzyvo7rCzgn68pLS9xU'
+  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzcHp5dGR5b3R0c2ljd21td3NibCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzc2NTQxOTM5LCJleHAiOjIwOTIxMTc5Mzl9.9Ku9KU102YaX1UhWVPntA6q7vzyvo7rCzgn68pLS9xU'
 });
 
 (function routeTopbarSyncToSettings(document) {
