@@ -3,6 +3,32 @@ window.HABITFLOW_SUPABASE_CONFIG = Object.freeze({
   anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNwenl0ZHlvdHRzaWN3bW13c2JsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1NDE5MzksImV4cCI6MjA5MjExNzkzOX0.9Ku9KU102YaX1UhWVPntA6q7vzyvo7rCzgn68pLS9xU'
 });
 
+(function routeTopbarSyncToSettings(document) {
+  'use strict';
+
+  if (!document) return;
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const syncTab = document.querySelector('.bottom-nav .nav-btn[data-target="settings"]');
+    const syncButton = document.getElementById('syncNowBtn');
+
+    if (syncTab) {
+      syncTab.classList.add('hidden');
+      syncTab.setAttribute('aria-hidden', 'true');
+      syncTab.setAttribute('tabindex', '-1');
+    }
+
+    if (!syncButton || !syncTab) return;
+
+    syncButton.setAttribute('aria-controls', 'screen-settings');
+    syncButton.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      syncTab.click();
+    }, { capture: true });
+  }, { once: true });
+})(document);
+
 (function loadHabitFlowModuleShell(document) {
   'use strict';
 
