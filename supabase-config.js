@@ -11,6 +11,28 @@ window.HABITFLOW_SUPABASE_CONFIG = Object.freeze({
   document.addEventListener('DOMContentLoaded', () => {
     const syncTab = document.querySelector('.bottom-nav .nav-btn[data-target="settings"]');
     const syncButton = document.getElementById('syncNowBtn');
+    const navButtons = Array.from(document.querySelectorAll('.bottom-nav .nav-btn[data-target]'));
+    let lastNonSettingsTarget = 'dashboard';
+
+    const getActiveScreen = () => (
+      document.body?.dataset.activeScreen
+      || document.documentElement?.dataset.activeScreen
+      || document.querySelector('.bottom-nav .nav-btn.active')?.dataset.target
+      || 'dashboard'
+    );
+
+    const openScreen = target => {
+      const targetButton = document.querySelector(`.bottom-nav .nav-btn[data-target="${target}"]`);
+      if (targetButton) targetButton.click();
+    };
+
+    navButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        if (button.dataset.target && button.dataset.target !== 'settings') {
+          lastNonSettingsTarget = button.dataset.target;
+        }
+      }, { capture: true });
+    });
 
     if (syncTab) {
       syncTab.classList.add('hidden');
@@ -22,9 +44,20 @@ window.HABITFLOW_SUPABASE_CONFIG = Object.freeze({
 
     syncButton.setAttribute('aria-controls', 'screen-settings');
     syncButton.addEventListener('click', event => {
+      const activeScreen = getActiveScreen();
+
       event.preventDefault();
       event.stopImmediatePropagation();
-      syncTab.click();
+
+      if (activeScreen === 'settings') {
+        openScreen(lastNonSettingsTarget || 'dashboard');
+        return;
+      }
+
+      if (activeScreen && activeScreen !== 'settings') {
+        lastNonSettingsTarget = activeScreen;
+      }
+      openScreen('settings');
     }, { capture: true });
   }, { once: true });
 })(document);
