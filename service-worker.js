@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v162-project-native-modal';
+const CACHE_NAME = 'habitflow-v163-project-single-source';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -27,12 +27,6 @@ const MODULE_ASSETS = [
   './modules/gamification.js',
   './modules/monthly-missions.js',
   './modules/projects.js',
-  './modules/projects-supabase-fix.js',
-  './modules/projects-submit-listener-fix.js',
-  './modules/projects-submit-currenttarget-fix.js',
-  './modules/projects-formdata-fix.js',
-  './modules/projects-phases-remote-fix.js',
-  './modules/projects-mobile-detail.js',
   './modules/projects.css',
   './modules/projects-mobile-fix.css'
 ];
