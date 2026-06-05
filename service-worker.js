@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v161-project-stable-overlay';
+const CACHE_NAME = 'habitflow-v162-project-native-modal';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
