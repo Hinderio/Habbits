@@ -5,6 +5,7 @@
   const TABLE_PROJECTS = 'projects';
   const TABLE_PHASES = 'project_phases';
   const DEFAULT_PROJECT_COLOR = '#4ad7d1';
+  const PROJECT_META_RE = /\n?\s*<!--hf-project-meta:([^>]+)-->/;
   const STATUS = {
     planned: { label: 'Geplant', cls: 'project-status-planned' },
     active: { label: 'Aktiv', cls: 'project-status-active' },
@@ -45,6 +46,28 @@
   function normalizeProjectColor(value) {
     const color = String(value || '').trim();
     return /^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/.test(color) ? color : DEFAULT_PROJECT_COLOR;
+  }
+
+  function parseProjectMeta(value = '') {
+    const raw = String(value || '');
+    const match = raw.match(PROJECT_META_RE);
+    if (!match) return { text: raw, meta: {} };
+    try {
+      return { text: raw.replace(PROJECT_META_RE, '').trim(), meta: JSON.parse(decodeURIComponent(match[1])) || {} };
+    } catch {
+      return { text: raw.replace(PROJECT_META_RE, '').trim(), meta: {} };
+    }
+  }
+
+  function projectOutcomeForStorage(project = {}) {
+    const text = String(project.outcome_note || '').trim();
+    const meta = encodeURIComponent(JSON.stringify({ color: normalizeProjectColor(project.color) }));
+    return `${text ? `${text}\n\n` : ''}<!--hf-project-meta:${meta}-->`;
+  }
+
+  function isMissingRemoteColumnError(error, column) {
+    const text = `${error?.message || ''} ${error?.details || ''} ${error?.hint || ''}`.toLowerCase();
+    return text.includes(column.toLowerCase()) && (text.includes('schema cache') || text.includes('column'));
   }
 
   function projectInitials(title = '') {
@@ -88,6 +111,7 @@
 
   function normalizeProject(project = {}) {
     const created = validIso(project.created_at || project.createdAt) || nowIso();
+    const outcome = parseProjectMeta(project.outcome_note || project.outcomeNote || '');
     return {
       id: String(project.id || uid()),
       title: String(project.title || '').trim().slice(0, 120),
@@ -95,8 +119,8 @@
       start_date: validDate(project.start_date || project.startDate) || todayDate(),
       end_date: validDate(project.end_date || project.endDate) || '',
       status: STATUS[project.status] ? project.status : 'planned',
-      outcome_note: String(project.outcome_note || project.outcomeNote || '').trim().slice(0, 500),
-      color: normalizeProjectColor(project.color),
+      outcome_note: String(outcome.text || '').trim().slice(0, 500),
+      color: normalizeProjectColor(project.color || outcome.meta.color),
       is_archived: Boolean(project.is_archived),
       created_at: created,
       updated_at: validIso(project.updated_at || project.updatedAt) || created,
@@ -436,8 +460,12 @@
       const now = nowIso();
       const project = normalizeProject({ ...(existing || {}), id: existing?.id || uid(), title, description: data.get('description'), start_date: start, end_date: end, status: data.get('status'), outcome_note: data.get('outcome_note'), color: data.get('color'), created_at: existing?.created_at || now, updated_at: now, synced: true });
       const { supabase, userId } = await requireRemoteUser();
-      const row = { id: project.id, user_id: userId, title: project.title, description: project.description || null, start_date: project.start_date || null, end_date: project.end_date || null, status: project.status, outcome_note: project.outcome_note || null, color: project.color, is_archived: false, created_at: project.created_at, updated_at: project.updated_at };
-      const { error } = await supabase.from(TABLE_PROJECTS).upsert(row, { onConflict: 'id' });
+      const baseRow = { id: project.id, user_id: userId, title: project.title, description: project.description || null, start_date: project.start_date || null, end_date: project.end_date || null, status: project.status, outcome_note: projectOutcomeForStorage(project), is_archived: false, created_at: project.created_at, updated_at: project.updated_at };
+      const row = { ...baseRow, color: project.color };
+      let { error } = await supabase.from(TABLE_PROJECTS).upsert(row, { onConflict: 'id' });
+      if (error && isMissingRemoteColumnError(error, 'color')) {
+        ({ error } = await supabase.from(TABLE_PROJECTS).upsert(baseRow, { onConflict: 'id' }));
+      }
       if (error) throw error;
       state.projects = existing ? state.projects.map(item => item.id === project.id ? project : item) : [project, ...state.projects];
       writeState(state);
@@ -633,14 +661,23 @@
       const projectQuery = supabase.from(TABLE_PROJECTS).select('*').eq('user_id', userId).eq('is_archived', false);
       let phaseQuery = supabase.from(TABLE_PHASES).select('*').eq('user_id', userId).eq('is_archived', false);
       if (projectId) phaseQuery = phaseQuery.eq('project_id', projectId);
-      const [projectsRemote, phasesRemote] = await Promise.all([projectQuery, phaseQuery]);
+      const taskLinkQuery = supabase.from('tasks').select('id,project_id,updated_at').eq('user_id', userId).not('project_id', 'is', null);
+      const [projectsRemote, phasesRemote, taskLinksRemote] = await Promise.all([projectQuery, phaseQuery, taskLinkQuery]);
       if (projectsRemote.error) throw projectsRemote.error;
       if (phasesRemote.error) throw phasesRemote.error;
+      if (taskLinksRemote.error && !isMissingRemoteColumnError(taskLinksRemote.error, 'project_id')) throw taskLinksRemote.error;
       const state = readState();
       const remoteProjects = (projectsRemote.data || []).map(row => normalizeProject({ ...row, synced: true }));
       const remotePhases = (phasesRemote.data || []).map(row => normalizePhase({ ...row, synced: true }));
+      const remoteTaskLinks = new Map((taskLinksRemote.data || []).filter(row => row?.id && row.project_id).map(row => [String(row.id), String(row.project_id)]));
       state.projects = mergeById(state.projects, remoteProjects);
       state.projectPhases = projectId ? [...remotePhases, ...state.projectPhases.filter(phase => phase.project_id !== projectId)] : remotePhases;
+      if (remoteTaskLinks.size) {
+        state.tasks = state.tasks.map(task => {
+          const projectLink = remoteTaskLinks.get(String(task.id));
+          return projectLink && task.project_id !== projectLink ? { ...task, project_id: projectLink, projectId: projectLink } : task;
+        });
+      }
       writeState(state);
       if (!options.silent) setSyncStatus('synchronisiert');
       render();
