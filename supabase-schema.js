@@ -28,6 +28,9 @@
     if (!document.querySelector('script[src="modules/projects-supabase-fix.js"]')) {
       document.write('<script src="modules/projects-supabase-fix.js"><\/script>');
     }
+    if (!document.querySelector('script[src="modules/projects-submit-currenttarget-fix.js"]')) {
+      document.write('<script src="modules/projects-submit-currenttarget-fix.js"><\/script>');
+    }
     if (!document.querySelector('script[src="modules/projects-formdata-fix.js"]')) {
       document.write('<script src="modules/projects-formdata-fix.js"><\/script>');
     }
