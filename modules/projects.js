@@ -511,57 +511,65 @@
     }
   }
 
-  function markProjectDone(projectId) {
+  async function markProjectDone(projectId) {
     const state = readState();
-    state.projects = state.projects.map(project => project.id === projectId ? { ...project, status: 'done', updated_at: nowIso(), synced: false } : project);
-    writeState(state);
-    renderDetail(projectId);
-    render();
-    toast('Projekt abgeschlossen');
+    const project = state.projects.find(item => item.id === projectId);
+    if (!project) return;
+    const updatedAt = nowIso();
+    try {
+      const { supabase } = await requireRemoteUser();
+      const { error } = await supabase.from(TABLE_PROJECTS).update({ status: 'done', updated_at: updatedAt }).eq('id', projectId);
+      if (error) throw error;
+      state.projects = state.projects.map(item => item.id === projectId ? { ...item, status: 'done', updated_at: updatedAt, synced: true } : item);
+      writeState(state);
+      renderDetail(projectId);
+      render();
+      toast('Projekt abgeschlossen');
+    } catch (error) {
+      toast(error.message || 'Projekt konnte nicht abgeschlossen werden.');
+    }
   }
 
-  function openDetail(projectId) {
+  async function openDetail(projectId) {
     selectedProjectId = projectId;
     renderDetail(projectId);
     const modal = document.getElementById('projectDetailModal');
     if (!modal) return;
     modal.classList.remove('hidden');
     document.body.classList.add('project-modal-open');
-    pullRemoteProjectData(projectId).catch(error => console.warn('[HabitFlow/projects] Projekt konnte nicht nachgeladen werden.', error));
+    await pullRemoteProjectData(projectId).catch(error => console.warn('[HabitFlow/projects] Projekt konnte nicht nachgeladen werden.', error));
   }
 
   function closeDetail() {
     selectedProjectId = '';
     document.getElementById('projectDetailModal')?.classList.add('hidden');
     document.body.classList.remove('project-modal-open');
+    pullRemoteProjectData('', { silent: true }).catch(error => console.warn('[HabitFlow/projects] Projektliste konnte nicht nachgeladen werden.', error));
   }
 
-  async function pullRemoteProjectData(projectId = '') {
+  async function pullRemoteProjectData(projectId = '', options = {}) {
     const supabase = getSupabaseClient();
     const userId = await currentUserId();
     if (!supabase || !userId || syncing) return;
     syncing = true;
-    setSyncStatus('synchronisiert...');
+    if (!options.silent) setSyncStatus('synchronisiert...');
     try {
       const projectQuery = supabase.from(TABLE_PROJECTS).select('*').eq('user_id', userId).eq('is_archived', false);
-      const phaseQuery = supabase.from(TABLE_PHASES).select('*').eq('user_id', userId).eq('is_archived', false);
-      if (projectId) {
-        projectQuery.eq('id', projectId);
-        phaseQuery.eq('project_id', projectId);
-      }
+      let phaseQuery = supabase.from(TABLE_PHASES).select('*').eq('user_id', userId).eq('is_archived', false);
+      if (projectId) phaseQuery = phaseQuery.eq('project_id', projectId);
       const [projectsRemote, phasesRemote] = await Promise.all([projectQuery, phaseQuery]);
       if (projectsRemote.error) throw projectsRemote.error;
       if (phasesRemote.error) throw phasesRemote.error;
       const state = readState();
       const remoteProjects = (projectsRemote.data || []).map(row => normalizeProject({ ...row, synced: true }));
       const remotePhases = (phasesRemote.data || []).map(row => normalizePhase({ ...row, synced: true }));
-      state.projects = projectId ? mergeById(state.projects, remoteProjects) : remoteProjects;
+      state.projects = mergeById(state.projects, remoteProjects);
       state.projectPhases = projectId ? [...remotePhases, ...state.projectPhases.filter(phase => phase.project_id !== projectId)] : remotePhases;
       writeState(state);
-      setSyncStatus('synchronisiert');
+      if (!options.silent) setSyncStatus('synchronisiert');
       render();
     } catch (error) {
-      setSyncStatus('Sync-Fehler');
+      if (!options.silent) setSyncStatus('Sync-Fehler');
       console.warn('[HabitFlow/projects] Sync fehlgeschlagen.', error);
     } finally {
       syncing = false;
@@ -611,6 +619,7 @@
     bindEvents();
     render();
     setTimeout(() => pullRemoteProjectData(), 500);
+    setTimeout(() => pullRemoteProjectData('', { silent: true }), 2500);
   }
 
   patchStatePersistence();
