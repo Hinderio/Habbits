@@ -25,6 +25,12 @@
       link.href = 'modules/projects.css';
       document.head.appendChild(link);
     }
+    if (!document.querySelector('link[href="modules/projects-mobile-fix.css"]')) {
+      const mobileLink = document.createElement('link');
+      mobileLink.rel = 'stylesheet';
+      mobileLink.href = 'modules/projects-mobile-fix.css';
+      document.head.appendChild(mobileLink);
+    }
     if (!document.querySelector('script[src="modules/projects-supabase-fix.js"]')) {
       document.write('<script src="modules/projects-supabase-fix.js"><\/script>');
     }
