@@ -488,7 +488,7 @@
     )) || null;
   }
 
-  function rememberEditingAppointmentFromForm() {
+  function rememberEditingAppointmentFromForm({ applyDetectedRecurrence = false } = {}) {
     if (!isEditingAppointment()) {
       return;
     }
@@ -499,6 +499,9 @@
     const match = currentEditingAppointment(readState(), form);
     if (match?.id) {
       editingAppointmentId = match.id;
+      if (!applyDetectedRecurrence) {
+        return;
+      }
       const field = document.getElementById(FIELD_ID);
       const series = inferSeries(readState(), match);
       if (field && series?.recurrence) {
@@ -553,7 +556,7 @@
   function resetEditContextIfNeeded(action, target) {
     if (action === 'edit-appointment' || (action || '').includes('edit-appointment')) {
       editingAppointmentId = target?.dataset?.id || null;
-      window.setTimeout(rememberEditingAppointmentFromForm, 0);
+      window.setTimeout(() => rememberEditingAppointmentFromForm({ applyDetectedRecurrence: true }), 0);
       return;
     }
     if (
@@ -564,7 +567,7 @@
     ) {
       editingAppointmentId = null;
     }
-    window.setTimeout(rememberEditingAppointmentFromForm, 0);
+    window.setTimeout(() => rememberEditingAppointmentFromForm({ applyDetectedRecurrence: false }), 0);
   }
 
   async function handleSubmit(event) {
