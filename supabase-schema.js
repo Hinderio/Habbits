@@ -31,6 +31,10 @@
     document.write(`<script src="${src}"><\/script>`);
   }
 
+  function loadAppointmentSeriesAssets() {
+    writeScript('modules/appointment-series.js');
+  }
+
   function loadProjectAssets() {
     ensureStylesheet('modules/projects.css');
     ensureStylesheet('modules/projects-mobile-fix.css');
@@ -41,5 +45,6 @@
   }
 
   loadSqlPreview();
+  loadAppointmentSeriesAssets();
   loadProjectAssets();
 })(window, document);
