@@ -309,8 +309,11 @@
     if (!shouldRestore) {
       return;
     }
+    showCalendarScreen();
+    window.setTimeout(showCalendarScreen, 0);
     window.setTimeout(showCalendarScreen, 60);
     window.setTimeout(showCalendarScreen, 220);
+    window.setTimeout(showCalendarScreen, 420);
   }
 
   function resetEditContextIfNeeded(action, target) {
@@ -406,6 +409,7 @@
   }
 
   if (document.readyState === 'loading') {
+    restoreCalendarAfterReload();
     document.addEventListener('DOMContentLoaded', install);
   } else {
     install();
