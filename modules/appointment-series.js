@@ -82,6 +82,33 @@
     ].join('|');
   }
 
+  function cleanDescription(value) {
+    return String(value || '').trim();
+  }
+
+  function appointmentSignature(appointment) {
+    return [
+      appointment.title || '',
+      appointment.location || '',
+      appointment.appointment_type || 'other',
+      cleanDescription(appointment.description),
+      durationMs(appointment),
+    ].join('|');
+  }
+
+  function durationMs(appointment) {
+    const start = new Date(appointment?.starts_at || '').getTime();
+    const end = new Date(appointment?.ends_at || '').getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end)) {
+      return '';
+    }
+    return String(end - start);
+  }
+
+  function sameInstant(left, right) {
+    return Math.abs(new Date(left).getTime() - new Date(right).getTime()) < 1000;
+  }
+
   function toast(message, type) {
     const node = document.getElementById('toast');
     if (!node) {
@@ -146,8 +173,7 @@
     return form;
   }
 
-  function buildSeries(form, recurrence, existingAppointment = null) {
-    const option = RECURRENCE_OPTIONS[recurrence];
+  function buildAppointmentFromForm(form, existingAppointment = null) {
     const formData = new FormData(form);
     const title = String(formData.get('title') || '').trim();
     const startsAtRaw = String(formData.get('starts_at') || '');
@@ -165,32 +191,99 @@
       throw new Error('Die Endzeit muss nach dem Start liegen.');
     }
 
-    const createdAt = existingAppointment?.created_at || nowIso();
-    const seriesId = uid();
-    const duration = endDate ? endDate.getTime() - startDate.getTime() : null;
+    const timestamp = nowIso();
+    return {
+      id: existingAppointment?.id || uid(),
+      title,
+      description: cleanDescription(formData.get('description')),
+      location: String(formData.get('location') || '').trim(),
+      appointment_type: String(formData.get('appointment_type') || 'other').trim() || 'other',
+      starts_at: startDate.toISOString(),
+      ends_at: endDate ? endDate.toISOString() : null,
+      created_at: existingAppointment?.created_at || timestamp,
+      updated_at: timestamp,
+      synced: false,
+    };
+  }
+
+  function buildSeries(form, recurrence, existingAppointment = null, seriesId = null) {
+    const option = RECURRENCE_OPTIONS[recurrence];
+    const base = buildAppointmentFromForm(form, existingAppointment);
+    const startDate = new Date(base.starts_at);
+    const duration = base.ends_at ? new Date(base.ends_at).getTime() - startDate.getTime() : null;
+    const effectiveSeriesId = seriesId || existingAppointment?.series_id || uid();
     const rows = [];
 
     for (let index = 0; index < option.count; index += 1) {
       const occurrenceStart = advanceDate(startDate, recurrence, index);
       const occurrenceEnd = duration == null ? null : new Date(occurrenceStart.getTime() + duration);
       rows.push({
+        ...base,
         id: index === 0 && existingAppointment?.id ? existingAppointment.id : uid(),
-        title,
-        description: String(formData.get('description') || '').trim(),
-        location: String(formData.get('location') || '').trim(),
-        appointment_type: String(formData.get('appointment_type') || 'other').trim() || 'other',
         starts_at: occurrenceStart.toISOString(),
         ends_at: occurrenceEnd ? occurrenceEnd.toISOString() : null,
-        created_at: createdAt,
-        updated_at: createdAt,
         synced: false,
         recurrence,
-        series_id: seriesId,
+        series_id: effectiveSeriesId,
         series_index: index,
       });
     }
 
     return rows;
+  }
+
+  function seriesFromLocalFields(state, appointment) {
+    if (!appointment?.series_id) {
+      return null;
+    }
+    const appointments = state.appointments
+      .filter((item) => item.series_id === appointment.series_id)
+      .sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
+    const recurrence = appointment.recurrence || appointments.find((item) => item.recurrence)?.recurrence;
+    if (!RECURRENCE_OPTIONS[recurrence] || appointments.length < 2) {
+      return null;
+    }
+    return { recurrence, appointments, seriesId: appointment.series_id };
+  }
+
+  function detectSeriesByCadence(state, appointment) {
+    if (!appointment?.starts_at) {
+      return null;
+    }
+    const signature = appointmentSignature(appointment);
+    const candidates = state.appointments
+      .filter((item) => item.id && appointmentSignature(item) === signature)
+      .sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
+    if (candidates.length < 2) {
+      return null;
+    }
+
+    const recurrenceOrder = ['weekly', 'monthly', 'quarterly', 'yearly'];
+    for (const recurrence of recurrenceOrder) {
+      for (const anchor of candidates) {
+        const anchorDate = new Date(anchor.starts_at);
+        const group = candidates.filter((candidate) => {
+          for (let index = 0; index < RECURRENCE_OPTIONS[recurrence].count; index += 1) {
+            if (sameInstant(candidate.starts_at, advanceDate(anchorDate, recurrence, index).toISOString())) {
+              return true;
+            }
+          }
+          return false;
+        });
+        if (group.length >= 2 && group.some((item) => item.id === appointment.id)) {
+          return {
+            recurrence,
+            appointments: group.sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)),
+            seriesId: appointment.series_id || group.find((item) => item.series_id)?.series_id || uid(),
+          };
+        }
+      }
+    }
+    return null;
+  }
+
+  function inferSeries(state, appointment) {
+    return seriesFromLocalFields(state, appointment) || detectSeriesByCadence(state, appointment);
   }
 
   async function syncAppointments(rows) {
@@ -229,6 +322,51 @@
       throw error;
     }
     return true;
+  }
+
+  async function deleteRemoteAppointments(ids) {
+    const config = window.HABITFLOW_SUPABASE_CONFIG || {};
+    const uniqueIds = Array.from(new Set((ids || []).filter(Boolean)));
+    if (!window.supabase || !config.url || !config.anonKey || !uniqueIds.length) {
+      return false;
+    }
+    const client = window.supabase.createClient(config.url, config.anonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: false,
+      },
+    });
+    const sessionResult = await client.auth.getSession();
+    const userId = sessionResult?.data?.session?.user?.id;
+    if (!userId) {
+      return false;
+    }
+    const { error } = await client.from('appointments').delete().eq('user_id', userId).in('id', uniqueIds);
+    if (error) {
+      throw error;
+    }
+    return true;
+  }
+
+  function markDeletedAppointments(state, ids, synced = false) {
+    const uniqueIds = Array.from(new Set((ids || []).filter(Boolean)));
+    if (!uniqueIds.length) {
+      return;
+    }
+    if (!state.deletedRemoteIds || typeof state.deletedRemoteIds !== 'object') {
+      state.deletedRemoteIds = {};
+    }
+    if (!state.deletedRemoteIds.appointments || typeof state.deletedRemoteIds.appointments !== 'object') {
+      state.deletedRemoteIds.appointments = {};
+    }
+    const timestamp = nowIso();
+    uniqueIds.forEach((id) => {
+      state.deletedRemoteIds.appointments[id] = {
+        deleted_at: timestamp,
+        ...(synced ? { synced_at: timestamp } : {}),
+      };
+    });
   }
 
   function markSynced(ids) {
@@ -270,6 +408,11 @@
     const match = currentEditingAppointment(readState(), form);
     if (match?.id) {
       editingAppointmentId = match.id;
+      const field = document.getElementById(FIELD_ID);
+      const series = inferSeries(readState(), match);
+      if (field && series?.recurrence) {
+        field.value = series.recurrence;
+      }
     }
   }
 
@@ -339,27 +482,34 @@
       return;
     }
     const recurrence = form.elements[FIELD_NAME]?.value || 'once';
-    if (recurrence === 'once') {
+    if (!RECURRENCE_OPTIONS[recurrence]) {
       return;
     }
-    if (!RECURRENCE_OPTIONS[recurrence]) {
+
+    const state = readState();
+    const existingAppointment = isEditingAppointment() ? currentEditingAppointment(state, form) : null;
+    const existingSeries = existingAppointment ? inferSeries(state, existingAppointment) : null;
+    if (recurrence === 'once' && !existingSeries) {
       return;
     }
 
     event.preventDefault();
     event.stopImmediatePropagation();
 
-    const state = readState();
-    const existingAppointment = isEditingAppointment() ? currentEditingAppointment(state, form) : null;
     let rows;
     try {
-      rows = buildSeries(form, recurrence, existingAppointment);
+      rows = recurrence === 'once'
+        ? [buildAppointmentFromForm(form, existingAppointment)]
+        : buildSeries(form, recurrence, existingAppointment, existingSeries?.seriesId);
     } catch (error) {
       toast(error.message, 'danger');
       return;
     }
 
-    const existingKeys = new Set(state.appointments.map(appointmentKey));
+    const replacedSeriesIds = new Set((existingSeries?.appointments || []).map((appointment) => appointment.id));
+    const existingKeys = new Set(state.appointments
+      .filter((appointment) => !replacedSeriesIds.has(appointment.id))
+      .map(appointmentKey));
     const additions = rows.filter((row, index) => (
       index === 0 && existingAppointment?.id ? true : !existingKeys.has(appointmentKey(row))
     ));
@@ -368,19 +518,37 @@
       return;
     }
 
-    if (existingAppointment?.id) {
-      const replacement = { ...additions[0], synced: false };
+    const deletedIds = existingSeries?.appointments
+      ?.map((appointment) => appointment.id)
+      .filter((id) => id && !additions.some((row) => row.id === id)) || [];
+    if (deletedIds.length) {
+      markDeletedAppointments(state, deletedIds, false);
+    }
+
+    if (existingSeries?.appointments?.length) {
+      state.appointments = state.appointments.filter((appointment) => !replacedSeriesIds.has(appointment.id));
+      state.appointments = [...state.appointments, ...additions];
+    } else if (existingAppointment?.id) {
       state.appointments = state.appointments.map((appointment) => (
-        appointment.id === existingAppointment.id ? replacement : appointment
+        appointment.id === existingAppointment.id ? { ...additions[0], synced: false } : appointment
       ));
       state.appointments = [...state.appointments, ...additions.slice(1)];
     } else {
       state.appointments = [...state.appointments, ...additions];
     }
     writeState(state);
-    toast(`${additions.length} Termine als ${recurrenceLabel(recurrence)}-Serie angelegt.`, 'success');
+    toast(recurrence === 'once'
+      ? 'Termin als Einzeltermin gespeichert.'
+      : `${additions.length} Termine als ${recurrenceLabel(recurrence)}-Serie angelegt.`,
+    'success');
 
     try {
+      const deletedRemote = await deleteRemoteAppointments(deletedIds);
+      if (deletedRemote && deletedIds.length) {
+        const latestState = readState();
+        markDeletedAppointments(latestState, deletedIds, true);
+        writeState(latestState);
+      }
       const synced = await syncAppointments(additions);
       if (synced) {
         markSynced(additions.map((row) => row.id));
