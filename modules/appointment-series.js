@@ -422,7 +422,7 @@
     });
   }
 
-  async function deleteRemoteGeneratedFollowers(anchor, keepId) {
+  async function deleteRemoteGeneratedFollowers(anchor, keepId, existingSeries = null) {
     const config = window.HABITFLOW_SUPABASE_CONFIG || {};
     if (!window.supabase || !config.url || !config.anonKey || !anchor?.starts_at || !anchor?.created_at) {
       return false;
@@ -454,6 +454,16 @@
         throw seriesDeleteError;
       }
       return true;
+    }
+
+    if (existingSeries?.appointments?.length) {
+      const ids = existingSeries.appointments
+        .filter((appointment) => appointment.id && appointment.id !== keepId)
+        .filter((appointment) => timestampMs(appointment.starts_at) > timestampMs(anchor.starts_at))
+        .map((appointment) => appointment.id);
+      if (ids.length) {
+        return deleteRemoteAppointments(ids);
+      }
     }
 
     const { data, error } = await client.from('appointments')
@@ -681,7 +691,7 @@
 
     try {
       const deletedRemote = await deleteRemoteAppointments(deletedIds);
-      const deletedRemoteFollowers = await deleteRemoteGeneratedFollowers(existingAppointment, additions[0]?.id);
+      const deletedRemoteFollowers = await deleteRemoteGeneratedFollowers(existingAppointment, additions[0]?.id, existingSeries);
       if (deletedRemote && deletedIds.length) {
         const latestState = readState();
         markDeletedAppointments(latestState, deletedIds, Boolean(deletedRemoteFollowers));
