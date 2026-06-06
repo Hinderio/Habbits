@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v178-series-remote-delete';
+const CACHE_NAME = 'habitflow-v179-appointment-series-schema';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -33,8 +33,9 @@ const MODULE_ASSETS = [
   './modules/projects.css',
   './modules/projects-mobile-fix.css'
 ];
-const ASSETS = ['./', './index.html', './style.css', './app.js', './supabase-config.js', './supabase-schema.js', './manifest.json', './icons/coach-clean.svg', './data/activity-ideas.json', './sql/add-projects.sql', ...MODULE_ASSETS];
-const NETWORK_FIRST_PATHS = new Set(['/', '/index.html', '/app.js', '/style.css', '/supabase-config.js', '/manifest.json', '/sql/add-projects.sql', ...MODULE_ASSETS.map(path => path.replace(/^\./, ''))]);
+const SQL_ASSETS = ['./sql/add-projects.sql', './sql/add-appointment-series.sql'];
+const ASSETS = ['./', './index.html', './style.css', './app.js', './supabase-config.js', './supabase-schema.js', './manifest.json', './icons/coach-clean.svg', './data/activity-ideas.json', ...SQL_ASSETS, ...MODULE_ASSETS];
+const NETWORK_FIRST_PATHS = new Set(['/', '/index.html', '/app.js', '/style.css', '/supabase-config.js', '/manifest.json', ...SQL_ASSETS.map(path => path.replace(/^\./, '')), ...MODULE_ASSETS.map(path => path.replace(/^\./, ''))]);
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
