@@ -442,4 +442,239 @@
 
   function markDeletedAppointments(state, ids, synced = false) {
     const uniqueIds = Array.from(new Set((ids || []).filter(Boolean)));
-    if (!uniqueIds.length) { // truncated not need? Need full content to update, have it. continue? The output includes until 680? Need content after truncated maybe available already from earlier? It was less than 720 but truncated at markDeleted due max? actually max 80k but output token truncated due? Need not manually copy? We need update_file content full; easier fetch local with nodeRepl? We can use command output but visible truncated? It says 
+    if (!uniqueIds.length) {
+      return;
+    }
+    if (!state.deletedRemoteIds || typeof state.deletedRemoteIds !== 'object') {
+      state.deletedRemoteIds = {};
+    }
+    if (!state.deletedRemoteIds.appointments || typeof state.deletedRemoteIds.appointments !== 'object') {
+      state.deletedRemoteIds.appointments = {};
+    }
+    const timestamp = nowIso();
+    uniqueIds.forEach((id) => {
+      state.deletedRemoteIds.appointments[id] = {
+        deleted_at: timestamp,
+        ...(synced ? { synced_at: timestamp } : {}),
+      };
+    });
+  }
+
+  function markSynced(ids) {
+    const idSet = new Set(ids);
+    const state = readState();
+    state.appointments = state.appointments.map((appointment) => (
+      idSet.has(appointment.id) ? { ...appointment, synced: true } : appointment
+    ));
+    writeState(state);
+  }
+
+  function currentEditingAppointment(state, form) {
+    if (editingAppointmentId) {
+      const match = state.appointments.find((appointment) => appointment.id === editingAppointmentId);
+      if (match) {
+        return match;
+      }
+    }
+    const data = new FormData(form);
+    const title = String(data.get('title') || '').trim();
+    const startsAtRaw = String(data.get('starts_at') || '');
+    const startDate = new Date(startsAtRaw);
+    if (!title || Number.isNaN(startDate.getTime())) {
+      return null;
+    }
+    return state.appointments.find((appointment) => (
+      appointment.title === title && appointment.starts_at === startDate.toISOString()
+    )) || null;
+  }
+
+  function rememberEditingAppointmentFromForm() {
+    if (!isEditingAppointment()) {
+      return;
+    }
+    const form = document.getElementById(FORM_ID);
+    if (!(form instanceof HTMLFormElement)) {
+      return;
+    }
+    const match = currentEditingAppointment(readState(), form);
+    if (match?.id) {
+      editingAppointmentId = match.id;
+      const field = document.getElementById(FIELD_ID);
+      const series = inferSeries(readState(), match);
+      if (field && series?.recurrence) {
+        field.value = series.recurrence;
+      }
+    }
+  }
+
+  function rememberCalendarRestore() {
+    try {
+      window.sessionStorage.setItem(RESTORE_KEY, JSON.stringify({ screen: 'calendar' }));
+    } catch (error) {}
+  }
+
+  function showCalendarScreen() {
+    const calendarButton = document.querySelector('.nav-btn[data-target="calendar"]');
+    calendarButton?.click();
+    const calendarScreen = document.getElementById('screen-calendar');
+    if (calendarScreen && !calendarScreen.classList.contains('active')) {
+      document.querySelectorAll('.screen').forEach((screen) => {
+        const active = screen === calendarScreen;
+        screen.classList.toggle('active', active);
+        screen.hidden = !active;
+        screen.setAttribute('aria-hidden', String(!active));
+      });
+      document.querySelectorAll('.nav-btn').forEach((button) => {
+        button.classList.toggle('active', button.dataset.target === 'calendar');
+      });
+    }
+  }
+
+  function restoreCalendarAfterReload() {
+    let shouldRestore = false;
+    try {
+      shouldRestore = JSON.parse(window.sessionStorage.getItem(RESTORE_KEY) || 'null')?.screen === 'calendar';
+      if (shouldRestore) {
+        window.sessionStorage.removeItem(RESTORE_KEY);
+      }
+    } catch (error) {
+      shouldRestore = false;
+    }
+    if (!shouldRestore) {
+      return;
+    }
+    showCalendarScreen();
+    window.setTimeout(showCalendarScreen, 0);
+    window.setTimeout(showCalendarScreen, 60);
+    window.setTimeout(showCalendarScreen, 220);
+    window.setTimeout(showCalendarScreen, 420);
+  }
+
+  function resetEditContextIfNeeded(action, target) {
+    if (action === 'edit-appointment' || (action || '').includes('edit-appointment')) {
+      editingAppointmentId = target?.dataset?.id || null;
+      window.setTimeout(rememberEditingAppointmentFromForm, 0);
+      return;
+    }
+    if (
+      action === 'new-appointment-for-day'
+      || target?.id === 'appointmentFormToggleBtn'
+      || target?.id === 'appointmentFormCloseBtn'
+      || target?.id === 'cancelAppointmentEditBtn'
+    ) {
+      editingAppointmentId = null;
+    }
+    window.setTimeout(rememberEditingAppointmentFromForm, 0);
+  }
+
+  async function handleSubmit(event) {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement) || form.id !== FORM_ID) {
+      return;
+    }
+    const recurrence = form.elements[FIELD_NAME]?.value || 'once';
+    if (!RECURRENCE_OPTIONS[recurrence]) {
+      return;
+    }
+
+    const state = readState();
+    const existingAppointment = isEditingAppointment() ? currentEditingAppointment(state, form) : null;
+    const existingSeries = existingAppointment ? inferSeries(state, existingAppointment) : null;
+    if (recurrence === 'once' && !existingSeries && !existingAppointment) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    let rows;
+    try {
+      rows = recurrence === 'once'
+        ? [buildAppointmentFromForm(form, existingAppointment)]
+        : buildSeries(form, recurrence, existingAppointment, existingSeries?.seriesId);
+    } catch (error) {
+      toast(error.message, 'danger');
+      return;
+    }
+
+    const replacedAppointments = existingAppointment
+      ? appointmentsFromEditPoint(state, existingAppointment, existingSeries)
+      : [];
+    const replacedSeriesIds = new Set(replacedAppointments.map((appointment) => appointment.id));
+    const existingKeys = new Set(state.appointments
+      .filter((appointment) => !replacedSeriesIds.has(appointment.id))
+      .map(appointmentKey));
+    const additions = rows.filter((row, index) => (
+      index === 0 && existingAppointment?.id ? true : !existingKeys.has(appointmentKey(row))
+    ));
+    if (!additions.length) {
+      toast('Diese Terminserie ist bereits angelegt.', 'warning');
+      return;
+    }
+
+    const deletedIds = replacedAppointments
+      .map((appointment) => appointment.id)
+      .filter((id) => id && !additions.some((row) => row.id === id)) || [];
+    if (deletedIds.length) {
+      markDeletedAppointments(state, deletedIds, false);
+    }
+
+    if (replacedAppointments.length) {
+      state.appointments = state.appointments.filter((appointment) => !replacedSeriesIds.has(appointment.id));
+      state.appointments = [...state.appointments, ...additions];
+    } else if (existingAppointment?.id) {
+      state.appointments = state.appointments.map((appointment) => (
+        appointment.id === existingAppointment.id ? { ...additions[0], synced: false } : appointment
+      ));
+      state.appointments = [...state.appointments, ...additions.slice(1)];
+    } else {
+      state.appointments = [...state.appointments, ...additions];
+    }
+    writeState(state);
+    toast(recurrence === 'once'
+      ? 'Termin als Einzeltermin gespeichert.'
+      : `${additions.length} Termine als ${recurrenceLabel(recurrence)}-Serie angelegt.`,
+    'success');
+
+    try {
+      const deletedRemote = await deleteRemoteAppointments(deletedIds);
+      const deletedRemoteFollowers = await deleteRemoteGeneratedFollowers(existingAppointment, additions[0]?.id);
+      if (deletedRemote && deletedIds.length) {
+        const latestState = readState();
+        markDeletedAppointments(latestState, deletedIds, Boolean(deletedRemoteFollowers));
+        writeState(latestState);
+      }
+      const synced = await syncAppointments(additions);
+      if (synced) {
+        markSynced(additions.map((row) => row.id));
+      }
+    } catch (error) {
+      console.warn('HabitFlow appointment series: sync failed, local changes remain pending.', error);
+    }
+
+    rememberCalendarRestore();
+    window.setTimeout(() => window.location.reload(), 700);
+  }
+
+  function install() {
+    const form = injectField();
+    if (!form) {
+      return;
+    }
+    syncFieldAvailability();
+    restoreCalendarAfterReload();
+    form.addEventListener('submit', handleSubmit, true);
+    document.addEventListener('click', (event) => {
+      const target = event.target instanceof Element ? event.target.closest('button, [data-action]') : null;
+      resetEditContextIfNeeded(target?.dataset?.action, target);
+      window.setTimeout(syncFieldAvailability, 0);
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    restoreCalendarAfterReload();
+    document.addEventListener('DOMContentLoaded', install);
+  } else {
+    install();
+  }
+})(window, document);
