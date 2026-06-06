@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v175-series-follower-delete';
+const CACHE_NAME = 'habitflow-v176-series-follower-delete';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
