@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v177-recurrence-selection-fix';
+const CACHE_NAME = 'habitflow-v178-series-remote-delete';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
