@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v170-stable-craving-coach-actions';
+const CACHE_NAME = 'habitflow-v171-appointment-series';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -28,6 +28,7 @@ const MODULE_ASSETS = [
   './modules/craving-coach-v2-actions-polish.js',
   './modules/gamification.js',
   './modules/monthly-missions.js',
+  './modules/appointment-series.js',
   './modules/projects.js',
   './modules/projects.css',
   './modules/projects-mobile-fix.css'
