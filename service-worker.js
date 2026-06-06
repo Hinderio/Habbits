@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v173-appointment-series-restore';
+const CACHE_NAME = 'habitflow-v174-editable-appointment-series';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
