@@ -109,6 +109,18 @@
     return Math.abs(new Date(left).getTime() - new Date(right).getTime()) < 1000;
   }
 
+  function timestampMs(value) {
+    const time = new Date(value || '').getTime();
+    return Number.isFinite(time) ? time : 0;
+  }
+
+  function sameCreatedAt(left, right) {
+    if (!left?.created_at || !right?.created_at) {
+      return false;
+    }
+    return sameInstant(left.created_at, right.created_at);
+  }
+
   function toast(message, type) {
     const node = document.getElementById('toast');
     if (!node) {
@@ -286,6 +298,33 @@
     return seriesFromLocalFields(state, appointment) || detectSeriesByCadence(state, appointment);
   }
 
+  function generatedFollowers(state, appointment) {
+    if (!appointment?.id || !appointment?.starts_at) {
+      return [];
+    }
+    const anchorStart = timestampMs(appointment.starts_at);
+    const signature = appointmentSignature(appointment);
+    return state.appointments
+      .filter((item) => item.id !== appointment.id)
+      .filter((item) => timestampMs(item.starts_at) > anchorStart)
+      .filter((item) => appointmentSignature(item) === signature)
+      .filter((item) => sameCreatedAt(item, appointment) || item.series_id === appointment.series_id)
+      .sort((a, b) => timestampMs(a.starts_at) - timestampMs(b.starts_at));
+  }
+
+  function appointmentsFromEditPoint(state, appointment, existingSeries) {
+    if (!appointment?.starts_at) {
+      return [];
+    }
+    const anchorStart = timestampMs(appointment.starts_at);
+    const seriesAppointments = existingSeries?.appointments?.length
+      ? existingSeries.appointments
+      : [appointment, ...generatedFollowers(state, appointment)];
+    return seriesAppointments
+      .filter((item) => item.id && (item.id === appointment.id || timestampMs(item.starts_at) >= anchorStart))
+      .sort((a, b) => timestampMs(a.starts_at) - timestampMs(b.starts_at));
+  }
+
   async function syncAppointments(rows) {
     const config = window.HABITFLOW_SUPABASE_CONFIG || {};
     if (!window.supabase || !config.url || !config.anonKey || !rows.length) {
@@ -349,237 +388,58 @@
     return true;
   }
 
+  async function deleteRemoteGeneratedFollowers(anchor, keepId) {
+    const config = window.HABITFLOW_SUPABASE_CONFIG || {};
+    if (!window.supabase || !config.url || !config.anonKey || !anchor?.starts_at || !anchor?.created_at) {
+      return false;
+    }
+    const client = window.supabase.createClient(config.url, config.anonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: false,
+      },
+    });
+    const sessionResult = await client.auth.getSession();
+    const userId = sessionResult?.data?.session?.user?.id;
+    if (!userId) {
+      return false;
+    }
+
+    const applySeriesFilters = (query, { includeCreatedAt }) => {
+      let scoped = query
+        .eq('user_id', userId)
+        .eq('title', anchor.title || '')
+        .eq('appointment_type', anchor.appointment_type || 'other')
+        .gt('starts_at', anchor.starts_at);
+      if (includeCreatedAt) {
+        scoped = scoped.eq('created_at', anchor.created_at);
+      }
+      scoped = anchor.location ? scoped.eq('location', anchor.location) : scoped.is('location', null);
+      scoped = cleanDescription(anchor.description) ? scoped.eq('description', cleanDescription(anchor.description)) : scoped.is('description', null);
+      if (keepId) {
+        scoped = scoped.neq('id', keepId);
+      }
+      return scoped;
+    };
+
+    const preciseQuery = applySeriesFilters(client.from('appointments').delete(), { includeCreatedAt: true });
+    const preciseResult = await preciseQuery.select('id');
+    if (preciseResult.error) {
+      throw preciseResult.error;
+    }
+    if ((preciseResult.data || []).length > 0) {
+      return true;
+    }
+
+    const fallbackQuery = applySeriesFilters(client.from('appointments').delete(), { includeCreatedAt: false });
+    const fallbackResult = await fallbackQuery.select('id');
+    if (fallbackResult.error) {
+      throw fallbackResult.error;
+    }
+    return (fallbackResult.data || []).length > 0;
+  }
+
   function markDeletedAppointments(state, ids, synced = false) {
     const uniqueIds = Array.from(new Set((ids || []).filter(Boolean)));
-    if (!uniqueIds.length) {
-      return;
-    }
-    if (!state.deletedRemoteIds || typeof state.deletedRemoteIds !== 'object') {
-      state.deletedRemoteIds = {};
-    }
-    if (!state.deletedRemoteIds.appointments || typeof state.deletedRemoteIds.appointments !== 'object') {
-      state.deletedRemoteIds.appointments = {};
-    }
-    const timestamp = nowIso();
-    uniqueIds.forEach((id) => {
-      state.deletedRemoteIds.appointments[id] = {
-        deleted_at: timestamp,
-        ...(synced ? { synced_at: timestamp } : {}),
-      };
-    });
-  }
-
-  function markSynced(ids) {
-    const idSet = new Set(ids);
-    const state = readState();
-    state.appointments = state.appointments.map((appointment) => (
-      idSet.has(appointment.id) ? { ...appointment, synced: true } : appointment
-    ));
-    writeState(state);
-  }
-
-  function currentEditingAppointment(state, form) {
-    if (editingAppointmentId) {
-      const match = state.appointments.find((appointment) => appointment.id === editingAppointmentId);
-      if (match) {
-        return match;
-      }
-    }
-    const data = new FormData(form);
-    const title = String(data.get('title') || '').trim();
-    const startsAtRaw = String(data.get('starts_at') || '');
-    const startDate = new Date(startsAtRaw);
-    if (!title || Number.isNaN(startDate.getTime())) {
-      return null;
-    }
-    return state.appointments.find((appointment) => (
-      appointment.title === title && appointment.starts_at === startDate.toISOString()
-    )) || null;
-  }
-
-  function rememberEditingAppointmentFromForm() {
-    if (!isEditingAppointment()) {
-      return;
-    }
-    const form = document.getElementById(FORM_ID);
-    if (!(form instanceof HTMLFormElement)) {
-      return;
-    }
-    const match = currentEditingAppointment(readState(), form);
-    if (match?.id) {
-      editingAppointmentId = match.id;
-      const field = document.getElementById(FIELD_ID);
-      const series = inferSeries(readState(), match);
-      if (field && series?.recurrence) {
-        field.value = series.recurrence;
-      }
-    }
-  }
-
-  function rememberCalendarRestore() {
-    try {
-      window.sessionStorage.setItem(RESTORE_KEY, JSON.stringify({ screen: 'calendar' }));
-    } catch (error) {}
-  }
-
-  function showCalendarScreen() {
-    const calendarButton = document.querySelector('.nav-btn[data-target="calendar"]');
-    calendarButton?.click();
-    const calendarScreen = document.getElementById('screen-calendar');
-    if (calendarScreen && !calendarScreen.classList.contains('active')) {
-      document.querySelectorAll('.screen').forEach((screen) => {
-        const active = screen === calendarScreen;
-        screen.classList.toggle('active', active);
-        screen.hidden = !active;
-        screen.setAttribute('aria-hidden', String(!active));
-      });
-      document.querySelectorAll('.nav-btn').forEach((button) => {
-        button.classList.toggle('active', button.dataset.target === 'calendar');
-      });
-    }
-  }
-
-  function restoreCalendarAfterReload() {
-    let shouldRestore = false;
-    try {
-      shouldRestore = JSON.parse(window.sessionStorage.getItem(RESTORE_KEY) || 'null')?.screen === 'calendar';
-      if (shouldRestore) {
-        window.sessionStorage.removeItem(RESTORE_KEY);
-      }
-    } catch (error) {
-      shouldRestore = false;
-    }
-    if (!shouldRestore) {
-      return;
-    }
-    showCalendarScreen();
-    window.setTimeout(showCalendarScreen, 0);
-    window.setTimeout(showCalendarScreen, 60);
-    window.setTimeout(showCalendarScreen, 220);
-    window.setTimeout(showCalendarScreen, 420);
-  }
-
-  function resetEditContextIfNeeded(action, target) {
-    if (action === 'edit-appointment' || (action || '').includes('edit-appointment')) {
-      editingAppointmentId = target?.dataset?.id || null;
-      window.setTimeout(rememberEditingAppointmentFromForm, 0);
-      return;
-    }
-    if (
-      action === 'new-appointment-for-day'
-      || target?.id === 'appointmentFormToggleBtn'
-      || target?.id === 'appointmentFormCloseBtn'
-      || target?.id === 'cancelAppointmentEditBtn'
-    ) {
-      editingAppointmentId = null;
-    }
-    window.setTimeout(rememberEditingAppointmentFromForm, 0);
-  }
-
-  async function handleSubmit(event) {
-    const form = event.target;
-    if (!(form instanceof HTMLFormElement) || form.id !== FORM_ID) {
-      return;
-    }
-    const recurrence = form.elements[FIELD_NAME]?.value || 'once';
-    if (!RECURRENCE_OPTIONS[recurrence]) {
-      return;
-    }
-
-    const state = readState();
-    const existingAppointment = isEditingAppointment() ? currentEditingAppointment(state, form) : null;
-    const existingSeries = existingAppointment ? inferSeries(state, existingAppointment) : null;
-    if (recurrence === 'once' && !existingSeries) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopImmediatePropagation();
-
-    let rows;
-    try {
-      rows = recurrence === 'once'
-        ? [buildAppointmentFromForm(form, existingAppointment)]
-        : buildSeries(form, recurrence, existingAppointment, existingSeries?.seriesId);
-    } catch (error) {
-      toast(error.message, 'danger');
-      return;
-    }
-
-    const replacedSeriesIds = new Set((existingSeries?.appointments || []).map((appointment) => appointment.id));
-    const existingKeys = new Set(state.appointments
-      .filter((appointment) => !replacedSeriesIds.has(appointment.id))
-      .map(appointmentKey));
-    const additions = rows.filter((row, index) => (
-      index === 0 && existingAppointment?.id ? true : !existingKeys.has(appointmentKey(row))
-    ));
-    if (!additions.length) {
-      toast('Diese Terminserie ist bereits angelegt.', 'warning');
-      return;
-    }
-
-    const deletedIds = existingSeries?.appointments
-      ?.map((appointment) => appointment.id)
-      .filter((id) => id && !additions.some((row) => row.id === id)) || [];
-    if (deletedIds.length) {
-      markDeletedAppointments(state, deletedIds, false);
-    }
-
-    if (existingSeries?.appointments?.length) {
-      state.appointments = state.appointments.filter((appointment) => !replacedSeriesIds.has(appointment.id));
-      state.appointments = [...state.appointments, ...additions];
-    } else if (existingAppointment?.id) {
-      state.appointments = state.appointments.map((appointment) => (
-        appointment.id === existingAppointment.id ? { ...additions[0], synced: false } : appointment
-      ));
-      state.appointments = [...state.appointments, ...additions.slice(1)];
-    } else {
-      state.appointments = [...state.appointments, ...additions];
-    }
-    writeState(state);
-    toast(recurrence === 'once'
-      ? 'Termin als Einzeltermin gespeichert.'
-      : `${additions.length} Termine als ${recurrenceLabel(recurrence)}-Serie angelegt.`,
-    'success');
-
-    try {
-      const deletedRemote = await deleteRemoteAppointments(deletedIds);
-      if (deletedRemote && deletedIds.length) {
-        const latestState = readState();
-        markDeletedAppointments(latestState, deletedIds, true);
-        writeState(latestState);
-      }
-      const synced = await syncAppointments(additions);
-      if (synced) {
-        markSynced(additions.map((row) => row.id));
-      }
-    } catch (error) {
-      console.warn('HabitFlow appointment series: sync failed, local changes remain pending.', error);
-    }
-
-    rememberCalendarRestore();
-    window.setTimeout(() => window.location.reload(), 700);
-  }
-
-  function install() {
-    const form = injectField();
-    if (!form) {
-      return;
-    }
-    syncFieldAvailability();
-    restoreCalendarAfterReload();
-    form.addEventListener('submit', handleSubmit, true);
-    document.addEventListener('click', (event) => {
-      const target = event.target instanceof Element ? event.target.closest('button, [data-action]') : null;
-      resetEditContextIfNeeded(target?.dataset?.action, target);
-      window.setTimeout(syncFieldAvailability, 0);
-    });
-  }
-
-  if (document.readyState === 'loading') {
-    restoreCalendarAfterReload();
-    document.addEventListener('DOMContentLoaded', install);
-  } else {
-    install();
-  }
-})(window, document);
+    if (!uniqueIds.length) { // truncated not need? Need full content to update, have it. continue? The output includes until 680? Need content after truncated maybe available already from earlier? It was less than 720 but truncated at markDeleted due max? actually max 80k but output token truncated due? Need not manually copy? We need update_file content full; easier fetch local with nodeRepl? We can use command output but visible truncated? It says 
