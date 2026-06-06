@@ -388,6 +388,34 @@
     return true;
   }
 
+  function sameTextValue(left, right) {
+    return cleanDescription(left) === cleanDescription(right);
+  }
+
+  function isGeneratedFollower(anchor, candidate) {
+    if (!anchor || !candidate || candidate.id === anchor.id) {
+      return false;
+    }
+    if (timestampMs(candidate.starts_at) <= timestampMs(anchor.starts_at)) {
+      return false;
+    }
+    if (appointmentSignature(candidate) !== appointmentSignature(anchor)) {
+      return false;
+    }
+    if (sameCreatedAt(candidate, anchor)) {
+      return true;
+    }
+    const anchorDate = new Date(anchor.starts_at);
+    return ['weekly', 'monthly', 'quarterly', 'yearly'].some((recurrence) => {
+      for (let index = 1; index < RECURRENCE_OPTIONS[recurrence].count; index += 1) {
+        if (sameInstant(candidate.starts_at, advanceDate(anchorDate, recurrence, index).toISOString())) {
+          return true;
+        }
+      }
+      return false;
+    });
+  }
+
   async function deleteRemoteGeneratedFollowers(anchor, keepId) {
     const config = window.HABITFLOW_SUPABASE_CONFIG || {};
     if (!window.supabase || !config.url || !config.anonKey || !anchor?.starts_at || !anchor?.created_at) {
@@ -406,38 +434,28 @@
       return false;
     }
 
-    const applySeriesFilters = (query, { includeCreatedAt }) => {
-      let scoped = query
-        .eq('user_id', userId)
-        .eq('title', anchor.title || '')
-        .eq('appointment_type', anchor.appointment_type || 'other')
-        .gt('starts_at', anchor.starts_at);
-      if (includeCreatedAt) {
-        scoped = scoped.eq('created_at', anchor.created_at);
-      }
-      scoped = anchor.location ? scoped.eq('location', anchor.location) : scoped.is('location', null);
-      scoped = cleanDescription(anchor.description) ? scoped.eq('description', cleanDescription(anchor.description)) : scoped.is('description', null);
-      if (keepId) {
-        scoped = scoped.neq('id', keepId);
-      }
-      return scoped;
-    };
-
-    const preciseQuery = applySeriesFilters(client.from('appointments').delete(), { includeCreatedAt: true });
-    const preciseResult = await preciseQuery.select('id');
-    if (preciseResult.error) {
-      throw preciseResult.error;
-    }
-    if ((preciseResult.data || []).length > 0) {
-      return true;
+    const { data, error } = await client.from('appointments')
+      .select('id,title,description,location,appointment_type,starts_at,ends_at,created_at,updated_at')
+      .eq('user_id', userId)
+      .eq('title', anchor.title || '')
+      .eq('appointment_type', anchor.appointment_type || 'other')
+      .gt('starts_at', anchor.starts_at)
+      .order('starts_at', { ascending: true });
+    if (error) {
+      throw error;
     }
 
-    const fallbackQuery = applySeriesFilters(client.from('appointments').delete(), { includeCreatedAt: false });
-    const fallbackResult = await fallbackQuery.select('id');
-    if (fallbackResult.error) {
-      throw fallbackResult.error;
+    const ids = (data || [])
+      .filter((candidate) => candidate.id !== keepId)
+      .filter((candidate) => sameTextValue(candidate.location, anchor.location))
+      .filter((candidate) => sameTextValue(candidate.description, anchor.description))
+      .filter((candidate) => isGeneratedFollower(anchor, candidate))
+      .map((candidate) => candidate.id)
+      .filter(Boolean);
+    if (!ids.length) {
+      return false;
     }
-    return (fallbackResult.data || []).length > 0;
+    return deleteRemoteAppointments(ids);
   }
 
   function markDeletedAppointments(state, ids, synced = false) {
