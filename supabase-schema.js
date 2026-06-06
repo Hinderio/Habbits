@@ -7,9 +7,10 @@
     if (!window.fetch) return;
     Promise.all([
       fetch('./supabase.sql', { cache: 'no-store' }).then(response => response.ok ? response.text() : ''),
-      fetch('./sql/add-projects.sql', { cache: 'no-store' }).then(response => response.ok ? response.text() : '')
+      fetch('./sql/add-projects.sql', { cache: 'no-store' }).then(response => response.ok ? response.text() : ''),
+      fetch('./sql/add-appointment-series.sql', { cache: 'no-store' }).then(response => response.ok ? response.text() : '')
     ]).then(parts => {
-      const sql = parts.filter(Boolean).join('\n\n-- Project Tab extension\n\n');
+      const sql = parts.filter(Boolean).join('\n\n-- HabitFlow extension --\n\n');
       if (sql.trim()) window.HABITFLOW_SUPABASE_SQL = sql;
       const preview = document.getElementById('sqlPreview');
       if (preview) preview.textContent = window.HABITFLOW_SUPABASE_SQL;
