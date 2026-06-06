@@ -457,7 +457,7 @@
     }
 
     const { data, error } = await client.from('appointments')
-      .select('id,title,description,location,appointment_type,starts_at,ends_at,created_at,updated_at,recurrence,series_id,series_index')
+      .select('id,title,description,location,appointment_type,starts_at,ends_at,created_at,updated_at')
       .eq('user_id', userId)
       .eq('title', anchor.title || '')
       .eq('appointment_type', anchor.appointment_type || 'other')
