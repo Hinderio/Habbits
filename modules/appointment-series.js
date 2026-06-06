@@ -214,6 +214,9 @@
       ends_at: endDate ? endDate.toISOString() : null,
       created_at: existingAppointment?.created_at || timestamp,
       updated_at: timestamp,
+      recurrence: null,
+      series_id: null,
+      series_index: null,
       synced: false,
     };
   }
@@ -355,6 +358,9 @@
       ends_at: row.ends_at || null,
       created_at: row.created_at,
       updated_at: row.updated_at,
+      recurrence: row.recurrence || null,
+      series_id: row.series_id || null,
+      series_index: Number.isInteger(row.series_index) ? row.series_index : null,
     }));
     const { error } = await client.from('appointments').upsert(payload, { onConflict: 'id' });
     if (error) {
@@ -434,8 +440,24 @@
       return false;
     }
 
+    if (anchor.series_id) {
+      let query = client.from('appointments')
+        .delete()
+        .eq('user_id', userId)
+        .eq('series_id', anchor.series_id)
+        .gt('starts_at', anchor.starts_at);
+      if (keepId) {
+        query = query.neq('id', keepId);
+      }
+      const { error: seriesDeleteError } = await query;
+      if (seriesDeleteError) {
+        throw seriesDeleteError;
+      }
+      return true;
+    }
+
     const { data, error } = await client.from('appointments')
-      .select('id,title,description,location,appointment_type,starts_at,ends_at,created_at,updated_at')
+      .select('id,title,description,location,appointment_type,starts_at,ends_at,created_at,updated_at,recurrence,series_id,series_index')
       .eq('user_id', userId)
       .eq('title', anchor.title || '')
       .eq('appointment_type', anchor.appointment_type || 'other')
