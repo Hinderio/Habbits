@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v189-line-calendar-orange-markers';
+const CACHE_NAME = 'habitflow-v190-startup-reload-guard';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
