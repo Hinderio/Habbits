@@ -6,6 +6,7 @@
   const CLEANUP_MARKER_KEY = 'habitflow-remote-cache-reconcile-v1';
   const RELOAD_MARKER_KEY = 'habitflow-remote-cache-reconcile-reloaded-v1';
   const APPOINTMENT_RELOAD_MARKER_KEY = 'habitflow-appointments-remote-reconcile-reload';
+  const APPOINTMENT_SAVE_LOCK_KEY = 'habitflow-appointment-series-save-lock';
   const RECENT_LOCAL_GRACE_MS = 10 * 60 * 1000;
   const HISTORY_LOOKBACK_DAYS = 180;
   const RELOAD_DELAY_MS = 1200;
@@ -155,12 +156,25 @@
     }
   }
 
+  function isAppointmentSaveLocked() {
+    try {
+      const expiresAt = Number(window.sessionStorage?.getItem(APPOINTMENT_SAVE_LOCK_KEY) || 0);
+      if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+        window.sessionStorage?.removeItem(APPOINTMENT_SAVE_LOCK_KEY);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
   function requestReconcileReload() {
     const alreadyReloaded = window.sessionStorage?.getItem(RELOAD_MARKER_KEY) === '1';
-    if (alreadyReloaded || hasAppointmentReloadScheduled()) return;
+    if (alreadyReloaded || hasAppointmentReloadScheduled() || isAppointmentSaveLocked()) return;
     window.sessionStorage?.setItem(RELOAD_MARKER_KEY, '1');
     window.setTimeout(() => {
-      if (!hasAppointmentReloadScheduled()) {
+      if (!hasAppointmentReloadScheduled() && !isAppointmentSaveLocked()) {
         window.location.reload();
       }
     }, RELOAD_DELAY_MS);
@@ -168,6 +182,7 @@
 
   async function reconcile() {
     if (!shouldRun()) return { skipped: 'already-checked-today' };
+    if (isAppointmentSaveLocked()) return { skipped: 'appointment-save-active' };
     const state = readJson(STORAGE_KEY, null);
     if (!state || !safeArray(state.habitEntries).length) return { skipped: 'no-local-state' };
 
