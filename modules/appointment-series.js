@@ -562,7 +562,19 @@
     });
   }
 
-  async function deleteRemoteGeneratedFollowers(anchor, keepId, existingSeries = null) {
+  function normalizeKeepIds(value) {
+    if (Array.isArray(value)) {
+      return new Set(value.filter(Boolean));
+    }
+    return new Set(value ? [value] : []);
+  }
+
+  function supabaseInList(values) {
+    return `(${Array.from(values).join(',')})`;
+  }
+
+  async function deleteRemoteGeneratedFollowers(anchor, keepIdsValue, existingSeries = null) {
+    const keepIds = normalizeKeepIds(keepIdsValue);
     const config = window.HABITFLOW_SUPABASE_CONFIG || {};
     if (!window.supabase || !config.url || !config.anonKey || !anchor?.starts_at || !anchor?.created_at) {
       return false;
@@ -586,8 +598,8 @@
         .eq('user_id', userId)
         .eq('series_id', anchor.series_id)
         .gt('starts_at', anchor.starts_at);
-      if (keepId) {
-        query = query.neq('id', keepId);
+      if (keepIds.size) {
+        query = query.not('id', 'in', supabaseInList(keepIds));
       }
       const { error: seriesDeleteError } = await query;
       if (seriesDeleteError) {
@@ -598,7 +610,7 @@
 
     if (existingSeries?.appointments?.length) {
       const ids = existingSeries.appointments
-        .filter((appointment) => appointment.id && appointment.id !== keepId)
+        .filter((appointment) => appointment.id && !keepIds.has(appointment.id))
         .filter((appointment) => timestampMs(appointment.starts_at) > timestampMs(anchor.starts_at))
         .map((appointment) => appointment.id);
       if (ids.length) {
@@ -618,7 +630,7 @@
     }
 
     const ids = (data || [])
-      .filter((candidate) => candidate.id !== keepId)
+      .filter((candidate) => !keepIds.has(candidate.id))
       .filter((candidate) => sameTextValue(candidate.location, anchor.location))
       .filter((candidate) => sameTextValue(candidate.description, anchor.description))
       .filter((candidate) => isGeneratedFollower(anchor, candidate))
@@ -771,6 +783,7 @@
     }
 
     const state = readState();
+    const originalAppointments = [...state.appointments];
     const existingAppointment = isEditingAppointment() ? currentEditingAppointment(state, form) : null;
     const existingSeries = existingAppointment ? inferSeries(state, existingAppointment) : null;
     if (recurrence === 'once' && !existingSeries && !existingAppointment) {
@@ -830,23 +843,30 @@
     'success');
 
     try {
+      const synced = await syncAppointments(additions);
+      if (!synced) {
+        throw new Error('Termin konnte nicht mit Supabase synchronisiert werden.');
+      }
+      const keepIds = additions.map((row) => row.id);
       const deletedRemote = await deleteRemoteAppointments(deletedIds);
-      const deletedRemoteFollowers = await deleteRemoteGeneratedFollowers(existingAppointment, additions[0]?.id, existingSeries);
+      const deletedRemoteFollowers = await deleteRemoteGeneratedFollowers(existingAppointment, keepIds, existingSeries);
       if (deletedRemote && deletedIds.length) {
         const latestState = readState();
         markDeletedAppointments(latestState, deletedIds, Boolean(deletedRemoteFollowers));
         writeState(latestState);
       }
-      const synced = await syncAppointments(additions);
-      if (synced) {
-        markSynced(additions.map((row) => row.id));
-      }
+      await syncAppointments(additions);
+      markSynced(keepIds);
     } catch (error) {
       console.warn('HabitFlow appointment series: sync failed, local changes remain pending.', error);
+      state.appointments = originalAppointments;
+      writeState(state);
+      toast('Termin konnte nicht vollständig mit der DB synchronisiert werden. Bitte nochmals speichern.', 'danger');
+      return;
     }
 
     rememberCalendarRestore();
-    window.setTimeout(() => window.location.reload(), 700);
+    window.setTimeout(() => window.location.reload(), 250);
   }
 
   function install() {
