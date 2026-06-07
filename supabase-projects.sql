@@ -38,6 +38,7 @@ create table if not exists public.project_milestones (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   project_id uuid not null references public.projects(id) on delete cascade,
+  phase_id uuid references public.project_phases(id) on delete set null,
   title text not null,
   milestone_date date not null,
   is_archived boolean not null default false,
@@ -81,6 +82,7 @@ alter table public.project_phases add constraint project_phases_dates_check chec
 alter table public.project_milestones add column if not exists user_id uuid references auth.users(id) on delete cascade;
 alter table public.project_milestones alter column user_id set default auth.uid();
 alter table public.project_milestones add column if not exists project_id uuid references public.projects(id) on delete cascade;
+alter table public.project_milestones add column if not exists phase_id uuid references public.project_phases(id) on delete set null;
 alter table public.project_milestones add column if not exists title text;
 alter table public.project_milestones add column if not exists milestone_date date;
 alter table public.project_milestones add column if not exists is_archived boolean not null default false;
@@ -92,6 +94,7 @@ alter table public.tasks add column if not exists project_id uuid references pub
 create index if not exists idx_projects_user_updated on public.projects(user_id, updated_at desc);
 create index if not exists idx_project_phases_user_project on public.project_phases(user_id, project_id, start_date);
 create index if not exists idx_project_milestones_user_project on public.project_milestones(user_id, project_id, milestone_date);
+create index if not exists idx_project_milestones_user_phase on public.project_milestones(user_id, phase_id, milestone_date);
 create index if not exists idx_tasks_user_project on public.tasks(user_id, project_id);
 
 drop trigger if exists set_projects_updated_at on public.projects;
