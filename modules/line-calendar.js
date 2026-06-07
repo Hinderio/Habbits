@@ -39,6 +39,65 @@
     }
   }
 
+  function writeState(state) {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state || {}));
+    } catch (error) {}
+  }
+
+  function toIso(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? String(value) : date.toISOString();
+  }
+
+  function mapRemoteAppointment(row) {
+    return {
+      id: row.id,
+      title: row.title || '',
+      description: row.description || '',
+      location: row.location || '',
+      appointment_type: row.appointment_type || 'other',
+      starts_at: toIso(row.starts_at),
+      ends_at: toIso(row.ends_at),
+      recurrence: row.recurrence || 'once',
+      series_id: row.series_id || '',
+      series_index: Number.isInteger(row.series_index) ? row.series_index : null,
+      created_at: toIso(row.created_at),
+      updated_at: toIso(row.updated_at),
+      synced: true
+    };
+  }
+
+  async function refreshRemoteAppointments() {
+    const config = window.HABITFLOW_SUPABASE_CONFIG || {};
+    if (!window.supabase || !config.url || !config.anonKey) return false;
+    const client = window.supabase.createClient(config.url, config.anonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: false,
+      },
+    });
+    const sessionResult = await client.auth.getSession();
+    const userId = sessionResult?.data?.session?.user?.id;
+    if (!userId) return false;
+
+    const { data, error } = await client.from('appointments')
+      .select('*')
+      .eq('user_id', userId)
+      .order('starts_at', { ascending: true });
+    if (error) throw error;
+
+    const state = readState();
+    state.appointments = (data || []).map(mapRemoteAppointment);
+    if (state.deletedRemoteIds?.appointments) {
+      state.deletedRemoteIds.appointments = {};
+    }
+    writeState(state);
+    return true;
+  }
+
   function toDate(value) {
     const date = value instanceof Date ? new Date(value) : new Date(value || 0);
     return Number.isNaN(date.getTime()) ? null : date;
@@ -135,15 +194,17 @@
     </section>`;
   }
 
-  function renderModalBody() {
+  function renderModalBody(options = {}) {
     const today = new Date();
     const appointments = futureAppointments();
     const segments = buildSegments(today);
     const next = appointments[0] || null;
     const last = appointments[appointments.length - 1] || null;
-    const body = appointments.length
-      ? segments.map(segment => renderSegment(segment, appointments)).join('')
-      : '<div class="line-calendar-empty">In den kommenden 12 Monaten sind noch keine Termine eingetragen. Sobald du Termine im bestehenden Kalender speicherst, erscheinen sie automatisch auf dieser Linie.</div>';
+    const body = options.isLoading
+      ? '<div class="line-calendar-empty">Termine werden aktualisiert…</div>'
+      : appointments.length
+        ? segments.map(segment => renderSegment(segment, appointments)).join('')
+        : '<div class="line-calendar-empty">In den kommenden 12 Monaten sind noch keine Termine eingetragen. Sobald du Termine im bestehenden Kalender speicherst, erscheinen sie automatisch auf dieser Linie.</div>';
 
     return `<section class="line-calendar-card" role="document">
       <div class="line-calendar-head">
@@ -156,15 +217,15 @@
       </div>
       <div class="line-calendar-summary" aria-label="Linienkalender Zusammenfassung">
         <article><small>Fenster</small><strong>${escapeHtml(formatDate(today, { day: '2-digit', month: 'long', year: 'numeric' }))}</strong></article>
-        <article><small>Termine</small><strong>${appointments.length}</strong></article>
-        <article><small>Nächster Termin</small><strong>${next ? escapeHtml(formatDate(next._date, { day: '2-digit', month: 'short' })) : '-'}</strong></article>
+        <article><small>Termine</small><strong>${options.isLoading ? '…' : appointments.length}</strong></article>
+        <article><small>Nächster Termin</small><strong>${!options.isLoading && next ? escapeHtml(formatDate(next._date, { day: '2-digit', month: 'short' })) : '-'}</strong></article>
       </div>
       <div class="line-calendar-track-list">${body}</div>
-      ${last ? `<p class="meta">Letzter sichtbarer Termin: ${escapeHtml(last.title || 'Termin')} am ${escapeHtml(formatDate(last._date, { day: '2-digit', month: 'long', year: 'numeric' }))}.</p>` : ''}
+      ${!options.isLoading && last ? `<p class="meta">Letzter sichtbarer Termin: ${escapeHtml(last.title || 'Termin')} am ${escapeHtml(formatDate(last._date, { day: '2-digit', month: 'long', year: 'numeric' }))}.</p>` : ''}
     </section>`;
   }
 
-  function openModal() {
+  async function openModal() {
     if (!modal) {
       modal = document.createElement('div');
       modal.id = 'lineCalendarModal';
@@ -174,10 +235,18 @@
       modal.setAttribute('aria-label', 'Linienkalender');
       document.body.appendChild(modal);
     }
-    modal.innerHTML = renderModalBody();
+    modal.innerHTML = renderModalBody({ isLoading: true });
     modal.classList.remove('hidden');
     document.body.classList.add('modal-open');
     requestAnimationFrame(() => modal.querySelector('[data-line-calendar-close]')?.focus({ preventScroll: true }));
+    try {
+      await refreshRemoteAppointments();
+    } catch (error) {
+      console.warn('[HabitFlow/line-calendar] Termine konnten nicht aus Supabase aktualisiert werden.', error);
+    }
+    if (modal && !modal.classList.contains('hidden')) {
+      modal.innerHTML = renderModalBody();
+    }
   }
 
   function closeModal() {
