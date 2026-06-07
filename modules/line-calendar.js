@@ -64,6 +64,7 @@
       recurrence: row.recurrence || 'once',
       series_id: row.series_id || '',
       series_index: Number.isInteger(row.series_index) ? row.series_index : null,
+      is_birthday: Boolean(row.is_birthday),
       created_at: toIso(row.created_at),
       updated_at: toIso(row.updated_at),
       synced: true
@@ -169,9 +170,11 @@
     const type = APPOINTMENT_TYPES[typeKey];
     const title = appointment.title || type.label || 'Termin';
     const displayTitle = shortTitle(title);
-    const meta = `${formatDate(appointment._date, { day: '2-digit', month: 'short' })} · ${formatTime(appointment._date)}`;
+    const birthday = Boolean(appointment.is_birthday);
+    const meta = `${birthday ? 'Geburtstag · ' : ''}${formatDate(appointment._date, { day: '2-digit', month: 'short' })} · ${formatTime(appointment._date)}`;
     const placement = index % 2 === 0 ? 'is-top' : 'is-bottom';
-    return `<span class="line-calendar-event ${placement}" style="--event-left:${left.toFixed(2)}%;--event-color:${type.color}" title="${escapeHtml(`${title} · ${meta}`)}">
+    const birthdayClass = birthday ? ' is-birthday' : '';
+    return `<span class="line-calendar-event ${placement}${birthdayClass}" style="--event-left:${left.toFixed(2)}%;--event-color:${type.color}" title="${escapeHtml(`${title} · ${meta}`)}">
       <span class="line-calendar-label"><strong>${escapeHtml(displayTitle)}</strong><small>${escapeHtml(meta)}</small></span>
     </span>`;
   }
