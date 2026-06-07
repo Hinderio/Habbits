@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v184-line-calendar';
+const CACHE_NAME = 'habitflow-v185-line-calendar-tweaks';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
