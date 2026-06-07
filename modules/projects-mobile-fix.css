@@ -43,6 +43,99 @@ body .project-chip-mark-only{
   text-transform:uppercase;
   box-shadow:none;
 }
+body .milestone-form{
+  display:grid;
+  grid-template-columns:minmax(180px,1fr) 170px auto;
+  gap:10px;
+  align-items:end;
+  margin:10px 0 12px;
+}
+body .milestone-form label{
+  display:flex;
+  flex-direction:column;
+  gap:7px;
+}
+body .milestone-form label span{
+  color:var(--muted);
+  font-size:.78rem;
+  font-weight:900;
+}
+body .milestone-list{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin:0 0 12px;
+}
+body .milestone-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  max-width:100%;
+  padding:7px 8px 7px 7px;
+  border-radius:999px;
+  background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.08);
+}
+body .milestone-chip strong{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:34px;
+  height:34px;
+  padding:0 8px;
+  border-radius:999px;
+  background:rgba(74,215,209,.2);
+  color:var(--primary);
+  font-size:.76rem;
+  font-weight:900;
+}
+body .milestone-chip span{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  max-width:180px;
+  font-weight:800;
+}
+body .milestone-chip small{
+  color:var(--muted);
+  font-weight:800;
+  white-space:nowrap;
+}
+body .phase-timeline-with-milestones .phase-timeline-track{
+  position:relative;
+  overflow:visible;
+  margin-bottom:18px;
+}
+body .phase-milestone-marker{
+  position:absolute;
+  top:-5px;
+  bottom:-17px;
+  width:1px;
+  transform:translateX(-50%);
+  pointer-events:auto;
+}
+body .phase-milestone-marker i{
+  display:block;
+  width:1px;
+  height:25px;
+  border-radius:999px;
+  background:rgba(74,215,209,.68);
+  box-shadow:0 0 0 1px rgba(74,215,209,.08);
+}
+body .phase-milestone-marker b{
+  position:absolute;
+  top:27px;
+  left:50%;
+  transform:translateX(-50%);
+  max-width:44px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:var(--muted);
+  font-size:.64rem;
+  font-weight:900;
+  letter-spacing:.08em;
+}
 
 @media (max-width: 760px) {
   body .project-form-grid input[type="color"]{
@@ -53,6 +146,16 @@ body .project-chip-mark-only{
   body .project-form-grid input[type="color"]::-webkit-color-swatch,
   body .project-form-grid input[type="color"]::-moz-color-swatch{
     border-radius:20px;
+  }
+  body .milestone-form{
+    grid-template-columns:1fr;
+  }
+  body .milestone-chip{
+    width:100%;
+  }
+  body .milestone-chip span{
+    max-width:none;
+    flex:1;
   }
 
   .project-detail-modal:not(.hidden) {
@@ -119,6 +222,7 @@ body .project-chip-mark-only{
   .project-detail-modal:not(.hidden) .project-detail-grid,
   .project-detail-modal:not(.hidden) .project-section-head,
   .project-detail-modal:not(.hidden) .phase-form,
+  .project-detail-modal:not(.hidden) .milestone-form,
   .project-detail-modal:not(.hidden) .phase-card,
   .project-detail-modal:not(.hidden) .project-task-tools,
   .project-detail-modal:not(.hidden) .project-task-row,
