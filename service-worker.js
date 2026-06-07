@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v192-appointment-save-lock';
+const CACHE_NAME = 'habitflow-v193-consolidated-appointments';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -28,7 +28,7 @@ const MODULE_ASSETS = [
   './modules/craving-coach-v2-actions-polish.js',
   './modules/gamification.js',
   './modules/monthly-missions.js',
-  './modules/appointment-series.js',
+  './modules/appointments-domain.js',
   './modules/line-calendar.js',
   './modules/line-calendar.css',
   './modules/projects-milestone-edit.js',
