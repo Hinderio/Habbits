@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v191-hardened-appointment-save-sync';
+const CACHE_NAME = 'habitflow-v192-appointment-save-lock';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
