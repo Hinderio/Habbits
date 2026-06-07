@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v180-project-milestone-edit';
+const CACHE_NAME = 'habitflow-v181-project-milestone-inline-edit';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -29,8 +29,8 @@ const MODULE_ASSETS = [
   './modules/gamification.js',
   './modules/monthly-missions.js',
   './modules/appointment-series.js',
-  './modules/projects.js',
   './modules/projects-milestone-edit.js',
+  './modules/projects.js',
   './modules/projects.css',
   './modules/projects-mobile-fix.css'
 ];
@@ -43,7 +43,10 @@ async function withProjectMilestoneEditScript(response) {
   if (!type.includes('text/html')) return response;
   let html = await response.text();
   if (!html.includes('modules/projects-milestone-edit.js')) {
-    html = html.replace('</body>', '  <script src="modules/projects-milestone-edit.js"></script>\n</body>');
+    html = html.replace('<script src="app.js"></script>', '<script src="modules/projects-milestone-edit.js"></script>\n  <script src="app.js"></script>');
+    if (!html.includes('modules/projects-milestone-edit.js')) {
+      html = html.replace('</body>', '  <script src="modules/projects-milestone-edit.js"></script>\n</body>');
+    }
   }
   const headers = new Headers(response.headers);
   headers.delete('content-length');
@@ -77,7 +80,7 @@ self.addEventListener('fetch', event => {
           return clientResponse;
         })
         .catch(() => caches.match(event.request).then(async cached => {
-          if (!cached) return caches.match('./index.html');
+          if (!cached) return caches.match('./index.html').then(fallback => fallback && shouldInjectProjectPatch ? withProjectMilestoneEditScript(fallback.clone()) : fallback);
           return shouldInjectProjectPatch ? withProjectMilestoneEditScript(cached.clone()) : cached;
         }))
     );
