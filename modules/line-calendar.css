@@ -1,9 +1,11 @@
 .line-calendar-btn {
-  width: 76px;
-  height: 76px;
-  flex: 0 0 76px;
+  width: 64px;
+  height: 64px;
+  flex: 0 0 64px;
   margin-left: auto;
   margin-right: 10px;
+  padding: 0;
+  aspect-ratio: 1 / 1;
   border-radius: 50%;
   border: 1px solid rgba(74, 215, 209, .22);
   background: rgba(74, 215, 209, .12);
@@ -211,7 +213,7 @@
   position: absolute;
   left: 50%;
   width: max-content;
-  max-width: 180px;
+  max-width: 128px;
   transform: translateX(-50%);
   text-align: center;
   line-height: 1.2;
@@ -267,9 +269,9 @@ body.light .line-calendar-event {
 
 @media (max-width: 760px) {
   .line-calendar-btn {
-    width: 68px;
-    height: 68px;
-    flex-basis: 68px;
+    width: 58px;
+    height: 58px;
+    flex-basis: 58px;
     margin-right: 8px;
   }
 
@@ -310,6 +312,6 @@ body.light .line-calendar-event {
   }
 
   .line-calendar-label {
-    max-width: 148px;
+    max-width: 112px;
   }
 }
