@@ -7,7 +7,10 @@
   const FIELD_NAME = 'recurrence';
   const RESTORE_KEY = 'habitflow-appointment-series-restore';
   const REMOTE_RECONCILE_RELOAD_KEY = 'habitflow-appointments-remote-reconcile-reload';
+  const REMOTE_RECONCILE_MAX_ATTEMPTS = 24;
+  const REMOTE_RECONCILE_RETRY_MS = 500;
   let editingAppointmentId = null;
+  let remoteReconcileAttempts = 0;
   const RECURRENCE_OPTIONS = Object.freeze({
     once: { label: 'Einmalig', count: 1 },
     weekly: { label: 'Wöchentlich', count: 104 },
@@ -448,7 +451,7 @@
   async function reconcileAppointmentsFromRemote() {
     const config = window.HABITFLOW_SUPABASE_CONFIG || {};
     if (!window.supabase || !config.url || !config.anonKey) {
-      return false;
+      return null;
     }
     const client = window.supabase.createClient(config.url, config.anonKey, {
       auth: {
@@ -460,7 +463,7 @@
     const sessionResult = await client.auth.getSession();
     const userId = sessionResult?.data?.session?.user?.id;
     if (!userId) {
-      return false;
+      return null;
     }
 
     const remoteAppointments = await fetchRemoteAppointments(client, userId);
@@ -484,11 +487,26 @@
       const reloadKey = `${signatureHash(localSignature)}:${signatureHash(remoteSignature)}`;
       if (window.sessionStorage.getItem(REMOTE_RECONCILE_RELOAD_KEY) !== reloadKey) {
         window.sessionStorage.setItem(REMOTE_RECONCILE_RELOAD_KEY, reloadKey);
-        rememberCalendarRestore();
         window.setTimeout(() => window.location.reload(), 150);
       }
     } catch (error) {}
     return true;
+  }
+
+  function scheduleRemoteReconcile(delay = 0) {
+    window.setTimeout(() => {
+      remoteReconcileAttempts += 1;
+      reconcileAppointmentsFromRemote().then((result) => {
+        if (result === null && remoteReconcileAttempts < REMOTE_RECONCILE_MAX_ATTEMPTS) {
+          scheduleRemoteReconcile(REMOTE_RECONCILE_RETRY_MS);
+        }
+      }).catch((error) => {
+        console.warn('HabitFlow appointment series: remote appointment reconciliation failed.', error);
+        if (remoteReconcileAttempts < REMOTE_RECONCILE_MAX_ATTEMPTS) {
+          scheduleRemoteReconcile(REMOTE_RECONCILE_RETRY_MS);
+        }
+      });
+    }, delay);
   }
 
   async function deleteRemoteAppointments(ids) {
@@ -833,9 +851,7 @@
 
   function install() {
     restoreCalendarAfterReload();
-    reconcileAppointmentsFromRemote().catch((error) => {
-      console.warn('HabitFlow appointment series: remote appointment reconciliation failed.', error);
-    });
+    scheduleRemoteReconcile();
 
     const form = injectField();
     if (!form) {
