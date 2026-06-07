@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v198-line-calendar-remote-authority';
+const CACHE_NAME = 'habitflow-v199-line-calendar-birthday-date';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
