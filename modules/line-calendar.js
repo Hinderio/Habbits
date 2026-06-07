@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const MONTHS_AHEAD = 12;
-  const MONTHS_PER_SEGMENT = 2;
+  const MONTHS_PER_SEGMENT = 1;
   const APPOINTMENT_TYPES = {
     personal: { label: 'Privat', color: '#4ad7d1' },
     work: { label: 'Arbeit', color: '#66e7ff' },
@@ -143,7 +143,7 @@
         <div>
           <p class="eyebrow">Linienkalender</p>
           <h2>12 Monate voraus</h2>
-          <p>Sechs ruhige Linien, jeweils zwei Monate ab heute. Deine bestehenden Kalendertermine werden automatisch als Meilensteine angezeigt.</p>
+          <p>Zwoelf ruhige Linien, jeweils ein Monat ab heute. Deine bestehenden Kalendertermine werden automatisch als Meilensteine angezeigt.</p>
         </div>
         <button class="icon-btn line-calendar-close" type="button" data-line-calendar-close aria-label="Linienkalender schliessen">x</button>
       </div>
