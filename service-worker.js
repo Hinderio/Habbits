@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v197-appointment-series-delete-polish';
+const CACHE_NAME = 'habitflow-v198-line-calendar-remote-authority';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
