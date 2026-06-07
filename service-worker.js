@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v196-native-appointment-domain';
+const CACHE_NAME = 'habitflow-v197-appointment-series-delete-polish';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',

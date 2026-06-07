@@ -11869,13 +11869,22 @@ async function deleteAlcoholLog(id) {
   async function deleteAppointment(id) {
     const appointment = state.appointments.find(item => item.id === id);
     if (!appointment) return;
-    if (!confirm(`Termin „${appointment.title}“ wirklich löschen?`)) return;
-    state.appointments = state.appointments.filter(item => item.id !== id);
-    markRemoteDeleted('appointments', id);
-    if (editingAppointmentId === id) resetAppointmentFormMode({ clearForm: true });
+    const seriesRows = appointment.series_id
+      ? state.appointments.filter(item => item.series_id === appointment.series_id)
+      : [appointment];
+    const deleteIds = seriesRows.map(item => item.id).filter(Boolean);
+    const isSeriesDelete = deleteIds.length > 1;
+    const message = isSeriesDelete
+      ? `Terminserie „${appointment.title}“ wirklich vollständig löschen?`
+      : `Termin „${appointment.title}“ wirklich löschen?`;
+    if (!confirm(message)) return;
+    const deleteIdSet = new Set(deleteIds);
+    state.appointments = state.appointments.filter(item => !deleteIdSet.has(item.id));
+    markRemoteDeletedMany('appointments', deleteIds);
+    if (deleteIdSet.has(editingAppointmentId)) resetAppointmentFormMode({ clearForm: true });
     saveState();
-    await deleteRemoteById('appointments', id);
-    toast('Termin gelöscht');
+    await deleteRemoteByIds('appointments', deleteIds);
+    toast(isSeriesDelete ? 'Terminserie gelöscht' : 'Termin gelöscht');
     syncWithSupabase({ silent: true, pullFirst: false });
   }
 
