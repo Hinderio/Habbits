@@ -32,12 +32,24 @@
     document.write(`<script src="${src}"><\/script>`);
   }
 
-  function ensureAppointmentRecurrenceField() {
+  function ensureAppointmentFields() {
     const form = document.getElementById('appointmentForm');
-    if (!form || document.getElementById('appointmentRecurrenceSelect')) return;
-    const field = document.createElement('label');
-    field.innerHTML = '<span>Zyklus</span><select id="appointmentRecurrenceSelect" name="recurrence"><option value="once" selected>Einmalig</option><option value="weekly">Wöchentlich</option><option value="monthly">Monatlich</option><option value="quarterly">Quartal</option><option value="yearly">Jährlich</option></select>';
-    form.elements.location?.closest('label')?.insertAdjacentElement('afterend', field);
+    if (!form) return;
+
+    if (!document.getElementById('appointmentRecurrenceSelect')) {
+      const field = document.createElement('label');
+      field.innerHTML = '<span>Zyklus</span><select id="appointmentRecurrenceSelect" name="recurrence"><option value="once" selected>Einmalig</option><option value="weekly">Wöchentlich</option><option value="monthly">Monatlich</option><option value="quarterly">Quartal</option><option value="yearly">Jährlich</option></select>';
+      form.elements.location?.closest('label')?.insertAdjacentElement('afterend', field);
+    }
+
+    if (!document.getElementById('appointmentBirthdayCheckbox')) {
+      const field = document.createElement('label');
+      field.innerHTML = '<span>Geburtstag</span><span class="appointment-checkbox-row"><input id="appointmentBirthdayCheckbox" name="is_birthday" type="checkbox" value="1"><strong>Als Geburtstag markieren</strong></span>';
+      const recurrenceLabel = document.getElementById('appointmentRecurrenceSelect')?.closest('label');
+      const descriptionLabel = form.elements.description?.closest('label');
+      if (recurrenceLabel) recurrenceLabel.insertAdjacentElement('afterend', field);
+      else if (descriptionLabel) descriptionLabel.insertAdjacentElement('beforebegin', field);
+    }
   }
 
   function loadProjectAssets() {
@@ -50,6 +62,7 @@
   }
 
   loadSqlPreview();
-  document.addEventListener('DOMContentLoaded', ensureAppointmentRecurrenceField, { once: true });
+  document.addEventListener('DOMContentLoaded', ensureAppointmentFields, { once: true });
+  writeScript('modules/appointment-recurrence-controller.js?v=1');
   loadProjectAssets();
 })(window, document);
