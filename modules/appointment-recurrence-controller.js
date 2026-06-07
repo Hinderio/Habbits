@@ -1,17 +1,20 @@
-(function loadSafeAppointmentFieldEnhancer(window, document) {
+(function loadSafeAppointmentRecurrenceBridge(window, document) {
   'use strict';
 
-  if (window.__HABITFLOW_APPOINTMENT_FIELD_ENHANCER_REQUESTED__) return;
-  window.__HABITFLOW_APPOINTMENT_FIELD_ENHANCER_REQUESTED__ = true;
-
-  function load() {
-    if (document.querySelector('script[src^="modules/appointment-calendar-fields.js"]')) return;
+  function loadScript(src, flag) {
+    if (flag && window[flag]) return;
+    if (flag) window[flag] = true;
+    if (document.querySelector(`script[src^="${src.split('?')[0]}"]`)) return;
+    if (document.readyState === 'loading') {
+      document.write(`<script src="${src}"><\/script>`);
+      return;
+    }
     const script = document.createElement('script');
-    script.src = 'modules/appointment-calendar-fields.js?v=1';
+    script.src = src;
     script.async = false;
     document.head.appendChild(script);
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', load, { once: true });
-  else load();
+  loadScript('modules/appointment-native-recurrence-bridge.js?v=1', '__HABITFLOW_NATIVE_APPOINTMENT_RECURRENCE_BRIDGE_REQUESTED__');
+  loadScript('modules/appointment-calendar-fields.js?v=1', '__HABITFLOW_APPOINTMENT_FIELD_ENHANCER_REQUESTED__');
 })(window, document);
