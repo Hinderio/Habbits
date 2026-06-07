@@ -33,9 +33,7 @@
   }
 
   function loadAppointmentSeriesAssets() {
-    writeScript('modules/appointment-series-edit-guard.js?v=190');
-    writeScript('modules/appointment-remote-refresh-guard.js?v=190');
-    writeScript('modules/appointment-series.js?v=190');
+    writeScript('modules/appointments-domain.js?v=191');
   }
 
   function loadProjectAssets() {
