@@ -4,6 +4,7 @@
   const STORAGE_KEY = 'habitflow-state-v1';
   const MONTHS_AHEAD = 12;
   const MONTHS_PER_SEGMENT = 1;
+  const TITLE_MAX_LENGTH = 10;
   const APPOINTMENT_TYPES = {
     personal: { label: 'Privat', color: '#4ad7d1' },
     work: { label: 'Arbeit', color: '#66e7ff' },
@@ -23,6 +24,11 @@
       '"': '&quot;',
       "'": '&#39;'
     })[char]);
+  }
+
+  function shortTitle(value = '') {
+    const title = String(value || 'Termin').trim() || 'Termin';
+    return title.length > TITLE_MAX_LENGTH ? `${title.slice(0, TITLE_MAX_LENGTH - 1)}…` : title;
   }
 
   function readState() {
@@ -102,10 +108,11 @@
     const typeKey = normalizedType(appointment.appointment_type);
     const type = APPOINTMENT_TYPES[typeKey];
     const title = appointment.title || type.label || 'Termin';
+    const displayTitle = shortTitle(title);
     const meta = `${formatDate(appointment._date, { day: '2-digit', month: 'short' })} · ${formatTime(appointment._date)}`;
     const placement = index % 2 === 0 ? 'is-top' : 'is-bottom';
     return `<span class="line-calendar-event ${placement}" style="--event-left:${left.toFixed(2)}%;--event-color:${type.color}" title="${escapeHtml(`${title} · ${meta}`)}">
-      <span class="line-calendar-label"><strong>${escapeHtml(title)}</strong><small>${escapeHtml(meta)}</small></span>
+      <span class="line-calendar-label"><strong>${escapeHtml(displayTitle)}</strong><small>${escapeHtml(meta)}</small></span>
     </span>`;
   }
 
@@ -180,6 +187,27 @@
     document.body.classList.remove('modal-open');
   }
 
+  function syncButtonSize(button, addButton) {
+    requestAnimationFrame(() => {
+      const rect = addButton.getBoundingClientRect();
+      const width = Math.round(rect.width);
+      const height = Math.round(rect.height);
+      if (!width || !height) return;
+      button.style.width = `${width}px`;
+      button.style.height = `${height}px`;
+      button.style.flexBasis = `${width}px`;
+    });
+  }
+
+  function watchButtonSize(button, addButton) {
+    syncButtonSize(button, addButton);
+    window.addEventListener('resize', () => syncButtonSize(button, addButton), { passive: true });
+    if ('ResizeObserver' in window) {
+      const observer = new ResizeObserver(() => syncButtonSize(button, addButton));
+      observer.observe(addButton);
+    }
+  }
+
   function ensureButton() {
     const addButton = document.getElementById('appointmentFormToggleBtn');
     if (!addButton || document.getElementById('lineCalendarToggleBtn')) return;
@@ -191,6 +219,7 @@
     button.setAttribute('title', 'Linienkalender');
     button.innerHTML = '<span aria-hidden="true"><i></i></span>';
     addButton.parentElement?.insertBefore(button, addButton);
+    watchButtonSize(button, addButton);
   }
 
   function bindEvents() {
