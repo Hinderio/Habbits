@@ -143,14 +143,14 @@
         <div>
           <p class="eyebrow">Linienkalender</p>
           <h2>12 Monate voraus</h2>
-          <p>Zwoelf ruhige Linien, jeweils ein Monat ab heute. Deine bestehenden Kalendertermine werden automatisch als Meilensteine angezeigt.</p>
+          <p>Zwölf ruhige Linien, jeweils ein Monat ab heute. Deine bestehenden Kalendertermine werden automatisch als Meilensteine angezeigt.</p>
         </div>
         <button class="icon-btn line-calendar-close" type="button" data-line-calendar-close aria-label="Linienkalender schliessen">x</button>
       </div>
       <div class="line-calendar-summary" aria-label="Linienkalender Zusammenfassung">
         <article><small>Fenster</small><strong>${escapeHtml(formatDate(today, { day: '2-digit', month: 'long', year: 'numeric' }))}</strong></article>
         <article><small>Termine</small><strong>${appointments.length}</strong></article>
-        <article><small>Naechster Termin</small><strong>${next ? escapeHtml(formatDate(next._date, { day: '2-digit', month: 'short' })) : '-'}</strong></article>
+        <article><small>Nächster Termin</small><strong>${next ? escapeHtml(formatDate(next._date, { day: '2-digit', month: 'short' })) : '-'}</strong></article>
       </div>
       <div class="line-calendar-track-list">${body}</div>
       ${last ? `<p class="meta">Letzter sichtbarer Termin: ${escapeHtml(last.title || 'Termin')} am ${escapeHtml(formatDate(last._date, { day: '2-digit', month: 'long', year: 'numeric' }))}.</p>` : ''}
