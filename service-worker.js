@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v188-line-calendar-remote-appointments';
+const CACHE_NAME = 'habitflow-v189-line-calendar-orange-markers';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
