@@ -171,10 +171,10 @@
     const title = appointment.title || type.label || 'Termin';
     const displayTitle = shortTitle(title);
     const birthday = Boolean(appointment.is_birthday);
-    const meta = `${birthday ? 'Geburtstag · ' : ''}${formatDate(appointment._date, { day: '2-digit', month: 'short' })} · ${formatTime(appointment._date)}`;
+    const meta = `${formatDate(appointment._date, { day: '2-digit', month: 'short' })} · ${formatTime(appointment._date)}`;
     const placement = index % 2 === 0 ? 'is-top' : 'is-bottom';
     const birthdayClass = birthday ? ' is-birthday' : '';
-    return `<span class="line-calendar-event ${placement}${birthdayClass}" style="--event-left:${left.toFixed(2)}%;--event-color:${type.color}" title="${escapeHtml(`${title} · ${meta}`)}">
+    return `<span class="line-calendar-event ${placement}${birthdayClass}" style="--event-left:${left.toFixed(2)}%;--event-color:${type.color}" title="${escapeHtml(`${title}${birthday ? ' · Geburtstag' : ''} · ${meta}`)}">
       <span class="line-calendar-label"><strong>${escapeHtml(displayTitle)}</strong><small>${escapeHtml(meta)}</small></span>
     </span>`;
   }
