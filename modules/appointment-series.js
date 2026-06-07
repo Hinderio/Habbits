@@ -116,6 +116,16 @@
       .join('\n');
   }
 
+  function signatureHash(value) {
+    let hash = 0;
+    const text = String(value || '');
+    for (let index = 0; index < text.length; index += 1) {
+      hash = ((hash << 5) - hash) + text.charCodeAt(index);
+      hash |= 0;
+    }
+    return String(hash);
+  }
+
   function appointmentKey(appointment) {
     return [
       appointment.title || '',
@@ -199,8 +209,11 @@
 
   function injectField() {
     const form = document.getElementById(FORM_ID);
-    if (!form || document.getElementById(FIELD_ID)) {
+    if (!form) {
       return null;
+    }
+    if (document.getElementById(FIELD_ID)) {
+      return form;
     }
 
     const label = document.createElement('label');
@@ -455,6 +468,9 @@
     const localSignature = appointmentsSignature(state.appointments || []);
     const remoteSignature = appointmentsSignature(remoteAppointments);
     if (localSignature === remoteSignature) {
+      try {
+        window.sessionStorage.removeItem(REMOTE_RECONCILE_RELOAD_KEY);
+      } catch (error) {}
       return false;
     }
 
@@ -465,8 +481,9 @@
     writeState(state);
 
     try {
-      if (window.sessionStorage.getItem(REMOTE_RECONCILE_RELOAD_KEY) !== remoteSignature) {
-        window.sessionStorage.setItem(REMOTE_RECONCILE_RELOAD_KEY, remoteSignature);
+      const reloadKey = `${signatureHash(localSignature)}:${signatureHash(remoteSignature)}`;
+      if (window.sessionStorage.getItem(REMOTE_RECONCILE_RELOAD_KEY) !== reloadKey) {
+        window.sessionStorage.setItem(REMOTE_RECONCILE_RELOAD_KEY, reloadKey);
         rememberCalendarRestore();
         window.setTimeout(() => window.location.reload(), 150);
       }
@@ -815,15 +832,16 @@
   }
 
   function install() {
+    restoreCalendarAfterReload();
+    reconcileAppointmentsFromRemote().catch((error) => {
+      console.warn('HabitFlow appointment series: remote appointment reconciliation failed.', error);
+    });
+
     const form = injectField();
     if (!form) {
       return;
     }
     syncFieldAvailability();
-    restoreCalendarAfterReload();
-    reconcileAppointmentsFromRemote().catch((error) => {
-      console.warn('HabitFlow appointment series: remote appointment reconciliation failed.', error);
-    });
     form.addEventListener('submit', handleSubmit, true);
     document.addEventListener('click', (event) => {
       const target = event.target instanceof Element ? event.target.closest('button, [data-action]') : null;
