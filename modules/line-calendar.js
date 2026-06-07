@@ -5,13 +5,14 @@
   const MONTHS_AHEAD = 12;
   const MONTHS_PER_SEGMENT = 1;
   const TITLE_MAX_LENGTH = 10;
+  const APPOINTMENT_COLOR = '#f7b84a';
   const APPOINTMENT_TYPES = {
-    personal: { label: 'Privat', color: '#4ad7d1' },
-    work: { label: 'Arbeit', color: '#66e7ff' },
-    health: { label: 'Gesundheit', color: '#8ff0a7' },
-    social: { label: 'Sozial', color: '#ffb84d' },
-    admin: { label: 'Admin', color: '#b79cff' },
-    other: { label: 'Sonstiges', color: '#9db0c3' }
+    personal: { label: 'Privat', color: APPOINTMENT_COLOR },
+    work: { label: 'Arbeit', color: APPOINTMENT_COLOR },
+    health: { label: 'Gesundheit', color: APPOINTMENT_COLOR },
+    social: { label: 'Sozial', color: APPOINTMENT_COLOR },
+    admin: { label: 'Admin', color: APPOINTMENT_COLOR },
+    other: { label: 'Sonstiges', color: APPOINTMENT_COLOR }
   };
 
   let modal = null;
