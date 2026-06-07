@@ -6,6 +6,7 @@
   const FIELD_ID = 'appointmentRecurrenceSelect';
   const FIELD_NAME = 'recurrence';
   const RESTORE_KEY = 'habitflow-appointment-series-restore';
+  const REMOTE_RECONCILE_RELOAD_KEY = 'habitflow-appointments-remote-reconcile-reload';
   let editingAppointmentId = null;
   const RECURRENCE_OPTIONS = Object.freeze({
     once: { label: 'Einmalig', count: 1 },
@@ -71,6 +72,48 @@
 
   function writeState(state) {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+
+  function normalizeRemoteAppointment(row) {
+    return {
+      id: row.id,
+      title: row.title,
+      description: cleanDescription(row.description),
+      location: String(row.location || '').trim(),
+      appointment_type: row.appointment_type || 'other',
+      starts_at: row.starts_at,
+      ends_at: row.ends_at || null,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      recurrence: row.recurrence || null,
+      series_id: row.series_id || null,
+      series_index: Number.isInteger(row.series_index) ? row.series_index : null,
+      synced: true,
+    };
+  }
+
+  function remoteComparable(appointment) {
+    return [
+      appointment.id || '',
+      appointment.title || '',
+      cleanDescription(appointment.description),
+      appointment.location || '',
+      appointment.appointment_type || 'other',
+      appointment.starts_at || '',
+      appointment.ends_at || '',
+      appointment.created_at || '',
+      appointment.updated_at || '',
+      appointment.recurrence || '',
+      appointment.series_id || '',
+      Number.isInteger(appointment.series_index) ? appointment.series_index : '',
+    ].join('|');
+  }
+
+  function appointmentsSignature(appointments) {
+    return (appointments || [])
+      .map(remoteComparable)
+      .sort()
+      .join('\n');
   }
 
   function appointmentKey(appointment) {
@@ -366,6 +409,68 @@
     if (error) {
       throw error;
     }
+    return true;
+  }
+
+  async function fetchRemoteAppointments(client, userId) {
+    const baseColumns = 'id,title,description,location,appointment_type,starts_at,ends_at,created_at,updated_at';
+    const seriesColumns = `${baseColumns},recurrence,series_id,series_index`;
+    let result = await client.from('appointments')
+      .select(seriesColumns)
+      .eq('user_id', userId)
+      .order('starts_at', { ascending: true });
+
+    if (result.error && /recurrence|series_id|series_index/i.test(result.error.message || '')) {
+      result = await client.from('appointments')
+        .select(baseColumns)
+        .eq('user_id', userId)
+        .order('starts_at', { ascending: true });
+    }
+    if (result.error) {
+      throw result.error;
+    }
+    return (result.data || []).map(normalizeRemoteAppointment);
+  }
+
+  async function reconcileAppointmentsFromRemote() {
+    const config = window.HABITFLOW_SUPABASE_CONFIG || {};
+    if (!window.supabase || !config.url || !config.anonKey) {
+      return false;
+    }
+    const client = window.supabase.createClient(config.url, config.anonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: false,
+      },
+    });
+    const sessionResult = await client.auth.getSession();
+    const userId = sessionResult?.data?.session?.user?.id;
+    if (!userId) {
+      return false;
+    }
+
+    const remoteAppointments = await fetchRemoteAppointments(client, userId);
+    const state = readState();
+    const localSignature = appointmentsSignature(state.appointments || []);
+    const remoteSignature = appointmentsSignature(remoteAppointments);
+    if (localSignature === remoteSignature) {
+      return false;
+    }
+
+    state.appointments = remoteAppointments;
+    if (state.deletedRemoteIds?.appointments) {
+      state.deletedRemoteIds.appointments = {};
+    }
+    writeState(state);
+
+    try {
+      if (window.sessionStorage.getItem(REMOTE_RECONCILE_RELOAD_KEY) !== remoteSignature) {
+        window.sessionStorage.setItem(REMOTE_RECONCILE_RELOAD_KEY, remoteSignature);
+        rememberCalendarRestore();
+        window.setTimeout(() => window.location.reload(), 150);
+      }
+    } catch (error) {}
     return true;
   }
 
@@ -716,6 +821,9 @@
     }
     syncFieldAvailability();
     restoreCalendarAfterReload();
+    reconcileAppointmentsFromRemote().catch((error) => {
+      console.warn('HabitFlow appointment series: remote appointment reconciliation failed.', error);
+    });
     form.addEventListener('submit', handleSubmit, true);
     document.addEventListener('click', (event) => {
       const target = event.target instanceof Element ? event.target.closest('button, [data-action]') : null;
