@@ -201,6 +201,18 @@
   box-shadow: 0 0 0 2px rgba(255, 255, 255, .16);
 }
 
+.line-calendar-event.is-birthday {
+  width: 22px;
+  height: 22px;
+  background: #f7b84a;
+  box-shadow: 0 0 0 2px rgba(247, 184, 74, .38), 0 8px 18px rgba(247, 184, 74, .22);
+}
+
+.line-calendar-event.is-birthday .line-calendar-label small {
+  color: #f7b84a;
+  font-weight: 900;
+}
+
 .line-calendar-event.is-top .line-calendar-label {
   bottom: 22px;
 }
