@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v193-consolidated-appointments';
+const CACHE_NAME = 'habitflow-v194-appointment-core';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -28,7 +28,7 @@ const MODULE_ASSETS = [
   './modules/craving-coach-v2-actions-polish.js',
   './modules/gamification.js',
   './modules/monthly-missions.js',
-  './modules/appointments-domain.js',
+  './modules/appointments-core.js',
   './modules/line-calendar.js',
   './modules/line-calendar.css',
   './modules/projects-milestone-edit.js',
@@ -55,6 +55,12 @@ async function withProjectMilestoneEditScript(response) {
     html = html.replace('<script src="app.js"></script>', '<script src="modules/projects-milestone-edit.js?v=183"></script>\n  <script src="app.js"></script>');
     if (!html.includes('modules/projects-milestone-edit.js')) {
       html = html.replace('</body>', '  <script src="modules/projects-milestone-edit.js?v=183"></script>\n</body>');
+    }
+  }
+  if (!html.includes('modules/appointments-core.js')) {
+    html = html.replace('<script src="app.js"></script>', '<script src="app.js"></script>\n  <script src="modules/appointments-core.js?v=194"></script>');
+    if (!html.includes('modules/appointments-core.js')) {
+      html = html.replace('</body>', '  <script src="modules/appointments-core.js?v=194"></script>\n</body>');
     }
   }
   return new Response(html, { status: response.status, statusText: response.statusText, headers: patchedHeaders(response) });
