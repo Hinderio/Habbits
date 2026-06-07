@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v183-project-milestone-inline-edit';
+const CACHE_NAME = 'habitflow-v184-line-calendar';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -29,6 +29,8 @@ const MODULE_ASSETS = [
   './modules/gamification.js',
   './modules/monthly-missions.js',
   './modules/appointment-series.js',
+  './modules/line-calendar.js',
+  './modules/line-calendar.css',
   './modules/projects-milestone-edit.js',
   './modules/projects.js',
   './modules/projects.css',
@@ -72,7 +74,7 @@ async function withInlineMilestoneEditing(response) {
     const title = String(data.get('title') || '').trim();
     const date = validDate(data.get('milestone_date'));
     const phaseId = String(data.get('phase_id') || '');
-    if (!projectId) return toast('Projekt konnte für den Meilenstein nicht gefunden werden.');
+    if (!projectId) return toast('Projekt konnte fuer den Meilenstein nicht gefunden werden.');
     if (!title || !date) return toast('Meilenstein braucht Titel und Datum.');
 
     try {
