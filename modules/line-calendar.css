@@ -204,12 +204,6 @@
 
 .line-calendar-event.is-birthday {
   background: #8f2542;
-  box-shadow: 0 0 0 2px rgba(143, 37, 66, .32);
-}
-
-.line-calendar-event.is-birthday .line-calendar-label small {
-  color: var(--muted);
-  font-weight: 800;
 }
 
 .line-calendar-event.is-top .line-calendar-label {
