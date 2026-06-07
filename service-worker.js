@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v182-project-milestone-inline-edit';
+const CACHE_NAME = 'habitflow-v183-project-milestone-inline-edit';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -38,19 +38,24 @@ const SQL_ASSETS = ['./sql/add-projects.sql', './sql/add-appointment-series.sql'
 const ASSETS = ['./', './index.html', './style.css', './app.js', './supabase-config.js', './supabase-schema.js', './manifest.json', './icons/coach-clean.svg', './data/activity-ideas.json', ...SQL_ASSETS, ...MODULE_ASSETS];
 const NETWORK_FIRST_PATHS = new Set(['/', '/index.html', '/app.js', '/style.css', '/supabase-config.js', '/manifest.json', ...SQL_ASSETS.map(path => path.replace(/^\./, '')), ...MODULE_ASSETS.map(path => path.replace(/^\./, ''))]);
 
+function patchedHeaders(response) {
+  const headers = new Headers(response.headers);
+  headers.delete('content-length');
+  headers.set('cache-control', 'no-store');
+  return headers;
+}
+
 async function withProjectMilestoneEditScript(response) {
   const type = response.headers.get('content-type') || '';
   if (!type.includes('text/html')) return response;
   let html = await response.text();
   if (!html.includes('modules/projects-milestone-edit.js')) {
-    html = html.replace('<script src="app.js"></script>', '<script src="modules/projects-milestone-edit.js"></script>\n  <script src="app.js"></script>');
+    html = html.replace('<script src="app.js"></script>', '<script src="modules/projects-milestone-edit.js?v=183"></script>\n  <script src="app.js"></script>');
     if (!html.includes('modules/projects-milestone-edit.js')) {
-      html = html.replace('</body>', '  <script src="modules/projects-milestone-edit.js"></script>\n</body>');
+      html = html.replace('</body>', '  <script src="modules/projects-milestone-edit.js?v=183"></script>\n</body>');
     }
   }
-  const headers = new Headers(response.headers);
-  headers.delete('content-length');
-  return new Response(html, { status: response.status, statusText: response.statusText, headers });
+  return new Response(html, { status: response.status, statusText: response.statusText, headers: patchedHeaders(response) });
 }
 
 async function withInlineMilestoneEditing(response) {
@@ -111,9 +116,7 @@ async function withInlineMilestoneEditing(response) {
   script = script
     .replace(/async function saveMilestone\(event\) \{[\s\S]*?\n  async function editMilestone/, `${saveMilestone}\n\n  async function editMilestone`)
     .replace(/async function editMilestone\(id\) \{[\s\S]*?\n  async function deleteMilestone/, `${editMilestone}\n\n  async function deleteMilestone`);
-  const headers = new Headers(response.headers);
-  headers.delete('content-length');
-  return new Response(script, { status: response.status, statusText: response.statusText, headers });
+  return new Response(script, { status: response.status, statusText: response.statusText, headers: patchedHeaders(response) });
 }
 
 self.addEventListener('install', event => {
