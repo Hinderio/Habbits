@@ -45,7 +45,9 @@ async function withProjectMilestoneEditScript(response) {
   if (!html.includes('modules/projects-milestone-edit.js')) {
     html = html.replace('</body>', '  <script src="modules/projects-milestone-edit.js"></script>\n</body>');
   }
-  return new Response(html, { status: response.status, statusText: response.statusText, headers: response.headers });
+  const headers = new Headers(response.headers);
+  headers.delete('content-length');
+  return new Response(html, { status: response.status, statusText: response.statusText, headers });
 }
 
 self.addEventListener('install', event => {
@@ -71,11 +73,13 @@ self.addEventListener('fetch', event => {
       fetch(event.request, { cache: 'no-store' })
         .then(async response => {
           const clientResponse = shouldInjectProjectPatch ? await withProjectMilestoneEditScript(response.clone()) : response.clone();
-          const cacheResponse = clientResponse.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, cacheResponse)).catch(() => {});
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clientResponse.clone())).catch(() => {});
           return clientResponse;
         })
-        .catch(() => caches.match(event.request).then(cached => cached || caches.match('./index.html')))
+        .catch(() => caches.match(event.request).then(async cached => {
+          if (!cached) return caches.match('./index.html');
+          return shouldInjectProjectPatch ? withProjectMilestoneEditScript(cached.clone()) : cached;
+        }))
     );
     return;
   }
