@@ -7,6 +7,8 @@
   const FIELD_NAME = 'recurrence';
   const RESTORE_KEY = 'habitflow-appointment-series-restore';
   const REMOTE_RECONCILE_RELOAD_KEY = 'habitflow-appointments-remote-reconcile-reload';
+  const SAVE_LOCK_KEY = 'habitflow-appointment-series-save-lock';
+  const SAVE_LOCK_MS = 15000;
   const REMOTE_RECONCILE_MAX_ATTEMPTS = 24;
   const REMOTE_RECONCILE_RETRY_MS = 500;
   let editingAppointmentId = null;
@@ -75,6 +77,31 @@
 
   function writeState(state) {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+
+  function setSaveLock() {
+    try {
+      window.sessionStorage.setItem(SAVE_LOCK_KEY, String(Date.now() + SAVE_LOCK_MS));
+    } catch (error) {}
+  }
+
+  function clearSaveLock() {
+    try {
+      window.sessionStorage.removeItem(SAVE_LOCK_KEY);
+    } catch (error) {}
+  }
+
+  function isSaveLocked() {
+    try {
+      const expiresAt = Number(window.sessionStorage.getItem(SAVE_LOCK_KEY) || 0);
+      if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+        window.sessionStorage.removeItem(SAVE_LOCK_KEY);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      return false;
+    }
   }
 
   function normalizeRemoteAppointment(row) {
@@ -449,6 +476,9 @@
   }
 
   async function reconcileAppointmentsFromRemote() {
+    if (isSaveLocked()) {
+      return false;
+    }
     const config = window.HABITFLOW_SUPABASE_CONFIG || {};
     if (!window.supabase || !config.url || !config.anonKey) {
       return null;
@@ -685,9 +715,14 @@
     if (!title || Number.isNaN(startDate.getTime())) {
       return null;
     }
-    return state.appointments.find((appointment) => (
+    const matches = state.appointments.filter((appointment) => (
       appointment.title === title && appointment.starts_at === startDate.toISOString()
-    )) || null;
+    ));
+    if (matches.length === 1) {
+      return matches[0];
+    }
+    const onceMatch = matches.find((appointment) => !appointment.recurrence || appointment.recurrence === 'once');
+    return onceMatch || null;
   }
 
   function rememberEditingAppointmentFromForm({ applyDetectedRecurrence = false } = {}) {
@@ -755,9 +790,13 @@
     window.setTimeout(showCalendarScreen, 420);
   }
 
-  function resetEditContextIfNeeded(action, target) {
+  function appointmentIdFromTarget(target, source) {
+    return target?.dataset?.id || source?.closest?.('[data-id]')?.dataset?.id || null;
+  }
+
+  function resetEditContextIfNeeded(action, target, source) {
     if (action === 'edit-appointment' || (action || '').includes('edit-appointment')) {
-      editingAppointmentId = target?.dataset?.id || null;
+      editingAppointmentId = appointmentIdFromTarget(target, source);
       window.setTimeout(() => rememberEditingAppointmentFromForm({ applyDetectedRecurrence: true }), 0);
       return;
     }
@@ -792,6 +831,7 @@
 
     event.preventDefault();
     event.stopImmediatePropagation();
+    setSaveLock();
 
     let rows;
     try {
@@ -800,6 +840,7 @@
         : buildSeries(form, recurrence, existingAppointment, existingSeries?.seriesId);
     } catch (error) {
       toast(error.message, 'danger');
+      clearSaveLock();
       return;
     }
 
@@ -815,6 +856,7 @@
     ));
     if (!additions.length) {
       toast('Diese Terminserie ist bereits angelegt.', 'warning');
+      clearSaveLock();
       return;
     }
 
@@ -861,11 +903,15 @@
       console.warn('HabitFlow appointment series: sync failed, local changes remain pending.', error);
       state.appointments = originalAppointments;
       writeState(state);
+      clearSaveLock();
       toast('Termin konnte nicht vollständig mit der DB synchronisiert werden. Bitte nochmals speichern.', 'danger');
       return;
     }
 
     rememberCalendarRestore();
+    try {
+      window.sessionStorage.setItem(REMOTE_RECONCILE_RELOAD_KEY, `save:${Date.now()}`);
+    } catch (error) {}
     window.setTimeout(() => window.location.reload(), 250);
   }
 
@@ -880,8 +926,9 @@
     syncFieldAvailability();
     form.addEventListener('submit', handleSubmit, true);
     document.addEventListener('click', (event) => {
-      const target = event.target instanceof Element ? event.target.closest('button, [data-action]') : null;
-      resetEditContextIfNeeded(target?.dataset?.action, target);
+      const source = event.target instanceof Element ? event.target : null;
+      const target = source?.closest('button, [data-action]') || null;
+      resetEditContextIfNeeded(target?.dataset?.action, target, source);
       window.setTimeout(syncFieldAvailability, 0);
     });
   }
