@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v179-appointment-series-schema';
+const CACHE_NAME = 'habitflow-v180-project-milestone-edit';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -30,12 +30,23 @@ const MODULE_ASSETS = [
   './modules/monthly-missions.js',
   './modules/appointment-series.js',
   './modules/projects.js',
+  './modules/projects-milestone-edit.js',
   './modules/projects.css',
   './modules/projects-mobile-fix.css'
 ];
 const SQL_ASSETS = ['./sql/add-projects.sql', './sql/add-appointment-series.sql'];
 const ASSETS = ['./', './index.html', './style.css', './app.js', './supabase-config.js', './supabase-schema.js', './manifest.json', './icons/coach-clean.svg', './data/activity-ideas.json', ...SQL_ASSETS, ...MODULE_ASSETS];
 const NETWORK_FIRST_PATHS = new Set(['/', '/index.html', '/app.js', '/style.css', '/supabase-config.js', '/manifest.json', ...SQL_ASSETS.map(path => path.replace(/^\./, '')), ...MODULE_ASSETS.map(path => path.replace(/^\./, ''))]);
+
+async function withProjectMilestoneEditScript(response) {
+  const type = response.headers.get('content-type') || '';
+  if (!type.includes('text/html')) return response;
+  let html = await response.text();
+  if (!html.includes('modules/projects-milestone-edit.js')) {
+    html = html.replace('</body>', '  <script src="modules/projects-milestone-edit.js"></script>\n</body>');
+  }
+  return new Response(html, { status: response.status, statusText: response.statusText, headers: response.headers });
+}
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
@@ -53,14 +64,16 @@ self.addEventListener('fetch', event => {
   const isSameOrigin = url.origin === self.location.origin;
   const normalizedPath = url.pathname.endsWith('/') ? '/' : url.pathname.replace(self.location.pathname.replace(/service-worker\.js$/, ''), '/');
   const shouldNetworkFirst = event.request.mode === 'navigate' || (isSameOrigin && NETWORK_FIRST_PATHS.has(normalizedPath));
+  const shouldInjectProjectPatch = event.request.mode === 'navigate' || (isSameOrigin && (normalizedPath === '/' || normalizedPath === '/index.html'));
 
   if (shouldNetworkFirst) {
     event.respondWith(
       fetch(event.request, { cache: 'no-store' })
-        .then(response => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy)).catch(() => {});
-          return response;
+        .then(async response => {
+          const clientResponse = shouldInjectProjectPatch ? await withProjectMilestoneEditScript(response.clone()) : response.clone();
+          const cacheResponse = clientResponse.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, cacheResponse)).catch(() => {});
+          return clientResponse;
         })
         .catch(() => caches.match(event.request).then(cached => cached || caches.match('./index.html')))
     );
