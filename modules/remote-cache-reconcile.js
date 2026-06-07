@@ -5,8 +5,10 @@
   const STORAGE_KEY = 'habitflow-state-v1';
   const CLEANUP_MARKER_KEY = 'habitflow-remote-cache-reconcile-v1';
   const RELOAD_MARKER_KEY = 'habitflow-remote-cache-reconcile-reloaded-v1';
+  const APPOINTMENT_RELOAD_MARKER_KEY = 'habitflow-appointments-remote-reconcile-reload';
   const RECENT_LOCAL_GRACE_MS = 10 * 60 * 1000;
   const HISTORY_LOOKBACK_DAYS = 180;
+  const RELOAD_DELAY_MS = 1200;
 
   function nowMs() {
     return Date.now();
@@ -145,6 +147,25 @@
     writeJson(CLEANUP_MARKER_KEY, { date: toDateKey(new Date()), checked_at: new Date().toISOString(), ...summary });
   }
 
+  function hasAppointmentReloadScheduled() {
+    try {
+      return Boolean(window.sessionStorage?.getItem(APPOINTMENT_RELOAD_MARKER_KEY));
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function requestReconcileReload() {
+    const alreadyReloaded = window.sessionStorage?.getItem(RELOAD_MARKER_KEY) === '1';
+    if (alreadyReloaded || hasAppointmentReloadScheduled()) return;
+    window.sessionStorage?.setItem(RELOAD_MARKER_KEY, '1');
+    window.setTimeout(() => {
+      if (!hasAppointmentReloadScheduled()) {
+        window.location.reload();
+      }
+    }, RELOAD_DELAY_MS);
+  }
+
   async function reconcile() {
     if (!shouldRun()) return { skipped: 'already-checked-today' };
     const state = readJson(STORAGE_KEY, null);
@@ -167,12 +188,7 @@
 
     writeJson(STORAGE_KEY, state);
     markRun({ removed_entries: removedEntries.length, removed_ledger: removedLedger.length });
-
-    const alreadyReloaded = window.sessionStorage?.getItem(RELOAD_MARKER_KEY) === '1';
-    if (!alreadyReloaded) {
-      window.sessionStorage?.setItem(RELOAD_MARKER_KEY, '1');
-      window.location.reload();
-    }
+    requestReconcileReload();
 
     return { removedEntries: removedEntries.length, removedLedger: removedLedger.length };
   }
