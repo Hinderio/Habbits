@@ -203,7 +203,9 @@
     const type = APPOINTMENT_TYPES[typeKey];
     const title = appointment.title || type.label || 'Termin';
     const displayTitle = shortTitle(title);
-    const meta = `${formatDate(appointment._date, { day: '2-digit', month: 'short' })} · ${formatTime(appointment._date)}`;
+    const dateLabel = formatDate(appointment._date, { day: '2-digit', month: 'short' });
+    const timeLabel = formatTime(appointment._date);
+    const meta = appointment.is_birthday ? dateLabel : `${dateLabel} · ${timeLabel}`;
     const placement = index % 2 === 0 ? 'is-top' : 'is-bottom';
     const birthdayClass = appointment.is_birthday ? ' is-birthday' : '';
     return `<span class="line-calendar-event ${placement}${birthdayClass}" style="--event-left:${left.toFixed(2)}%;--event-color:${type.color}" title="${escapeHtml(`${title} · ${meta}`)}">
