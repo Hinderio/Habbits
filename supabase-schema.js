@@ -32,8 +32,20 @@
     document.write(`<script src="${src}"><\/script>`);
   }
 
-  function loadAppointmentSeriesAssets() {
-    writeScript('modules/appointments-domain.js?v=193');
+  function appendScript(src) {
+    if (document.querySelector(`script[src="${src}"]`)) return;
+    const script = document.createElement('script');
+    script.src = src;
+    document.body.appendChild(script);
+  }
+
+  function loadAppointmentCoreAfterApp() {
+    const src = 'modules/appointments-core.js?v=194';
+    if (document.readyState === 'complete') {
+      appendScript(src);
+      return;
+    }
+    window.addEventListener('load', () => appendScript(src), { once: true });
   }
 
   function loadProjectAssets() {
@@ -46,6 +58,6 @@
   }
 
   loadSqlPreview();
-  loadAppointmentSeriesAssets();
+  loadAppointmentCoreAfterApp();
   loadProjectAssets();
 })(window, document);
