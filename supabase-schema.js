@@ -63,6 +63,5 @@
 
   loadSqlPreview();
   document.addEventListener('DOMContentLoaded', ensureAppointmentFields, { once: true });
-  writeScript('modules/appointment-recurrence-controller.js?v=1');
   loadProjectAssets();
 })(window, document);
