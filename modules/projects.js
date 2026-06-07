@@ -30,36 +30,17 @@
 
   function nowIso() { return new Date().toISOString(); }
   function todayDate() { return new Date().toISOString().slice(0, 10); }
-
-  function escapeHtml(value = '') {
-    return String(value || '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
-  }
-
-  function validDate(value) {
-    const text = String(value || '').slice(0, 10);
-    return /^\d{4}-\d{2}-\d{2}$/.test(text) && !Number.isNaN(new Date(`${text}T12:00:00`).getTime()) ? text : '';
-  }
-
-  function validIso(value) {
-    if (!value) return '';
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? '' : date.toISOString();
-  }
-
-  function normalizeProjectColor(value) {
-    const color = String(value || '').trim();
-    return /^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/.test(color) ? color : DEFAULT_PROJECT_COLOR;
-  }
+  function escapeHtml(value = '') { return String(value || '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char])); }
+  function validDate(value) { const text = String(value || '').slice(0, 10); return /^\d{4}-\d{2}-\d{2}$/.test(text) && !Number.isNaN(new Date(`${text}T12:00:00`).getTime()) ? text : ''; }
+  function validIso(value) { if (!value) return ''; const date = new Date(value); return Number.isNaN(date.getTime()) ? '' : date.toISOString(); }
+  function normalizeProjectColor(value) { const color = String(value || '').trim(); return /^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/.test(color) ? color : DEFAULT_PROJECT_COLOR; }
 
   function parseProjectMeta(value = '') {
     const raw = String(value || '');
     const match = raw.match(PROJECT_META_RE);
     if (!match) return { text: raw, meta: {} };
-    try {
-      return { text: raw.replace(PROJECT_META_RE, '').trim(), meta: JSON.parse(decodeURIComponent(match[1])) || {} };
-    } catch {
-      return { text: raw.replace(PROJECT_META_RE, '').trim(), meta: {} };
-    }
+    try { return { text: raw.replace(PROJECT_META_RE, '').trim(), meta: JSON.parse(decodeURIComponent(match[1])) || {} }; }
+    catch { return { text: raw.replace(PROJECT_META_RE, '').trim(), meta: {} }; }
   }
 
   function projectOutcomeForStorage(project = {}) {
@@ -121,19 +102,12 @@
   function getSupabaseClient() {
     const config = window.HABITFLOW_SUPABASE_CONFIG || {};
     if (!config.url || !config.anonKey || !window.supabase?.createClient) return null;
-    if (!client) {
-      client = window.supabase.createClient(config.url, config.anonKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
-    }
+    if (!client) client = window.supabase.createClient(config.url, config.anonKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
     return client;
   }
 
-  async function currentUserId() {
-    try { return (await getSupabaseClient()?.auth.getUser())?.data?.user?.id || null; } catch { return null; }
-  }
-
-  function normalizeTask(task = {}) {
-    return { ...task, project_id: task.project_id || task.projectId || null };
-  }
+  async function currentUserId() { try { return (await getSupabaseClient()?.auth.getUser())?.data?.user?.id || null; } catch { return null; } }
+  function normalizeTask(task = {}) { return { ...task, project_id: task.project_id || task.projectId || null }; }
 
   function normalizeProject(project = {}) {
     const created = validIso(project.created_at || project.createdAt) || nowIso();
@@ -196,13 +170,8 @@
   }
 
   function readState() {
-    try {
-      const parsed = JSON.parse(window.localStorage?.getItem(STORAGE_KEY) || '{}');
-      return normalizeState(parsed && typeof parsed === 'object' ? parsed : {});
-    } catch (error) {
-      console.warn('[HabitFlow/projects] State konnte nicht gelesen werden.', error);
-      return normalizeState({});
-    }
+    try { return normalizeState(JSON.parse(window.localStorage?.getItem(STORAGE_KEY) || '{}')); }
+    catch (error) { console.warn('[HabitFlow/projects] State konnte nicht gelesen werden.', error); return normalizeState({}); }
   }
 
   function writeState(next) {
@@ -243,37 +212,14 @@
     };
   }
 
-  function projectTasks(state, projectId) {
-    return state.tasks.filter(task => task.project_id === projectId && (task.status || 'open') !== 'archived');
-  }
-
-  function projectPhases(state, projectId) {
-    return state.projectPhases.filter(phase => phase.project_id === projectId && !phase.is_archived).sort((a, b) => a.start_date.localeCompare(b.start_date));
-  }
-
-  function projectMilestones(state, projectId) {
-    return state.projectMilestones.filter(item => item.project_id === projectId && !item.is_archived).sort((a, b) => a.milestone_date.localeCompare(b.milestone_date));
-  }
-
-  function milestonePhaseLabel(milestone, phases = []) {
-    if (!milestone.phase_id) return 'Projektweit';
-    return phases.find(phase => phase.id === milestone.phase_id)?.name || 'Phase';
-  }
-
-  function milestonesForPhase(milestones = [], phaseId = '') {
-    return milestones.filter(item => !item.phase_id || item.phase_id === phaseId);
-  }
-
-  function phaseOptions(phases = [], selectedPhaseId = '') {
-    return `<option value="">Projektweit</option>${phases.map(phase => `<option value="${escapeHtml(phase.id)}" ${phase.id === selectedPhaseId ? 'selected' : ''}>${escapeHtml(phase.name)}</option>`).join('')}`;
-  }
-
+  function projectTasks(state, projectId) { return state.tasks.filter(task => task.project_id === projectId && (task.status || 'open') !== 'archived'); }
+  function projectPhases(state, projectId) { return state.projectPhases.filter(phase => phase.project_id === projectId && !phase.is_archived).sort((a, b) => a.start_date.localeCompare(b.start_date)); }
+  function projectMilestones(state, projectId) { return state.projectMilestones.filter(item => item.project_id === projectId && !item.is_archived).sort((a, b) => a.milestone_date.localeCompare(b.milestone_date)); }
+  function milestonePhaseLabel(milestone, phases = []) { return milestone.phase_id ? (phases.find(phase => phase.id === milestone.phase_id)?.name || 'Phase') : 'Projektweit'; }
+  function milestonesForPhase(milestones = [], phaseId = '') { return milestones.filter(item => !item.phase_id || item.phase_id === phaseId); }
+  function phaseOptions(phases = [], selectedPhaseId = '') { return `<option value="">Projektweit</option>${phases.map(phase => `<option value="${escapeHtml(phase.id)}" ${phase.id === selectedPhaseId ? 'selected' : ''}>${escapeHtml(phase.name)}</option>`).join('')}`; }
   function taskDone(task = {}) { return (task.status || 'open') === 'done'; }
-
-  function taskClosedForLinking(task = {}) {
-    const status = String(task.status || task.state || '').toLowerCase();
-    return CLOSED_TASK_STATUSES.has(status) || Boolean(task.is_archived) || Boolean(task.done_archived_at) || status === 'archived';
-  }
+  function taskClosedForLinking(task = {}) { const status = String(task.status || task.state || '').toLowerCase(); return CLOSED_TASK_STATUSES.has(status) || Boolean(task.is_archived) || Boolean(task.done_archived_at) || status === 'archived'; }
 
   function progressFor(project, state) {
     const tasks = projectTasks(state, project.id);
@@ -305,9 +251,7 @@
   }
 
   function projectBadge(project, mode = 'full') {
-    if (mode === 'mark') {
-      return `<span class="project-chip-mark project-chip-mark-only" style="--project-color:${project.color}">${escapeHtml(projectInitials(project.title))}</span>`;
-    }
+    if (mode === 'mark') return `<span class="project-chip-mark project-chip-mark-only" style="--project-color:${project.color}">${escapeHtml(projectInitials(project.title))}</span>`;
     const classes = mode === 'chip' ? 'project-chip project-chip-inline' : 'project-chip';
     return `<span class="${classes}" style="--project-color:${project.color}"><span class="project-chip-mark">${escapeHtml(projectInitials(project.title))}</span><span class="project-chip-label">${escapeHtml(project.title)}</span></span>`;
   }
@@ -326,10 +270,7 @@
 
   function scheduleTaskBadgePaint() {
     if (taskBadgeRaf) return;
-    taskBadgeRaf = window.requestAnimationFrame(() => {
-      taskBadgeRaf = 0;
-      decorateTaskProjectBadges();
-    });
+    taskBadgeRaf = window.requestAnimationFrame(() => { taskBadgeRaf = 0; decorateTaskProjectBadges(); });
   }
 
   function scheduleTaskLinkRefresh() {
@@ -343,8 +284,7 @@
   function inferTaskId(card, taskMap) {
     const direct = card.dataset.taskId || card.dataset.id;
     if (direct && taskMap.has(direct)) return direct;
-    const candidate = Array.from(card.querySelectorAll('[data-id]')).map(node => node.dataset.id).find(id => taskMap.has(id));
-    return candidate || '';
+    return Array.from(card.querySelectorAll('[data-id]')).map(node => node.dataset.id).find(id => taskMap.has(id)) || '';
   }
 
   function decorateTaskProjectBadges() {
@@ -361,8 +301,7 @@
           existing.dataset.pendingRemoval = 'true';
           scheduleTaskLinkRefresh();
           window.setTimeout(() => {
-            const freshState = readState();
-            const freshTask = freshState.tasks.find(item => item.id === taskId);
+            const freshTask = readState().tasks.find(item => item.id === taskId);
             if (freshTask?.project_id) scheduleTaskBadgePaint(); else existing.remove();
           }, 1000);
           return;
@@ -373,24 +312,16 @@
       const markup = document.createElement('div');
       markup.innerHTML = `<div data-project-badge-root data-project-id="${escapeHtml(project.id)}">${projectBadge(project, 'mark')}</div>`;
       const badge = markup.firstElementChild;
-      if (existing) {
-        existing.replaceWith(badge);
-        return;
-      }
+      if (existing) return existing.replaceWith(badge);
       const heading = card.querySelector('h1, h2, h3, h4, strong');
-      if (heading?.parentElement) {
-        heading.insertAdjacentElement('afterend', badge);
-      } else {
-        card.prepend(badge);
-      }
+      if (heading?.parentElement) heading.insertAdjacentElement('afterend', badge); else card.prepend(badge);
     });
   }
 
   function bindTaskBadgeObserver() {
     if (window.__habitFlowProjectBadgeObserverBound) return;
     window.__habitFlowProjectBadgeObserverBound = true;
-    const observer = new MutationObserver(() => scheduleTaskBadgePaint());
-    observer.observe(document.body, { childList: true, subtree: true });
+    new MutationObserver(() => scheduleTaskBadgePaint()).observe(document.body, { childList: true, subtree: true });
   }
 
   function ensureCss() {
@@ -455,11 +386,7 @@
   function renderSummary(state) {
     const node = document.getElementById('projectsSummary');
     if (!node) return;
-    const active = state.projects.filter(project => project.status === 'active').length;
-    const planned = state.projects.filter(project => project.status === 'planned').length;
-    const done = state.projects.filter(project => project.status === 'done').length;
-    const tasks = state.projects.reduce((count, project) => count + projectTasks(state, project.id).length, 0);
-    node.innerHTML = `<article><small>Aktiv</small><strong>${active}</strong></article><article><small>Geplant</small><strong>${planned}</strong></article><article><small>Abgeschlossen</small><strong>${done}</strong></article><article><small>Verknüpfte Tasks</small><strong>${tasks}</strong></article>`;
+    node.innerHTML = `<article><small>Aktiv</small><strong>${state.projects.filter(project => project.status === 'active').length}</strong></article><article><small>Geplant</small><strong>${state.projects.filter(project => project.status === 'planned').length}</strong></article><article><small>Abgeschlossen</small><strong>${state.projects.filter(project => project.status === 'done').length}</strong></article><article><small>Verknüpfte Tasks</small><strong>${state.projects.reduce((count, project) => count + projectTasks(state, project.id).length, 0)}</strong></article>`;
   }
 
   function renderProjectCard(project, state) {
@@ -499,8 +426,7 @@
   }
 
   function renderTaskTools(project, state) {
-    const available = state.tasks.filter(task => !task.project_id && !taskClosedForLinking(task));
-    const options = available.map(task => `<option value="${escapeHtml(task.id)}">${escapeHtml(task.title)}</option>`).join('');
+    const options = state.tasks.filter(task => !task.project_id && !taskClosedForLinking(task)).map(task => `<option value="${escapeHtml(task.id)}">${escapeHtml(task.title)}</option>`).join('');
     return `<div class="project-task-tools"><label><span class="subtle">Bestehenden Task verbinden</span><select id="projectTaskSelect"><option value="">Task auswählen</option>${options}</select></label><div class="list-actions"><button class="mini-btn" type="button" data-action="link-selected-task" data-id="${escapeHtml(project.id)}">Verbinden</button><button class="mini-btn primary" type="button" data-action="create-project-task" data-id="${escapeHtml(project.id)}">Task für Projekt erstellen</button></div></div>`;
   }
 
@@ -536,17 +462,8 @@
     }
   }
 
-  function setProjectError(text) {
-    const node = document.getElementById('projectFormError');
-    if (node) node.textContent = text || '';
-  }
-
-  async function requireRemoteUser() {
-    const supabase = getSupabaseClient();
-    const userId = await currentUserId();
-    if (!supabase || !userId) throw new Error('Supabase ist nicht verbunden.');
-    return { supabase, userId };
-  }
+  function setProjectError(text) { const node = document.getElementById('projectFormError'); if (node) node.textContent = text || ''; }
+  async function requireRemoteUser() { const supabase = getSupabaseClient(); const userId = await currentUserId(); if (!supabase || !userId) throw new Error('Supabase ist nicht verbunden.'); return { supabase, userId }; }
 
   async function saveProject(event) {
     event.preventDefault();
@@ -568,9 +485,7 @@
       const baseRow = { id: project.id, user_id: userId, title: project.title, description: project.description || null, start_date: project.start_date || null, end_date: project.end_date || null, status: project.status, outcome_note: projectOutcomeForStorage(project), is_archived: false, created_at: project.created_at, updated_at: project.updated_at };
       const row = { ...baseRow, color: project.color };
       let { error } = await supabase.from(TABLE_PROJECTS).upsert(row, { onConflict: 'id' });
-      if (error && isMissingRemoteColumnError(error, 'color')) {
-        ({ error } = await supabase.from(TABLE_PROJECTS).upsert(baseRow, { onConflict: 'id' }));
-      }
+      if (error && isMissingRemoteColumnError(error, 'color')) ({ error } = await supabase.from(TABLE_PROJECTS).upsert(baseRow, { onConflict: 'id' }));
       if (error) throw error;
       state.projects = existing ? state.projects.map(item => item.id === project.id ? project : item) : [project, ...state.projects];
       writeState(state);
@@ -622,6 +537,7 @@
     if (!(form instanceof HTMLFormElement)) return;
     const data = new FormData(form);
     const projectId = form.dataset.projectId;
+    const editingMilestoneId = form.dataset.editingMilestoneId || '';
     const title = String(data.get('title') || '').trim();
     const date = validDate(data.get('milestone_date'));
     const phaseId = String(data.get('phase_id') || '');
@@ -630,53 +546,42 @@
 
     try {
       const now = nowIso();
-      const milestone = normalizeMilestone({ id: uid('milestone'), project_id: projectId, phase_id: phaseId, title, milestone_date: date, created_at: now, updated_at: now, synced: true });
+      const state = readState();
+      const existing = editingMilestoneId ? state.projectMilestones.find(item => item.id === editingMilestoneId) : null;
+      const milestone = normalizeMilestone({ ...(existing || {}), id: existing?.id || uid('milestone'), project_id: projectId, phase_id: phaseId, title, milestone_date: date, created_at: existing?.created_at || now, updated_at: now, synced: true });
       const { supabase, userId } = await requireRemoteUser();
       const row = { id: milestone.id, user_id: userId, project_id: milestone.project_id, phase_id: milestone.phase_id || null, title: milestone.title, milestone_date: milestone.milestone_date, is_archived: false, created_at: milestone.created_at, updated_at: milestone.updated_at };
       const { error } = await supabase.from(TABLE_MILESTONES).upsert(row, { onConflict: 'id' });
       if (error) throw error;
-      const state = readState();
-      state.projectMilestones = [milestone, ...state.projectMilestones.filter(item => item.id !== milestone.id)];
+      state.projectMilestones = existing ? state.projectMilestones.map(item => item.id === milestone.id ? milestone : item) : [milestone, ...state.projectMilestones.filter(item => item.id !== milestone.id)];
       writeState(state);
+      delete form.dataset.editingMilestoneId;
+      const button = form.querySelector('button[type="submit"]');
+      if (button) button.textContent = 'Meilenstein speichern';
       form.reset();
       renderDetail(projectId);
       render();
-      toast('Meilenstein gespeichert');
+      toast(existing ? 'Meilenstein aktualisiert' : 'Meilenstein gespeichert');
     } catch (error) {
       console.warn('[HabitFlow/projects] Meilenstein konnte nicht gespeichert werden.', error);
       toast(error.message || 'Meilenstein konnte nicht gespeichert werden.');
     }
   }
 
-  async function editMilestone(id) {
+  function editMilestone(id) {
     const state = readState();
     const milestone = state.projectMilestones.find(item => item.id === id);
     if (!milestone) return;
-    const phases = projectPhases(state, milestone.project_id);
-    const title = prompt('Meilenstein', milestone.title);
-    if (title == null) return;
-    const date = prompt('Datum YYYY-MM-DD', milestone.milestone_date);
-    if (date == null) return;
-    const phaseHint = phases.length ? `\n\nPhase optional: leer = projektweit, oder Nummer wählen:\n${phases.map((phase, index) => `${index + 1}: ${phase.name}`).join('\n')}` : '';
-    const phaseInput = prompt(`Phase zuordnen${phaseHint}`, milestone.phase_id ? String(phases.findIndex(phase => phase.id === milestone.phase_id) + 1 || '') : '');
-    if (phaseInput == null) return;
-    const phaseIndex = Number(phaseInput || 0) - 1;
-    const phaseId = phaseInput ? (phases[phaseIndex]?.id || milestone.phase_id || '') : '';
-    if (!String(title).trim() || !validDate(date)) return toast('Ungültige Meilenstein-Daten.');
-    try {
-      const updated = normalizeMilestone({ ...milestone, title, milestone_date: date, phase_id: phaseId, updated_at: nowIso(), synced: true });
-      const { supabase, userId } = await requireRemoteUser();
-      const row = { id: updated.id, user_id: userId, project_id: updated.project_id, phase_id: updated.phase_id || null, title: updated.title, milestone_date: updated.milestone_date, is_archived: false, created_at: updated.created_at, updated_at: updated.updated_at };
-      const { error } = await supabase.from(TABLE_MILESTONES).upsert(row, { onConflict: 'id' });
-      if (error) throw error;
-      state.projectMilestones = state.projectMilestones.map(item => item.id === id ? updated : item);
-      writeState(state);
-      renderDetail(updated.project_id);
-      render();
-      toast('Meilenstein aktualisiert');
-    } catch (error) {
-      toast(error.message || 'Meilenstein konnte nicht aktualisiert werden.');
-    }
+    const form = Array.from(document.querySelectorAll('[data-project-milestone-form]')).find(item => item.dataset.projectId === milestone.project_id);
+    if (!form) return;
+    form.dataset.editingMilestoneId = milestone.id;
+    form.elements.title.value = milestone.title || '';
+    form.elements.milestone_date.value = validDate(milestone.milestone_date) || todayDate();
+    if (form.elements.phase_id) form.elements.phase_id.value = milestone.phase_id || '';
+    const button = form.querySelector('button[type="submit"]');
+    if (button) button.textContent = 'Meilenstein aktualisieren';
+    form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    form.elements.title?.focus();
   }
 
   async function deleteMilestone(id) {
@@ -692,9 +597,7 @@
       renderDetail(milestone.project_id);
       render();
       toast('Meilenstein gelöscht');
-    } catch (error) {
-      toast(error.message || 'Meilenstein konnte nicht gelöscht werden.');
-    }
+    } catch (error) { toast(error.message || 'Meilenstein konnte nicht gelöscht werden.'); }
   }
 
   async function editPhase(id) {
@@ -720,9 +623,7 @@
       renderDetail(updated.project_id);
       render();
       toast('Phase aktualisiert');
-    } catch (error) {
-      toast(error.message || 'Phase konnte nicht aktualisiert werden.');
-    }
+    } catch (error) { toast(error.message || 'Phase konnte nicht aktualisiert werden.'); }
   }
 
   async function deletePhase(id) {
@@ -738,9 +639,7 @@
       renderDetail(phase.project_id);
       render();
       toast('Phase gelöscht');
-    } catch (error) {
-      toast(error.message || 'Phase konnte nicht gelöscht werden.');
-    }
+    } catch (error) { toast(error.message || 'Phase konnte nicht gelöscht werden.'); }
   }
 
   async function linkTask(projectId, taskId) {
@@ -755,9 +654,7 @@
       renderDetail(projectId);
       render();
       toast('Task verknüpft');
-    } catch (error) {
-      toast(error.message || 'Task konnte nicht verknüpft werden.');
-    }
+    } catch (error) { toast(error.message || 'Task konnte nicht verknüpft werden.'); }
   }
 
   async function unlinkTask(taskId) {
@@ -773,9 +670,7 @@
       renderDetail(task.project_id);
       render();
       toast('Task gelöst');
-    } catch (error) {
-      toast(error.message || 'Task konnte nicht gelöst werden.');
-    }
+    } catch (error) { toast(error.message || 'Task konnte nicht gelöst werden.'); }
   }
 
   async function createProjectTask(projectId) {
@@ -794,9 +689,7 @@
       renderDetail(projectId);
       render();
       toast('Projekt-Task erstellt');
-    } catch (error) {
-      toast(error.message || 'Projekt-Task konnte nicht erstellt werden.');
-    }
+    } catch (error) { toast(error.message || 'Projekt-Task konnte nicht erstellt werden.'); }
   }
 
   async function markProjectDone(projectId) {
@@ -813,9 +706,7 @@
       renderDetail(projectId);
       render();
       toast('Projekt abgeschlossen');
-    } catch (error) {
-      toast(error.message || 'Projekt konnte nicht abgeschlossen werden.');
-    }
+    } catch (error) { toast(error.message || 'Projekt konnte nicht abgeschlossen werden.'); }
   }
 
   async function openDetail(projectId) {
@@ -832,9 +723,7 @@
     selectedProjectId = '';
     document.getElementById('projectDetailModal')?.classList.add('hidden');
     document.body.classList.remove('project-modal-open');
-    if (!options.skipSync) {
-      pullRemoteProjectData('', { silent: true }).catch(error => console.warn('[HabitFlow/projects] Projektliste konnte nicht nachgeladen werden.', error));
-    }
+    if (!options.skipSync) pullRemoteProjectData('', { silent: true }).catch(error => console.warn('[HabitFlow/projects] Projektliste konnte nicht nachgeladen werden.', error));
   }
 
   async function pullRemoteProjectData(projectId = '', options = {}) {
@@ -877,15 +766,10 @@
     } catch (error) {
       if (!options.silent) setSyncStatus('Sync-Fehler');
       console.warn('[HabitFlow/projects] Sync fehlgeschlagen.', error);
-    } finally {
-      syncing = false;
-    }
+    } finally { syncing = false; }
   }
 
-  function setSyncStatus(text) {
-    const node = document.getElementById('projectSyncStatus');
-    if (node) node.textContent = text;
-  }
+  function setSyncStatus(text) { const node = document.getElementById('projectSyncStatus'); if (node) node.textContent = text; }
 
   function bindEvents() {
     if (window.__habitFlowProjectsEventsBound) return;
@@ -904,10 +788,7 @@
       if (action === 'close-project-form' || action === 'cancel-project-edit') closeForm();
       if (action === 'open-project-detail') openDetail(id);
       if (action === 'close-project-detail') closeDetail();
-      if (action === 'edit-project') {
-        closeDetail({ skipSync: true });
-        openForm(id);
-      }
+      if (action === 'edit-project') { closeDetail({ skipSync: true }); openForm(id); }
       if (action === 'mark-project-done') markProjectDone(id);
       if (action === 'edit-phase') editPhase(id);
       if (action === 'delete-phase') deletePhase(id);
@@ -920,15 +801,12 @@
     document.addEventListener('keydown', event => {
       if (event.key === 'Escape' && !document.getElementById('projectDetailModal')?.classList.contains('hidden')) closeDetail();
     });
-    document.getElementById('projectDetailModal')?.addEventListener('click', event => {
-      if (event.target.id === 'projectDetailModal') closeDetail();
-    });
+    document.getElementById('projectDetailModal')?.addEventListener('click', event => { if (event.target.id === 'projectDetailModal') closeDetail(); });
   }
 
   function boot() {
     patchStatePersistence();
-    const initialState = readState();
-    writeState(initialState);
+    writeState(readState());
     injectShell();
     bindEvents();
     bindTaskBadgeObserver();
