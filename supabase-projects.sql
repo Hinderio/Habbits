@@ -34,6 +34,17 @@ create table if not exists public.project_phases (
   constraint project_phases_dates_check check (end_date >= start_date)
 );
 
+create table if not exists public.project_milestones (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  project_id uuid not null references public.projects(id) on delete cascade,
+  title text not null,
+  milestone_date date not null,
+  is_archived boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 alter table public.projects add column if not exists user_id uuid references auth.users(id) on delete cascade;
 alter table public.projects alter column user_id set default auth.uid();
 alter table public.projects add column if not exists description text;
@@ -67,10 +78,20 @@ alter table public.project_phases add constraint project_phases_status_check che
 alter table public.project_phases drop constraint if exists project_phases_dates_check;
 alter table public.project_phases add constraint project_phases_dates_check check (end_date >= start_date);
 
+alter table public.project_milestones add column if not exists user_id uuid references auth.users(id) on delete cascade;
+alter table public.project_milestones alter column user_id set default auth.uid();
+alter table public.project_milestones add column if not exists project_id uuid references public.projects(id) on delete cascade;
+alter table public.project_milestones add column if not exists title text;
+alter table public.project_milestones add column if not exists milestone_date date;
+alter table public.project_milestones add column if not exists is_archived boolean not null default false;
+alter table public.project_milestones add column if not exists created_at timestamptz not null default now();
+alter table public.project_milestones add column if not exists updated_at timestamptz not null default now();
+
 alter table public.tasks add column if not exists project_id uuid references public.projects(id) on delete set null;
 
 create index if not exists idx_projects_user_updated on public.projects(user_id, updated_at desc);
 create index if not exists idx_project_phases_user_project on public.project_phases(user_id, project_id, start_date);
+create index if not exists idx_project_milestones_user_project on public.project_milestones(user_id, project_id, milestone_date);
 create index if not exists idx_tasks_user_project on public.tasks(user_id, project_id);
 
 drop trigger if exists set_projects_updated_at on public.projects;
@@ -79,12 +100,15 @@ create trigger set_projects_updated_at before update on public.projects for each
 drop trigger if exists set_project_phases_updated_at on public.project_phases;
 create trigger set_project_phases_updated_at before update on public.project_phases for each row execute function public.set_updated_at();
 
+drop trigger if exists set_project_milestones_updated_at on public.project_milestones;
+create trigger set_project_milestones_updated_at before update on public.project_milestones for each row execute function public.set_updated_at();
+
 do $$
 declare
   tbl text;
   pol record;
 begin
-  foreach tbl in array array['projects','project_phases'] loop
+  foreach tbl in array array['projects','project_phases','project_milestones'] loop
     execute format('alter table public.%I enable row level security', tbl);
     execute format('alter table public.%I force row level security', tbl);
 
@@ -101,6 +125,7 @@ end $$;
 
 grant select, insert, update, delete on public.projects to authenticated;
 grant select, insert, update, delete on public.project_phases to authenticated;
+grant select, insert, update, delete on public.project_milestones to authenticated;
 
 do $$
 begin
@@ -111,6 +136,11 @@ begin
   end;
   begin
     alter publication supabase_realtime add table public.project_phases;
+  exception when others then
+    null;
+  end;
+  begin
+    alter publication supabase_realtime add table public.project_milestones;
   exception when others then
     null;
   end;
