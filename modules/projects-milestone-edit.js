@@ -16,6 +16,11 @@
   function todayDate() { return new Date().toISOString().slice(0, 10); }
   function nowIso() { return new Date().toISOString(); }
 
+  function cssEscape(value) {
+    const text = String(value || '');
+    return window.CSS?.escape ? window.CSS.escape(text) : text.replace(/["\\]/g, char => `\\${char}`);
+  }
+
   function validDate(value) {
     const text = String(value || '').slice(0, 10);
     return /^\d{4}-\d{2}-\d{2}$/.test(text) && !Number.isNaN(new Date(`${text}T12:00:00`).getTime()) ? text : '';
@@ -63,7 +68,9 @@
 
   function userIdFromToken(token) {
     try {
-      const payload = JSON.parse(atob(String(token).split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      const payloadText = String(token).split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      const padded = payloadText.padEnd(payloadText.length + ((4 - payloadText.length % 4) % 4), '=');
+      const payload = JSON.parse(atob(padded));
       return payload.sub || '';
     } catch {
       return '';
@@ -81,7 +88,7 @@
         apikey: config.anonKey,
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
-        Prefer: 'resolution=merge-duplicates'
+        Prefer: 'resolution=merge-duplicates,return=minimal'
       },
       body: JSON.stringify([{ ...row, user_id: userId }])
     });
@@ -104,7 +111,7 @@
 
   function refreshProjectDetail(projectId) {
     const close = document.querySelector('[data-action="close-project-detail"]');
-    const opener = document.querySelector(`[data-action="open-project-detail"][data-id="${CSS.escape(projectId)}"]`);
+    const opener = document.querySelector(`[data-action="open-project-detail"][data-id="${cssEscape(projectId)}"]`);
     if (close && opener) {
       close.click();
       window.setTimeout(() => opener.click(), 40);
@@ -117,7 +124,7 @@
     const state = readState();
     const milestone = projectMilestones(state).find(item => item?.id === id);
     if (!milestone) return;
-    const form = document.querySelector(`[data-project-milestone-form][data-project-id="${CSS.escape(milestone.project_id)}"]`);
+    const form = document.querySelector(`[data-project-milestone-form][data-project-id="${cssEscape(milestone.project_id)}"]`);
     if (!form) return;
     form.dataset.editingMilestoneId = milestone.id;
     form.elements.title.value = milestone.title || '';
