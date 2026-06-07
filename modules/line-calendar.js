@@ -16,6 +16,7 @@
   };
 
   let modal = null;
+  let remoteAppointmentCache = null;
 
   function escapeHtml(value = '') {
     return String(value).replace(/[&<>"']/g, char => ({
@@ -44,6 +45,33 @@
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state || {}));
     } catch (error) {}
+  }
+
+  function readJsonStorage(key) {
+    try {
+      return JSON.parse(window.localStorage.getItem(key) || '{}') || {};
+    } catch {
+      return {};
+    }
+  }
+
+  function collectDeletedIds(source, table, ids) {
+    const value = source?.[table];
+    if (!value) return;
+    if (Array.isArray(value)) {
+      value.forEach(id => { if (id) ids.add(String(id)); });
+      return;
+    }
+    if (typeof value === 'object') {
+      Object.keys(value).forEach(id => { if (id) ids.add(String(id)); });
+    }
+  }
+
+  function deletedAppointmentIds(state = readState()) {
+    const ids = new Set();
+    collectDeletedIds(state.deletedRemoteIds, 'appointments', ids);
+    collectDeletedIds(readJsonStorage('habitflow-remote-delete-archive-v1'), 'appointments', ids);
+    return ids;
   }
 
   function toIso(value) {
@@ -92,7 +120,8 @@
     if (error) throw error;
 
     const state = readState();
-    state.appointments = (data || []).map(mapRemoteAppointment);
+    remoteAppointmentCache = (data || []).map(mapRemoteAppointment);
+    state.appointments = remoteAppointmentCache;
     if (state.deletedRemoteIds?.appointments) {
       state.deletedRemoteIds.appointments = {};
     }
@@ -137,10 +166,14 @@
     return toDate(appointment?.starts_at || appointment?.created_at);
   }
 
-  function futureAppointments() {
+  function futureAppointments(sourceAppointments = null) {
     const now = new Date();
     const windowEnd = addMonths(now, MONTHS_AHEAD);
-    return (readState().appointments || [])
+    const state = readState();
+    const deletedIds = deletedAppointmentIds(state);
+    const appointments = Array.isArray(sourceAppointments) ? sourceAppointments : (state.appointments || []);
+    return appointments
+      .filter(appointment => appointment?.id && !deletedIds.has(String(appointment.id)))
       .map(appointment => ({ ...appointment, _date: appointmentDate(appointment) }))
       .filter(appointment => appointment._date && appointment._date >= now && appointment._date < windowEnd)
       .sort((a, b) => a._date.getTime() - b._date.getTime());
@@ -170,11 +203,10 @@
     const type = APPOINTMENT_TYPES[typeKey];
     const title = appointment.title || type.label || 'Termin';
     const displayTitle = shortTitle(title);
-    const birthday = Boolean(appointment.is_birthday);
     const meta = `${formatDate(appointment._date, { day: '2-digit', month: 'short' })} · ${formatTime(appointment._date)}`;
     const placement = index % 2 === 0 ? 'is-top' : 'is-bottom';
-    const birthdayClass = birthday ? ' is-birthday' : '';
-    return `<span class="line-calendar-event ${placement}${birthdayClass}" style="--event-left:${left.toFixed(2)}%;--event-color:${type.color}" title="${escapeHtml(`${title}${birthday ? ' · Geburtstag' : ''} · ${meta}`)}">
+    const birthdayClass = appointment.is_birthday ? ' is-birthday' : '';
+    return `<span class="line-calendar-event ${placement}${birthdayClass}" style="--event-left:${left.toFixed(2)}%;--event-color:${type.color}" title="${escapeHtml(`${title} · ${meta}`)}">
       <span class="line-calendar-label"><strong>${escapeHtml(displayTitle)}</strong><small>${escapeHtml(meta)}</small></span>
     </span>`;
   }
@@ -200,7 +232,7 @@
 
   function renderModalBody(options = {}) {
     const today = new Date();
-    const appointments = futureAppointments();
+    const appointments = futureAppointments(options.appointments || null);
     const segments = buildSegments(today);
     const next = appointments[0] || null;
     const last = appointments[appointments.length - 1] || null;
@@ -244,7 +276,11 @@
     document.body.classList.add('modal-open');
     requestAnimationFrame(() => modal.querySelector('[data-line-calendar-close]')?.focus({ preventScroll: true }));
     try {
-      await refreshRemoteAppointments();
+      const didRefresh = await refreshRemoteAppointments();
+      if (modal && !modal.classList.contains('hidden')) {
+        modal.innerHTML = renderModalBody({ appointments: didRefresh ? remoteAppointmentCache : null });
+      }
+      return;
     } catch (error) {
       console.warn('[HabitFlow/line-calendar] Termine konnten nicht aus Supabase aktualisiert werden.', error);
     }
