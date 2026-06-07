@@ -175,6 +175,7 @@
     return {
       id: String(milestone.id || uid('milestone')),
       project_id: String(milestone.project_id || milestone.projectId || ''),
+      phase_id: String(milestone.phase_id || milestone.phaseId || ''),
       title: String(milestone.title || milestone.name || '').trim().slice(0, 100),
       milestone_date: validDate(milestone.milestone_date || milestone.date || milestone.due_date) || todayDate(),
       is_archived: Boolean(milestone.is_archived),
@@ -252,6 +253,19 @@
 
   function projectMilestones(state, projectId) {
     return state.projectMilestones.filter(item => item.project_id === projectId && !item.is_archived).sort((a, b) => a.milestone_date.localeCompare(b.milestone_date));
+  }
+
+  function milestonePhaseLabel(milestone, phases = []) {
+    if (!milestone.phase_id) return 'Projektweit';
+    return phases.find(phase => phase.id === milestone.phase_id)?.name || 'Phase';
+  }
+
+  function milestonesForPhase(milestones = [], phaseId = '') {
+    return milestones.filter(item => !item.phase_id || item.phase_id === phaseId);
+  }
+
+  function phaseOptions(phases = [], selectedPhaseId = '') {
+    return `<option value="">Projektweit</option>${phases.map(phase => `<option value="${escapeHtml(phase.id)}" ${phase.id === selectedPhaseId ? 'selected' : ''}>${escapeHtml(phase.name)}</option>`).join('')}`;
   }
 
   function taskDone(task = {}) { return (task.status || 'open') === 'done'; }
@@ -466,11 +480,11 @@
     const phases = projectPhases(state, project.id);
     const milestones = projectMilestones(state, project.id);
     const status = STATUS[project.status] || STATUS.planned;
-    node.innerHTML = `<div class="project-detail-head">${projectBadge(project)}<p class="eyebrow">Projekt</p><h2>${escapeHtml(project.title)}</h2><p>${escapeHtml(project.description || 'Noch keine Beschreibung.')}</p></div><div class="project-detail-grid"><article class="project-detail-box"><small>Status</small><h3><span class="badge ${status.cls}">${status.label}</span></h3><p class="subtle">${dateLabel(project.start_date)} bis ${dateLabel(project.end_date)}</p></article><article class="project-detail-box"><small>Fortschritt</small><h3>${progress}%</h3><div class="project-progress-track"><i style="width:${progress}%"></i></div></article><article class="project-detail-box"><small>Ziel / Outcome</small><p class="subtle">${escapeHtml(project.outcome_note || 'Noch kein Outcome notiert.')}</p></article><article class="project-detail-box project-next-step"><small>Nächster sinnvoller Schritt</small><p>${escapeHtml(nextStep(project, state, progress))}</p></article></div><div class="project-section-head"><div><p class="eyebrow">Phasen / Gantt MVP</p><h3>Timeline</h3></div><span class="badge muted">${phases.length} Phase${phases.length === 1 ? '' : 'n'} · ${milestones.length} Meilenstein${milestones.length === 1 ? '' : 'e'}</span></div><form class="phase-form" data-project-phase-form data-project-id="${escapeHtml(project.id)}"><label><span>Phase</span><input name="name" required placeholder="z. B. Konzept" /></label><label><span>Start</span><input name="start_date" type="date" value="${escapeHtml(project.start_date || todayDate())}" required /></label><label><span>Ende</span><input name="end_date" type="date" value="${escapeHtml(project.end_date || project.start_date || todayDate())}" required /></label><label><span>Status</span><select name="status"><option value="open">Offen</option><option value="active">In Arbeit</option><option value="done">Erledigt</option></select></label><button class="mini-btn primary" type="submit">Phase speichern</button></form><form class="milestone-form" data-project-milestone-form data-project-id="${escapeHtml(project.id)}"><label><span>Meilenstein</span><input name="title" required placeholder="z. B. Go-Live" /></label><label><span>Datum</span><input name="milestone_date" type="date" value="${escapeHtml(project.end_date || project.start_date || todayDate())}" required /></label><button class="mini-btn primary" type="submit">Meilenstein speichern</button></form>${milestones.length ? `<div class="milestone-list">${milestones.map(renderMilestone).join('')}</div>` : '<div class="project-empty">Noch keine Meilensteine. Setze wichtige Termine als Orientierungspunkte.</div>'}<div>${phases.length ? phases.map(phase => renderPhase(phase, project, milestones)).join('') : '<div class="project-empty">Noch keine Phasen. Erstelle die erste Projektphase.</div>'}</div><div class="project-section-head"><div><p class="eyebrow">Tasks</p><h3>Verknüpfte Aufgaben</h3></div><span class="badge muted">${tasks.length} Task${tasks.length === 1 ? '' : 's'}</span></div>${renderTaskTools(project, state)}<div class="project-task-list">${tasks.length ? tasks.map(task => renderTaskRow(task)).join('') : '<div class="project-empty">Noch keine Tasks verknüpft.</div>'}</div><div class="form-actions project-detail-actions"><button class="pill secondary" type="button" data-action="edit-project" data-id="${escapeHtml(project.id)}">Projekt bearbeiten</button><button class="pill secondary" type="button" data-action="mark-project-done" data-id="${escapeHtml(project.id)}">Als abgeschlossen markieren</button></div>`;
+    node.innerHTML = `<div class="project-detail-head">${projectBadge(project)}<p class="eyebrow">Projekt</p><h2>${escapeHtml(project.title)}</h2><p>${escapeHtml(project.description || 'Noch keine Beschreibung.')}</p></div><div class="project-detail-grid"><article class="project-detail-box"><small>Status</small><h3><span class="badge ${status.cls}">${status.label}</span></h3><p class="subtle">${dateLabel(project.start_date)} bis ${dateLabel(project.end_date)}</p></article><article class="project-detail-box"><small>Fortschritt</small><h3>${progress}%</h3><div class="project-progress-track"><i style="width:${progress}%"></i></div></article><article class="project-detail-box"><small>Ziel / Outcome</small><p class="subtle">${escapeHtml(project.outcome_note || 'Noch kein Outcome notiert.')}</p></article><article class="project-detail-box project-next-step"><small>Nächster sinnvoller Schritt</small><p>${escapeHtml(nextStep(project, state, progress))}</p></article></div><div class="project-section-head"><div><p class="eyebrow">Phasen / Gantt MVP</p><h3>Timeline</h3></div><span class="badge muted">${phases.length} Phase${phases.length === 1 ? '' : 'n'} · ${milestones.length} Meilenstein${milestones.length === 1 ? '' : 'e'}</span></div><form class="phase-form" data-project-phase-form data-project-id="${escapeHtml(project.id)}"><label><span>Phase</span><input name="name" required placeholder="z. B. Konzept" /></label><label><span>Start</span><input name="start_date" type="date" value="${escapeHtml(project.start_date || todayDate())}" required /></label><label><span>Ende</span><input name="end_date" type="date" value="${escapeHtml(project.end_date || project.start_date || todayDate())}" required /></label><label><span>Status</span><select name="status"><option value="open">Offen</option><option value="active">In Arbeit</option><option value="done">Erledigt</option></select></label><button class="mini-btn primary" type="submit">Phase speichern</button></form><form class="milestone-form" data-project-milestone-form data-project-id="${escapeHtml(project.id)}"><label><span>Meilenstein</span><input name="title" required placeholder="z. B. Go-Live" /></label><label><span>Datum</span><input name="milestone_date" type="date" value="${escapeHtml(project.end_date || project.start_date || todayDate())}" required /></label><label><span>Phase</span><select name="phase_id">${phaseOptions(phases)}</select></label><button class="mini-btn primary" type="submit">Meilenstein speichern</button></form>${milestones.length ? `<div class="milestone-list">${milestones.map(milestone => renderMilestone(milestone, phases)).join('')}</div>` : '<div class="project-empty">Noch keine Meilensteine. Setze wichtige Termine als Orientierungspunkte.</div>'}<div>${phases.length ? phases.map(phase => renderPhase(phase, project, milestonesForPhase(milestones, phase.id))).join('') : '<div class="project-empty">Noch keine Phasen. Erstelle die erste Projektphase.</div>'}</div><div class="project-section-head"><div><p class="eyebrow">Tasks</p><h3>Verknüpfte Aufgaben</h3></div><span class="badge muted">${tasks.length} Task${tasks.length === 1 ? '' : 's'}</span></div>${renderTaskTools(project, state)}<div class="project-task-list">${tasks.length ? tasks.map(task => renderTaskRow(task)).join('') : '<div class="project-empty">Noch keine Tasks verknüpft.</div>'}</div><div class="form-actions project-detail-actions"><button class="pill secondary" type="button" data-action="edit-project" data-id="${escapeHtml(project.id)}">Projekt bearbeiten</button><button class="pill secondary" type="button" data-action="mark-project-done" data-id="${escapeHtml(project.id)}">Als abgeschlossen markieren</button></div>`;
   }
 
-  function renderMilestone(milestone) {
-    return `<article class="milestone-chip"><strong>${escapeHtml(milestoneAbbr(milestone.title))}</strong><span>${escapeHtml(milestone.title)}</span><small>${dateLabel(milestone.milestone_date)}</small><button class="mini-btn" type="button" data-action="edit-milestone" data-id="${escapeHtml(milestone.id)}">Bearbeiten</button><button class="mini-btn danger" type="button" data-action="delete-milestone" data-id="${escapeHtml(milestone.id)}">Löschen</button></article>`;
+  function renderMilestone(milestone, phases = []) {
+    return `<article class="milestone-chip"><strong>${escapeHtml(milestoneAbbr(milestone.title))}</strong><span>${escapeHtml(milestone.title)}</span><small>${dateLabel(milestone.milestone_date)}</small><em>${escapeHtml(milestonePhaseLabel(milestone, phases))}</em><button class="mini-btn" type="button" data-action="edit-milestone" data-id="${escapeHtml(milestone.id)}">Bearbeiten</button><button class="mini-btn danger" type="button" data-action="delete-milestone" data-id="${escapeHtml(milestone.id)}">Löschen</button></article>`;
   }
 
   function renderPhase(phase, project, milestones = []) {
@@ -610,14 +624,15 @@
     const projectId = form.dataset.projectId;
     const title = String(data.get('title') || '').trim();
     const date = validDate(data.get('milestone_date'));
+    const phaseId = String(data.get('phase_id') || '');
     if (!projectId) return toast('Projekt konnte für den Meilenstein nicht gefunden werden.');
     if (!title || !date) return toast('Meilenstein braucht Titel und Datum.');
 
     try {
       const now = nowIso();
-      const milestone = normalizeMilestone({ id: uid('milestone'), project_id: projectId, title, milestone_date: date, created_at: now, updated_at: now, synced: true });
+      const milestone = normalizeMilestone({ id: uid('milestone'), project_id: projectId, phase_id: phaseId, title, milestone_date: date, created_at: now, updated_at: now, synced: true });
       const { supabase, userId } = await requireRemoteUser();
-      const row = { id: milestone.id, user_id: userId, project_id: milestone.project_id, title: milestone.title, milestone_date: milestone.milestone_date, is_archived: false, created_at: milestone.created_at, updated_at: milestone.updated_at };
+      const row = { id: milestone.id, user_id: userId, project_id: milestone.project_id, phase_id: milestone.phase_id || null, title: milestone.title, milestone_date: milestone.milestone_date, is_archived: false, created_at: milestone.created_at, updated_at: milestone.updated_at };
       const { error } = await supabase.from(TABLE_MILESTONES).upsert(row, { onConflict: 'id' });
       if (error) throw error;
       const state = readState();
@@ -637,15 +652,21 @@
     const state = readState();
     const milestone = state.projectMilestones.find(item => item.id === id);
     if (!milestone) return;
+    const phases = projectPhases(state, milestone.project_id);
     const title = prompt('Meilenstein', milestone.title);
     if (title == null) return;
     const date = prompt('Datum YYYY-MM-DD', milestone.milestone_date);
     if (date == null) return;
+    const phaseHint = phases.length ? `\n\nPhase optional: leer = projektweit, oder Nummer wählen:\n${phases.map((phase, index) => `${index + 1}: ${phase.name}`).join('\n')}` : '';
+    const phaseInput = prompt(`Phase zuordnen${phaseHint}`, milestone.phase_id ? String(phases.findIndex(phase => phase.id === milestone.phase_id) + 1 || '') : '');
+    if (phaseInput == null) return;
+    const phaseIndex = Number(phaseInput || 0) - 1;
+    const phaseId = phaseInput ? (phases[phaseIndex]?.id || milestone.phase_id || '') : '';
     if (!String(title).trim() || !validDate(date)) return toast('Ungültige Meilenstein-Daten.');
     try {
-      const updated = normalizeMilestone({ ...milestone, title, milestone_date: date, updated_at: nowIso(), synced: true });
+      const updated = normalizeMilestone({ ...milestone, title, milestone_date: date, phase_id: phaseId, updated_at: nowIso(), synced: true });
       const { supabase, userId } = await requireRemoteUser();
-      const row = { id: updated.id, user_id: userId, project_id: updated.project_id, title: updated.title, milestone_date: updated.milestone_date, is_archived: false, created_at: updated.created_at, updated_at: updated.updated_at };
+      const row = { id: updated.id, user_id: userId, project_id: updated.project_id, phase_id: updated.phase_id || null, title: updated.title, milestone_date: updated.milestone_date, is_archived: false, created_at: updated.created_at, updated_at: updated.updated_at };
       const { error } = await supabase.from(TABLE_MILESTONES).upsert(row, { onConflict: 'id' });
       if (error) throw error;
       state.projectMilestones = state.projectMilestones.map(item => item.id === id ? updated : item);
