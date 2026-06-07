@@ -1,6 +1,9 @@
 .line-calendar-btn {
-  width: 64px;
-  height: 64px;
+  width: 76px;
+  height: 76px;
+  flex: 0 0 76px;
+  margin-left: auto;
+  margin-right: 10px;
   border-radius: 50%;
   border: 1px solid rgba(74, 215, 209, .22);
   background: rgba(74, 215, 209, .12);
@@ -264,8 +267,10 @@ body.light .line-calendar-event {
 
 @media (max-width: 760px) {
   .line-calendar-btn {
-    width: 58px;
-    height: 58px;
+    width: 68px;
+    height: 68px;
+    flex-basis: 68px;
+    margin-right: 8px;
   }
 
   .line-calendar-modal {
