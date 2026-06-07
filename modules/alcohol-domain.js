@@ -90,3 +90,20 @@
   script.defer = true;
   document.head.appendChild(script);
 })(window, document);
+
+(function loadLineCalendar(window, document) {
+  'use strict';
+
+  if (window.__habitFlowLineCalendarLoaded) return;
+  window.__habitFlowLineCalendarLoaded = true;
+
+  const stylesheet = document.createElement('link');
+  stylesheet.rel = 'stylesheet';
+  stylesheet.href = 'modules/line-calendar.css';
+  document.head.appendChild(stylesheet);
+
+  const script = document.createElement('script');
+  script.src = 'modules/line-calendar.js';
+  script.defer = true;
+  document.head.appendChild(script);
+})(window, document);
