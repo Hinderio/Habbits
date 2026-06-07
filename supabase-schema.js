@@ -33,7 +33,7 @@
   }
 
   function loadAppointmentSeriesAssets() {
-    writeScript('modules/appointment-series.js?v=186');
+    writeScript('modules/appointment-series.js?v=187');
   }
 
   function loadProjectAssets() {
