@@ -738,6 +738,8 @@
             <label><span>Ende</span><input name="ends_at" type="datetime-local" /></label>
             <label><span>Typ</span><select name="appointment_type"><option value="personal" selected>Privat</option><option value="work">Arbeit</option><option value="health">Gesundheit</option><option value="social">Sozial</option><option value="admin">Admin</option><option value="other">Sonstiges</option></select></label>
             <label><span>Ort</span><input name="location" placeholder="optional" /></label>
+            <label><span>Zyklus</span><select id="appointmentRecurrenceSelect" name="recurrence"><option value="once" selected>Einmalig</option><option value="weekly">Wöchentlich</option><option value="monthly">Monatlich</option><option value="quarterly">Quartal</option><option value="yearly">Jährlich</option></select></label>
+            <label><span>Geburtstag</span><span class="appointment-checkbox-row"><input id="appointmentBirthdayCheckbox" name="is_birthday" type="checkbox" value="1" /><strong>Als Geburtstag markieren</strong></span></label>
             <label class="full"><span>Notiz</span><textarea name="description" rows="3" placeholder="optional"></textarea></label>
             <div class="form-actions full"><button id="appointmentSubmitBtn" class="pill primary" type="submit">Termin speichern</button><button id="cancelAppointmentEditBtn" class="pill secondary hidden" type="button">Abbrechen</button></div>
           </form>

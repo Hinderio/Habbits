@@ -191,6 +191,10 @@ create table if not exists public.appointments (
   appointment_type text not null default 'other' check (appointment_type in ('personal','work','health','social','admin','other')),
   starts_at timestamptz not null default now(),
   ends_at timestamptz,
+  recurrence text check (recurrence in ('weekly','monthly','quarterly','yearly')),
+  series_id text,
+  series_index integer check (series_index is null or series_index >= 0),
+  is_birthday boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint appointments_time_check check (ends_at is null or ends_at >= starts_at)
@@ -275,10 +279,18 @@ alter table public.appointments add column if not exists location text;
 alter table public.appointments add column if not exists appointment_type text not null default 'other';
 alter table public.appointments add column if not exists starts_at timestamptz not null default now();
 alter table public.appointments add column if not exists ends_at timestamptz;
+alter table public.appointments add column if not exists recurrence text;
+alter table public.appointments add column if not exists series_id text;
+alter table public.appointments add column if not exists series_index integer;
+alter table public.appointments add column if not exists is_birthday boolean not null default false;
 alter table public.appointments add column if not exists created_at timestamptz not null default now();
 alter table public.appointments add column if not exists updated_at timestamptz not null default now();
 alter table public.appointments drop constraint if exists appointments_type_check;
 alter table public.appointments add constraint appointments_type_check check (appointment_type in ('personal','work','health','social','admin','other'));
+alter table public.appointments drop constraint if exists appointments_recurrence_check;
+alter table public.appointments add constraint appointments_recurrence_check check (recurrence is null or recurrence in ('weekly','monthly','quarterly','yearly'));
+alter table public.appointments drop constraint if exists appointments_series_index_check;
+alter table public.appointments add constraint appointments_series_index_check check (series_index is null or series_index >= 0);
 alter table public.appointments drop constraint if exists appointments_time_check;
 alter table public.appointments add constraint appointments_time_check check (ends_at is null or ends_at >= starts_at);
 
@@ -388,6 +400,8 @@ create index if not exists idx_activity_ideas_user_active on public.activity_ide
 create index if not exists idx_activity_ideas_user_category on public.activity_ideas(user_id, category, mood);
 create index if not exists idx_appointments_user_starts_at on public.appointments(user_id, starts_at desc);
 create index if not exists idx_appointments_type_starts_at on public.appointments(user_id, appointment_type, starts_at desc);
+create index if not exists idx_appointments_series on public.appointments(user_id, series_id, series_index) where series_id is not null;
+create index if not exists idx_appointments_birthday on public.appointments(user_id, is_birthday, starts_at desc) where is_birthday = true;
 create index if not exists idx_points_ledger_user_time on public.points_ledger(user_id, earned_at desc);
 create index if not exists idx_pause_periods_user_scope on public.pause_periods(user_id, scope, starts_at desc);
 create index if not exists idx_weekly_reviews_user_week on public.weekly_reviews(user_id, week_key desc);

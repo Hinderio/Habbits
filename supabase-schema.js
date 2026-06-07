@@ -62,8 +62,6 @@
   }
 
   loadSqlPreview();
-  writeScript('modules/appointment-native-recurrence-bridge.js?v=1');
   document.addEventListener('DOMContentLoaded', ensureAppointmentFields, { once: true });
-  writeScript('modules/appointment-calendar-fields.js?v=1');
   loadProjectAssets();
 })(window, document);

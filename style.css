@@ -2962,6 +2962,48 @@ body.light .pause-card-log-row{
   background:rgba(74,215,209,.13)!important;
   color:var(--primary)!important;
 }
+
+.appointment-checkbox-row{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  min-height:44px;
+  padding:0 16px;
+  border:1px solid var(--line);
+  border-radius:18px;
+  background:rgba(255,255,255,.62);
+  color:var(--text);
+}
+
+.appointment-checkbox-row input{
+  width:18px;
+  height:18px;
+  accent-color:#f6b33f;
+}
+
+.appointment-checkbox-row strong{
+  font-size:.9rem;
+  font-weight:850;
+}
+
+.calendar-event-chip.is-birthday{
+  box-shadow:inset 3px 0 0 rgba(246,179,63,.72);
+  border-color:rgba(246,179,63,.22);
+  background:rgba(246,179,63,.08);
+}
+
+.appointment-birthday-badge{
+  display:inline-flex;
+  align-items:center;
+  margin-left:8px;
+  padding:3px 8px;
+  border-radius:999px;
+  background:rgba(246,179,63,.14);
+  color:#9a6400;
+  font-size:.68rem;
+  font-weight:950;
+  vertical-align:middle;
+}
 body.light .task-cycle-hint{
   background:rgba(255,255,255,.72);
   border-color:rgba(17,36,58,.08);

@@ -2425,6 +2425,10 @@
     const startsAt = validIsoOrFallback(appointment.starts_at || appointment.start_at || appointment.date || created, created);
     const rawEnd = validIsoOrNull(appointment.ends_at || appointment.end_at);
     const endsAt = rawEnd && new Date(rawEnd).getTime() >= new Date(startsAt).getTime() ? rawEnd : null;
+    const recurrence = normalizeAppointmentRecurrence(appointment.recurrence);
+    const seriesIndex = Number.isInteger(appointment.series_index)
+      ? appointment.series_index
+      : Number.isInteger(Number(appointment.series_index)) ? Number(appointment.series_index) : null;
     return {
       ...appointment,
       title: String(appointment.title || '').trim() || 'Termin',
@@ -2433,6 +2437,10 @@
       appointment_type: normalizeAppointmentType(appointment.appointment_type || appointment.type || 'other'),
       starts_at: startsAt,
       ends_at: endsAt,
+      recurrence,
+      series_id: recurrence ? (appointment.series_id || null) : null,
+      series_index: recurrence ? (seriesIndex ?? 0) : null,
+      is_birthday: Boolean(appointment.is_birthday),
       created_at: created,
       updated_at: appointment.updated_at || created
     };
@@ -2563,6 +2571,94 @@
 
   function appointmentTypeMeta(type) {
     return APPOINTMENT_TYPES[normalizeAppointmentType(type)] || APPOINTMENT_TYPES.other;
+  }
+
+  function normalizeAppointmentRecurrence(value) {
+    const key = String(value || '').trim().toLowerCase();
+    return ['weekly', 'monthly', 'quarterly', 'yearly'].includes(key) ? key : null;
+  }
+
+  function appointmentRecurrenceLabel(value) {
+    const key = normalizeAppointmentRecurrence(value);
+    return ({ weekly: 'Wöchentlich', monthly: 'Monatlich', quarterly: 'Quartal', yearly: 'Jährlich' })[key] || 'Einmalig';
+  }
+
+  function appointmentRecurrenceCount(value) {
+    return ({ weekly: 104, monthly: 36, quarterly: 20, yearly: 10 })[normalizeAppointmentRecurrence(value)] || 1;
+  }
+
+  function addAppointmentMonthsClamped(base, months) {
+    const date = new Date(base.getTime());
+    const day = date.getDate();
+    date.setDate(1);
+    date.setMonth(date.getMonth() + months);
+    const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+    date.setDate(Math.min(day, lastDay));
+    date.setHours(base.getHours(), base.getMinutes(), base.getSeconds(), base.getMilliseconds());
+    return date;
+  }
+
+  function advanceAppointmentDate(base, recurrence, index) {
+    const date = new Date(base.getTime());
+    if (recurrence === 'weekly') {
+      date.setDate(date.getDate() + index * 7);
+      return date;
+    }
+    if (recurrence === 'monthly') return addAppointmentMonthsClamped(base, index);
+    if (recurrence === 'quarterly') return addAppointmentMonthsClamped(base, index * 3);
+    if (recurrence === 'yearly') return addAppointmentMonthsClamped(base, index * 12);
+    return date;
+  }
+
+  function appointmentSeriesForEdit(appointment) {
+    const normalized = normalizeAppointment(appointment);
+    if (!normalized.series_id) return [normalized];
+    return state.appointments
+      .map(normalizeAppointment)
+      .filter(item => item.series_id === normalized.series_id)
+      .sort(compareAppointments);
+  }
+
+  function appointmentsFromEditPoint(appointment, seriesRows = []) {
+    if (!appointment) return [];
+    const anchor = new Date(appointment.starts_at).getTime();
+    const source = seriesRows.length ? seriesRows : [appointment];
+    return source.filter(item => item.id === appointment.id || new Date(item.starts_at).getTime() >= anchor);
+  }
+
+  function buildAppointmentSeriesRows(values, existing = null, recurrenceValue = null, seriesId = null) {
+    const recurrence = normalizeAppointmentRecurrence(recurrenceValue);
+    const created = existing?.created_at || nowIso();
+    const base = normalizeAppointment({
+      ...(existing || {}),
+      ...values,
+      id: existing?.id || values.id || uid(),
+      recurrence: null,
+      series_id: null,
+      series_index: null,
+      created_at: created,
+      updated_at: nowIso(),
+      synced: false
+    });
+    if (!recurrence) return [base];
+
+    const start = new Date(base.starts_at);
+    const duration = base.ends_at ? new Date(base.ends_at).getTime() - new Date(base.starts_at).getTime() : null;
+    const nextSeriesId = seriesId || existing?.series_id || uid();
+    return Array.from({ length: appointmentRecurrenceCount(recurrence) }, (_, index) => {
+      const nextStart = advanceAppointmentDate(start, recurrence, index);
+      const nextEnd = duration == null ? null : new Date(nextStart.getTime() + duration);
+      return normalizeAppointment({
+        ...base,
+        id: index === 0 ? base.id : uid(),
+        starts_at: nextStart.toISOString(),
+        ends_at: nextEnd ? nextEnd.toISOString() : null,
+        recurrence,
+        series_id: nextSeriesId,
+        series_index: index,
+        synced: false
+      });
+    });
   }
 
   function compareAppointments(a, b) {
@@ -9956,12 +10052,13 @@
     const visibleAppointments = appointments.slice(0, 2);
     const chips = visibleAppointments.map(appointment => {
       const type = appointmentTypeMeta(appointment.appointment_type);
+      const isBirthday = Boolean(appointment.is_birthday);
       const startsAt = appointment?.starts_at ? new Date(appointment.starts_at) : null;
       const time = startsAt && !Number.isNaN(startsAt.getTime())
         ? startsAt.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' })
         : 'Zeit offen';
-      return `<span class="day-chip appointment calendar-event-chip type-${normalizeAppointmentType(appointment.appointment_type)}">
-        <b>${escapeHtml(time)} · ${escapeHtml(type.short || type.label)}</b>
+      return `<span class="day-chip appointment calendar-event-chip type-${normalizeAppointmentType(appointment.appointment_type)}${isBirthday ? ' is-birthday' : ''}">
+        <b>${escapeHtml(time)} · ${escapeHtml(isBirthday ? 'Geburtstag' : type.short || type.label)}</b>
         <em>${escapeHtml(appointment.title || type.label || 'Termin')}</em>
       </span>`;
     });
@@ -10045,10 +10142,12 @@
     const type = appointmentTypeMeta(appointment.appointment_type);
     const location = appointment.location ? ` · ${escapeHtml(appointment.location)}` : '';
     const description = appointment.description ? `<br>${escapeHtml(appointment.description)}` : '';
+    const recurrence = appointment.recurrence ? ` · ${escapeHtml(appointmentRecurrenceLabel(appointment.recurrence))}` : '';
+    const birthday = appointment.is_birthday ? '<span class="appointment-birthday-badge">Geburtstag</span>' : '';
     return `<article class="list-card appointment-card ${editingAppointmentId === appointment.id ? 'is-editing' : ''}">
       <div class="list-card-main">
-        <h4>${escapeHtml(appointment.title)}</h4>
-        <p class="meta">${escapeHtml(formatAppointmentRange(appointment))} · ${escapeHtml(type.label)}${location}${description}</p>
+        <h4>${escapeHtml(appointment.title)}${birthday}</h4>
+        <p class="meta">${escapeHtml(formatAppointmentRange(appointment))} · ${escapeHtml(type.label)}${recurrence}${location}${description}</p>
       </div>
       <div class="list-actions">
         <button class="mini-btn" type="button" data-action="edit-appointment" data-id="${appointment.id}">Bearbeiten</button>
@@ -11655,6 +11754,7 @@ async function deleteAlcoholLog(id) {
     const data = new FormData(els.appointmentForm);
     const startsAt = validIsoOrNull(data.get('starts_at'));
     const endsAt = validIsoOrNull(data.get('ends_at'));
+    const recurrence = normalizeAppointmentRecurrence(data.get('recurrence'));
     const values = {
       title: String(data.get('title') || '').trim(),
       description: String(data.get('description') || '').trim(),
@@ -11662,6 +11762,10 @@ async function deleteAlcoholLog(id) {
       appointment_type: normalizeAppointmentType(data.get('appointment_type')),
       starts_at: startsAt,
       ends_at: endsAt,
+      recurrence,
+      series_id: null,
+      series_index: null,
+      is_birthday: Boolean(data.get('is_birthday')),
       updated_at: nowIso(),
       synced: false
     };
@@ -11675,14 +11779,26 @@ async function deleteAlcoholLog(id) {
       return;
     }
 
-    if (editingAppointmentId) {
-      const appointment = state.appointments.find(item => item.id === editingAppointmentId);
-      if (!appointment) {
+    const wasEditing = Boolean(editingAppointmentId);
+    const existing = editingAppointmentId ? state.appointments.find(item => item.id === editingAppointmentId) : null;
+    if (wasEditing) {
+      if (!existing) {
         resetAppointmentFormMode({ clearForm: true });
         toast('Termin wurde nicht gefunden.');
         return;
       }
-      Object.assign(appointment, values);
+      const seriesRows = appointmentSeriesForEdit(existing);
+      const replacedRows = appointmentsFromEditPoint(existing, seriesRows);
+      const nextSeriesId = recurrence ? (existing.series_id || seriesRows.find(item => item.series_id)?.series_id || uid()) : null;
+      const rows = buildAppointmentSeriesRows(values, existing, recurrence, nextSeriesId);
+      const replacementIds = new Set(rows.map(row => row.id));
+      const replacedIds = new Set(replacedRows.map(row => row.id));
+      const deleteIds = replacedRows.filter(row => !replacementIds.has(row.id)).map(row => row.id);
+      if (deleteIds.length) markRemoteDeletedMany('appointments', deleteIds);
+      state.appointments = state.appointments
+        .map(normalizeAppointment)
+        .filter(item => !replacedIds.has(item.id) && !replacementIds.has(item.id));
+      state.appointments.push(...rows);
       resetAppointmentFormMode({ clearForm: true, dateKey: toDateKey(values.starts_at) || selectedCalendarDate });
       appointmentFormOpen = false;
       syncAppointmentFormPanel();
@@ -11690,21 +11806,21 @@ async function deleteAlcoholLog(id) {
       calendarCursor = new Date(`${selectedCalendarDate}T12:00:00`);
       saveState();
       toast('Termin aktualisiert');
-      syncWithSupabase({ silent: true, pullFirst: false });
+      syncWithSupabase({ silent: true, pullFirst: false, pullAfter: true });
       return;
     }
 
     const created = nowIso();
-    const appointment = normalizeAppointment({ id: uid(), ...values, created_at: created, updated_at: created });
-    state.appointments.push(appointment);
-    selectedCalendarDate = toDateKey(appointment.starts_at) || selectedCalendarDate;
+    const rows = buildAppointmentSeriesRows({ id: uid(), ...values, created_at: created, updated_at: created }, null, recurrence);
+    state.appointments.push(...rows);
+    selectedCalendarDate = toDateKey(rows[0].starts_at) || selectedCalendarDate;
     calendarCursor = new Date(`${selectedCalendarDate}T12:00:00`);
     resetAppointmentFormMode({ clearForm: true, dateKey: selectedCalendarDate });
     appointmentFormOpen = false;
     syncAppointmentFormPanel();
     saveState();
-    toast('Termin gespeichert');
-    syncWithSupabase({ silent: true });
+    toast(recurrence ? 'Terminserie gespeichert' : 'Termin gespeichert');
+    syncWithSupabase({ silent: true, pullFirst: false, pullAfter: true });
   }
 
   function editAppointment(id) {
@@ -11719,6 +11835,8 @@ async function deleteAlcoholLog(id) {
     fields.appointment_type.value = normalizeAppointmentType(appointment.appointment_type);
     fields.location.value = appointment.location || '';
     fields.description.value = appointment.description || '';
+    if (fields.recurrence) fields.recurrence.value = normalizeAppointmentRecurrence(appointment.recurrence) || 'once';
+    if (fields.is_birthday) fields.is_birthday.checked = Boolean(appointment.is_birthday);
     els.appointmentFormTitle.textContent = 'Termin bearbeiten';
     els.appointmentSubmitBtn.textContent = 'Änderungen speichern';
     els.cancelAppointmentEditBtn.classList.remove('hidden');
@@ -11737,6 +11855,8 @@ async function deleteAlcoholLog(id) {
       els.appointmentForm.elements.starts_at.value = defaults.start;
       els.appointmentForm.elements.ends_at.value = defaults.end;
       els.appointmentForm.elements.appointment_type.value = 'personal';
+      if (els.appointmentForm.elements.recurrence) els.appointmentForm.elements.recurrence.value = 'once';
+      if (els.appointmentForm.elements.is_birthday) els.appointmentForm.elements.is_birthday.checked = false;
     }
     if (els.appointmentFormTitle) els.appointmentFormTitle.textContent = 'Termin erfassen';
     if (els.appointmentSubmitBtn) els.appointmentSubmitBtn.textContent = 'Termin speichern';
@@ -12576,6 +12696,9 @@ async function deleteAlcoholLog(id) {
         const appointmentRows = rowsPendingSync('appointments', state.appointments, { forceAll: forcePushAll }).map(a => ({
           id: a.id, title: a.title, description: a.description || null, location: a.location || null,
           appointment_type: normalizeAppointmentType(a.appointment_type), starts_at: a.starts_at, ends_at: a.ends_at || null,
+          recurrence: normalizeAppointmentRecurrence(a.recurrence), series_id: a.series_id || null,
+          series_index: Number.isInteger(a.series_index) ? a.series_index : Number.isInteger(Number(a.series_index)) ? Number(a.series_index) : null,
+          is_birthday: Boolean(a.is_birthday),
           created_at: a.created_at, updated_at: a.updated_at || nowIso()
         }));
         if (await upsertRows('appointments', appointmentRows)) {
@@ -13215,7 +13338,7 @@ async function deleteAlcoholLog(id) {
     state.alcoholUnits = mergeById(state.alcoholUnits, remoteAlcoholEventRows, mapRemoteAlcoholEvent);
     state.tasks = mergeById(state.tasks, remoteTaskRows, mapRemoteTask).map(task => preserveLocalTaskFallbacks(normalizeTask(task), localTasksBeforePull.get(task.id)));
     state.taskIdeas = mergeById(state.taskIdeas || [], remoteTaskIdeaRows, mapRemoteTaskIdea).map(idea => preserveLocalTaskIdeaFallbacks(normalizeTaskIdea(idea), localTaskIdeasBeforePull.get(idea.id)));
-    state.appointments = mergeById(state.appointments, remoteAppointmentRows, mapRemoteAppointment).map(normalizeAppointment);
+    state.appointments = mergeAppointmentsByRemoteAuthority(state.appointments, remoteAppointmentRows, mapRemoteAppointment);
     state.pointsLedger = mergeById(state.pointsLedger, remoteLedgerRows, mapRemoteLedger);
     state.pausePeriods = mergeById(state.pausePeriods || [], remotePauseRows, mapRemotePausePeriod).map(normalizePausePeriod);
     state.weeklyReviews = mergeById(state.weeklyReviews || [], remoteWeeklyReviewRows, mapRemoteWeeklyReview).map(normalizeWeeklyReview);
@@ -13291,6 +13414,15 @@ async function deleteAlcoholLog(id) {
     return Array.from(map.values());
   }
 
+  function mergeAppointmentsByRemoteAuthority(localRows, remoteRows, mapper) {
+    const remoteAppointments = remoteRows.map(mapper).map(normalizeAppointment);
+    const remoteIds = new Set(remoteAppointments.map(item => item.id));
+    const localUnsynced = (localRows || [])
+      .map(normalizeAppointment)
+      .filter(item => item.id && item.synced !== true && !remoteIds.has(item.id) && !isRemoteDeleted('appointments', item.id));
+    return [...remoteAppointments, ...localUnsynced].sort(compareAppointments);
+  }
+
   function isLocalPristine() {
     const defaultIds = new Set(Object.values(DEFAULT_HABIT_IDS));
     const hasOnlyDefaultHabits = state.habits.every(h => defaultIds.has(h.id) || BUILT_IN_DEFAULT_HABIT_NAMES.has(String(h.name || '').trim().toLowerCase()));
@@ -13355,7 +13487,22 @@ async function deleteAlcoholLog(id) {
   const mapRemoteAlcoholEvent = a => ({ id: a.id, occurred_at: a.occurred_at, drink_type: a.drink_type || 'other', note: a.note, created_at: a.created_at, updated_at: a.updated_at, synced: true });
   const mapRemoteTask = t => ({ id: t.id, title: t.title, description: t.description, effort: t.effort, priority: normalizeTaskPriority(t.priority), status: TASK_COLUMNS.some(column => column.status === t.status) ? t.status : 'open', due_at: t.due_at, completed_at: t.completed_at, points: t.points, backlog_rank: t.backlog_rank, done_archived_at: t.done_archived_at, done_archive_rank: t.done_archive_rank, created_at: t.created_at, updated_at: t.updated_at, synced: true });
   const mapRemoteTaskIdea = idea => normalizeTaskIdea({ id: idea.id, title: idea.title, description: idea.description, category: idea.category, story_points: idea.story_points, priority: idea.priority, idea_status: idea.idea_status, source_key: idea.source_key, generated_task_id: idea.generated_task_id, accepted_at: idea.accepted_at, dismissed_at: idea.dismissed_at, created_at: idea.created_at, updated_at: idea.updated_at, synced: true });
-  const mapRemoteAppointment = a => normalizeAppointment({ id: a.id, title: a.title, description: a.description, location: a.location, appointment_type: a.appointment_type, starts_at: a.starts_at, ends_at: a.ends_at, created_at: a.created_at, updated_at: a.updated_at, synced: true });
+  const mapRemoteAppointment = a => normalizeAppointment({
+    id: a.id,
+    title: a.title,
+    description: a.description,
+    location: a.location,
+    appointment_type: a.appointment_type,
+    starts_at: a.starts_at,
+    ends_at: a.ends_at,
+    recurrence: a.recurrence,
+    series_id: a.series_id,
+    series_index: a.series_index,
+    is_birthday: a.is_birthday,
+    created_at: a.created_at,
+    updated_at: a.updated_at,
+    synced: true
+  });
   const mapRemoteLedger = p => normalizeMorningRoutineLedgerPoint({ id: p.id, source_type: p.source_type, source_id: p.source_id, points: p.points, reason: p.reason, earned_at: p.earned_at, created_at: p.created_at, updated_at: p.created_at, synced: true });
   const mapRemotePausePeriod = p => normalizePausePeriod({ id: p.id, scope: p.scope, target_id: p.target_id, starts_at: p.starts_at, ends_at: p.ends_at, note: p.note, is_archived: p.is_archived, created_at: p.created_at, updated_at: p.updated_at, synced: true });
   const mapRemoteWeeklyReview = row => normalizeWeeklyReview({
