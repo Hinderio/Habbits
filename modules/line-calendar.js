@@ -166,6 +166,28 @@
     return toDate(appointment?.starts_at || appointment?.created_at);
   }
 
+  function appointmentEndDate(appointment) {
+    return toDate(appointment?.ends_at || appointment?.starts_at || appointment?.created_at);
+  }
+
+  function dayStamp(value) {
+    const date = toDate(value);
+    if (!date) return 0;
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  }
+
+  function eventEnd(appointment) {
+    const start = appointment._date || appointmentDate(appointment);
+    const end = appointment._endDate || appointmentEndDate(appointment);
+    if (!start) return end;
+    if (!end || end.getTime() < start.getTime()) return start;
+    return end;
+  }
+
+  function isMultiDayAppointment(appointment) {
+    return dayStamp(eventEnd(appointment)) > dayStamp(appointment._date || appointmentDate(appointment));
+  }
+
   function futureAppointments(sourceAppointments = null) {
     const now = new Date();
     const windowEnd = addMonths(now, MONTHS_AHEAD);
@@ -173,9 +195,9 @@
     const deletedIds = deletedAppointmentIds(state);
     const appointments = Array.isArray(sourceAppointments) ? sourceAppointments : (state.appointments || []);
     return appointments
-      .filter(appointment => appointment?.id && !deletedIds.has(String(appointment.id)))
-      .map(appointment => ({ ...appointment, _date: appointmentDate(appointment) }))
-      .filter(appointment => appointment._date && appointment._date >= now && appointment._date < windowEnd)
+      .filter(appointment => appointment?.id && !appointment.is_birthday && !deletedIds.has(String(appointment.id)))
+      .map(appointment => ({ ...appointment, _date: appointmentDate(appointment), _endDate: appointmentEndDate(appointment) }))
+      .filter(appointment => appointment._date && appointment._date < windowEnd && eventEnd(appointment) >= now)
       .sort((a, b) => a._date.getTime() - b._date.getTime());
   }
 
@@ -192,23 +214,43 @@
   }
 
   function segmentAppointments(appointments, segment) {
-    return appointments.filter(appointment => appointment._date >= segment.start && appointment._date < segment.end);
+    return appointments.filter(appointment => {
+      if (!isMultiDayAppointment(appointment)) {
+        return appointment._date >= segment.start && appointment._date < segment.end;
+      }
+      return appointment._date < segment.end && eventEnd(appointment) > segment.start;
+    });
   }
 
   function renderEvent(appointment, segment, index) {
-    const start = segment.start.getTime();
-    const range = Math.max(1, segment.end.getTime() - start);
-    const left = Math.max(0, Math.min(100, ((appointment._date.getTime() - start) / range) * 100));
+    const segmentStart = segment.start.getTime();
+    const segmentEnd = segment.end.getTime();
+    const range = Math.max(1, segmentEnd - segmentStart);
+    const isRange = isMultiDayAppointment(appointment);
+    const startsInSegment = appointment._date.getTime() >= segmentStart;
+    const endDate = eventEnd(appointment);
+    const eventStart = Math.max(segmentStart, appointment._date.getTime());
+    const eventEndTime = Math.min(segmentEnd, endDate.getTime());
+    const left = Math.max(0, Math.min(100, ((eventStart - segmentStart) / range) * 100));
+    const right = Math.max(left, Math.min(100, ((eventEndTime - segmentStart) / range) * 100));
+    const width = Math.max(2.4, right - left);
     const typeKey = normalizedType(appointment.appointment_type);
     const type = APPOINTMENT_TYPES[typeKey];
     const title = appointment.title || type.label || 'Termin';
     const displayTitle = shortTitle(title);
     const dateLabel = formatDate(appointment._date, { day: '2-digit', month: 'short' });
     const timeLabel = formatTime(appointment._date);
-    const meta = appointment.is_birthday ? dateLabel : `${dateLabel} · ${timeLabel}`;
+    const endLabel = formatDate(endDate, { day: '2-digit', month: 'short' });
+    const meta = `${dateLabel} · ${timeLabel}`;
+    const titleMeta = isRange ? `${meta} - ${endLabel}` : meta;
     const placement = index % 2 === 0 ? 'is-top' : 'is-bottom';
-    const birthdayClass = appointment.is_birthday ? ' is-birthday' : '';
-    return `<span class="line-calendar-event ${placement}${birthdayClass}" style="--event-left:${left.toFixed(2)}%;--event-color:${type.color}" title="${escapeHtml(`${title} · ${meta}`)}">
+    const rangeClass = isRange ? ' is-range' : '';
+    const continuedClass = isRange && !startsInSegment ? ' is-continued' : '';
+    const openEndedClass = isRange && endDate.getTime() > segmentEnd ? ' is-open-ended' : '';
+    const style = isRange
+      ? `--event-left:${left.toFixed(2)}%;--event-width:${width.toFixed(2)}%;--event-color:${type.color}`
+      : `--event-left:${left.toFixed(2)}%;--event-color:${type.color}`;
+    return `<span class="line-calendar-event ${placement}${rangeClass}${continuedClass}${openEndedClass}" style="${style}" title="${escapeHtml(`${title} · ${titleMeta}`)}">
       <span class="line-calendar-label"><strong>${escapeHtml(displayTitle)}</strong><small>${escapeHtml(meta)}</small></span>
     </span>`;
   }
