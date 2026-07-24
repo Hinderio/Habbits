@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v209-birthday-bubble-flow';
+const CACHE_NAME = 'habitflow-v210-mobile-calendar-bubbles';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -112,6 +112,22 @@ function nativeAppointmentPatch(script) {
       ": 'Zeit offen';\n      const birthdayInitials = isBirthday ? (() => {\n        const words = String(appointment.title || '').trim().split(/\\s+/).filter(Boolean);\n        const raw = words.length > 1 ? words.slice(0, 2).map(part => part[0] || '').join('') : (words[0] || 'GB').slice(0, 2);\n        return raw.toUpperCase() || 'GB';\n      })() : '';\n      return `<span class=\"day-chip appointment calendar-event-chip type-${normalizeAppointmentType(appointment.appointment_type)}${isBirthday ? ' is-birthday' : ''}\">"
     );
   }
+  if (!next.includes('function calendarBubbleInitials(')) {
+    next = next.replace(
+      "\n  function renderCalendarAppointmentChips(appointments) {",
+      "\n  function calendarBubbleInitials(value, fallback = 'HF') {\n    const words = String(value || '').trim().split(/\\s+/).filter(Boolean);\n    const raw = words.length > 1 ? words.slice(0, 2).map(part => part[0] || '').join('') : (words[0] || fallback).slice(0, 2);\n    return raw.toUpperCase() || fallback;\n  }\n\n  function renderCalendarAppointmentChips(appointments) {"
+    );
+  }
+  if (!next.includes('const appointmentInitials = calendarBubbleInitials')) {
+    next = next.replace(
+      ": 'Zeit offen';\n      const birthdayInitials = isBirthday",
+      ": 'Zeit offen';\n      const appointmentInitials = calendarBubbleInitials(appointment.title || type.label || 'Termin', isBirthday ? 'GB' : (type.short || type.label || 'TE'));\n      const birthdayInitials = isBirthday"
+    );
+  }
+  next = next.replace(
+    "return `<span class=\"day-chip appointment calendar-event-chip type-${normalizeAppointmentType(appointment.appointment_type)}${isBirthday ? ' is-birthday' : ''}\">",
+    "return `<span class=\"day-chip appointment calendar-event-chip type-${normalizeAppointmentType(appointment.appointment_type)}${isBirthday ? ' is-birthday' : ''}\" data-initials=\"${escapeHtml(appointmentInitials)}\">"
+  );
   next = next
     .replace(
       "<b>${escapeHtml(time)} · ${escapeHtml(isBirthday ? 'Geburtstag' : type.short || type.label)}</b>",
@@ -126,6 +142,15 @@ function nativeAppointmentPatch(script) {
   }
   if (!next.includes('habitflow-birthday-bubble-flow-style')) {
     next += "\n;(() => {\n  const css = '.day-chips:has(.calendar-event-chip.is-birthday){display:flex!important;align-items:flex-start!important;flex-wrap:wrap!important;gap:6px!important}.day-chips:has(.calendar-event-chip.is-birthday) .calendar-event-chip:not(.is-birthday){flex:0 0 100%!important}.calendar-event-chip.is-birthday{flex:0 0 44px!important}.day-chips:has(.calendar-event-chip.is-birthday) .day-chip.appointment-more{align-self:center!important}@media(max-width:760px){.calendar-event-chip.is-birthday{flex-basis:34px!important}}';\n  const inject = () => {\n    if (document.getElementById('habitflow-birthday-bubble-flow-style')) return;\n    const style = document.createElement('style');\n    style.id = 'habitflow-birthday-bubble-flow-style';\n    style.textContent = css;\n    document.head.appendChild(style);\n  };\n  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', inject, { once: true });\n  else inject();\n})();\n";
+  }
+  if (!next.includes('data-initials="${escapeHtml(taskInitials)}"')) {
+    next = next.replace(
+      "const title = `${label}: ${task.title || 'Aufgabe'}`;\n      return `<span class=\"calendar-task-dot priority-${priority}\" title=\"${escapeHtml(title)}\" aria-label=\"${escapeHtml(title)}\"></span>`;",
+      "const title = `${label}: ${task.title || 'Aufgabe'}`;\n      const taskInitials = calendarBubbleInitials(task.title || 'Aufgabe', 'AU');\n      return `<span class=\"calendar-task-dot priority-${priority}\" data-initials=\"${escapeHtml(taskInitials)}\" title=\"${escapeHtml(title)}\" aria-label=\"${escapeHtml(title)}\"></span>`;"
+    );
+  }
+  if (!next.includes('habitflow-mobile-calendar-bubbles-style')) {
+    next += "\n;(() => {\n  const css = '@media(max-width:760px) and (orientation:portrait){#screen-calendar .calendar-day-head{justify-content:flex-start!important;align-items:baseline!important;gap:3px!important}#screen-calendar .day-appointment-count{display:inline!important;min-width:0!important;height:auto!important;padding:0!important;border-radius:0!important;background:transparent!important;color:rgba(17,24,39,.48)!important;font-size:.5rem!important;font-style:normal!important;font-weight:900!important;line-height:1!important;transform:translateY(-.18em)!important}#screen-calendar .day-chips{display:flex!important;align-items:flex-start!important;align-content:flex-start!important;flex-wrap:wrap!important;gap:4px!important;min-height:0!important}#screen-calendar .day-chip.calendar-event-chip,#screen-calendar .calendar-task-dot{display:inline-grid!important;place-items:center!important;width:24px!important;height:24px!important;min-width:24px!important;max-width:24px!important;flex:0 0 24px!important;padding:0!important;border-radius:999px!important;background:#acdacf!important;border:1px solid rgba(17,36,58,.08)!important;box-shadow:none!important;color:#111827!important;overflow:hidden!important}#screen-calendar .day-chip.calendar-event-chip.is-birthday{background:#f6b33f!important;border-color:rgba(17,24,39,.08)!important}#screen-calendar .calendar-event-chip b,#screen-calendar .calendar-event-chip em{display:none!important}#screen-calendar .calendar-event-chip:before,#screen-calendar .calendar-task-dot:before{content:attr(data-initials);font-size:.54rem!important;line-height:1!important;letter-spacing:0!important;text-transform:uppercase!important;font-weight:950!important;color:#111827!important}#screen-calendar .calendar-task-dots{display:flex!important;align-items:flex-start!important;flex-wrap:wrap!important;gap:4px!important;min-height:0!important;margin-top:0!important;padding-top:0!important}#screen-calendar .calendar-task-dot-more,#screen-calendar .day-chip.appointment-more{height:16px!important;min-width:16px!important;padding:0 4px!important;border-radius:999px!important;background:rgba(17,24,39,.055)!important;color:rgba(17,24,39,.55)!important;font-size:.48rem!important;font-weight:950!important;line-height:16px!important}body:not(.light) #screen-calendar .day-appointment-count{color:rgba(255,255,255,.5)!important}body:not(.light) #screen-calendar .calendar-task-dot-more,body:not(.light) #screen-calendar .day-chip.appointment-more{background:rgba(255,255,255,.08)!important;color:rgba(255,255,255,.62)!important}}';\n  const inject = () => {\n    if (document.getElementById('habitflow-mobile-calendar-bubbles-style')) return;\n    const style = document.createElement('style');\n    style.id = 'habitflow-mobile-calendar-bubbles-style';\n    style.textContent = css;\n    document.head.appendChild(style);\n  };\n  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', inject, { once: true });\n  else inject();\n})();\n";
   }
   return next;
 }
