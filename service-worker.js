@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v202-pause-edit-loader';
+const CACHE_NAME = 'habitflow-v204-pause-edit-repair';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -63,9 +63,9 @@ async function withProjectMilestoneEditScript(response) {
     }
   }
   if (!html.includes('modules/pause-period-edit.js')) {
-    html = html.replace('<script src="app.js"></script>', '<script src="app.js"></script>\n  <script src="modules/pause-period-edit.js?v=202"></script>');
+    html = html.replace('<script src="app.js"></script>', '<script src="app.js"></script>\n  <script src="modules/pause-period-edit.js?v=204"></script>');
     if (!html.includes('modules/pause-period-edit.js')) {
-      html = html.replace('</body>', '  <script src="modules/pause-period-edit.js?v=202"></script>\n</body>');
+      html = html.replace('</body>', '  <script src="modules/pause-period-edit.js?v=204"></script>\n</body>');
     }
   }
   return new Response(html, { status: response.status, statusText: response.statusText, headers: patchedHeaders(response) });
