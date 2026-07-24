@@ -202,8 +202,45 @@
   box-shadow: 0 0 0 2px rgba(255, 255, 255, .16);
 }
 
+.line-calendar-event.is-range {
+  width: var(--event-width);
+  height: 12px;
+  border-radius: 999px;
+  transform: translateY(-50%);
+  box-shadow: 0 0 0 5px var(--card-strong);
+}
+
+.line-calendar-event.is-range::before,
+.line-calendar-event.is-range::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--event-color, var(--primary));
+  box-shadow: 0 0 0 5px var(--card-strong);
+  transform: translateY(-50%);
+}
+
+.line-calendar-event.is-range::before {
+  left: 0;
+}
+
+.line-calendar-event.is-range::after {
+  right: 0;
+}
+
+.line-calendar-event.is-range.is-continued::before {
+  display: none;
+}
+
+.line-calendar-event.is-range.is-open-ended::after {
+  display: none;
+}
+
 .line-calendar-event.is-birthday {
-  background: #8f2542;
+  background: #f6b33f;
 }
 
 .line-calendar-event.is-top .line-calendar-label {
@@ -212,6 +249,14 @@
 
 .line-calendar-event.is-bottom .line-calendar-label {
   top: 22px;
+}
+
+.line-calendar-event.is-range.is-top .line-calendar-label {
+  bottom: 24px;
+}
+
+.line-calendar-event.is-range.is-bottom .line-calendar-label {
+  top: 24px;
 }
 
 .line-calendar-label {
