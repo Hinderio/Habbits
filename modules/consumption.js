@@ -372,6 +372,32 @@
     document.head.appendChild(style);
   }
 
+  function injectConsumptionButtonBorderReset(document) {
+    if (!document || document.getElementById('habitflow-consumption-button-border-reset')) return;
+    const style = document.createElement('style');
+    style.id = 'habitflow-consumption-button-border-reset';
+    style.textContent = `
+      #screen-smoking button,
+      #screen-smoking .mini-btn,
+      #screen-smoking .pill,
+      #screen-smoking .consumption-switch-btn,
+      #screen-smoking .alcohol-unit-btn,
+      #screen-smoking .history-modal button {
+        border: 0 !important;
+      }
+
+      #screen-smoking button:focus-visible,
+      #screen-smoking .mini-btn:focus-visible,
+      #screen-smoking .pill:focus-visible,
+      #screen-smoking .consumption-switch-btn:focus-visible,
+      #screen-smoking .alcohol-unit-btn:focus-visible {
+        outline: 2px solid rgba(74,215,209,.5);
+        outline-offset: 3px;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
   function loadConsumptionTimeProfile(document) {
     if (!document || document.getElementById('habitflow-consumption-time-profile-script')) return;
     const script = document.createElement('script');
@@ -393,6 +419,7 @@
   injectTimeProfilePeakStyle(window.document);
   injectSmokingQuickCapturePolish(window.document);
   injectYearOverviewMobilePolish(window.document);
+  injectConsumptionButtonBorderReset(window.document);
   loadConsumptionTimeProfile(window.document);
   loadConsumptionYearOverview(window.document);
 
@@ -406,7 +433,8 @@
       loadsConsumptionYearOverview: true,
       hidesPeakDot: true,
       smokingQuickCapturePolish: true,
-      yearOverviewMobilePolish: true
+      yearOverviewMobilePolish: true,
+      buttonBorderReset: true
     })
   });
 })(window);
