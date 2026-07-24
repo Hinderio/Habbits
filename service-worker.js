@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v205-birthday-appointments';
+const CACHE_NAME = 'habitflow-v206-birthday-appointments-repair';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -47,27 +47,23 @@ function patchedHeaders(response) {
   return headers;
 }
 
-function injectAppointmentRecurrenceField(html) {
-  return html;
+function injectHtmlPatches(html) {
+  let next = html;
+  if (!next.includes('modules/projects-milestone-edit.js')) {
+    next = next.replace('<script src="app.js"></script>', '<script src="modules/projects-milestone-edit.js?v=183"></script>\n  <script src="app.js"></script>');
+    if (!next.includes('modules/projects-milestone-edit.js')) next = next.replace('</body>', '  <script src="modules/projects-milestone-edit.js?v=183"></script>\n</body>');
+  }
+  if (!next.includes('modules/pause-period-edit.js')) {
+    next = next.replace('<script src="app.js"></script>', '<script src="app.js"></script>\n  <script src="modules/pause-period-edit.js?v=206"></script>');
+    if (!next.includes('modules/pause-period-edit.js')) next = next.replace('</body>', '  <script src="modules/pause-period-edit.js?v=206"></script>\n</body>');
+  }
+  return next;
 }
 
-async function withProjectMilestoneEditScript(response) {
+async function withHtmlPatches(response) {
   const type = response.headers.get('content-type') || '';
   if (!type.includes('text/html')) return response;
-  let html = await response.text();
-  html = injectAppointmentRecurrenceField(html);
-  if (!html.includes('modules/projects-milestone-edit.js')) {
-    html = html.replace('<script src="app.js"></script>', '<script src="modules/projects-milestone-edit.js?v=183"></script>\n  <script src="app.js"></script>');
-    if (!html.includes('modules/projects-milestone-edit.js')) {
-      html = html.replace('</body>', '  <script src="modules/projects-milestone-edit.js?v=183"></script>\n</body>');
-    }
-  }
-  if (!html.includes('modules/pause-period-edit.js')) {
-    html = html.replace('<script src="app.js"></script>', '<script src="app.js"></script>\n  <script src="modules/pause-period-edit.js?v=204"></script>');
-    if (!html.includes('modules/pause-period-edit.js')) {
-      html = html.replace('</body>', '  <script src="modules/pause-period-edit.js?v=204"></script>\n</body>');
-    }
-  }
+  const html = injectHtmlPatches(await response.text());
   return new Response(html, { status: response.status, statusText: response.statusText, headers: patchedHeaders(response) });
 }
 
@@ -89,3 +85,71 @@ function nativeAppointmentPatch(script) {
     );
     next = next.replace(
       "is_birthday: Boolean(data.get('is_birthday')),",
+      "is_birthday: isBirthday,"
+    );
+    next = next.replace(
+      "if (fields.is_birthday) fields.is_birthday.checked = Boolean(appointment.is_birthday);\n    els.appointmentFormTitle.textContent = 'Termin bearbeiten';",
+      "if (fields.is_birthday) fields.is_birthday.checked = Boolean(appointment.is_birthday);\n    syncAppointmentBirthdayRecurrence();\n    els.appointmentFormTitle.textContent = 'Termin bearbeiten';"
+    );
+    next = next.replace(
+      "\n  function moveMonth(delta) {",
+      "\n  function syncAppointmentBirthdayRecurrence() {\n    const fields = els.appointmentForm?.elements;\n    if (!fields?.is_birthday?.checked || !fields?.recurrence) return;\n    fields.recurrence.value = 'yearly';\n  }\n\n  function moveMonth(delta) {"
+    );
+  }
+  if (!next.includes('habitflow-birthday-appointment-style')) {
+    next += "\n;(() => {\n  const css = '.calendar-event-chip.is-birthday{box-shadow:inset 3px 0 0 #f6b33f!important;border-color:rgba(246,179,63,.48)!important;background:rgba(246,179,63,.18)!important;color:var(--text)!important}.line-calendar-event.is-birthday{background:#f6b33f!important}';\n  const inject = () => {\n    if (document.getElementById('habitflow-birthday-appointment-style')) return;\n    const style = document.createElement('style');\n    style.id = 'habitflow-birthday-appointment-style';\n    style.textContent = css;\n    document.head.appendChild(style);\n  };\n  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', inject, { once: true });\n  else inject();\n})();\n";
+  }
+  return next;
+}
+
+async function withNativeAppointmentSeries(response) {
+  const type = response.headers.get('content-type') || '';
+  if (!type.includes('javascript') && !type.includes('text/plain') && !response.url.includes('app.js')) return response;
+  const script = nativeAppointmentPatch(await response.text());
+  return new Response(script, { status: response.status, statusText: response.statusText, headers: patchedHeaders(response) });
+}
+
+self.addEventListener('install', event => {
+  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)).catch(() => {}));
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', event => {
+  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key)))));
+  self.clients.claim();
+});
+
+self.addEventListener('fetch', event => {
+  if (event.request.method !== 'GET') return;
+  const url = new URL(event.request.url);
+  const isSameOrigin = url.origin === self.location.origin;
+  const normalizedPath = url.pathname.endsWith('/') ? '/' : url.pathname.replace(self.location.pathname.replace(/service-worker\.js$/, ''), '/');
+  const shouldNetworkFirst = event.request.mode === 'navigate' || (isSameOrigin && NETWORK_FIRST_PATHS.has(normalizedPath));
+  const shouldPatchHtml = event.request.mode === 'navigate' || (isSameOrigin && (normalizedPath === '/' || normalizedPath === '/index.html'));
+  const shouldPatchAppScript = isSameOrigin && normalizedPath === '/app.js';
+
+  if (shouldNetworkFirst) {
+    event.respondWith(
+      fetch(event.request, { cache: 'no-store' })
+        .then(async response => {
+          let clientResponse = shouldPatchHtml ? await withHtmlPatches(response.clone()) : response.clone();
+          if (shouldPatchAppScript) clientResponse = await withNativeAppointmentSeries(clientResponse.clone());
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clientResponse.clone())).catch(() => {});
+          return clientResponse;
+        })
+        .catch(() => caches.match(event.request).then(async cached => {
+          if (!cached) return caches.match('./index.html').then(fallback => fallback && shouldPatchHtml ? withHtmlPatches(fallback.clone()) : fallback);
+          let clientResponse = shouldPatchHtml ? await withHtmlPatches(cached.clone()) : cached;
+          if (shouldPatchAppScript) clientResponse = await withNativeAppointmentSeries(clientResponse.clone());
+          return clientResponse;
+        }))
+    );
+    return;
+  }
+
+  event.respondWith(caches.match(event.request).then(async cached => {
+    let response = cached || await fetch(event.request);
+    if (shouldPatchAppScript) response = await withNativeAppointmentSeries(response.clone());
+    return response;
+  }));
+});
