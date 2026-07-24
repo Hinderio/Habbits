@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v200-pause-period-edit';
+const CACHE_NAME = 'habitflow-v201-consumption-button-borders';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
