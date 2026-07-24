@@ -386,6 +386,15 @@
         border: 0 !important;
       }
 
+      #screen-smoking .pause-card-actions .mini-btn {
+        background: rgba(74,215,209,.14) !important;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 8px 18px rgba(17,36,58,.04);
+      }
+
+      #screen-smoking .pause-card-actions .mini-btn.danger {
+        background: rgba(255,112,112,.14) !important;
+      }
+
       #screen-smoking button:focus-visible,
       #screen-smoking .mini-btn:focus-visible,
       #screen-smoking .pill:focus-visible,
