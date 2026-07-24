@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v212-smoking-tip-modal';
+const CACHE_NAME = 'habitflow-v213-habit-defaults-extension';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -19,6 +19,7 @@ const MODULE_ASSETS = [
   './modules/quick-capture-button-style.js',
   './modules/remote-cache-reconcile.js',
   './modules/dashboard.js',
+  './modules/habit-defaults-extension.js',
   './modules/habits.js',
   './modules/tasks.js',
   './modules/fitness.js',
