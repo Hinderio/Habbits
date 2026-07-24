@@ -9,6 +9,7 @@
   const MODAL_ID = 'hfCravingTipModal';
   const $ = (selector, root = document) => root?.querySelector?.(selector);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+  let tipCursor = -1;
 
   function readState() {
     try {
@@ -63,45 +64,128 @@
     return { pause, today, next };
   }
 
-  function tipCopy(data = metrics()) {
+  function tipVariants(data = metrics()) {
     if (data.pause == null) {
-      return {
+      return [{
         tag: 'Start',
         title: 'Erste bewusste Pause setzen.',
         body: 'Du brauchst gerade keinen grossen Plan. Starte mit einem kleinen Abstand und entscheide danach neu.',
         action: '10 Minuten Abstand gewinnen',
         reason: 'Ohne letzte Zigarette gibt es noch keinen Rhythmus. Der Tipp beginnt deshalb bewusst klein.',
         step: 'Wasser holen, kurz stehen bleiben, dann erst neu prüfen.'
-      };
+      }, {
+        tag: 'Start',
+        title: 'Beginne mit einem klaren Mini-Vertrag.',
+        body: 'Kein Tagesziel, keine harte Ansage. Nur eine kleine Strecke, die du bewusst steuerst.',
+        action: 'Timer auf 10 Minuten',
+        reason: 'Am Anfang ist ein sichtbarer nächster Schritt stärker als ein abstrakter Vorsatz.',
+        step: 'Timer stellen, Wasser trinken, danach neu entscheiden.'
+      }, {
+        tag: 'Start',
+        title: 'Mach den ersten Log bewusst langsam.',
+        body: 'Du baust gerade Daten und Abstand auf. Beides zählt, auch wenn der erste Schritt klein wirkt.',
+        action: 'Autopilot unterbrechen',
+        reason: 'Bewusstes Erfassen nimmt der Routine Tempo und macht das Muster sichtbarer.',
+        step: 'Kurz notieren: Ort, Stimmung, Auslöser. Dann 10 Minuten warten.'
+      }];
     }
     if (data.pause < 30) {
-      return {
+      return [{
         tag: 'Akut',
         title: 'Sehr kurzer Abstand. Jetzt zählt nur: 10 Minuten gewinnen.',
         body: 'Nicht diskutieren, nicht bewerten. Du verschiebst nur den Autopilot um einen kleinen, machbaren Schritt.',
         action: '10-Minuten-Vertrag',
         reason: 'Unter 30 Minuten ist der stärkste Hebel nicht Motivation, sondern Abstand.',
         step: 'Glas Wasser, drei tiefe Ausatmungen, Handy weglegen.'
-      };
+      }, {
+        tag: 'Akut',
+        title: 'Der Drang darf da sein, du musst ihm nicht folgen.',
+        body: 'Behandle es wie eine Welle: nicht wegdrücken, nur nicht sofort handeln.',
+        action: '90 Sekunden Reizwechsel',
+        reason: 'Kurze Pausen kippen oft durch Sofortreaktion. Ein Mini-Reizwechsel reicht oft schon.',
+        step: 'Aufstehen, Fenster oder Küche, Hände kurz mit kaltem Wasser waschen.'
+      }, {
+        tag: 'Akut',
+        title: 'Nur die nächste Zigarette verschieben.',
+        body: 'Du entscheidest nicht über den ganzen Tag. Du kaufst dir nur eine bessere nächste Minute.',
+        action: 'Eine Szene wechseln',
+        reason: 'Der gleiche Ort hält den gleichen Impuls aktiv. Ortswechsel senkt die Reibung.',
+        step: 'Getränk holen, andere Sitzposition, danach erst wieder prüfen.'
+      }, {
+        tag: 'Akut',
+        title: 'Mach die Belohnung kleiner und sauberer.',
+        body: 'Wenn der Impuls eine Belohnung will, gib ihm eine ohne Zigarette.',
+        action: 'Ersatzbelohnung wählen',
+        reason: 'Belohnungsmomente brauchen Abschluss. Der Abschluss muss nicht Rauchen sein.',
+        step: 'Musik, Tee, kurze Nachricht oder 3 Minuten frische Luft.'
+      }];
     }
     if (data.pause < 90) {
-      return {
+      return [{
         tag: 'Stabilisieren',
         title: `${duration(data.next)} als nächste saubere Marke.`,
         body: 'Du bist schon im Aufbau. Halte die Linie noch ein Stück, ohne daraus eine grosse Entscheidung zu machen.',
         action: 'Marke halten',
         reason: 'Dein aktueller Abstand ist nah genug, um mit wenig Reibung eine bessere Pause daraus zu machen.',
         step: 'Kurz raus aus der Situation: Fenster, Küche, Wasser, zurück.'
-      };
+      }, {
+        tag: 'Stabilisieren',
+        title: 'Schütze die Pause vor einem alten Ritual.',
+        body: 'Du hast schon Abstand aufgebaut. Jetzt geht es darum, ihn nicht aus Gewohnheit zu verschenken.',
+        action: 'Ritual ersetzen',
+        reason: 'In dieser Zone ist oft nicht der Drang das Problem, sondern der gewohnte Ablauf.',
+        step: 'Nach Kaffee, Essen oder Task-Abschluss zuerst Wasser, dann neu prüfen.'
+      }, {
+        tag: 'Stabilisieren',
+        title: 'Mach aus dem Abstand eine kleine Serie.',
+        body: 'Ein stabiler Tag entsteht nicht dramatisch, sondern durch mehrere kleine Nicht-sofort-Momente.',
+        action: 'Noch 15 Minuten anhängen',
+        reason: 'Kurze Verlängerungen sind leichter als ein grosses Ziel und trainieren trotzdem Kontrolle.',
+        step: 'Timer stellen und etwas Konkretes erledigen, das in 15 Minuten fertig ist.'
+      }, {
+        tag: 'Stabilisieren',
+        title: 'Du brauchst gerade keinen perfekten Entscheid.',
+        body: 'Ein guter nächster Schritt reicht. Danach darfst du wieder neu bewerten.',
+        action: 'Entscheidung vertagen',
+        reason: 'Vertagen reduziert Druck, ohne dass du dich in einen Kampf gegen dich selbst bringst.',
+        step: 'Einen Satz schreiben: Was brauche ich gerade wirklich?'
+      }];
     }
-    return {
+    return [{
       tag: 'Halten',
       title: 'Pause nicht aus Routine beenden.',
       body: 'Das ist ein gutes Fenster. Wenn du jetzt rauchst, dann bewusst und nicht aus Reflex.',
       action: 'Noch einmal bewusst wählen',
       reason: 'Längere Pausen kippen oft nicht durch Drang, sondern durch alte Abschluss-Rituale.',
       step: 'Belohnung nehmen, aber ohne Zigarette: Musik, Tee oder kurze Nachricht.'
-    };
+    }, {
+      tag: 'Halten',
+      title: 'Du bist aus der akuten Zone raus.',
+      body: 'Jetzt lohnt sich ein ruhiger Check: Ist es echter Wunsch oder nur der alte Abschluss?',
+      action: 'Bewusstheits-Check',
+      reason: 'Nach längeren Pausen wird die Entscheidung oft wieder sozial oder ritualisiert.',
+      step: 'Skala 1-10: Wie stark ist der Drang wirklich? Unter 7 noch 20 Minuten warten.'
+    }, {
+      tag: 'Halten',
+      title: 'Nutze die Pause als neuen Standard.',
+      body: 'Du hast deinem System gezeigt, dass Abstand möglich ist. Jetzt machst du ihn normaler.',
+      action: 'Nächste Marke sichtbar machen',
+      reason: 'Ein konkreter Marker verhindert, dass die Pause unbemerkt endet.',
+      step: `${duration(data.next)} als Ziel nehmen und erst dann neu entscheiden.`
+    }, {
+      tag: 'Halten',
+      title: 'Keine Zigarette aus Langeweile.',
+      body: 'Wenn gerade nichts passiert, sucht dein Kopf ein altes Signal. Gib ihm ein besseres.',
+      action: 'Kleiner Reizwechsel',
+      reason: 'Langeweile braucht Aktivierung, nicht zwingend Nikotin.',
+      step: '2 Minuten bewegen, danach eine kleine Aufgabe starten.'
+    }];
+  }
+
+  function tipCopy(data = metrics(), index = tipCursor) {
+    const variants = tipVariants(data);
+    const safeIndex = Math.abs(Number(index) || 0) % variants.length;
+    return variants[safeIndex];
   }
 
   function injectStyle() {
@@ -143,7 +227,8 @@
     return modal;
   }
 
-  function renderModal() {
+  function renderModal(options = {}) {
+    if (options.advance || tipCursor < 0) tipCursor += 1;
     const data = metrics();
     const tip = tipCopy(data);
     const modal = ensureModal();
@@ -169,6 +254,7 @@
       </div>
       <div class="hf-tip-actions">
         <button class="pill secondary" type="button" data-hf-tip-close>Schliessen</button>
+        <button class="pill secondary hf-tip-refresh-btn" type="button" data-hf-tip-action="next">Neuer Tipp</button>
         <button class="pill secondary" type="button" data-hf-tip-action="coach">Coach öffnen</button>
         <button class="pill primary" type="button" data-hf-tip-action="pause">Pause starten</button>
       </div>
@@ -179,7 +265,7 @@
   function openModal() {
     injectStyle();
     $('#screen-smoking .craving-coach-card')?.classList.remove('hf-show-coach-details');
-    const modal = renderModal();
+    const modal = renderModal({ advance: true });
     modal.classList.remove('hidden');
     document.body.classList.add('modal-open');
     window.requestAnimationFrame(() => $('[data-hf-tip-action="pause"], [data-hf-tip-close]', modal)?.focus({ preventScroll: true }));
@@ -211,6 +297,11 @@
           event.preventDefault();
           event.stopImmediatePropagation();
           const action = modalAction.dataset.hfTipAction;
+          if (action === 'next') {
+            renderModal({ advance: true });
+            window.requestAnimationFrame(() => $('[data-hf-tip-action="next"]', modal)?.focus({ preventScroll: true }));
+            return;
+          }
           closeModal();
           if (action === 'coach') $('[data-action="open-coach"]', $('#screen-smoking'))?.click();
           if (action === 'pause') $('[data-action="open-pause-modal"][data-scope="smoke"]', $('#screen-smoking'))?.click();
