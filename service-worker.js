@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v208-birthday-initials-chip';
+const CACHE_NAME = 'habitflow-v209-birthday-bubble-flow';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -100,6 +100,12 @@ function nativeAppointmentPatch(script) {
       "\n  function syncAppointmentBirthdayRecurrence() {\n    const fields = els.appointmentForm?.elements;\n    if (!fields?.is_birthday?.checked || !fields?.recurrence) return;\n    fields.recurrence.value = 'yearly';\n  }\n\n  function moveMonth(delta) {"
     );
   }
+  if (!next.includes('const visibleBirthdayAppointments = appointments.filter')) {
+    next = next.replace(
+      "const visibleAppointments = appointments.slice(0, 2);",
+      "const visibleBirthdayAppointments = appointments.filter(appointment => Boolean(appointment?.is_birthday));\n    const visibleAppointments = visibleBirthdayAppointments.length > 1\n      ? appointments.filter((appointment, index) => index < 2 || Boolean(appointment?.is_birthday)).slice(0, 5)\n      : appointments.slice(0, 2);"
+    );
+  }
   if (!next.includes('const birthdayInitials = isBirthday')) {
     next = next.replace(
       ": 'Zeit offen';\n      return `<span class=\"day-chip appointment calendar-event-chip type-${normalizeAppointmentType(appointment.appointment_type)}${isBirthday ? ' is-birthday' : ''}\">",
@@ -117,6 +123,9 @@ function nativeAppointmentPatch(script) {
     );
   if (!next.includes('habitflow-birthday-initials-style')) {
     next += "\n;(() => {\n  const css = '.calendar-event-chip.is-birthday{display:inline-grid!important;place-items:center!important;width:44px!important;height:44px!important;min-width:44px!important;max-width:44px!important;padding:0!important;border-radius:50%!important;background:#f6b33f!important;border:0!important;box-shadow:none!important;color:#111827!important;justify-self:start!important}.calendar-event-chip.is-birthday b{font-size:.82rem!important;line-height:1!important;letter-spacing:.03em!important;text-transform:uppercase!important;color:#111827!important;font-weight:950!important}.calendar-event-chip.is-birthday em{display:none!important}.line-calendar-event.is-birthday{background:#f6b33f!important}@media(max-width:760px){.calendar-event-chip.is-birthday{width:34px!important;height:34px!important;min-width:34px!important;max-width:34px!important}.calendar-event-chip.is-birthday b{font-size:.68rem!important}}';\n  const inject = () => {\n    if (document.getElementById('habitflow-birthday-initials-style')) return;\n    const style = document.createElement('style');\n    style.id = 'habitflow-birthday-initials-style';\n    style.textContent = css;\n    document.head.appendChild(style);\n  };\n  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', inject, { once: true });\n  else inject();\n})();\n";
+  }
+  if (!next.includes('habitflow-birthday-bubble-flow-style')) {
+    next += "\n;(() => {\n  const css = '.day-chips:has(.calendar-event-chip.is-birthday){display:flex!important;align-items:flex-start!important;flex-wrap:wrap!important;gap:6px!important}.day-chips:has(.calendar-event-chip.is-birthday) .calendar-event-chip:not(.is-birthday){flex:0 0 100%!important}.calendar-event-chip.is-birthday{flex:0 0 44px!important}.day-chips:has(.calendar-event-chip.is-birthday) .day-chip.appointment-more{align-self:center!important}@media(max-width:760px){.calendar-event-chip.is-birthday{flex-basis:34px!important}}';\n  const inject = () => {\n    if (document.getElementById('habitflow-birthday-bubble-flow-style')) return;\n    const style = document.createElement('style');\n    style.id = 'habitflow-birthday-bubble-flow-style';\n    style.textContent = css;\n    document.head.appendChild(style);\n  };\n  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', inject, { once: true });\n  else inject();\n})();\n";
   }
   return next;
 }
@@ -204,7 +213,7 @@ self.addEventListener('fetch', event => {
   const isSameOrigin = url.origin === self.location.origin;
   const normalizedPath = url.pathname.endsWith('/') ? '/' : url.pathname.replace(self.location.pathname.replace(/service-worker\.js$/, ''), '/');
   const shouldNetworkFirst = event.request.mode === 'navigate' || (isSameOrigin && NETWORK_FIRST_PATHS.has(normalizedPath));
-  const shouldInjectProjectPatch = event.request.mode === 'navigate' || (isSameOrigin && (normalizedPath === '/' || normalizedPath === '/index.html'));
+  const shouldInjectProjectPatch = event.request.mode === 'navigate' || (isSameOrigin && (isSameOrigin && (normalizedPath === '/' || normalizedPath === '/index.html')));
   const shouldPatchProjectsScript = isSameOrigin && normalizedPath === '/modules/projects.js';
   const shouldPatchAppScript = isSameOrigin && normalizedPath === '/app.js';
 
