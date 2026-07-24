@@ -57,8 +57,9 @@
     ensureStylesheet('modules/projects-mobile-fix.css');
 
     // Project UI, navigation, cards, modal and actions are intentionally owned by projects.js only.
-    // Legacy project sidecars used to register competing listeners and made detail opening unstable.
     writeScript('modules/projects.js');
+    // Pause editing is kept in its existing narrow sidecar so the core consumption flow stays untouched.
+    writeScript('modules/pause-period-edit.js');
   }
 
   loadSqlPreview();
