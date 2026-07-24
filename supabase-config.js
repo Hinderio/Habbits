@@ -85,6 +85,7 @@ window.HABITFLOW_SUPABASE_CONFIG = Object.freeze({
     'modules/state.js',
     'modules/sync.js',
     'modules/dashboard.js',
+    'modules/habit-defaults-extension.js',
     'modules/habits.js',
     'modules/tasks.js',
     'modules/fitness.js',
