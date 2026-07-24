@@ -213,7 +213,7 @@ self.addEventListener('fetch', event => {
   const isSameOrigin = url.origin === self.location.origin;
   const normalizedPath = url.pathname.endsWith('/') ? '/' : url.pathname.replace(self.location.pathname.replace(/service-worker\.js$/, ''), '/');
   const shouldNetworkFirst = event.request.mode === 'navigate' || (isSameOrigin && NETWORK_FIRST_PATHS.has(normalizedPath));
-  const shouldInjectProjectPatch = event.request.mode === 'navigate' || (isSameOrigin && (isSameOrigin && (normalizedPath === '/' || normalizedPath === '/index.html')));
+  const shouldInjectProjectPatch = event.request.mode === 'navigate' || (isSameOrigin && (normalizedPath === '/' || normalizedPath === '/index.html'));
   const shouldPatchProjectsScript = isSameOrigin && normalizedPath === '/modules/projects.js';
   const shouldPatchAppScript = isSameOrigin && normalizedPath === '/app.js';
 
