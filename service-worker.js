@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v205-birthday-appointments';
+const CACHE_NAME = 'habitflow-v207-birthday-chip-polish';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -96,12 +96,16 @@ function nativeAppointmentPatch(script) {
       "if (fields.is_birthday) fields.is_birthday.checked = Boolean(appointment.is_birthday);\n    syncAppointmentBirthdayRecurrence();\n    els.appointmentFormTitle.textContent = 'Termin bearbeiten';"
     );
     next = next.replace(
+      "<b>${escapeHtml(time)} · ${escapeHtml(isBirthday ? 'Geburtstag' : type.short || type.label)}</b>",
+      "<b>${escapeHtml(isBirthday ? 'Geburtstag' : `${time} · ${type.short || type.label}`)}</b>"
+    );
+    next = next.replace(
       "\n  function moveMonth(delta) {",
       "\n  function syncAppointmentBirthdayRecurrence() {\n    const fields = els.appointmentForm?.elements;\n    if (!fields?.is_birthday?.checked || !fields?.recurrence) return;\n    fields.recurrence.value = 'yearly';\n  }\n\n  function moveMonth(delta) {"
     );
   }
   if (!next.includes('habitflow-birthday-appointment-style')) {
-    next += "\n;(() => {\n  const css = '.calendar-event-chip.is-birthday{box-shadow:inset 3px 0 0 #f6b33f!important;border-color:rgba(246,179,63,.48)!important;background:rgba(246,179,63,.18)!important;color:var(--text)!important}.line-calendar-event.is-birthday{background:#f6b33f!important}';\n  const inject = () => {\n    if (document.getElementById('habitflow-birthday-appointment-style')) return;\n    const style = document.createElement('style');\n    style.id = 'habitflow-birthday-appointment-style';\n    style.textContent = css;\n    document.head.appendChild(style);\n  };\n  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', inject, { once: true });\n  else inject();\n})();\n";
+    next += "\n;(() => {\n  const css = '.calendar-event-chip.is-birthday{box-shadow:none!important;border-color:#9f5700!important;background:#9f5700!important;color:#fff!important}.calendar-event-chip.is-birthday b,.calendar-event-chip.is-birthday em{color:#fff!important}.line-calendar-event.is-birthday{background:#9f5700!important}';\n  const inject = () => {\n    if (document.getElementById('habitflow-birthday-appointment-style')) return;\n    const style = document.createElement('style');\n    style.id = 'habitflow-birthday-appointment-style';\n    style.textContent = css;\n    document.head.appendChild(style);\n  };\n  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', inject, { once: true });\n  else inject();\n})();\n";
   }
   return next;
 }
