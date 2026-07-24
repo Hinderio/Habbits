@@ -82,6 +82,6 @@
   loadPreAppModule('modules/quick-capture-button-style.js');
   loadPreAppModule('modules/remote-cache-reconcile.js');
   loadPreAppModule('modules/learning-vault.js');
-  loadPreAppModule('modules/' + 'pause-' + 'period-' + 'edit.js');
+  loadPreAppModule('modules/' + 'pause-' + 'period-' + 'edit.js?v=204');
   loadPreAppModule('modules/' + 'smoke-' + 'active-' + 'pause-' + 'metric.js');
 })(window);
