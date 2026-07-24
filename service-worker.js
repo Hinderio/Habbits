@@ -90,7 +90,7 @@ async function withInlineMilestoneEditing(response) {
     const form = event.target;
     if (!(form instanceof HTMLFormElement)) return;
     const data = new FormData(form);
-    const projectId = form.datasetProjectId;
+    const projectId = form.dataset.projectId;
     const editingMilestoneId = form.dataset.editingMilestoneId || '';
     const title = String(data.get('title') || '').trim();
     const date = validDate(data.get('milestone_date'));
