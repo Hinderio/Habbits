@@ -3,6 +3,8 @@
 
   const modules = window.HabitFlowModules;
   if (modules && modules.has('pause-period-edit')) return;
+  if (window.__HabitFlowPausePeriodEditActive) return;
+  window.__HabitFlowPausePeriodEditActive = true;
 
   const STORAGE_KEY = 'habitflow-state-v1';
   const RETURN_KEY = 'habitflow-pause-edit-return';
