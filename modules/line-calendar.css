@@ -204,10 +204,11 @@
 
 .line-calendar-event.is-range {
   width: var(--event-width);
-  height: 12px;
+  height: 5px;
   border-radius: 999px;
+  border: 0;
   transform: translateY(-50%);
-  box-shadow: 0 0 0 5px var(--card-strong);
+  box-shadow: 0 0 0 4px var(--card-strong), 0 0 0 6px rgba(255, 255, 255, .16);
 }
 
 .line-calendar-event.is-range::before,
@@ -215,20 +216,22 @@
   content: "";
   position: absolute;
   top: 50%;
-  width: 14px;
-  height: 14px;
+  width: 17px;
+  height: 17px;
   border-radius: 50%;
   background: var(--event-color, var(--primary));
-  box-shadow: 0 0 0 5px var(--card-strong);
-  transform: translateY(-50%);
+  border: 4px solid var(--card-strong);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, .16);
 }
 
 .line-calendar-event.is-range::before {
   left: 0;
+  transform: translate(-50%, -50%);
 }
 
 .line-calendar-event.is-range::after {
   right: 0;
+  transform: translate(50%, -50%);
 }
 
 .line-calendar-event.is-range.is-continued::before {
