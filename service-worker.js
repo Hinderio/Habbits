@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v201-consumption-button-borders';
+const CACHE_NAME = 'habitflow-v202-pause-edit-loader';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -62,6 +62,12 @@ async function withProjectMilestoneEditScript(response) {
       html = html.replace('</body>', '  <script src="modules/projects-milestone-edit.js?v=183"></script>\n</body>');
     }
   }
+  if (!html.includes('modules/pause-period-edit.js')) {
+    html = html.replace('<script src="app.js"></script>', '<script src="app.js"></script>\n  <script src="modules/pause-period-edit.js?v=202"></script>');
+    if (!html.includes('modules/pause-period-edit.js')) {
+      html = html.replace('</body>', '  <script src="modules/pause-period-edit.js?v=202"></script>\n</body>');
+    }
+  }
   return new Response(html, { status: response.status, statusText: response.statusText, headers: patchedHeaders(response) });
 }
 
@@ -84,7 +90,7 @@ async function withInlineMilestoneEditing(response) {
     const form = event.target;
     if (!(form instanceof HTMLFormElement)) return;
     const data = new FormData(form);
-    const projectId = form.dataset.projectId;
+    const projectId = form.datasetProjectId;
     const editingMilestoneId = form.dataset.editingMilestoneId || '';
     const title = String(data.get('title') || '').trim();
     const date = validDate(data.get('milestone_date'));
