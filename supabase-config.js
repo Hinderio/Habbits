@@ -89,6 +89,7 @@ window.HABITFLOW_SUPABASE_CONFIG = Object.freeze({
     'modules/tasks.js',
     'modules/fitness.js',
     'modules/consumption.js',
+    'modules/smoking-tip-modal.js',
     'modules/smoking-top-cards-polish.js',
     'modules/consumption-heatmap-flat-polish.js',
     'modules/smoke-strike-history.js',
