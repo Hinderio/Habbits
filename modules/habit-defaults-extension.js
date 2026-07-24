@@ -16,8 +16,8 @@
       type: 'number',
       unit: 'Sätze',
       direction: 'increase',
-      target: 3,
-      target_period: 'day',
+      target: 20,
+      target_period: 'week',
       icon: 'pushups',
       visualIcon: 'dumbbells'
     },
@@ -29,7 +29,7 @@
       unit: 'Min.',
       direction: 'increase',
       target: 30,
-      target_period: 'day',
+      target_period: 'week',
       icon: 'sport',
       visualIcon: 'swimming'
     }
@@ -44,7 +44,7 @@
   }
 
   function normalizeName(value = '') {
-    return String(value || '').trim().toLowerCase();
+    return String(value || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   }
 
   function readState() {
@@ -116,8 +116,8 @@
         type: existing.type || template.type,
         unit: existing.unit || template.unit,
         direction: existing.direction || template.direction,
-        target: existing.target ?? template.target,
-        target_period: existing.target_period || template.target_period,
+        target: template.target,
+        target_period: template.target_period,
         is_archived: false
       };
 
@@ -129,7 +129,43 @@
       });
     });
 
+    habits.forEach(habit => {
+      if (!habit || typeof habit !== 'object') return;
+      const key = habitIntervalRuleKey(habit);
+      if (!key) return;
+      const patch = intervalPatchFor(key, habit);
+      Object.entries(patch).forEach(([field, value]) => {
+        if (habit[field] !== value) {
+          habit[field] = value;
+          changed = true;
+        }
+      });
+    });
+
     if (changed) writeState({ ...state, habits });
+  }
+
+  function habitIntervalRuleKey(habit = {}) {
+    const name = normalizeName(habit.name);
+    const text = normalizeName([habit.system_key, habit.icon, habit.name].filter(Boolean).join(' '));
+    if (name === 'brotfreier tag' || text.includes('brotfreier tag')) return '';
+    if (name === 'brot' || text === 'bread' || text.includes(' bread ')) return 'archiveBread';
+    if (text.includes('spazier') || text.includes('walking')) return 'walking';
+    if (text.includes('stehpult') || text.includes('standingdesk') || text.includes('standing desk') || text.includes('stand desk') || text.includes('stehschreibtisch')) return 'standingDesk';
+    if (text.includes('wander') || text.includes('hiking')) return 'hiking';
+    if (text.includes('hantel') || text.includes('dumbbell')) return 'dumbbells';
+    if (text.includes('schwimm') || text.includes('swimming')) return 'swimming';
+    return '';
+  }
+
+  function intervalPatchFor(key, habit = {}) {
+    if (key === 'walking') return { target_period: 'week' };
+    if (key === 'standingDesk') return { target_period: 'day' };
+    if (key === 'hiking') return { target_period: 'month' };
+    if (key === 'dumbbells') return { target_period: 'week', target: 20, unit: habit.unit || 'Sätze', direction: habit.direction || 'increase' };
+    if (key === 'swimming') return { target_period: 'week', unit: habit.unit || 'Min.', direction: habit.direction || 'increase' };
+    if (key === 'archiveBread') return { is_archived: true };
+    return {};
   }
 
   function svgIcon(key) {
