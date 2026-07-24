@@ -62,6 +62,19 @@ window.HABITFLOW_SUPABASE_CONFIG = Object.freeze({
   }, { once: true });
 })(document);
 
+(function loadDesktopNavRail(document) {
+  'use strict';
+
+  if (!document) return;
+  const href = 'modules/desktop-nav-rail.css';
+  if (document.querySelector(`link[href="${href}"]`)) return;
+
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = href;
+  document.head.appendChild(link);
+})(document);
+
 (function loadHabitFlowModuleShell(document) {
   'use strict';
 
