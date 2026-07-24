@@ -10,6 +10,7 @@
   const RETURN_KEY = 'habitflow-pause-edit-return';
   const EDITING_ATTR = 'data-hf-editing-pause-id';
   let enhanceTimer = null;
+  let repairInterval = null;
   let observer = null;
   let supabaseClient = null;
 
@@ -218,10 +219,16 @@
   }
 
   function enhancePauseCards() {
-    document.querySelectorAll('.pause-card').forEach(card => {
-      const deleteButton = card.querySelector('[data-action="delete-pause"][data-id]');
-      const actions = deleteButton?.closest('.pause-card-actions');
-      if (!deleteButton || !actions || actions.querySelector('[data-action="edit-pause"]')) return;
+    document.querySelectorAll('[data-action="delete-pause"][data-id]').forEach(deleteButton => {
+      const actions = deleteButton.closest('.pause-card-actions') || deleteButton.parentElement;
+      if (!actions) return;
+      const existing = actions.querySelector('[data-action="edit-pause"]');
+      if (existing) {
+        existing.dataset.id = deleteButton.dataset.id || '';
+        existing.hidden = false;
+        existing.style.display = '';
+        return;
+      }
       const button = document.createElement('button');
       button.className = 'mini-btn';
       button.type = 'button';
@@ -235,6 +242,15 @@
   function scheduleEnhance(delay = 80) {
     window.clearTimeout(enhanceTimer);
     enhanceTimer = window.setTimeout(enhancePauseCards, delay);
+  }
+
+  function startRepairLoop() {
+    if (repairInterval) return;
+    repairInterval = window.setInterval(() => {
+      if (document.hidden) return;
+      if (!document.querySelector('#consumptionPauseList, #habitPauseList')) return;
+      enhancePauseCards();
+    }, 700);
   }
 
   function restoreAfterReload() {
@@ -287,11 +303,15 @@
   function start() {
     bindEvents();
     restoreAfterReload();
-    [120, 600, 1400].forEach(delay => window.setTimeout(enhancePauseCards, delay));
+    [40, 120, 320, 700, 1400, 2400].forEach(delay => window.setTimeout(enhancePauseCards, delay));
+    ['focus', 'pageshow'].forEach(type => window.addEventListener(type, () => scheduleEnhance(40)));
+    document.addEventListener('visibilitychange', () => scheduleEnhance(40));
+    document.addEventListener('scroll', () => scheduleEnhance(120), { passive: true });
     if (document.body) {
-      observer = new MutationObserver(() => scheduleEnhance(80));
-      observer.observe(document.body, { childList: true, subtree: true });
+      observer = new MutationObserver(() => scheduleEnhance(30));
+      observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'aria-hidden', 'class'] });
     }
+    startRepairLoop();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
