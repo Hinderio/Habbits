@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v210-mobile-calendar-bubbles';
+const CACHE_NAME = 'habitflow-v211-smoking-top-cards-polish';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -23,6 +23,7 @@ const MODULE_ASSETS = [
   './modules/tasks.js',
   './modules/fitness.js',
   './modules/consumption.js',
+  './modules/smoking-top-cards-polish.js',
   './modules/consumption-time-profile.js',
   './modules/pause-period-edit.js',
   './modules/craving-coach-v2.js',
