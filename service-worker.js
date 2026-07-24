@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v199-line-calendar-birthday-date';
+const CACHE_NAME = 'habitflow-v200-pause-period-edit';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -24,6 +24,7 @@ const MODULE_ASSETS = [
   './modules/fitness.js',
   './modules/consumption.js',
   './modules/consumption-time-profile.js',
+  './modules/pause-period-edit.js',
   './modules/craving-coach-v2.js',
   './modules/craving-coach-v2-actions-polish.js',
   './modules/gamification.js',
