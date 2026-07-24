@@ -208,7 +208,7 @@
   border-radius: 999px;
   border: 0;
   transform: translateY(-50%);
-  box-shadow: 0 0 0 4px var(--card-strong), 0 0 0 6px rgba(255, 255, 255, .16);
+  box-shadow: none;
 }
 
 .line-calendar-event.is-range::before,
