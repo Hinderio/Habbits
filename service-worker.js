@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v213-habit-defaults-extension';
+const CACHE_NAME = 'habitflow-v214-habit-target-intervals';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
