@@ -11,6 +11,7 @@
   const MAX_MONTHS = 12;
   const CLOSED_STATUSES = new Set(['archived', 'closed']);
   const IDEA_META_RE = /\n?\s*<!--hf-idea-meta:([^>]+)-->/;
+  let renderTimer = null;
 
   const STATUS_LABELS = {
     planned: 'Geplant',
@@ -452,14 +453,18 @@
   }
 
   function scheduleRender(delay = 0) {
-    window.setTimeout(render, delay);
+    if (renderTimer) window.clearTimeout(renderTimer);
+    renderTimer = window.setTimeout(() => {
+      renderTimer = null;
+      render();
+    }, delay);
   }
 
   function boot() {
     ensureProjectBridges();
     injectStyle();
-    scheduleRender(0);
-    [250, 900, 2200].forEach(delay => scheduleRender(delay));
+    render();
+    scheduleRender(600);
     new MutationObserver(() => {
       if (!document.getElementById('projectTimelineViewMount') && document.getElementById('screen-projects')) scheduleRender(0);
     }).observe(document.body, { childList: true, subtree: true });
@@ -470,11 +475,11 @@
     window.addEventListener('habitflow:project-task-link-updated', () => scheduleRender(0));
     document.addEventListener('submit', event => {
       if (event.target?.id === 'projectForm' || event.target?.id === 'taskForm' || event.target?.matches?.('[data-project-phase-form], [data-project-milestone-form]')) {
-        [120, 600, 1500].forEach(delay => scheduleRender(delay));
+        scheduleRender(240);
       }
     }, true);
     document.addEventListener('click', event => {
-      if (event.target?.closest?.('[data-action]')) [160, 700, 1600].forEach(delay => scheduleRender(delay));
+      if (event.target?.closest?.('#projectTimelineViewMount [data-action="idea-to-task"], #projectTimelineViewMount [data-action="create-project-task"], #projectTimelineViewMount [data-action="open-project-idea"]')) scheduleRender(600);
     }, true);
   }
 
