@@ -283,7 +283,7 @@
 
   function renderIdeaTile(idea, project) {
     const priority = normalizePriority(idea.priority || 'idea');
-    return `<button class="project-timeline-idea" type="button" data-action="idea-to-task" data-id="${escapeHtml(idea.id)}" style="--project-color:${escapeHtml(normalizeColor(project.color))}" title="${escapeHtml(idea.title || 'Idee')} · ${storyPoints(idea)} SP">
+    return `<button class="project-timeline-idea" type="button" data-action="open-task-idea-detail" data-id="${escapeHtml(idea.id)}" style="--project-color:${escapeHtml(normalizeColor(project.color))}" title="${escapeHtml(idea.title || 'Idee')} · ${storyPoints(idea)} SP">
       <span class="project-timeline-sp">${storyPoints(idea)}</span>
       <span class="project-timeline-priority priority-${escapeHtml(priority === 'medium' ? 'idea' : priority)}"></span>
       <strong>${escapeHtml(tileInitials(idea.title || 'Idee'))}</strong>
@@ -448,8 +448,8 @@
   }
 
   function ensureProjectBridges() {
-    ensureBridgeScript('modules/project-task-form-bridge.js?v=225', '__habitFlowTaskProjectBridgeInstalled');
-    ensureBridgeScript('modules/project-idea-form-bridge.js?v=225', '__habitFlowProjectIdeaBridgeInstalled');
+    ensureBridgeScript('modules/project-task-form-bridge.js?v=226', '__habitFlowTaskProjectBridgeInstalled');
+    ensureBridgeScript('modules/project-idea-form-bridge.js?v=226', '__habitFlowProjectIdeaBridgeInstalled');
   }
 
   function scheduleRender(delay = 0) {
@@ -479,7 +479,7 @@
       }
     }, true);
     document.addEventListener('click', event => {
-      if (event.target?.closest?.('#projectTimelineViewMount [data-action="idea-to-task"], #projectTimelineViewMount [data-action="create-project-task"], #projectTimelineViewMount [data-action="open-project-idea"]')) scheduleRender(600);
+      if (event.target?.closest?.('#projectTimelineViewMount [data-action="open-task-idea-detail"], #projectTimelineViewMount [data-action="create-project-task"], #projectTimelineViewMount [data-action="open-project-idea"]')) scheduleRender(600);
     }, true);
   }
 
