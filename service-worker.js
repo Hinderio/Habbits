@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v217-project-unlink-intent';
+const CACHE_NAME = 'habitflow-v218-project-unlink-persistence';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -38,7 +38,8 @@ const MODULE_ASSETS = [
   './modules/projects.js',
   './modules/projects.css',
   './modules/projects-mobile-fix.css',
-  './modules/project-task-form-bridge.js'
+  './modules/project-task-form-bridge.js',
+  './modules/project-unlink-persistence-fix.js'
 ];
 const SQL_ASSETS = ['./sql/add-appointment-series.sql', './sql/add-projects.sql'];
 const ASSETS = ['./', './index.html', './style.css', './app.js', './supabase-config.js', './supabase-schema.js', './manifest.json', './icons/coach-clean.svg', './data/activity-ideas.json', ...SQL_ASSETS, ...MODULE_ASSETS];
@@ -70,6 +71,12 @@ async function withProjectMilestoneEditScript(response) {
     html = html.replace('<script src="app.js"></script>', '<script src="app.js"></script>\n  <script src="modules/pause-period-edit.js?v=204"></script>');
     if (!html.includes('modules/pause-period-edit.js')) {
       html = html.replace('</body>', '  <script src="modules/pause-period-edit.js?v=204"></script>\n</body>');
+    }
+  }
+  if (!html.includes('modules/project-unlink-persistence-fix.js')) {
+    html = html.replace('<script src="app.js"></script>', '<script src="app.js"></script>\n  <script src="modules/project-unlink-persistence-fix.js?v=218"></script>');
+    if (!html.includes('modules/project-unlink-persistence-fix.js')) {
+      html = html.replace('</body>', '  <script src="modules/project-unlink-persistence-fix.js?v=218"></script>\n</body>');
     }
   }
   return new Response(html, { status: response.status, statusText: response.statusText, headers: patchedHeaders(response) });
