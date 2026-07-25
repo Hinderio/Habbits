@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v222-project-timeline-view';
+const CACHE_NAME = 'habitflow-v224-project-performance';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -39,6 +39,7 @@ const MODULE_ASSETS = [
   './modules/projects.css',
   './modules/projects-mobile-fix.css',
   './modules/project-task-form-bridge.js',
+  './modules/project-idea-form-bridge.js',
   './modules/project-unlink-persistence-fix.js',
   './modules/projects-ui-polish.js',
   './modules/project-timeline-view.js'
@@ -81,6 +82,18 @@ async function withProjectMilestoneEditScript(response) {
       html = html.replace('</body>', '  <script src="modules/project-unlink-persistence-fix.js?v=218"></script>\n</body>');
     }
   }
+  if (!html.includes('modules/project-task-form-bridge.js')) {
+    html = html.replace('<script src="app.js"></script>', '<script src="app.js"></script>\n  <script src="modules/project-task-form-bridge.js?v=224"></script>');
+    if (!html.includes('modules/project-task-form-bridge.js')) {
+      html = html.replace('</body>', '  <script src="modules/project-task-form-bridge.js?v=224"></script>\n</body>');
+    }
+  }
+  if (!html.includes('modules/project-idea-form-bridge.js')) {
+    html = html.replace('<script src="app.js"></script>', '<script src="app.js"></script>\n  <script src="modules/project-idea-form-bridge.js?v=224"></script>');
+    if (!html.includes('modules/project-idea-form-bridge.js')) {
+      html = html.replace('</body>', '  <script src="modules/project-idea-form-bridge.js?v=224"></script>\n</body>');
+    }
+  }
   if (!html.includes('modules/projects-ui-polish.js')) {
     html = html.replace('<script src="app.js"></script>', '<script src="app.js"></script>\n  <script src="modules/projects-ui-polish.js?v=221"></script>');
     if (!html.includes('modules/projects-ui-polish.js')) {
@@ -88,9 +101,9 @@ async function withProjectMilestoneEditScript(response) {
     }
   }
   if (!html.includes('modules/project-timeline-view.js')) {
-    html = html.replace('<script src="app.js"></script>', '<script src="app.js"></script>\n  <script src="modules/project-timeline-view.js?v=222"></script>');
+    html = html.replace('<script src="app.js"></script>', '<script src="app.js"></script>\n  <script src="modules/project-timeline-view.js?v=224"></script>');
     if (!html.includes('modules/project-timeline-view.js')) {
-      html = html.replace('</body>', '  <script src="modules/project-timeline-view.js?v=222"></script>\n</body>');
+      html = html.replace('</body>', '  <script src="modules/project-timeline-view.js?v=224"></script>\n</body>');
     }
   }
   return new Response(html, { status: response.status, statusText: response.statusText, headers: patchedHeaders(response) });
@@ -213,10 +226,47 @@ function nativeAppointmentPatch(script) {
   }
   return next;
 }
+
+function nativeTaskIdeaProjectPatch(script) {
+  if (!script.includes('function createTaskIdea(event)') || script.includes('function taskIdeaProjectId(')) return script;
+  let next = script;
+  next = next.replace(
+    "function taskIdeaDescriptionForStorage(idea = {}) {\n    const clean = taskIdeaDescriptionForDisplay(idea).trim();\n    const rating = normalizeTaskIdeaRating(idea.rating);\n    if (!rating) return clean || null;\n    const meta = { rating };\n    return `${clean ? `${clean}\\n\\n` : ''}<!--hf-idea-meta:${encodeURIComponent(JSON.stringify(meta))}-->`;\n  }",
+    "function taskIdeaProjectId(idea = {}) {\n    const parsed = parseTaskIdeaMetaFromDescription(idea.description || '');\n    return String(idea.project_id || idea.projectId || parsed.meta.project_id || '').trim();\n  }\n\n  function taskIdeaDescriptionForStorage(idea = {}) {\n    const parsed = parseTaskIdeaMetaFromDescription(idea.description || '');\n    const clean = parsed.description.trim();\n    const rating = normalizeTaskIdeaRating(idea.rating ?? parsed.meta.rating);\n    const projectId = taskIdeaProjectId(idea);\n    const meta = {};\n    if (rating) meta.rating = rating;\n    if (projectId) meta.project_id = projectId;\n    if (!Object.keys(meta).length) return clean || null;\n    return `${clean ? `${clean}\\n\\n` : ''}<!--hf-idea-meta:${encodeURIComponent(JSON.stringify(meta))}-->`;\n  }"
+  );
+  next = next.replace(
+    "rating,\n      category,",
+    "rating,\n      project_id: idea.project_id || idea.projectId || parsedDescription.meta.project_id || null,\n      projectId: idea.project_id || idea.projectId || parsedDescription.meta.project_id || null,\n      category,"
+  );
+  next = next.replace(
+    "const created = nowIso();\n    state.taskIdeas.push(normalizeTaskIdea({",
+    "const created = nowIso();\n    const projectId = String(data.get('project_id') || '').trim() || null;\n    state.taskIdeas.push(normalizeTaskIdea({"
+  );
+  next = next.replace(
+    "priority: normalizeTaskPriority(data.get('priority')),\n      idea_status: 'open',",
+    "priority: normalizeTaskPriority(data.get('priority')),\n      project_id: projectId,\n      projectId: projectId,\n      idea_status: 'open',"
+  );
+  next = next.replace(
+    "const nextStatus = targetStatus === TASK_BACKLOG_STATUS ? TASK_BACKLOG_STATUS : 'open';\n    const task = {",
+    "const nextStatus = targetStatus === TASK_BACKLOG_STATUS ? TASK_BACKLOG_STATUS : 'open';\n    const ideaProjectId = taskIdeaProjectId(idea) || null;\n    const task = {"
+  );
+  next = next.replace(
+    "status: nextStatus,\n      backlog_rank:",
+    "status: nextStatus,\n      project_id: ideaProjectId,\n      projectId: ideaProjectId,\n      project_link_cleared_at: ideaProjectId ? null : undefined,\n      backlog_rank:"
+  );
+  next = next.replace(
+    "if (!normalizeTaskIdeaRating(next.rating) && normalizeTaskIdeaRating(localIdea.rating)) next.rating = normalizeTaskIdeaRating(localIdea.rating);\n    return next;",
+    "if (!normalizeTaskIdeaRating(next.rating) && normalizeTaskIdeaRating(localIdea.rating)) next.rating = normalizeTaskIdeaRating(localIdea.rating);\n    const localProjectId = taskIdeaProjectId(localIdea);\n    if (!taskIdeaProjectId(next) && localProjectId) {\n      next.project_id = localProjectId;\n      next.projectId = localProjectId;\n    }\n    return next;"
+  );
+  return next;
+}
+
 async function withNativeAppointmentSeries(response) {
   const type = response.headers.get('content-type') || '';
   if (!type.includes('javascript') && !type.includes('text/plain') && !response.url.includes('app.js')) return response;
-  const script = nativeAppointmentPatch(await response.text());
+  let script = await response.text();
+  script = nativeAppointmentPatch(script);
+  script = nativeTaskIdeaProjectPatch(script);
   return new Response(script, { status: response.status, statusText: response.statusText, headers: patchedHeaders(response) });
 }
 
