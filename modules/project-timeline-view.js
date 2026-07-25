@@ -9,8 +9,8 @@
   const TILE_SIZE = 52;
   const MONTH_WIDTH = 150;
   const MAX_MONTHS = 12;
-  const CONTEXT_KEY = 'habitflow-task-project-context-v1';
   const CLOSED_STATUSES = new Set(['archived', 'closed']);
+  const IDEA_META_RE = /\n?\s*<!--hf-idea-meta:([^>]+)-->/;
 
   const STATUS_LABELS = {
     planned: 'Geplant',
@@ -156,12 +156,23 @@
     return (Array.isArray(state.taskIdeas) ? state.taskIdeas : [])
       .filter(idea => String(idea.idea_status || 'open') === 'open')
       .filter(idea => {
-        const direct = String(idea.project_id || idea.projectId || '');
+        const direct = String(idea.project_id || idea.projectId || parseIdeaMeta(idea.description).project_id || '');
         if (direct) return direct === String(projectId);
         const generated = idea.generated_task_id ? taskMap.get(String(idea.generated_task_id)) : null;
         return String(generated?.project_id || generated?.projectId || '') === String(projectId);
       })
       .slice(0, 4);
+  }
+
+  function parseIdeaMeta(description = '') {
+    const match = String(description || '').match(IDEA_META_RE);
+    if (!match) return {};
+    try {
+      const decoded = JSON.parse(decodeURIComponent(match[1] || ''));
+      return decoded && typeof decoded === 'object' ? decoded : {};
+    } catch {
+      return {};
+    }
   }
 
   function buildModel() {
@@ -269,9 +280,9 @@
     </button>`;
   }
 
-  function renderIdeaTile(idea) {
+  function renderIdeaTile(idea, project) {
     const priority = normalizePriority(idea.priority || 'idea');
-    return `<button class="project-timeline-idea" type="button" data-action="idea-to-task" data-id="${escapeHtml(idea.id)}" title="${escapeHtml(idea.title || 'Idee')} · ${storyPoints(idea)} SP">
+    return `<button class="project-timeline-idea" type="button" data-action="idea-to-task" data-id="${escapeHtml(idea.id)}" style="--project-color:${escapeHtml(normalizeColor(project.color))}" title="${escapeHtml(idea.title || 'Idee')} · ${storyPoints(idea)} SP">
       <span class="project-timeline-sp">${storyPoints(idea)}</span>
       <span class="project-timeline-priority priority-${escapeHtml(priority === 'medium' ? 'idea' : priority)}"></span>
       <strong>${escapeHtml(tileInitials(idea.title || 'Idee'))}</strong>
@@ -303,8 +314,11 @@
         ${laneItems.length ? laneItems.map(item => renderTaskTile(item, project)).join('') : `<span class="project-timeline-empty">Noch keine geplanten Tasks</span>`}
       </div>
       <div class="project-timeline-ideas">
-        <div class="project-timeline-idea-list">${ideas.length ? ideas.map(renderIdeaTile).join('') : '<span class="project-timeline-empty">Keine Ideen</span>'}</div>
-        <button class="project-timeline-add" type="button" data-action="create-project-task" data-id="${escapeHtml(project.id)}">+ Task</button>
+        <div class="project-timeline-idea-list">${ideas.length ? ideas.map(idea => renderIdeaTile(idea, project)).join('') : '<span class="project-timeline-empty">Keine Ideen</span>'}</div>
+        <div class="project-timeline-create-actions">
+          <button class="project-timeline-add" type="button" data-action="open-project-idea" data-id="${escapeHtml(project.id)}">+ Idee</button>
+          <button class="project-timeline-add" type="button" data-action="create-project-task" data-id="${escapeHtml(project.id)}">+ Task</button>
+        </div>
       </div>
       <div class="project-timeline-progress" aria-label="Fortschritt ${progress}%"><i style="width:${progress}%"></i></div>
     </article>`;
@@ -389,12 +403,12 @@
       .project-timeline-track{position:relative;min-height:calc(68px + (var(--lane-count,1) - 1) * 58px);border-radius:18px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.06);overflow:hidden}
       .project-timeline-track-grid{position:absolute;inset:0}
       .project-timeline-track-grid i{position:absolute;top:0;bottom:0;width:1px;background:rgba(255,255,255,.06)}
-      .project-timeline-task,.project-timeline-idea{position:absolute;display:grid;grid-template-rows:14px 1fr;align-items:center;justify-items:center;width:${TILE_SIZE}px;height:${TILE_SIZE}px;border-radius:8px;border:1px solid color-mix(in srgb,var(--project-color,#4ad7d1) 46%, rgba(255,255,255,.18));background:color-mix(in srgb,var(--project-color,#4ad7d1) 20%, rgba(255,255,255,.08));color:var(--text);box-shadow:0 8px 20px rgba(2,10,18,.08);padding:5px}
+      .project-timeline-task,.project-timeline-idea{position:absolute;display:grid;place-items:center;width:${TILE_SIZE}px;height:${TILE_SIZE}px;border-radius:8px;border:1px solid color-mix(in srgb,var(--project-color,#4ad7d1) 78%, rgba(17,36,58,.16));background:var(--project-color,#4ad7d1);color:#0e1726;box-shadow:0 8px 20px rgba(2,10,18,.08);padding:5px;text-align:center}
       .project-timeline-task{left:var(--left);top:calc(12px + var(--lane) * 58px);transform:translateX(-50%)}
       .project-timeline-task.is-done{opacity:.58}
       .project-timeline-task.is-floating{border-style:dashed}
-      .project-timeline-task strong,.project-timeline-idea strong{font-size:.74rem;line-height:1;font-weight:950;letter-spacing:.03em}
-      .project-timeline-sp{position:absolute;left:6px;top:5px;font-size:.58rem;line-height:1;font-weight:950;color:var(--muted)}
+      .project-timeline-task strong,.project-timeline-idea strong{display:block;width:100%;font-size:.74rem;line-height:1;font-weight:950;letter-spacing:.03em;text-align:center}
+      .project-timeline-sp{position:absolute;left:6px;top:5px;font-size:.58rem;line-height:1;font-weight:950;color:rgba(14,23,38,.7)}
       .project-timeline-priority{position:absolute;right:7px;top:7px;width:7px;height:7px;border-radius:999px;background:#4ad7d1}
       .project-timeline-priority.priority-low,.project-timeline-foot .priority-low{background:#16c6b8}
       .project-timeline-priority.priority-medium,.project-timeline-foot .priority-medium{background:#4598ff}
@@ -403,7 +417,8 @@
       .project-timeline-priority.priority-idea,.project-timeline-foot .priority-idea{background:#9b6cff}
       .project-timeline-ideas{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
       .project-timeline-idea-list{position:relative;display:flex;align-items:center;gap:8px;min-width:0;min-height:${TILE_SIZE}px;overflow:hidden}
-      .project-timeline-idea{position:relative;inset:auto;background:rgba(155,108,255,.1);border-color:rgba(155,108,255,.24)}
+      .project-timeline-idea{position:relative;inset:auto}
+      .project-timeline-create-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}
       .project-timeline-add{border:0;background:rgba(74,215,209,.16);color:var(--primary);border-radius:999px;padding:9px 12px;font-weight:900;white-space:nowrap}
       .project-timeline-empty{display:inline-flex;align-items:center;height:100%;min-height:48px;color:var(--muted);font-weight:800;font-size:.82rem;padding:0 14px}
       .project-timeline-progress{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(255,255,255,.06);border-radius:999px;overflow:hidden}
@@ -417,46 +432,9 @@
       body.light .project-timeline-track-grid i{background:rgba(17,36,58,.06)}
       body.light .project-timeline-progress{background:rgba(17,36,58,.06)}
       @media(max-width:920px){.project-timeline-shell{min-width:calc(190px + var(--timeline-width,600px) + 170px)}.project-timeline-header,.project-timeline-row{grid-template-columns:190px var(--timeline-width,600px) 170px}.project-timeline-dna{width:48px;height:48px;min-width:48px}.project-timeline-dna span{width:34px;height:34px;font-size:.76rem}.project-timeline-project{gap:9px}.project-timeline-idea-list{gap:6px}}
-      @media(max-width:760px){.project-timeline-panel{border-radius:24px}.project-timeline-scroll{margin-inline:-2px}.project-timeline-shell{min-width:760px}.project-timeline-header,.project-timeline-row{grid-template-columns:170px var(--timeline-width,600px) 150px;gap:10px}.project-timeline-row{min-height:calc(86px + (var(--lane-count,1) - 1) * 54px);padding:12px 0}.project-timeline-track{min-height:calc(62px + (var(--lane-count,1) - 1) * 54px)}.project-timeline-task,.project-timeline-idea{width:46px;height:46px;border-radius:8px}.project-timeline-task{top:calc(10px + var(--lane) * 54px)}.project-timeline-task strong,.project-timeline-idea strong{font-size:.66rem}.project-timeline-project-copy small{font-size:.72rem}.project-timeline-bars{display:none}.project-timeline-add{padding:8px 10px;font-size:.72rem}.project-timeline-foot{font-size:.68rem;gap:10px}}
+      @media(max-width:760px){.project-timeline-panel{border-radius:24px}.project-timeline-scroll{margin-inline:-2px}.project-timeline-shell{min-width:780px}.project-timeline-header,.project-timeline-row{grid-template-columns:170px var(--timeline-width,600px) 170px;gap:10px}.project-timeline-row{min-height:calc(86px + (var(--lane-count,1) - 1) * 54px);padding:12px 0}.project-timeline-track{min-height:calc(62px + (var(--lane-count,1) - 1) * 54px)}.project-timeline-task,.project-timeline-idea{width:46px;height:46px;border-radius:8px}.project-timeline-task{top:calc(10px + var(--lane) * 54px)}.project-timeline-task strong,.project-timeline-idea strong{font-size:.66rem}.project-timeline-project-copy small{font-size:.72rem}.project-timeline-bars{display:none}.project-timeline-add{padding:8px 10px;font-size:.72rem}.project-timeline-foot{font-size:.68rem;gap:10px}}
     `;
     document.head.appendChild(style);
-  }
-
-  function writeProjectContext(projectId) {
-    const state = readState();
-    const project = (Array.isArray(state.projects) ? state.projects : []).find(item => String(item.id) === String(projectId));
-    if (!project) return;
-    const context = {
-      project_id: String(project.id),
-      project_title: String(project.title || 'Projekt'),
-      project_color: normalizeColor(project.color),
-      created_at: Date.now()
-    };
-    try {
-      window.sessionStorage.setItem(CONTEXT_KEY, JSON.stringify(context));
-    } catch {
-      window.__habitFlowTaskProjectContext = context;
-    }
-  }
-
-  function bindAddContext() {
-    if (window.__habitFlowProjectTimelineAddContextBound) return;
-    window.__habitFlowProjectTimelineAddContextBound = true;
-    document.addEventListener('click', event => {
-      const button = event.target?.closest?.('#projectTimelineViewMount [data-action="create-project-task"]');
-      if (!button?.dataset.id) return;
-      writeProjectContext(button.dataset.id);
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-      document.querySelector('.nav-btn[data-target="tasks"]')?.click();
-      window.setTimeout(() => {
-        const panel = document.getElementById('taskFormPanel');
-        const toggle = document.getElementById('taskFormToggleBtn');
-        if (panel?.classList.contains('hidden')) toggle?.click();
-        document.querySelector('#taskForm [name="title"]')?.focus({ preventScroll: false });
-      }, 80);
-    }, true);
   }
 
   function scheduleRender(delay = 0) {
@@ -465,7 +443,6 @@
 
   function boot() {
     injectStyle();
-    bindAddContext();
     scheduleRender(0);
     [250, 900, 2200].forEach(delay => scheduleRender(delay));
     new MutationObserver(() => {
