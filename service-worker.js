@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v216-project-task-bridge';
+const CACHE_NAME = 'habitflow-v217-project-unlink-intent';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -253,6 +253,10 @@ async function withInlineMilestoneEditing(response) {
   script = script
     .replace(/async function saveMilestone\(event\) \{[\s\S]*?\n  async function editMilestone/, `${saveMilestone}\n\n  async function editMilestone`)
     .replace(/async function editMilestone\(id\) \{[\s\S]*?\n  async function deleteMilestone/, `${editMilestone}\n\n  async function deleteMilestone`);
+  script = script.replace(
+    "incoming.tasks = incoming.tasks.map(task => projectByTask.has(task.id) && !task.project_id ? { ...task, project_id: projectByTask.get(task.id) } : task);",
+    "incoming.tasks = incoming.tasks.map(task => projectByTask.has(task.id) && !task.project_id && !task.project_link_cleared_at ? { ...task, project_id: projectByTask.get(task.id) } : task);"
+  );
   return new Response(script, { status: response.status, statusText: response.statusText, headers: patchedHeaders(response) });
 }
 
