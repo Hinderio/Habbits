@@ -6,6 +6,7 @@
 
   const STATE_KEY = 'habitflow-state-v1';
   const CONTEXT_KEY = 'habitflow-idea-project-context-v1';
+  const IDEA_PROJECT_LINKS_KEY = 'habitflow-idea-project-links-v1';
   const META_RE = /\n?\s*<!--hf-idea-meta:([^>]+)-->/;
   const RETRY_DELAYS = [120, 360, 800, 1400, 2400, 3600];
   const IDEA_STATUSES = new Set(['open', 'accepted', 'dismissed']);
@@ -31,6 +32,7 @@
   let supabaseClient = null;
   let lastProjectFieldSignature = '';
   let syncProjectFieldQueued = false;
+  let repairLinksQueued = false;
 
   function readState() {
     try {
@@ -49,6 +51,38 @@
       console.warn('[HabitFlow/projects] Ideen-Projekt-Verknuepfung konnte lokal nicht gespeichert werden.', error);
       return false;
     }
+  }
+
+  function readIdeaProjectLinks() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(IDEA_PROJECT_LINKS_KEY) || '{}');
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function writeIdeaProjectLinks(links) {
+    try {
+      localStorage.setItem(IDEA_PROJECT_LINKS_KEY, JSON.stringify(links || {}));
+    } catch (error) {
+      console.warn('[HabitFlow/projects] Ideen-Projekt-Linkregister konnte nicht gespeichert werden.', error);
+    }
+  }
+
+  function rememberIdeaProject(ideaId, projectId) {
+    if (!ideaId || !projectId) return;
+    const links = readIdeaProjectLinks();
+    links[String(ideaId)] = String(projectId);
+    writeIdeaProjectLinks(links);
+  }
+
+  function forgetIdeaProject(ideaId) {
+    if (!ideaId) return;
+    const links = readIdeaProjectLinks();
+    if (!Object.prototype.hasOwnProperty.call(links, String(ideaId))) return;
+    delete links[String(ideaId)];
+    writeIdeaProjectLinks(links);
   }
 
   function escapeHtml(value = '') {
@@ -106,7 +140,46 @@
   }
 
   function ideaProjectId(idea = {}) {
-    return String(idea.project_id || idea.projectId || parseMeta(idea.description).project_id || '');
+    const direct = String(idea.project_id || idea.projectId || parseMeta(idea.description).project_id || '');
+    if (direct) return direct;
+    return idea?.id ? String(readIdeaProjectLinks()[String(idea.id)] || '') : '';
+  }
+
+  function applyIdeaProjectLinksToState(state, { markUnsynced = false } = {}) {
+    if (!state || !Array.isArray(state.taskIdeas)) return { state, changed: false, restored: [] };
+    const links = readIdeaProjectLinks();
+    let linksChanged = false;
+    let changed = false;
+    const restored = [];
+    state.taskIdeas = state.taskIdeas.map(idea => {
+      if (!idea?.id) return idea;
+      const ideaId = String(idea.id);
+      const directProjectId = String(idea.project_id || idea.projectId || parseMeta(idea.description).project_id || '');
+      if (directProjectId) {
+        if (links[ideaId] !== directProjectId) {
+          links[ideaId] = directProjectId;
+          linksChanged = true;
+        }
+        return idea;
+      }
+      const linkedProjectId = String(links[ideaId] || '');
+      if (!linkedProjectId) return idea;
+      changed = true;
+      const next = {
+        ...idea,
+        project_id: linkedProjectId,
+        projectId: linkedProjectId,
+        description: descriptionWithMeta(idea.description, { project_id: linkedProjectId })
+      };
+      if (markUnsynced) {
+        next.synced = false;
+        next.updated_at = next.updated_at || new Date().toISOString();
+      }
+      restored.push(next);
+      return next;
+    });
+    if (linksChanged) writeIdeaProjectLinks(links);
+    return { state, changed, restored };
   }
 
   function activeProjects() {
@@ -206,6 +279,7 @@
 
   function persistIdeaProject(ideaId, projectId) {
     if (!ideaId || !projectId) return false;
+    rememberIdeaProject(ideaId, projectId);
     const state = readState();
     const ideas = Array.isArray(state.taskIdeas) ? state.taskIdeas : [];
     const now = new Date().toISOString();
@@ -287,6 +361,29 @@
       return false;
     }
     return true;
+  }
+
+  function repairIdeaProjectLinks({ syncRemote = true } = {}) {
+    const state = readState();
+    const result = applyIdeaProjectLinksToState(state, { markUnsynced: true });
+    if (!result.changed) return false;
+    writeState(result.state);
+    window.dispatchEvent(new Event('habitflow:projects-changed'));
+    if (syncRemote) {
+      result.restored.forEach(idea => {
+        syncRemoteIdeaProject(idea, ideaProjectId(idea), idea.updated_at || new Date().toISOString());
+      });
+    }
+    return true;
+  }
+
+  function queueRepairIdeaProjectLinks(delay = 0) {
+    if (repairLinksQueued) return;
+    repairLinksQueued = true;
+    window.setTimeout(() => {
+      repairLinksQueued = false;
+      repairIdeaProjectLinks();
+    }, delay);
   }
 
   function ideaProjectMap() {
@@ -434,6 +531,8 @@
     idea.description = descriptionWithMeta(String(data.get('description') || '').trim(), { project_id: projectId, rating: rating || undefined });
     idea.project_id = projectId || null;
     idea.projectId = projectId || null;
+    if (projectId) rememberIdeaProject(idea.id, projectId);
+    else forgetIdeaProject(idea.id);
     idea.category = normalizeCategory(data.get('category'));
     idea.story_points = clampStoryPoints(data.get('story_points'));
     idea.priority = normalizePriority(data.get('priority'));
@@ -491,8 +590,23 @@
   }
 
   function patchStoragePreservation() {
-    // Intentionally no global localStorage monkey patch: the app writes a large state object often.
-    // Project links are applied at the precise create/convert interaction points instead.
+    if (window.__habitFlowProjectIdeaStoragePatched) return;
+    window.__habitFlowProjectIdeaStoragePatched = true;
+    const originalSetItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function patchedSetItem(key, value) {
+      let nextValue = value;
+      if (this === window.localStorage && key === STATE_KEY && typeof value === 'string' && value.includes('"taskIdeas"')) {
+        try {
+          const parsed = JSON.parse(value);
+          const result = applyIdeaProjectLinksToState(parsed, { markUnsynced: true });
+          if (result.changed) {
+            nextValue = JSON.stringify(result.state);
+            window.setTimeout(() => queueRepairIdeaProjectLinks(80), 0);
+          }
+        } catch {}
+      }
+      return originalSetItem.call(this, key, nextValue);
+    };
   }
 
   function injectStyle() {
@@ -573,6 +687,20 @@
     deleteButtons.forEach(button => {
       polishActionButton(button, { icon: ICONS.trash, label: 'Loeschen', deleteTone: true });
     });
+    alignActionIcons(root);
+  }
+
+  function alignActionIcons(root = document) {
+    const actionRows = [
+      ...(root.matches?.('#screen-tasks .kanban-card .list-actions, #screen-tasks .activity-suggestion-card .idea-actions') ? [root] : []),
+      ...Array.from(root.querySelectorAll?.('#screen-tasks .kanban-card .list-actions, #screen-tasks .activity-suggestion-card .idea-actions') || [])
+    ];
+    actionRows.forEach(row => {
+      const edit = row.querySelector(':scope > .task-action-icon-edit');
+      const remove = row.querySelector(':scope > .task-action-icon-delete');
+      if (edit) row.appendChild(edit);
+      if (remove) row.appendChild(remove);
+    });
   }
 
   function bindEvents() {
@@ -629,13 +757,17 @@
       const beforeTaskIds = shouldLinkCreatedTask ? new Set((readState().tasks || []).map(task => String(task.id))) : null;
       if (action.matches('[data-task-idea-detail-modal] [data-action]')) window.setTimeout(closeIdeaDetail, 120);
       if (shouldLinkCreatedTask) [60, 360, 900, 1600].forEach(delay => window.setTimeout(() => linkTaskCreatedFromIdea(ideaId, projectId, beforeTaskIds), delay));
-      [80, 420, 1200].forEach(delay => window.setTimeout(() => restoreIdeaProjectLinks(beforeProjects), delay));
+      [80, 420, 1200].forEach(delay => window.setTimeout(() => {
+        restoreIdeaProjectLinks(beforeProjects);
+        repairIdeaProjectLinks();
+      }, delay));
     }, true);
   }
 
   function boot() {
     patchStoragePreservation();
     injectStyle();
+    repairIdeaProjectLinks({ syncRemote: false });
     syncProjectField();
     polishTaskActions();
     bindEvents();
