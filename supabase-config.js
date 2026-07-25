@@ -97,7 +97,8 @@ window.HABITFLOW_SUPABASE_CONFIG = Object.freeze({
     'modules/craving-coach-v2.js',
     'modules/craving-coach-v2-actions-polish.js',
     'modules/gamification.js',
-    'modules/monthly-missions.js'
+    'modules/monthly-missions.js',
+    'modules/project-task-form-bridge.js'
   ];
 
   document.write(scripts.map(src => `<script src="${src}"><\/script>`).join(''));
