@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v218-project-unlink-persistence';
+const CACHE_NAME = 'habitflow-v219-task-project-native-save';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -174,11 +174,15 @@ function nativeAppointmentPatch(script) {
     );
     next = next.replace(
       "const data = new FormData(els.taskForm);\n    const wantsMonthly",
-      "const data = new FormData(els.taskForm);\n    const projectTaskContext = editingTaskId ? null : readPendingProjectTaskContext();\n    const wantsMonthly"
+      "const data = new FormData(els.taskForm);\n    const selectedProjectId = String(data.get('project_id') || '').trim();\n    const projectTaskContext = editingTaskId ? null : readPendingProjectTaskContext();\n    const normalizedProjectId = selectedProjectId || projectTaskContext?.project_id || null;\n    const wantsMonthly"
+    );
+    next = next.replace(
+      "due_at: dueAt,\n      updated_at: nowIso(),",
+      "due_at: dueAt,\n      project_id: normalizedProjectId,\n      projectId: normalizedProjectId,\n      project_link_cleared_at: normalizedProjectId ? null : nowIso(),\n      updated_at: nowIso(),"
     );
     next = next.replace(
       "points: 0,\n      recurrence: wantsMonthly ? buildMonthlyTaskRecurrence(values.due_at, { id: taskId }) : null,",
-      "points: 0,\n      project_id: projectTaskContext?.project_id || null,\n      recurrence: wantsMonthly ? buildMonthlyTaskRecurrence(values.due_at, { id: taskId }) : null,"
+      "points: 0,\n      project_id: normalizedProjectId,\n      projectId: normalizedProjectId,\n      recurrence: wantsMonthly ? buildMonthlyTaskRecurrence(values.due_at, { id: taskId }) : null,"
     );
     next = next.replace(
       "saveState();\n    toast(wantsMonthly ? 'Aufgabe gespeichert · wird monatlich fortgeführt' : 'Aufgabe gespeichert');",
