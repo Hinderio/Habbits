@@ -10,7 +10,8 @@
   const RETRY_DELAYS = [120, 360, 800, 1400, 2400, 3600];
 
   let supabaseClient = null;
-  let patchedStorage = false;
+  let lastProjectFieldSignature = '';
+  let syncProjectFieldQueued = false;
 
   function readState() {
     try {
@@ -127,11 +128,24 @@
     const context = readContext() || window.__habitFlowIdeaProjectContext || null;
     const projects = activeProjects();
     const selected = context?.project_id || select.value || '';
+    const value = projects.some(project => String(project.id) === String(selected)) ? String(selected) : '';
+    const signature = `${value}|${projects.map(project => `${project.id}:${project.title || ''}`).join('|')}`;
+    if (signature === lastProjectFieldSignature && select.value === value) return;
+    lastProjectFieldSignature = signature;
     select.innerHTML = [
       '<option value="">Kein Projekt</option>',
       ...projects.map(project => `<option value="${escapeHtml(project.id)}">${escapeHtml(project.title || 'Projekt')}</option>`)
     ].join('');
-    select.value = projects.some(project => String(project.id) === String(selected)) ? String(selected) : '';
+    select.value = value;
+  }
+
+  function queueSyncProjectField(delay = 0) {
+    if (syncProjectFieldQueued) return;
+    syncProjectFieldQueued = true;
+    window.setTimeout(() => {
+      syncProjectFieldQueued = false;
+      syncProjectField();
+    }, delay);
   }
 
   function openIdeaMask(projectId) {
@@ -250,30 +264,8 @@
   }
 
   function patchStoragePreservation() {
-    if (patchedStorage || window.__habitFlowProjectIdeaStoragePatched) return;
-    const originalSetItem = window.localStorage?.setItem?.bind(window.localStorage);
-    if (!originalSetItem) return;
-    patchedStorage = true;
-    window.__habitFlowProjectIdeaStoragePatched = true;
-    window.localStorage.setItem = function patchedSetItem(key, value) {
-      if (key !== STATE_KEY) return originalSetItem(key, value);
-      try {
-        const existing = readState();
-        const incoming = JSON.parse(String(value || '{}'));
-        const projectByIdea = new Map((existing.taskIdeas || [])
-          .map(idea => [String(idea.id || ''), ideaProjectId(idea)])
-          .filter(([, projectId]) => projectId));
-        if (Array.isArray(incoming.taskIdeas) && projectByIdea.size) {
-          incoming.taskIdeas = incoming.taskIdeas.map(idea => {
-            const projectId = ideaProjectId(idea) || projectByIdea.get(String(idea?.id || ''));
-            return projectId ? { ...idea, project_id: projectId, projectId: projectId, description: descriptionWithMeta(idea.description, { project_id: projectId }) } : idea;
-          });
-        }
-        return originalSetItem(key, JSON.stringify(incoming));
-      } catch {
-        return originalSetItem(key, value);
-      }
-    };
+    // Intentionally no global localStorage monkey patch: the app writes a large state object often.
+    // Project links are applied at the precise create/convert interaction points instead.
   }
 
   function injectStyle() {
@@ -317,7 +309,7 @@
     }, true);
 
     document.addEventListener('click', event => {
-      if (event.target?.closest?.('#taskIdeasToggleBtn')) window.setTimeout(syncProjectField, 90);
+      if (event.target?.closest?.('#taskIdeasToggleBtn')) queueSyncProjectField(90);
     }, true);
   }
 
@@ -326,7 +318,10 @@
     injectStyle();
     syncProjectField();
     bindEvents();
-    new MutationObserver(() => syncProjectField()).observe(document.body, { childList: true, subtree: true });
+    new MutationObserver(mutations => {
+      const shouldSync = mutations.some(mutation => Array.from(mutation.addedNodes || []).some(node => node.nodeType === 1 && (node.id === 'taskIdeaForm' || node.querySelector?.('#taskIdeaForm'))));
+      if (shouldSync) queueSyncProjectField(0);
+    }).observe(document.body, { childList: true, subtree: true });
   }
 
   if (document.readyState === 'loading') {
