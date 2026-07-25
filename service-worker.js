@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v220-projects-ui-polish';
+const CACHE_NAME = 'habitflow-v221-project-phase-actions';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -81,9 +81,9 @@ async function withProjectMilestoneEditScript(response) {
     }
   }
   if (!html.includes('modules/projects-ui-polish.js')) {
-    html = html.replace('<script src="app.js"></script>', '<script src="app.js"></script>\n  <script src="modules/projects-ui-polish.js?v=220"></script>');
+    html = html.replace('<script src="app.js"></script>', '<script src="app.js"></script>\n  <script src="modules/projects-ui-polish.js?v=221"></script>');
     if (!html.includes('modules/projects-ui-polish.js')) {
-      html = html.replace('</body>', '  <script src="modules/projects-ui-polish.js?v=220"></script>\n</body>');
+      html = html.replace('</body>', '  <script src="modules/projects-ui-polish.js?v=221"></script>\n</body>');
     }
   }
   return new Response(html, { status: response.status, statusText: response.statusText, headers: patchedHeaders(response) });
