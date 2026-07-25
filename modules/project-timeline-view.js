@@ -416,8 +416,8 @@
       .project-timeline-priority.priority-high,.project-timeline-foot .priority-high{background:#f6a91f}
       .project-timeline-priority.priority-urgent,.project-timeline-foot .priority-urgent{background:#ff4d55}
       .project-timeline-priority.priority-idea,.project-timeline-foot .priority-idea{background:#9b6cff}
-      .project-timeline-ideas{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
-      .project-timeline-idea-list{position:relative;display:flex;align-items:center;gap:8px;min-width:0;min-height:${TILE_SIZE}px;overflow:hidden}
+      .project-timeline-ideas{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:8px;min-width:0}
+      .project-timeline-idea-list{position:relative;display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px;width:100%;min-width:0;min-height:${TILE_SIZE}px;overflow:visible}
       .project-timeline-idea{position:relative;inset:auto}
       .project-timeline-create-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}
       .project-timeline-add{border:0;background:rgba(74,215,209,.16);color:var(--primary);border-radius:999px;padding:9px 12px;font-weight:900;white-space:nowrap}
@@ -448,8 +448,8 @@
   }
 
   function ensureProjectBridges() {
-    ensureBridgeScript('modules/project-task-form-bridge.js?v=223', '__habitFlowTaskProjectBridgeInstalled');
-    ensureBridgeScript('modules/project-idea-form-bridge.js?v=223', '__habitFlowProjectIdeaBridgeInstalled');
+    ensureBridgeScript('modules/project-task-form-bridge.js?v=225', '__habitFlowTaskProjectBridgeInstalled');
+    ensureBridgeScript('modules/project-idea-form-bridge.js?v=225', '__habitFlowProjectIdeaBridgeInstalled');
   }
 
   function scheduleRender(delay = 0) {
