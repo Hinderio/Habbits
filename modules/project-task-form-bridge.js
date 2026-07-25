@@ -168,16 +168,23 @@
     return supabaseClient;
   }
 
-  async function syncRemoteProjectLink(taskId, projectId, updatedAt) {
+  async function syncRemoteProjectLink(taskId, projectId, updatedAt, attempt = 0) {
     const client = getSupabaseClient();
     if (!client) return false;
-    const { error } = await client
+    const { data, error } = await client
       .from('tasks')
       .update({ project_id: projectId || null, updated_at: updatedAt })
-      .eq('id', taskId);
+      .eq('id', taskId)
+      .select('id');
     if (error) {
       console.warn('[HabitFlow/projects] Task-Projekt-Verknuepfung konnte remote nicht gespeichert werden.', error);
       return false;
+    }
+    if (!Array.isArray(data) || data.length === 0) {
+      const delay = RETRY_DELAYS[attempt];
+      if (!delay) return false;
+      await new Promise(resolve => window.setTimeout(resolve, delay));
+      return syncRemoteProjectLink(taskId, projectId, updatedAt, attempt + 1);
     }
     return true;
   }
