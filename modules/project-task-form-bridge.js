@@ -199,7 +199,7 @@
 
     const updatedAt = new Date().toISOString();
     state.tasks = tasks.map(item => String(item?.id || '') === String(taskId)
-      ? { ...item, project_id: normalizedProjectId, projectId: normalizedProjectId, updated_at: updatedAt, synced: false }
+      ? { ...item, project_id: normalizedProjectId, projectId: normalizedProjectId, project_link_cleared_at: normalizedProjectId ? null : updatedAt, updated_at: updatedAt, synced: false }
       : item);
     writeState(state);
 
@@ -207,7 +207,7 @@
     if (synced) {
       const fresh = readState();
       fresh.tasks = (fresh.tasks || []).map(item => String(item?.id || '') === String(taskId)
-        ? { ...item, project_id: normalizedProjectId, projectId: normalizedProjectId, synced: true }
+        ? { ...item, project_id: normalizedProjectId, projectId: normalizedProjectId, project_link_cleared_at: normalizedProjectId ? null : updatedAt, synced: true }
         : item);
       writeState(fresh);
       if (clearProjectContext) clearContext();
