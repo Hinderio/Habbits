@@ -519,6 +519,11 @@
       #screen-tasks .task-action-icon-delete:hover,.task-detail-modal .task-action-icon-delete:hover{background:rgba(255,99,99,.13);border-color:rgba(255,99,99,.32)}
       body.light #screen-tasks .task-action-icon,body.light .task-detail-modal .task-action-icon{background:rgba(74,215,209,.14);border-color:rgba(17,36,58,.08)}
       body.light #screen-tasks .task-action-icon-delete,body.light .task-detail-modal .task-action-icon-delete{background:rgba(255,99,99,.1);border-color:rgba(179,58,58,.16)}
+      #screen-tasks .kanban-card .list-actions,#screen-tasks .activity-suggestion-card .idea-actions{display:flex;align-items:flex-end;flex-wrap:wrap;gap:8px}
+      #screen-tasks .kanban-card .list-actions>:not(.task-action-icon),#screen-tasks .activity-suggestion-card .idea-actions>:not(.task-action-icon){order:10}
+      #screen-tasks .kanban-card .task-action-icon-edit,#screen-tasks .activity-suggestion-card .task-action-icon-edit{order:90;margin-left:auto}
+      #screen-tasks .kanban-card .task-action-icon-delete,#screen-tasks .activity-suggestion-card .task-action-icon-delete{order:91;margin-left:0}
+      #screen-tasks .kanban-card .task-action-icon + .task-action-icon,#screen-tasks .activity-suggestion-card .task-action-icon + .task-action-icon{margin-left:0}
       @media(max-width:760px){.task-idea-detail-modal{align-items:flex-end;padding:10px 8px calc(env(safe-area-inset-bottom,0px) + 10px)}.task-idea-detail-card{max-height:min(88svh,760px);border-radius:24px 24px 18px 18px;padding:16px 14px 24px}.task-idea-detail-head{padding-right:44px}.task-idea-detail-form{grid-template-columns:1fr}.task-idea-detail-actions{display:grid;grid-template-columns:1fr;align-items:stretch}.task-idea-detail-close{right:12px;top:12px}}
     `;
     document.head.appendChild(style);
@@ -555,12 +560,12 @@
   function polishTaskActions(root = document) {
     ensureIdeaEditButtons(root);
     const editButtons = [
-      ...(root.matches?.('#screen-tasks [data-action="edit-task"], #screen-tasks [data-action="edit-task-idea"], .task-detail-modal [data-action="edit-task"]') ? [root] : []),
-      ...Array.from(root.querySelectorAll?.('#screen-tasks [data-action="edit-task"], #screen-tasks [data-action="edit-task-idea"], .task-detail-modal [data-action="edit-task"]') || [])
+      ...(root.matches?.('#screen-tasks [data-action="edit-task"], #screen-tasks [data-action="edit-task-idea"], #screen-tasks [data-action="edit-activity"], .task-detail-modal [data-action="edit-task"]') ? [root] : []),
+      ...Array.from(root.querySelectorAll?.('#screen-tasks [data-action="edit-task"], #screen-tasks [data-action="edit-task-idea"], #screen-tasks [data-action="edit-activity"], .task-detail-modal [data-action="edit-task"]') || [])
     ];
     const deleteButtons = [
-      ...(root.matches?.('#screen-tasks [data-action="delete-task"], #screen-tasks [data-action="delete-task-idea"], .task-detail-modal [data-action="delete-task"]') ? [root] : []),
-      ...Array.from(root.querySelectorAll?.('#screen-tasks [data-action="delete-task"], #screen-tasks [data-action="delete-task-idea"], .task-detail-modal [data-action="delete-task"]') || [])
+      ...(root.matches?.('#screen-tasks [data-action="delete-task"], #screen-tasks [data-action="delete-task-idea"], #screen-tasks [data-action="delete-activity"], .task-detail-modal [data-action="delete-task"]') ? [root] : []),
+      ...Array.from(root.querySelectorAll?.('#screen-tasks [data-action="delete-task"], #screen-tasks [data-action="delete-task-idea"], #screen-tasks [data-action="delete-activity"], .task-detail-modal [data-action="delete-task"]') || [])
     ];
     editButtons.forEach(button => {
       polishActionButton(button, { icon: ICONS.edit, label: 'Bearbeiten' });
