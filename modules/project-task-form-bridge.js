@@ -1,6 +1,9 @@
 (() => {
   'use strict';
 
+  if (window.__habitFlowTaskProjectBridgeInstalled) return;
+  window.__habitFlowTaskProjectBridgeInstalled = true;
+
   const CONTEXT_KEY = 'habitflow-task-project-context-v1';
   const STATE_KEY = 'habitflow-state-v1';
   const CONTEXT_TTL_MS = 30 * 60 * 1000;
