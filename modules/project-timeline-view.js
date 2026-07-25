@@ -437,11 +437,26 @@
     document.head.appendChild(style);
   }
 
+  function ensureBridgeScript(src, marker) {
+    if (window[marker] || document.querySelector(`script[data-project-timeline-bridge="${src}"]`)) return;
+    const script = document.createElement('script');
+    script.src = src;
+    script.defer = true;
+    script.dataset.projectTimelineBridge = src;
+    document.head.appendChild(script);
+  }
+
+  function ensureProjectBridges() {
+    ensureBridgeScript('modules/project-task-form-bridge.js?v=223', '__habitFlowTaskProjectBridgeInstalled');
+    ensureBridgeScript('modules/project-idea-form-bridge.js?v=223', '__habitFlowProjectIdeaBridgeInstalled');
+  }
+
   function scheduleRender(delay = 0) {
     window.setTimeout(render, delay);
   }
 
   function boot() {
+    ensureProjectBridges();
     injectStyle();
     scheduleRender(0);
     [250, 900, 2200].forEach(delay => scheduleRender(delay));
