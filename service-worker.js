@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v224-project-performance';
+const CACHE_NAME = 'habitflow-v225-project-ideas';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -83,15 +83,15 @@ async function withProjectMilestoneEditScript(response) {
     }
   }
   if (!html.includes('modules/project-task-form-bridge.js')) {
-    html = html.replace('<script src="app.js"></script>', '<script src="app.js"></script>\n  <script src="modules/project-task-form-bridge.js?v=224"></script>');
+    html = html.replace('<script src="app.js"></script>', '<script src="app.js"></script>\n  <script src="modules/project-task-form-bridge.js?v=225"></script>');
     if (!html.includes('modules/project-task-form-bridge.js')) {
-      html = html.replace('</body>', '  <script src="modules/project-task-form-bridge.js?v=224"></script>\n</body>');
+      html = html.replace('</body>', '  <script src="modules/project-task-form-bridge.js?v=225"></script>\n</body>');
     }
   }
   if (!html.includes('modules/project-idea-form-bridge.js')) {
-    html = html.replace('<script src="app.js"></script>', '<script src="app.js"></script>\n  <script src="modules/project-idea-form-bridge.js?v=224"></script>');
+    html = html.replace('<script src="app.js"></script>', '<script src="app.js"></script>\n  <script src="modules/project-idea-form-bridge.js?v=225"></script>');
     if (!html.includes('modules/project-idea-form-bridge.js')) {
-      html = html.replace('</body>', '  <script src="modules/project-idea-form-bridge.js?v=224"></script>\n</body>');
+      html = html.replace('</body>', '  <script src="modules/project-idea-form-bridge.js?v=225"></script>\n</body>');
     }
   }
   if (!html.includes('modules/projects-ui-polish.js')) {
@@ -101,9 +101,9 @@ async function withProjectMilestoneEditScript(response) {
     }
   }
   if (!html.includes('modules/project-timeline-view.js')) {
-    html = html.replace('<script src="app.js"></script>', '<script src="app.js"></script>\n  <script src="modules/project-timeline-view.js?v=224"></script>');
+    html = html.replace('<script src="app.js"></script>', '<script src="app.js"></script>\n  <script src="modules/project-timeline-view.js?v=225"></script>');
     if (!html.includes('modules/project-timeline-view.js')) {
-      html = html.replace('</body>', '  <script src="modules/project-timeline-view.js?v=224"></script>\n</body>');
+      html = html.replace('</body>', '  <script src="modules/project-timeline-view.js?v=225"></script>\n</body>');
     }
   }
   return new Response(html, { status: response.status, statusText: response.statusText, headers: patchedHeaders(response) });
