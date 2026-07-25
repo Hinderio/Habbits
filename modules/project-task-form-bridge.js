@@ -7,6 +7,8 @@
   const RETRY_DELAYS = [120, 260, 520, 900, 1400, 2200, 3200];
 
   let supabaseClient = null;
+  let editingTaskId = '';
+  let formObserverBound = false;
 
   function readState() {
     try {
@@ -59,9 +61,18 @@
     if (window.__habitFlowTaskProjectContext) delete window.__habitFlowTaskProjectContext;
   }
 
+  function activeProjects() {
+    return (readState().projects || [])
+      .filter(project => project?.id && !project.is_archived)
+      .sort((a, b) => String(a.title || '').localeCompare(String(b.title || ''), 'de'));
+  }
+
+  function taskById(taskId) {
+    return (readState().tasks || []).find(task => String(task?.id || '') === String(taskId || '')) || null;
+  }
+
   function writeContext(projectId) {
-    const state = readState();
-    const project = (state.projects || []).find(item => String(item?.id || '') === String(projectId || ''));
+    const project = activeProjects().find(item => String(item.id) === String(projectId || ''));
     if (!project) return null;
     const context = normalizeContext({
       project_id: project.id,
@@ -77,9 +88,61 @@
     return context;
   }
 
+  function escapeHtml(value = '') {
+    return String(value || '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
+  }
+
+  function ensureProjectField() {
+    const form = document.getElementById('taskForm');
+    if (!form || form.elements.project_id) return form?.elements.project_id || null;
+    const priorityLabel = form.querySelector('select[name="priority"]')?.closest('label');
+    const field = document.createElement('label');
+    field.dataset.taskProjectField = 'true';
+    field.innerHTML = '<span>Projekt</span><select name="project_id"></select>';
+    if (priorityLabel) priorityLabel.insertAdjacentElement('afterend', field);
+    else form.prepend(field);
+    return field.querySelector('select');
+  }
+
+  function selectedProjectIdForForm() {
+    const context = readContext();
+    if (context?.project_id) return context.project_id;
+    const task = taskById(editingTaskId);
+    return task?.project_id || task?.projectId || '';
+  }
+
+  function syncProjectField() {
+    const select = ensureProjectField();
+    if (!select) return;
+    const selected = selectedProjectIdForForm();
+    const projects = activeProjects();
+    select.innerHTML = [
+      '<option value="">Kein Projekt</option>',
+      ...projects.map(project => `<option value="${escapeHtml(project.id)}">${escapeHtml(project.title || 'Projekt')}</option>`)
+    ].join('');
+    select.value = projects.some(project => String(project.id) === String(selected)) ? String(selected) : '';
+  }
+
+  function bindFormObserver() {
+    if (formObserverBound) return;
+    const panel = document.getElementById('taskFormPanel');
+    if (!panel) return;
+    formObserverBound = true;
+    new MutationObserver(() => {
+      if (!panel.classList.contains('hidden')) window.setTimeout(syncProjectField, 0);
+    }).observe(panel, { attributes: true, attributeFilter: ['class'] });
+  }
+
   function closeProjectDialog() {
     document.getElementById('projectDetailModal')?.classList.add('hidden');
     document.body.classList.remove('project-modal-open');
+  }
+
+  function closeTaskDialog() {
+    document.getElementById('taskDetailModal')?.classList.add('hidden');
+    const detail = document.getElementById('taskDetailContent');
+    if (detail) detail.innerHTML = '';
+    document.body.classList.remove('modal-open');
   }
 
   function openTaskMask() {
@@ -89,6 +152,7 @@
       const panel = document.getElementById('taskFormPanel');
       const toggle = document.getElementById('taskFormToggleBtn');
       if (panel?.classList.contains('hidden')) toggle?.click();
+      syncProjectField();
       document.querySelector('#taskForm [name="title"]')?.focus({ preventScroll: false });
     }, 80);
   }
@@ -98,7 +162,9 @@
     const config = window.HABITFLOW_SUPABASE_CONFIG;
     const createClient = window.supabase?.createClient;
     if (!config?.url || !config?.anonKey || typeof createClient !== 'function') return null;
-    supabaseClient = createClient(config.url, config.anonKey);
+    supabaseClient = createClient(config.url, config.anonKey, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+    });
     return supabaseClient;
   }
 
@@ -107,7 +173,7 @@
     if (!client) return false;
     const { error } = await client
       .from('tasks')
-      .update({ project_id: projectId, updated_at: updatedAt })
+      .update({ project_id: projectId || null, updated_at: updatedAt })
       .eq('id', taskId);
     if (error) {
       console.warn('[HabitFlow/projects] Task-Projekt-Verknuepfung konnte remote nicht gespeichert werden.', error);
@@ -116,8 +182,9 @@
     return true;
   }
 
-  async function persistProjectLink(taskId, context) {
-    if (!taskId || !context?.project_id) return false;
+  async function persistProjectLink(taskId, projectId, { clearProjectContext = false } = {}) {
+    if (!taskId) return false;
+    const normalizedProjectId = projectId ? String(projectId) : null;
     const state = readState();
     const tasks = Array.isArray(state.tasks) ? state.tasks : [];
     const task = tasks.find(item => String(item?.id || '') === String(taskId));
@@ -125,51 +192,83 @@
 
     const updatedAt = new Date().toISOString();
     state.tasks = tasks.map(item => String(item?.id || '') === String(taskId)
-      ? { ...item, project_id: context.project_id, projectId: context.project_id, updated_at: updatedAt, synced: false }
+      ? { ...item, project_id: normalizedProjectId, projectId: normalizedProjectId, updated_at: updatedAt, synced: false }
       : item);
     writeState(state);
 
-    const synced = await syncRemoteProjectLink(taskId, context.project_id, updatedAt);
+    const synced = await syncRemoteProjectLink(taskId, normalizedProjectId, updatedAt);
     if (synced) {
       const fresh = readState();
       fresh.tasks = (fresh.tasks || []).map(item => String(item?.id || '') === String(taskId)
-        ? { ...item, project_id: context.project_id, projectId: context.project_id, synced: true }
+        ? { ...item, project_id: normalizedProjectId, projectId: normalizedProjectId, synced: true }
         : item);
       writeState(fresh);
-      clearContext();
+      if (clearProjectContext) clearContext();
+      window.setTimeout(() => window.dispatchEvent(new Event('habitflow:project-task-link-updated')), 0);
     }
     return synced;
   }
 
-  function newestCreatedTask(beforeIds, context) {
-    const state = readState();
-    const createdAfter = Number(context?.created_at || 0) - 60 * 1000;
-    return (state.tasks || [])
-      .filter(task => task?.id && !task.project_id && !beforeIds.has(String(task.id)))
+  function newestCreatedTask(beforeIds, createdAt = Date.now()) {
+    const createdAfter = Number(createdAt || Date.now()) - 60 * 1000;
+    return (readState().tasks || [])
+      .filter(task => task?.id && !beforeIds.has(String(task.id)))
       .filter(task => !createdAfter || Date.parse(task.created_at || task.updated_at || '') >= createdAfter)
       .sort((a, b) => Date.parse(b.created_at || b.updated_at || 0) - Date.parse(a.created_at || a.updated_at || 0))[0] || null;
   }
 
-  function linkCreatedTask(beforeIds, context, attempt = 0) {
-    const task = newestCreatedTask(beforeIds, context);
+  function linkCreatedTask(beforeIds, projectId, createdAt, attempt = 0) {
+    const task = newestCreatedTask(beforeIds, createdAt);
     if (task) {
-      persistProjectLink(task.id, context);
+      persistProjectLink(task.id, projectId, { clearProjectContext: true });
       return;
     }
     const delay = RETRY_DELAYS[attempt];
-    if (delay) window.setTimeout(() => linkCreatedTask(beforeIds, context, attempt + 1), delay);
+    if (delay) window.setTimeout(() => linkCreatedTask(beforeIds, projectId, createdAt, attempt + 1), delay);
   }
 
   function repairRecentContextTask() {
     const context = readContext();
     if (!context) return;
-    const state = readState();
     const createdAfter = Number(context.created_at || 0) - 60 * 1000;
-    const task = (state.tasks || [])
+    const task = (readState().tasks || [])
       .filter(item => item?.id && !item.project_id)
       .filter(item => Date.parse(item.created_at || item.updated_at || '') >= createdAfter)
       .sort((a, b) => Date.parse(b.created_at || b.updated_at || 0) - Date.parse(a.created_at || a.updated_at || 0))[0];
-    if (task) persistProjectLink(task.id, context);
+    if (task) persistProjectLink(task.id, context.project_id, { clearProjectContext: true });
+  }
+
+  function openProjectDetail(projectId) {
+    if (!projectId) return;
+    closeTaskDialog();
+    const trigger = document.createElement('button');
+    trigger.type = 'button';
+    trigger.dataset.action = 'open-project-detail';
+    trigger.dataset.id = projectId;
+    trigger.hidden = true;
+    document.body.appendChild(trigger);
+    trigger.click();
+    trigger.remove();
+  }
+
+  function enhanceProjectBadges(root = document) {
+    root.querySelectorAll?.('[data-project-badge-root]').forEach(node => {
+      if (node.dataset.projectLinkEnhanced) return;
+      node.dataset.projectLinkEnhanced = 'true';
+      node.classList.add('is-project-link');
+      node.setAttribute('role', 'button');
+      node.setAttribute('tabindex', '0');
+      node.setAttribute('aria-label', 'Projekt öffnen');
+      node.setAttribute('title', 'Projekt öffnen');
+    });
+  }
+
+  function injectStyle() {
+    if (document.getElementById('habitflow-task-project-integration-style')) return;
+    const style = document.createElement('style');
+    style.id = 'habitflow-task-project-integration-style';
+    style.textContent = '[data-task-project-field]{display:flex;flex-direction:column;gap:8px}[data-project-badge-root].is-project-link{cursor:pointer;width:max-content;max-width:100%}[data-project-badge-root].is-project-link:focus-visible{outline:3px solid rgba(74,215,209,.42);outline-offset:4px;border-radius:999px}';
+    document.head.appendChild(style);
   }
 
   document.addEventListener('click', event => {
@@ -177,27 +276,98 @@
     if (!button) return;
     const context = writeContext(button.dataset.id);
     if (!context) return;
+    editingTaskId = '';
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation();
     openTaskMask();
   }, true);
 
-  document.addEventListener('submit', event => {
-    if (event.target?.id !== 'taskForm') return;
-    const context = readContext();
-    if (!context) return;
-    const beforeIds = new Set((readState().tasks || []).map(task => String(task.id)));
-    window.setTimeout(() => linkCreatedTask(beforeIds, context), 0);
+  document.addEventListener('click', event => {
+    const badge = event.target?.closest?.('.task-detail-modal [data-project-badge-root]');
+    if (!badge?.dataset.projectId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+    openProjectDetail(badge.dataset.projectId);
+  }, true);
+
+  document.addEventListener('keydown', event => {
+    const badge = event.target?.closest?.('.task-detail-modal [data-project-badge-root]');
+    if (!badge?.dataset.projectId || !['Enter', ' '].includes(event.key)) return;
+    event.preventDefault();
+    openProjectDetail(badge.dataset.projectId);
   }, true);
 
   document.addEventListener('click', event => {
-    if (event.target?.closest?.('#taskFormCloseBtn, #cancelTaskEditBtn')) clearContext();
+    const editButton = event.target?.closest?.('[data-action="edit-task"]');
+    if (editButton?.dataset.id) {
+      editingTaskId = String(editButton.dataset.id);
+      clearContext();
+      window.setTimeout(syncProjectField, 90);
+      return;
+    }
+    if (event.target?.closest?.('#taskFormToggleBtn')) {
+      editingTaskId = '';
+      window.setTimeout(syncProjectField, 90);
+      return;
+    }
+    if (event.target?.closest?.('#taskFormCloseBtn, #cancelTaskEditBtn')) {
+      editingTaskId = '';
+      clearContext();
+    }
   }, true);
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => window.setTimeout(repairRecentContextTask, 400), { once: true });
-  } else {
+  document.addEventListener('submit', event => {
+    if (event.target?.id !== 'taskForm') return;
+    const select = ensureProjectField();
+    const selectedProjectId = select?.value || '';
+    const context = readContext();
+    const beforeIds = new Set((readState().tasks || []).map(task => String(task.id)));
+    const submittedEditId = editingTaskId;
+    const createdAt = Date.now();
+
+    window.setTimeout(() => {
+      if (submittedEditId) {
+        persistProjectLink(submittedEditId, selectedProjectId);
+        editingTaskId = '';
+        clearContext();
+        return;
+      }
+      if (selectedProjectId || context?.project_id) {
+        linkCreatedTask(beforeIds, selectedProjectId || context.project_id, createdAt);
+      } else {
+        clearContext();
+      }
+    }, 0);
+  }, true);
+
+  window.addEventListener('storage', event => {
+    if (event.key === STATE_KEY) window.setTimeout(syncProjectField, 0);
+  });
+  window.addEventListener('habitflow:project-task-link-updated', () => {
+    window.setTimeout(() => {
+      syncProjectField();
+      enhanceProjectBadges();
+    }, 0);
+  });
+
+  const boot = () => {
+    injectStyle();
+    bindFormObserver();
+    syncProjectField();
+    enhanceProjectBadges();
+    new MutationObserver(mutations => {
+      mutations.forEach(mutation => mutation.addedNodes.forEach(node => {
+        if (node.nodeType === 1) enhanceProjectBadges(node);
+      }));
+    }).observe(document.body, { childList: true, subtree: true });
     window.setTimeout(repairRecentContextTask, 400);
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot, { once: true });
+  } else {
+    boot();
   }
 })();
