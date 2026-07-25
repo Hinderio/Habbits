@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v215-line-calendar-ranges';
+const CACHE_NAME = 'habitflow-v216-project-task-bridge';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -37,7 +37,8 @@ const MODULE_ASSETS = [
   './modules/projects-milestone-edit.js',
   './modules/projects.js',
   './modules/projects.css',
-  './modules/projects-mobile-fix.css'
+  './modules/projects-mobile-fix.css',
+  './modules/project-task-form-bridge.js'
 ];
 const SQL_ASSETS = ['./sql/add-appointment-series.sql', './sql/add-projects.sql'];
 const ASSETS = ['./', './index.html', './style.css', './app.js', './supabase-config.js', './supabase-schema.js', './manifest.json', './icons/coach-clean.svg', './data/activity-ideas.json', ...SQL_ASSETS, ...MODULE_ASSETS];
@@ -154,6 +155,36 @@ function nativeAppointmentPatch(script) {
   }
   if (!next.includes('habitflow-mobile-calendar-bubbles-style')) {
     next += "\n;(() => {\n  const css = '@media(max-width:760px) and (orientation:portrait){#screen-calendar .calendar-day-head{justify-content:flex-start!important;align-items:baseline!important;gap:3px!important}#screen-calendar .day-appointment-count{display:inline!important;min-width:0!important;height:auto!important;padding:0!important;border-radius:0!important;background:transparent!important;color:rgba(17,24,39,.48)!important;font-size:.5rem!important;font-style:normal!important;font-weight:900!important;line-height:1!important;transform:translateY(-.18em)!important}#screen-calendar .day-chips{display:flex!important;align-items:flex-start!important;align-content:flex-start!important;flex-wrap:wrap!important;gap:4px!important;min-height:0!important}#screen-calendar .day-chip.calendar-event-chip,#screen-calendar .calendar-task-dot{display:inline-grid!important;place-items:center!important;width:24px!important;height:24px!important;min-width:24px!important;max-width:24px!important;flex:0 0 24px!important;padding:0!important;border-radius:999px!important;background:#acdacf!important;border:1px solid rgba(17,36,58,.08)!important;box-shadow:none!important;color:#111827!important;overflow:hidden!important}#screen-calendar .day-chip.calendar-event-chip.is-birthday{background:#f6b33f!important;border-color:rgba(17,24,39,.08)!important}#screen-calendar .calendar-event-chip b,#screen-calendar .calendar-event-chip em{display:none!important}#screen-calendar .calendar-event-chip:before,#screen-calendar .calendar-task-dot:before{content:attr(data-initials);font-size:.54rem!important;line-height:1!important;letter-spacing:0!important;text-transform:uppercase!important;font-weight:950!important;color:#111827!important}#screen-calendar .calendar-task-dots{display:flex!important;align-items:flex-start!important;flex-wrap:wrap!important;gap:4px!important;min-height:0!important;margin-top:0!important;padding-top:0!important}#screen-calendar .calendar-task-dot-more,#screen-calendar .day-chip.appointment-more{height:16px!important;min-width:16px!important;padding:0 4px!important;border-radius:999px!important;background:rgba(17,24,39,.055)!important;color:rgba(17,24,39,.55)!important;font-size:.48rem!important;font-weight:950!important;line-height:16px!important}body:not(.light) #screen-calendar .day-appointment-count{color:rgba(255,255,255,.5)!important}body:not(.light) #screen-calendar .calendar-task-dot-more,body:not(.light) #screen-calendar .day-chip.appointment-more{background:rgba(255,255,255,.08)!important;color:rgba(255,255,255,.62)!important}}';\n  const inject = () => {\n    if (document.getElementById('habitflow-mobile-calendar-bubbles-style')) return;\n    const style = document.createElement('style');\n    style.id = 'habitflow-mobile-calendar-bubbles-style';\n    style.textContent = css;\n    document.head.appendChild(style);\n  };\n  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', inject, { once: true });\n  else inject();\n})();\n";
+  }
+  if (!next.includes('function readPendingProjectTaskContext()')) {
+    next = next.replace(
+      "\n  function closeTaskForm({ clearForm = false } = {}) {\n    if (clearForm || editingTaskId) resetTaskFormMode({ clearForm });",
+      "\n  function closeTaskForm({ clearForm = false } = {}) {\n    if (clearForm && !editingTaskId) clearPendingProjectTaskContext();\n    if (clearForm || editingTaskId) resetTaskFormMode({ clearForm });"
+    );
+    next = next.replace(
+      "\n  async function createTask(event) {",
+      "\n  function readPendingProjectTaskContext() {\n    let raw = null;\n    try {\n      raw = sessionStorage.getItem('habitflow-task-project-context-v1');\n    } catch {\n      raw = null;\n    }\n    const context = raw ? (() => {\n      try { return JSON.parse(raw); } catch { return null; }\n    })() : window.__habitFlowTaskProjectContext;\n    if (!context?.project_id) return null;\n    if (context.created_at && Date.now() - Number(context.created_at) > 30 * 60 * 1000) {\n      clearPendingProjectTaskContext();\n      return null;\n    }\n    return { ...context, project_id: String(context.project_id) };\n  }\n\n  function clearPendingProjectTaskContext() {\n    try {\n      sessionStorage.removeItem('habitflow-task-project-context-v1');\n    } catch {}\n    if (window.__habitFlowTaskProjectContext) delete window.__habitFlowTaskProjectContext;\n  }\n\n  async function createTask(event) {"
+    );
+    next = next.replace(
+      "const data = new FormData(els.taskForm);\n    const wantsMonthly",
+      "const data = new FormData(els.taskForm);\n    const projectTaskContext = editingTaskId ? null : readPendingProjectTaskContext();\n    const wantsMonthly"
+    );
+    next = next.replace(
+      "points: 0,\n      recurrence: wantsMonthly ? buildMonthlyTaskRecurrence(values.due_at, { id: taskId }) : null,",
+      "points: 0,\n      project_id: projectTaskContext?.project_id || null,\n      recurrence: wantsMonthly ? buildMonthlyTaskRecurrence(values.due_at, { id: taskId }) : null,"
+    );
+    next = next.replace(
+      "saveState();\n    toast(wantsMonthly ? 'Aufgabe gespeichert · wird monatlich fortgeführt' : 'Aufgabe gespeichert');",
+      "saveState();\n    if (projectTaskContext?.project_id) clearPendingProjectTaskContext();\n    toast(wantsMonthly ? 'Aufgabe gespeichert · wird monatlich fortgeführt' : 'Aufgabe gespeichert');"
+    );
+    next = next.replace(
+      "points: Number(t.points || 0),\n        created_at: t.created_at,",
+      "points: Number(t.points || 0),\n        project_id: t.project_id || null,\n        created_at: t.created_at,"
+    );
+    next = next.replace(
+      "const mapRemoteTask = t => ({ id: t.id, title: t.title, description: t.description, effort: t.effort, priority: normalizeTaskPriority(t.priority), status: TASK_COLUMNS.some(column => column.status === t.status) ? t.status : 'open', due_at: t.due_at, completed_at: t.completed_at, points: t.points, backlog_rank: t.backlog_rank, done_archived_at: t.done_archived_at, done_archive_rank: t.done_archive_rank, created_at: t.created_at, updated_at: t.updated_at, synced: true });",
+      "const mapRemoteTask = t => ({ id: t.id, title: t.title, description: t.description, effort: t.effort, priority: normalizeTaskPriority(t.priority), status: TASK_COLUMNS.some(column => column.status === t.status) ? t.status : 'open', due_at: t.due_at, completed_at: t.completed_at, points: t.points, project_id: t.project_id || null, backlog_rank: t.backlog_rank, done_archived_at: t.done_archived_at, done_archive_rank: t.done_archive_rank, created_at: t.created_at, updated_at: t.updated_at, synced: true });"
+    );
   }
   return next;
 }
