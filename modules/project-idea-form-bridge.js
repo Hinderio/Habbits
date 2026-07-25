@@ -180,6 +180,14 @@
     });
     if (!changed) return false;
     writeState(state);
+    const updatedIdea = state.taskIdeas.find(idea => String(idea?.id || '') === String(ideaId));
+    syncRemoteIdeaProject(updatedIdea, projectId, now).then(synced => {
+      if (!synced) return;
+      const fresh = readState();
+      fresh.taskIdeas = (fresh.taskIdeas || []).map(idea => String(idea?.id || '') === String(ideaId) ? { ...idea, synced: true } : idea);
+      writeState(fresh);
+      window.dispatchEvent(new Event('habitflow:projects-changed'));
+    });
     window.dispatchEvent(new Event('habitflow:projects-changed'));
     return true;
   }
@@ -222,6 +230,63 @@
       console.warn('[HabitFlow/projects] Ideen-Task konnte remote nicht mit Projekt verknuepft werden.', error);
       return false;
     }
+    return true;
+  }
+
+  async function syncRemoteIdeaProject(idea, projectId, updatedAt) {
+    const client = getSupabaseClient();
+    if (!client || !idea?.id || !projectId) return false;
+    const description = descriptionWithMeta(idea.description, { project_id: String(projectId) });
+    const { error } = await client.from('task_ideas').update({ description, updated_at: updatedAt }).eq('id', idea.id);
+    if (error) {
+      console.warn('[HabitFlow/projects] Idee konnte remote nicht mit Projekt verknuepft werden.', error);
+      return false;
+    }
+    return true;
+  }
+
+  function ideaProjectMap() {
+    const pairs = new Map();
+    (readState().taskIdeas || []).forEach(idea => {
+      const projectId = ideaProjectId(idea);
+      if (idea?.id && projectId) pairs.set(String(idea.id), String(projectId));
+    });
+    return pairs;
+  }
+
+  function restoreIdeaProjectLinks(projectByIdeaId) {
+    if (!projectByIdeaId?.size) return false;
+    const state = readState();
+    const ideas = Array.isArray(state.taskIdeas) ? state.taskIdeas : [];
+    const now = new Date().toISOString();
+    let changed = false;
+    const remoteUpdates = [];
+    state.taskIdeas = ideas.map(idea => {
+      const projectId = projectByIdeaId.get(String(idea?.id || ''));
+      if (!idea?.id || !projectId || ideaProjectId(idea)) return idea;
+      changed = true;
+      const next = {
+        ...idea,
+        project_id: projectId,
+        projectId: projectId,
+        description: descriptionWithMeta(idea.description, { project_id: projectId }),
+        updated_at: now,
+        synced: false
+      };
+      remoteUpdates.push(next);
+      return next;
+    });
+    if (!changed) return false;
+    writeState(state);
+    remoteUpdates.forEach(idea => {
+      syncRemoteIdeaProject(idea, ideaProjectId(idea), idea.updated_at).then(synced => {
+        if (!synced) return;
+        const fresh = readState();
+        fresh.taskIdeas = (fresh.taskIdeas || []).map(item => String(item?.id || '') === String(idea.id) ? { ...item, synced: true } : item);
+        writeState(fresh);
+      });
+    });
+    window.dispatchEvent(new Event('habitflow:projects-changed'));
     return true;
   }
 
@@ -302,6 +367,8 @@
       const select = ensureProjectField();
       const context = readContext() || window.__habitFlowIdeaProjectContext || null;
       const projectId = select?.value || context?.project_id || '';
+      const textarea = event.target.elements.description;
+      if (projectId && textarea) textarea.value = descriptionWithMeta(textarea.value, { project_id: String(projectId) });
       const beforeIds = new Set((readState().taskIdeas || []).map(idea => String(idea.id)));
       const createdAt = Date.now();
       if (projectId) window.setTimeout(() => linkCreatedIdea(beforeIds, projectId, createdAt), 0);
@@ -310,6 +377,10 @@
 
     document.addEventListener('click', event => {
       if (event.target?.closest?.('#taskIdeasToggleBtn')) queueSyncProjectField(90);
+      const action = event.target?.closest?.('#taskIdeasPanel [data-action], #projectTimelineViewMount [data-action="idea-to-task"]');
+      if (!action) return;
+      const beforeProjects = ideaProjectMap();
+      [80, 420, 1200].forEach(delay => window.setTimeout(() => restoreIdeaProjectLinks(beforeProjects), delay));
     }, true);
   }
 
