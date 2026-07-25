@@ -449,7 +449,7 @@
 
   function ensureProjectBridges() {
     ensureBridgeScript('modules/project-task-form-bridge.js?v=226', '__habitFlowTaskProjectBridgeInstalled');
-    ensureBridgeScript('modules/project-idea-form-bridge.js?v=226', '__habitFlowProjectIdeaBridgeInstalled');
+    ensureBridgeScript('modules/project-idea-form-bridge.js?v=227', '__habitFlowProjectIdeaBridgeInstalled');
   }
 
   function scheduleRender(delay = 0) {
