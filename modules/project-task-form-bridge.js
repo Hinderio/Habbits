@@ -216,6 +216,12 @@
     return synced;
   }
 
+  function persistProjectLinkAfterTaskSave(taskId, projectId) {
+    [120, 520, 1200, 2400].forEach(delay => {
+      window.setTimeout(() => persistProjectLink(taskId, projectId), delay);
+    });
+  }
+
   function newestCreatedTask(beforeIds, createdAt = Date.now()) {
     const createdAfter = Number(createdAt || Date.now()) - 60 * 1000;
     return (readState().tasks || [])
@@ -329,20 +335,19 @@
     if (event.target?.id !== 'taskForm') return;
     const select = ensureProjectField();
     const selectedProjectId = select?.value || '';
-    const context = readContext();
     const beforeIds = new Set((readState().tasks || []).map(task => String(task.id)));
     const submittedEditId = editingTaskId;
     const createdAt = Date.now();
 
     window.setTimeout(() => {
       if (submittedEditId) {
-        persistProjectLink(submittedEditId, selectedProjectId);
+        persistProjectLinkAfterTaskSave(submittedEditId, selectedProjectId);
         editingTaskId = '';
         clearContext();
         return;
       }
-      if (selectedProjectId || context?.project_id) {
-        linkCreatedTask(beforeIds, selectedProjectId || context.project_id, createdAt);
+      if (selectedProjectId) {
+        linkCreatedTask(beforeIds, selectedProjectId, createdAt);
       } else {
         clearContext();
       }
