@@ -28,14 +28,15 @@
       .project-task-row>div>strong{min-width:0}
       .project-task-row>div>.subtle{display:inline-flex;align-items:center;color:var(--muted);font-weight:800}
       .milestone-chip{align-items:center}
-      .milestone-chip .project-icon-action{display:inline-grid;place-items:center;width:38px;height:38px;min-width:38px;padding:0;border-radius:999px;background:rgba(74,215,209,.11);border:1px solid rgba(74,215,209,.24);color:var(--primary);box-shadow:none;font-size:0}
-      .milestone-chip .project-icon-action svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
-      .milestone-chip .project-icon-action:hover{transform:translateY(-1px);background:rgba(74,215,209,.17);border-color:rgba(74,215,209,.36)}
-      .milestone-chip .project-icon-action-delete{background:rgba(255,99,99,.08);border-color:rgba(255,99,99,.22);color:#b33a3a}
-      .milestone-chip .project-icon-action-delete:hover{background:rgba(255,99,99,.13);border-color:rgba(255,99,99,.32)}
-      body.light .milestone-chip .project-icon-action{background:rgba(74,215,209,.14);border-color:rgba(17,36,58,.08)}
-      body.light .milestone-chip .project-icon-action-delete{background:rgba(255,99,99,.1);border-color:rgba(179,58,58,.16)}
-      @media(max-width:760px){.project-task-row>div{gap:7px 14px}.milestone-chip .project-icon-action{width:36px;height:36px;min-width:36px}}
+      .phase-card .list-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px}
+      .milestone-chip .project-icon-action,.phase-card .project-icon-action{display:inline-grid;place-items:center;width:38px;height:38px;min-width:38px;padding:0;border-radius:999px;background:rgba(74,215,209,.11);border:1px solid rgba(74,215,209,.24);color:var(--primary);box-shadow:none;font-size:0}
+      .milestone-chip .project-icon-action svg,.phase-card .project-icon-action svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+      .milestone-chip .project-icon-action:hover,.phase-card .project-icon-action:hover{transform:translateY(-1px);background:rgba(74,215,209,.17);border-color:rgba(74,215,209,.36)}
+      .milestone-chip .project-icon-action-delete,.phase-card .project-icon-action-delete{background:rgba(255,99,99,.08);border-color:rgba(255,99,99,.22);color:#b33a3a}
+      .milestone-chip .project-icon-action-delete:hover,.phase-card .project-icon-action-delete:hover{background:rgba(255,99,99,.13);border-color:rgba(255,99,99,.32)}
+      body.light .milestone-chip .project-icon-action,body.light .phase-card .project-icon-action{background:rgba(74,215,209,.14);border-color:rgba(17,36,58,.08)}
+      body.light .milestone-chip .project-icon-action-delete,body.light .phase-card .project-icon-action-delete{background:rgba(255,99,99,.1);border-color:rgba(179,58,58,.16)}
+      @media(max-width:760px){.project-task-row>div{gap:7px 14px}.phase-card .list-actions{display:flex;width:auto}.milestone-chip .project-icon-action,.phase-card .project-icon-action{width:36px;height:36px;min-width:36px}}
     `;
     document.head.appendChild(style);
   }
@@ -53,29 +54,38 @@
     });
   }
 
-  function polishMilestoneActions(root = document) {
+  function polishIconButton(button, { label, title, icon, deleteTone = false }) {
+    if (button.dataset.polished === 'true') return;
+    button.dataset.polished = 'true';
+    button.classList.add('project-icon-action', deleteTone ? 'project-icon-action-delete' : 'project-icon-action-edit');
+    button.setAttribute('aria-label', label);
+    button.setAttribute('title', title);
+    button.innerHTML = icon;
+  }
+
+  function polishProjectActions(root = document) {
     root.querySelectorAll?.('[data-action="edit-milestone"]').forEach(button => {
       if (button.dataset.polished === 'true') return;
-      button.dataset.polished = 'true';
-      button.classList.add('project-icon-action', 'project-icon-action-edit');
-      button.setAttribute('aria-label', 'Meilenstein bearbeiten');
-      button.setAttribute('title', 'Bearbeiten');
-      button.innerHTML = ICONS.edit;
+      polishIconButton(button, { label: 'Meilenstein bearbeiten', title: 'Bearbeiten', icon: ICONS.edit });
     });
     root.querySelectorAll?.('[data-action="delete-milestone"]').forEach(button => {
       if (button.dataset.polished === 'true') return;
-      button.dataset.polished = 'true';
-      button.classList.add('project-icon-action', 'project-icon-action-delete');
-      button.setAttribute('aria-label', 'Meilenstein loeschen');
-      button.setAttribute('title', 'Loeschen');
-      button.innerHTML = ICONS.trash;
+      polishIconButton(button, { label: 'Meilenstein loeschen', title: 'Loeschen', icon: ICONS.trash, deleteTone: true });
+    });
+    root.querySelectorAll?.('[data-action="edit-phase"]').forEach(button => {
+      if (button.dataset.polished === 'true') return;
+      polishIconButton(button, { label: 'Phase bearbeiten', title: 'Bearbeiten', icon: ICONS.edit });
+    });
+    root.querySelectorAll?.('[data-action="delete-phase"]').forEach(button => {
+      if (button.dataset.polished === 'true') return;
+      polishIconButton(button, { label: 'Phase loeschen', title: 'Loeschen', icon: ICONS.trash, deleteTone: true });
     });
   }
 
   function polish(root = document) {
     injectStyle();
     polishTaskRows(root);
-    polishMilestoneActions(root);
+    polishProjectActions(root);
   }
 
   function boot() {
