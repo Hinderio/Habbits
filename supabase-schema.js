@@ -58,6 +58,7 @@
 
     // Project UI, navigation, cards, modal and actions are intentionally owned by projects.js only.
     writeScript('modules/projects.js');
+    writeScript('modules/project-idea-db-link.js');
     // Pause editing is kept in its existing narrow sidecar so the core consumption flow stays untouched.
     writeScript('modules/pause-period-edit.js');
   }
