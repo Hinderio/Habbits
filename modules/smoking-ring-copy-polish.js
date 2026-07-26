@@ -26,8 +26,12 @@
           font-weight: 950 !important;
           font-variant-numeric: tabular-nums !important;
           letter-spacing: -.075em !important;
-          line-height: .9 !important;
-          white-space: nowrap !important;
+          line-height: .86 !important;
+          display: block !important;
+          max-width: 4.8ch !important;
+          margin-inline: auto !important;
+          text-align: center !important;
+          white-space: normal !important;
         }
 
         #screen-smoking .smoke-ring #smokePauseHint {
