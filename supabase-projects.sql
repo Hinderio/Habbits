@@ -90,12 +90,26 @@ alter table public.project_milestones add column if not exists created_at timest
 alter table public.project_milestones add column if not exists updated_at timestamptz not null default now();
 
 alter table public.tasks add column if not exists project_id uuid references public.projects(id) on delete set null;
+alter table public.task_ideas add column if not exists project_id uuid;
+alter table public.activity_ideas add column if not exists project_id uuid;
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'task_ideas_project_id_fkey') then
+    alter table public.task_ideas add constraint task_ideas_project_id_fkey foreign key (project_id) references public.projects(id) on delete set null;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'activity_ideas_project_id_fkey') then
+    alter table public.activity_ideas add constraint activity_ideas_project_id_fkey foreign key (project_id) references public.projects(id) on delete set null;
+  end if;
+end $$;
 
 create index if not exists idx_projects_user_updated on public.projects(user_id, updated_at desc);
 create index if not exists idx_project_phases_user_project on public.project_phases(user_id, project_id, start_date);
 create index if not exists idx_project_milestones_user_project on public.project_milestones(user_id, project_id, milestone_date);
 create index if not exists idx_project_milestones_user_phase on public.project_milestones(user_id, phase_id, milestone_date);
 create index if not exists idx_tasks_user_project on public.tasks(user_id, project_id);
+create index if not exists idx_task_ideas_user_project on public.task_ideas(user_id, project_id, idea_status);
+create index if not exists idx_activity_ideas_user_project on public.activity_ideas(user_id, project_id, is_archived);
 
 drop trigger if exists set_projects_updated_at on public.projects;
 create trigger set_projects_updated_at before update on public.projects for each row execute function public.set_updated_at();
