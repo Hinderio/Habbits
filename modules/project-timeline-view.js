@@ -367,7 +367,7 @@
     mount = document.createElement('div');
     mount.id = 'projectTimelineViewMount';
     const portfolioPanel = document.getElementById('projectsGrid')?.closest('.panel');
-    if (portfolioPanel?.parentElement) portfolioPanel.parentElement.insertBefore(mount, portfolioPanel);
+    if (portfolioPanel?.parentElement) portfolioPanel.parentElement.insertBefore(mount, portfolioPanel.nextSibling);
     else screen.appendChild(mount);
     return mount;
   }
