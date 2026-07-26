@@ -23,7 +23,7 @@
           color: #111827 !important;
           font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif !important;
           font-size: clamp(3.15rem, 5vw, 4.45rem) !important;
-          font-weight: 950 !important;
+          font-weight: 850 !important;
           font-variant-numeric: tabular-nums !important;
           letter-spacing: -.075em !important;
           line-height: .86 !important;
