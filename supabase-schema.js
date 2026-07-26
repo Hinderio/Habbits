@@ -63,7 +63,12 @@
     writeScript('modules/pause-period-edit.js');
   }
 
+  function loadConsumptionAssets() {
+    writeScript('modules/smoking-ring-copy-polish.js');
+  }
+
   loadSqlPreview();
   document.addEventListener('DOMContentLoaded', ensureAppointmentFields, { once: true });
   loadProjectAssets();
+  loadConsumptionAssets();
 })(window, document);
