@@ -64,6 +64,7 @@
   }
 
   function loadConsumptionAssets() {
+    writeScript('modules/calendar-performance-loader.js');
     writeScript('modules/smoking-ring-copy-polish.js');
   }
 
