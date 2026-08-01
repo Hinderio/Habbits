@@ -3829,10 +3829,10 @@ body.light .task-detail-facts article,body.light .task-detail-image{background:r
   align-content:center;
   gap:2px;
   text-align:center;
-  background:var(--card);
+  background:transparent;
   color:var(--text);
-  border:1px solid rgba(74,215,209,.2);
-  box-shadow:0 12px 26px rgba(0,0,0,.12);
+  border:0;
+  box-shadow:none;
 }
 .training-compass-profile-center small,
 .training-compass-profile-center span{text-transform:uppercase;letter-spacing:.08em;font-size:.56rem;font-weight:900;color:var(--muted)}
@@ -4012,7 +4012,7 @@ body.light .training-compass-dial{
   box-shadow:0 22px 50px rgba(42,78,104,.1);
 }
 body.light .training-compass-profile{background:rgba(74,215,209,.055);border-color:rgba(13,151,149,.13)}
-body.light .training-compass-profile-center{background:#fff;border-color:rgba(13,151,149,.16);box-shadow:0 12px 26px rgba(42,78,104,.1)}
+body.light .training-compass-profile-center{background:transparent;border:0;box-shadow:none}
 body.light .training-compass-ring{border-color:rgba(17,36,58,.14)}
 body.light .training-compass-dial:before,
 body.light .training-compass-dial:after{background:rgba(17,36,58,.12)}
