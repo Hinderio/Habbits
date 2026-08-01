@@ -8126,23 +8126,25 @@
     return icons.includes(icon) || keywords.some(keyword => name.includes(keyword));
   }
 
-  function countHabitEntriesForFitnessKeywords(weekKeys = [], keywords = [], icons = []) {
+  function fitnessWeekHabitRows(weekKeys = []) {
     const weekSet = new Set(weekKeys);
     const habitById = new Map(state.habits.map(habit => [habit.id, normalizeHabit(habit)]));
     return visibleHabitEntries()
       .filter(entry => weekSet.has(toDateKey(entry.occurred_at)))
-      .filter(entry => {
-        const habit = habitById.get(entry.habit_id);
-        return habit && !habit.is_archived && fitnessHabitMatchesKeywords(habit, keywords, icons);
-      }).length;
+      .map(entry => ({ entry, habit: habitById.get(entry.habit_id) }))
+      .filter(({ entry, habit }) => {
+        if (!habit || habit.is_archived) return false;
+        if (habit.type === 'boolean') return Boolean(entry.value_bool);
+        return habit.type === 'weight' || Number(entry.value_num || 0) > 0;
+      });
   }
 
   function fitnessCompassAreaState(score = 0) {
     const safeScore = Math.round(clampNumber(score, 0, 100));
-    if (safeScore >= 80) return { score: safeScore, label: 'stark', tone: 'strong' };
-    if (safeScore >= 55) return { score: safeScore, label: 'solide', tone: 'good' };
-    if (safeScore >= 30) return { score: safeScore, label: 'ausbaufähig', tone: 'watch' };
-    return { score: safeScore, label: 'unterversorgt', tone: 'low' };
+    if (safeScore >= 80) return { score: safeScore, status: 'stark', tone: 'strong' };
+    if (safeScore >= 55) return { score: safeScore, status: 'solide', tone: 'good' };
+    if (safeScore >= 30) return { score: safeScore, status: 'ausbaufähig', tone: 'watch' };
+    return { score: safeScore, status: 'unterversorgt', tone: 'low' };
   }
 
   function buildTrainingCompassModel(allSessions = []) {
@@ -8151,25 +8153,75 @@
     const weekSessions = allSessions.filter(session => weekSet.has(toDateKey(session.date)));
     const enduranceSessions = weekSessions.filter(session => ['jogging', 'hiking'].includes(session.type));
     const enduranceKm = sum(enduranceSessions.map(session => session.distanceKm));
-    const strengthEntries = countHabitEntriesForFitnessKeywords(weekKeys, ['kraft', 'strength', 'liegest', 'push', 'squat', 'kniebeuge', 'plank', 'core', 'bodyweight', 'muskel'], ['pushups']);
-    const mobilityEntries = countHabitEntriesForFitnessKeywords(weekKeys, ['mobility', 'mobilität', 'mobilitaet', 'dehnen', 'stretch', 'yoga', 'beweglichkeit', 'faszien', 'rücken', 'ruecken', 'nacken'], ['standingDesk']);
-    const recoveryEntries = countHabitEntriesForFitnessKeywords(weekKeys, ['meditation', 'atem', 'breath', 'ruhe', 'schlaf', 'recovery', 'regeneration', 'entspann', 'mind', 'pause'], ['meditation']);
-    const routineDays = weekKeys.filter(key => Boolean(morningRoutineCompletedLog(key))).length;
-    const activeRecoverySignals = recoveryEntries + Math.min(3, routineDays);
-    const enduranceScore = clampNumber((enduranceSessions.length / 3) * 62 + (enduranceKm / 18) * 38, 0, 100);
-    const strengthScore = clampNumber((strengthEntries / 2) * 100, 0, 100);
-    const mobilityScore = clampNumber((mobilityEntries / 3) * 100, 0, 100);
-    const recoveryScore = clampNumber((activeRecoverySignals / 4) * 78 + (weekSessions.length <= 2 ? 20 : 8), 0, 100);
+    const habitRows = fitnessWeekHabitRows(weekKeys);
+    const pushupRows = habitRows.filter(({ habit }) => fitnessHabitMatchesKeywords(habit, ['liegest', 'push-up', 'pushup'], ['pushups']));
+    const meditationRows = habitRows.filter(({ habit }) => isSystemMeditationHabit(habit) || fitnessHabitMatchesKeywords(habit, ['meditation', 'atem', 'breath'], ['meditation']));
+    const excludedHabitIds = new Set([...pushupRows, ...meditationRows].map(({ habit }) => habit.id));
+    habitRows.forEach(({ habit }) => {
+      if (isFitnessDistanceHabit(habit)) excludedHabitIds.add(habit.id);
+    });
+    const healthyRows = habitRows.filter(({ habit }) => !excludedHabitIds.has(habit.id));
+
+    const pushupRepetitions = sum(pushupRows.map(({ entry }) => Number(entry.value_num || (entry.value_bool ? 1 : 0))));
+    const pushupHabits = [...new Map(pushupRows.map(({ habit }) => [habit.id, habit])).values()];
+    const pushupTargets = pushupHabits.map(habit => Number(habit.target || 0)).filter(value => Number.isFinite(value) && value > 0);
+    const pushupTarget = Math.max(20, ...pushupTargets);
+    const healthyDays = new Set(healthyRows.map(({ entry }) => toDateKey(entry.occurred_at))).size;
+    const meditationMinutes = sum(meditationRows.map(({ entry, habit }) => habit.type === 'duration' ? Number(entry.value_num || 0) : 10));
+
+    const pushupScore = pushupRows.length
+      ? clampNumber((pushupRows.length / 3) * 38 + (pushupRepetitions / (pushupTarget * 3)) * 62, 0, 100)
+      : 0;
+    const enduranceScore = clampNumber((enduranceSessions.length / 2) * 62 + (enduranceKm / 12) * 38, 0, 100);
+    const healthyScore = clampNumber((healthyRows.length / 7) * 62 + (healthyDays / 4) * 38, 0, 100);
+    const meditationScore = clampNumber((meditationRows.length / 3) * 42 + (meditationMinutes / 45) * 58, 0, 100);
     const areas = [
-      { key: 'strength', label: 'Kraft', icon: 'pushups', angle: -45, metric: `${strengthEntries} Log${strengthEntries === 1 ? '' : 's'}`, cue: strengthEntries ? 'Kraftreiz ist sichtbar. Halte zwei kurze Blöcke pro Woche.' : 'Unterversorgt: 6 Minuten Bodyweight reichen als Start.', ...fitnessCompassAreaState(strengthScore) },
-      { key: 'endurance', label: 'Ausdauer', icon: 'jogging', angle: 45, metric: `${enduranceSessions.length} Session${enduranceSessions.length === 1 ? '' : 's'} · ${formatKmValue(enduranceKm)}`, cue: enduranceSessions.length ? 'Cardio-Momentum ist aktiv. Progression ruhig halten.' : 'Diese Woche fehlt noch eine lockere Ausdauer-Einheit.', ...fitnessCompassAreaState(enduranceScore) },
-      { key: 'mobility', label: 'Mobility', icon: 'standingDesk', angle: 135, metric: `${mobilityEntries} Log${mobilityEntries === 1 ? '' : 's'}`, cue: mobilityEntries ? 'Beweglichkeit ist abgedeckt. Perfekt als Erhaltung.' : 'Ein kurzer Hüft-/Rücken-Flow würde die Woche ausgleichen.', ...fitnessCompassAreaState(mobilityScore) },
-      { key: 'recovery', label: 'Regeneration', icon: 'meditation', angle: 225, metric: `${activeRecoverySignals} Signal${activeRecoverySignals === 1 ? '' : 'e'}`, cue: activeRecoverySignals ? 'Recovery-Signale vorhanden. Schlaf und ruhige Minuten schützen Momentum.' : 'Plane bewusst einen Reset: Atemtechnik, Spaziergang oder früher Feierabend.', ...fitnessCompassAreaState(recoveryScore) }
+      { key: 'pushups', label: 'Liegestütze', icon: 'pushups', metric: `${formatMetricNumber(pushupRepetitions, 0)} Wdh. · ${pushupRows.length} Log${pushupRows.length === 1 ? '' : 's'}`, cue: pushupRows.length ? 'Dein Kraftreiz ist gesetzt. Drei kurze Blöcke ergeben eine starke Woche.' : 'Ein kurzer Liegestütz-Block bringt Kraft in dein Wochenprofil.', ...fitnessCompassAreaState(pushupScore) },
+      { key: 'endurance', label: 'Joggen & Wandern', icon: 'jogging', secondaryIcon: 'hiking', metric: `${enduranceSessions.length} Einheit${enduranceSessions.length === 1 ? '' : 'en'} · ${formatKmValue(enduranceKm)}`, cue: enduranceSessions.length ? 'Ausdauer ist sichtbar. Distanz und Häufigkeit wachsen gemeinsam.' : 'Ein lockerer Lauf oder eine Wanderung öffnet die Ausdauerachse.', ...fitnessCompassAreaState(enduranceScore) },
+      { key: 'healthy', label: 'Gesunde Logs', icon: 'habits', metric: `${healthyRows.length} Log${healthyRows.length === 1 ? '' : 's'} · ${healthyDays} Tag${healthyDays === 1 ? '' : 'e'}`, cue: healthyRows.length ? 'Deine übrigen gesunden Routinen tragen die Woche zuverlässig.' : 'Ein gesunder Check-in ergänzt Training und Regeneration.', ...fitnessCompassAreaState(healthyScore) },
+      { key: 'meditation', label: 'Meditation', icon: 'meditation', metric: `${formatMetricNumber(meditationMinutes, 0)} Min. · ${meditationRows.length} Session${meditationRows.length === 1 ? '' : 's'}`, cue: meditationRows.length ? 'Ruhige Minuten stabilisieren dein gesamtes Wochenprofil.' : 'Zehn ruhige Minuten schließen die Regenerationslücke.', ...fitnessCompassAreaState(meditationScore) }
     ];
     const weakest = [...areas].sort((a, b) => a.score - b.score)[0] || areas[0];
     const balance = Math.round(average(areas.map(area => area.score)) || 0);
     const weekInfo = isoWeekInfo(new Date());
     return { areas, weakest, balance, weekLabel: `KW ${weekInfo.week}` };
+  }
+
+  function renderTrainingCompassProfile(model) {
+    const byKey = new Map(model.areas.map(area => [area.key, area]));
+    const center = 150;
+    const radius = 104;
+    const scoreFor = key => clampNumber(byKey.get(key)?.score || 0, 0, 100) / 100;
+    const profilePoints = [
+      `${center},${center - radius * scoreFor('pushups')}`,
+      `${center + radius * scoreFor('endurance')},${center}`,
+      `${center},${center + radius * scoreFor('meditation')}`,
+      `${center - radius * scoreFor('healthy')},${center}`
+    ].join(' ');
+    const guideDiamonds = [.25, .5, .75, 1].map(level => {
+      const distance = radius * level;
+      return `<polygon points="${center},${center - distance} ${center + distance},${center} ${center},${center + distance} ${center - distance},${center}" class="training-compass-profile-guide"/>`;
+    }).join('');
+    const nodes = [
+      { key: 'pushups', x: center, y: center - radius * scoreFor('pushups') },
+      { key: 'endurance', x: center + radius * scoreFor('endurance'), y: center },
+      { key: 'meditation', x: center, y: center + radius * scoreFor('meditation') },
+      { key: 'healthy', x: center - radius * scoreFor('healthy'), y: center }
+    ];
+    return `<div class="training-compass-profile" role="img" aria-label="Wochenprofil: ${model.balance} Prozent Balance">
+      <svg viewBox="0 0 300 300" aria-hidden="true" focusable="false">
+        ${guideDiamonds}
+        <line x1="150" y1="46" x2="150" y2="254" class="training-compass-profile-axis"/>
+        <line x1="46" y1="150" x2="254" y2="150" class="training-compass-profile-axis"/>
+        <polygon points="${profilePoints}" class="training-compass-profile-shape"/>
+        ${nodes.map(node => `<circle cx="${node.x}" cy="${node.y}" r="6" class="training-compass-profile-node is-${node.key}"/>`).join('')}
+        <text x="150" y="23" text-anchor="middle">Liegestütze</text>
+        <text x="294" y="154" text-anchor="end">Run / Hike</text>
+        <text x="150" y="291" text-anchor="middle">Meditation</text>
+        <text x="6" y="154">Gesund</text>
+      </svg>
+      <div class="training-compass-profile-center"><small>Balance</small><strong>${model.balance}%</strong><span>${escapeHtml(model.weekLabel)}</span></div>
+    </div>`;
   }
 
   function renderTrainingCompass(allSessions = []) {
@@ -8179,18 +8231,14 @@
       <summary><span>Training Compass</span><small>${escapeHtml(model.weakest.label)} braucht Fokus · ${model.balance}% Balance</small></summary>
       <section class="training-compass-card fitness-intelligence-card">
         <div class="training-compass-head">
-          <div><p class="eyebrow">Training Compass</p><h3>Wochenbalance statt Trainingsliste</h3><span>Kraft, Ausdauer, Mobility und Regeneration aus deinen bestehenden Logs.</span></div>
+          <div><p class="eyebrow">Training Compass</p><h3>Vier Bereiche, ein Wochenprofil</h3><span>Liegestütze, Joggen und Wandern, gesunde Logs sowie Meditation aus dieser Kalenderwoche.</span></div>
           <span class="badge muted">${escapeHtml(model.weekLabel)}</span>
         </div>
         <div class="training-compass-body">
-          <div class="training-compass-dial" style="--needle-angle:${model.weakest.angle}deg" aria-label="Unterversorgter Bereich: ${escapeHtml(model.weakest.label)}">
-            <span class="training-compass-ring"></span>
-            <span class="training-compass-needle"></span>
-            <div class="training-compass-center"><small>Fokus</small><strong>${escapeHtml(model.weakest.label)}</strong><span>${model.balance}% Balance</span></div>
-          </div>
+          ${renderTrainingCompassProfile(model)}
           <div class="training-compass-quadrants">
             ${model.areas.map(area => `<article class="training-compass-area is-${escapeHtml(area.key)} is-${escapeHtml(area.tone)}">
-              <div class="training-compass-area-head"><span class="training-compass-area-icon" aria-hidden="true">${svgIcon(area.icon, 'ui-icon')}</span><div><strong>${escapeHtml(area.label)}</strong><small>${escapeHtml(area.metric)}</small></div><b>${area.score}%</b></div>
+              <div class="training-compass-area-head"><span class="training-compass-area-icon ${area.secondaryIcon ? 'is-duo' : ''}" aria-hidden="true">${svgIcon(area.icon, 'ui-icon')}${area.secondaryIcon ? svgIcon(area.secondaryIcon, 'ui-icon') : ''}</span><div><strong>${escapeHtml(area.label)}</strong><small>${escapeHtml(area.metric)}</small></div><b>${area.score}%</b></div>
               <div class="training-compass-bar"><i style="width:${area.score}%"></i></div>
               <p>${escapeHtml(area.cue)}</p>
             </article>`).join('')}
