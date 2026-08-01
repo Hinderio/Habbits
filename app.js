@@ -1409,6 +1409,7 @@
       if (action === 'decrement-monthly-mission') decrementMonthlyMission(id);
       if (action === 'archive-monthly-mission') archiveMonthlyMission(id);
       if (action === 'delete-monthly-mission') deleteMonthlyMission(id);
+      if (action === 'open-monthly-magazine') openMonthlyMagazineReader(id || currentMonthKey());
       if (action === 'open-task-detail') openTaskDetail(id);
       if (action === 'close-task-detail') closeTaskDetail();
       if (action === 'edit-task') editTask(id);
@@ -4616,7 +4617,19 @@
     const eveningCigarettes = cigarettes.filter(cigarette => new Date(cigarette.smoked_at).getHours() >= 18).length;
     const alcoholUnits = visibleAlcoholUnits().filter(unit => inMonth(unit.occurred_at || unit.created_at));
     const tasksDone = state.tasks.map(normalizeTask).filter(task => task.status === 'done' && inMonth(task.completed_at || task.updated_at || task.created_at));
-    const routines = new Set((state.morningRoutineLogs || []).filter(log => inMonth(log.date_key || log.completed_at)).map(log => log.date_key || toDateKey(log.completed_at))).size;
+    const routineDayKeys = new Set((state.morningRoutineLogs || []).filter(log => inMonth(log.date_key || log.completed_at)).map(log => log.date_key || toDateKey(log.completed_at)));
+    const routines = routineDayKeys.size;
+    const habitEntries = visibleHabitEntries().filter(entry => inMonth(entry.occurred_at || entry.created_at));
+    const habitDays = new Set(habitEntries.map(entry => toDateKey(entry.occurred_at || entry.created_at)).filter(Boolean)).size;
+    const activeDayKeys = new Set([
+      ...sessions.map(session => toDateKey(session.entry?.occurred_at || session.date)),
+      ...tasksDone.map(task => toDateKey(task.completed_at || task.updated_at || task.created_at)),
+      ...habitEntries.map(entry => toDateKey(entry.occurred_at || entry.created_at)),
+      ...routineDayKeys
+    ].filter(Boolean));
+    const cigaretteDayKeys = new Set(cigarettes.map(cigarette => toDateKey(cigarette.smoked_at)).filter(Boolean));
+    const alcoholDayKeys = new Set(alcoholUnits.map(unit => toDateKey(unit.occurred_at || unit.created_at)).filter(Boolean));
+    const cleanDays = [...activeDayKeys].filter(key => !cigaretteDayKeys.has(key) && !alcoholDayKeys.has(key)).length;
     const smokeFreeEvenings = countMonthlyMissionProgress({ metric: 'smoke_free_evenings', target: 1, month_key: monthKey, title: 'Rauchfreie Abende' });
     const points = monthlyMagazinePoints(monthKey, keySet);
     const achievements = [
@@ -4670,22 +4683,222 @@
       strongestPattern,
       missedMission,
       bestDecision,
-      nextFocus
+      nextFocus,
+      facts: {
+        missionCount: missionSummary.count,
+        missionCompleted: missionSummary.completed,
+        missionAverage: missionSummary.average,
+        fitnessSessions: sessions.length,
+        jogs: jogs.length,
+        hikes: hikes.length,
+        runKm,
+        hikeKm,
+        ascent,
+        cigarettes: cigarettes.length,
+        eveningCigarettes,
+        smokeFreeEvenings,
+        alcoholUnits: alcoholUnits.length,
+        tasksDone: tasksDone.length,
+        routines,
+        habitLogs: habitEntries.length,
+        habitDays,
+        activeDays: activeDayKeys.size,
+        cleanDays,
+        points
+      }
     };
+  }
+
+  function monthlyMagazineArchiveKeys(limit = 12) {
+    const current = currentMonthKey();
+    const observed = new Set([current]);
+    const addValue = value => {
+      const match = String(value || '').match(/^(\d{4}-\d{2})/);
+      if (match && match[1] <= current) observed.add(match[1]);
+    };
+    visibleCigarettes().forEach(item => addValue(item.smoked_at));
+    visibleAlcoholUnits().forEach(item => addValue(item.occurred_at || item.created_at));
+    visibleHabitEntries().forEach(item => addValue(item.occurred_at || item.created_at));
+    visibleLedgerPoints().forEach(item => addValue(item.earned_at));
+    state.tasks.map(normalizeTask).forEach(item => {
+      addValue(item.created_at);
+      if (item.status === 'done') addValue(item.completed_at || item.updated_at);
+    });
+    (state.morningRoutineLogs || []).forEach(item => addValue(item.date_key || item.completed_at));
+    (state.monthlyMissions || []).forEach(item => addValue(item.month_key));
+    const earliest = [...observed].sort()[0] || current;
+    const keys = [];
+    let cursor = current;
+    while (keys.length < limit && cursor >= earliest) {
+      keys.push(cursor);
+      const [year, month] = cursor.split('-').map(Number);
+      const previous = new Date(year, month - 2, 1, 12);
+      cursor = `${previous.getFullYear()}-${String(previous.getMonth() + 1).padStart(2, '0')}`;
+    }
+    return keys;
+  }
+
+  function monthlyMagazinePageCover(magazine, pageIndex = 0) {
+    const baseIndex = Math.max(0, MONTHLY_MAGAZINE_COVERS.findIndex(item => item.file === magazine.cover.file));
+    const cover = MONTHLY_MAGAZINE_COVERS[(baseIndex + pageIndex) % MONTHLY_MAGAZINE_COVERS.length] || MONTHLY_MAGAZINE_COVERS[0];
+    return { ...cover, url: companionPosterAssetUrl(cover.file) };
+  }
+
+  function renderMonthlyMagazineGalleryTile(magazine, issueNumber) {
+    const coverStyle = `background-image:linear-gradient(180deg,rgba(5,9,16,.04),rgba(5,9,16,.72)),url('${escapeHtml(magazine.cover.url)}')`;
+    return `<button class="monthly-magazine-issue" type="button" data-action="open-monthly-magazine" data-id="${escapeHtml(magazine.monthKey)}" style="${coverStyle}" aria-label="${escapeHtml(magazine.label)} öffnen">
+      <span class="monthly-magazine-issue-number">${String(issueNumber).padStart(2, '0')}</span>
+      <span class="monthly-magazine-issue-copy"><strong>${escapeHtml(magazine.label)}</strong><small>${magazine.score}% · ${escapeHtml(magazine.isComplete ? 'Finale' : 'Live')}</small></span>
+    </button>`;
+  }
+
+  function monthlyMagazineReaderFact(label, value, detail = '') {
+    return `<div class="monthly-magazine-reader-fact"><small>${escapeHtml(label)}</small><strong>${escapeHtml(value)}</strong>${detail ? `<span>${escapeHtml(detail)}</span>` : ''}</div>`;
+  }
+
+  function monthlyMagazineReaderPageMarkup(magazine, pageIndex = 0) {
+    const facts = magazine.facts;
+    const page = Math.max(0, Math.min(2, Number(pageIndex) || 0));
+    const cover = monthlyMagazinePageCover(magazine, page);
+    const pageStyle = `background-image:url('${escapeHtml(cover.url)}')`;
+    if (page === 0) {
+      return `<article class="monthly-magazine-reader-page is-cover" style="${pageStyle}">
+        <div class="monthly-magazine-reader-shade" aria-hidden="true"></div>
+        <div class="monthly-magazine-reader-page-content">
+          <header><p>Life Magazine · Ausgabe ${escapeHtml(magazine.monthKey)}</p><span>${escapeHtml(magazine.isComplete ? 'Monatsfinale' : 'Live-Ausgabe')}</span></header>
+          <div class="monthly-magazine-reader-cover-title"><small>${escapeHtml(magazine.cover.label)}</small><h2>${escapeHtml(magazine.label)}</h2><p>${escapeHtml(magazine.strongestPattern.value)} · ${escapeHtml(magazine.strongestPattern.body)}</p></div>
+          <div class="monthly-magazine-reader-cover-bottom">
+            <div class="monthly-magazine-reader-score"><strong>${magazine.score}%</strong><span>Issue Score</span></div>
+            <div class="monthly-magazine-reader-facts">${magazine.stats.map(item => monthlyMagazineReaderFact(item.label, item.value, item.detail)).join('')}</div>
+          </div>
+        </div>
+      </article>`;
+    }
+    if (page === 1) {
+      return `<article class="monthly-magazine-reader-page" style="${pageStyle}">
+        <div class="monthly-magazine-reader-shade" aria-hidden="true"></div>
+        <div class="monthly-magazine-reader-page-content">
+          <header><p>Seite 2 · Bewegung & Fokus</p><span>${escapeHtml(magazine.label)}</span></header>
+          <div class="monthly-magazine-reader-editorial"><p class="eyebrow">Monatsenergie</p><h2>${escapeHtml(magazine.bestDecision.value)}</h2><p>${escapeHtml(magazine.bestDecision.body)}</p></div>
+          <div class="monthly-magazine-reader-facts is-six">
+            ${monthlyMagazineReaderFact('Sessions', `${facts.fitnessSessions}×`, `${facts.jogs} Runs · ${facts.hikes} Touren`)}
+            ${monthlyMagazineReaderFact('Distanz', formatKmValue(facts.runKm + facts.hikeKm), `${formatMetersValue(facts.ascent)} Anstieg`)}
+            ${monthlyMagazineReaderFact('Habits', `${facts.habitLogs} Logs`, `${facts.habitDays} aktive Tage`)}
+            ${monthlyMagazineReaderFact('Fokus', `${facts.tasksDone} Tasks`, `${facts.routines} Morgenroutinen`)}
+            ${monthlyMagazineReaderFact('Missionen', `${facts.missionCompleted}/${facts.missionCount}`, `${facts.missionAverage}% Fortschritt`)}
+            ${monthlyMagazineReaderFact('XP', Number(facts.points || 0).toLocaleString('de-CH'), `${facts.activeDays} aktive Tage`)}
+          </div>
+          <section class="monthly-magazine-reader-highlights"><p class="eyebrow">Top-Erfolge</p>${magazine.achievements.map(item => `<div><span>${svgIcon(item.icon, 'ui-icon')}</span><strong>${escapeHtml(item.label)}</strong><b>${escapeHtml(item.value)}</b><small>${escapeHtml(item.detail)}</small></div>`).join('')}</section>
+        </div>
+      </article>`;
+    }
+    return `<article class="monthly-magazine-reader-page" style="${pageStyle}">
+      <div class="monthly-magazine-reader-shade" aria-hidden="true"></div>
+      <div class="monthly-magazine-reader-page-content">
+        <header><p>Seite 3 · Konsum & Ausblick</p><span>${escapeHtml(magazine.label)}</span></header>
+        <div class="monthly-magazine-reader-editorial"><p class="eyebrow">Nächster Fokus</p><h2>${escapeHtml(magazine.nextFocus.value)}</h2><p>${escapeHtml(magazine.nextFocus.body)}</p></div>
+        <div class="monthly-magazine-reader-facts is-six">
+          ${monthlyMagazineReaderFact('Zigaretten', `${facts.cigarettes}×`, `${facts.eveningCigarettes} ab 18 Uhr`)}
+          ${monthlyMagazineReaderFact('Rauchfrei', `${facts.smokeFreeEvenings}`, 'rauchfreie Abende')}
+          ${monthlyMagazineReaderFact('Alkohol', `${facts.alcoholUnits}`, 'Einheiten im Monat')}
+          ${monthlyMagazineReaderFact('Klare Tage', `${facts.cleanDays}`, 'aktiv ohne Rauch & Alkohol')}
+          ${monthlyMagazineReaderFact('Aktive Tage', `${facts.activeDays}`, 'mit Fitness, Habit oder Fokus')}
+          ${monthlyMagazineReaderFact('Ausgabe', `${magazine.score}%`, magazine.isComplete ? 'Monatsfinale' : 'wächst live weiter')}
+        </div>
+        <div class="monthly-magazine-reader-outlook">
+          <section><small>Knapp verpasst</small><strong>${escapeHtml(magazine.missedMission.value)}</strong><p>${escapeHtml(magazine.missedMission.body)}</p></section>
+          <section><small>Stärkstes Muster</small><strong>${escapeHtml(magazine.strongestPattern.value)}</strong><p>${escapeHtml(magazine.strongestPattern.body)}</p></section>
+        </div>
+      </div>
+    </article>`;
+  }
+
+  function closeMonthlyMagazineReader() {
+    const reader = document.querySelector('.monthly-magazine-reader');
+    if (!reader) return;
+    if (reader._monthlyMagazineKeydown) document.removeEventListener('keydown', reader._monthlyMagazineKeydown);
+    reader.remove();
+    document.body.classList.remove('monthly-magazine-reader-open');
+  }
+
+  function openMonthlyMagazineReader(monthKey = currentMonthKey()) {
+    closeMonthlyMagazineReader();
+    const magazine = buildMonthlyMagazineReview(monthKey);
+    const reader = document.createElement('div');
+    reader.className = 'monthly-magazine-reader';
+    reader.setAttribute('role', 'dialog');
+    reader.setAttribute('aria-modal', 'true');
+    reader.setAttribute('aria-label', `${magazine.label} Life Magazine`);
+    let pageIndex = 0;
+    const renderPage = () => {
+      reader.innerHTML = `<div class="monthly-magazine-reader-shell">
+        <div class="monthly-magazine-reader-toolbar"><div><small>Life Magazine</small><strong>${escapeHtml(magazine.label)}</strong></div><button type="button" data-magazine-reader-action="close" aria-label="Magazin schliessen">×</button></div>
+        <div class="monthly-magazine-reader-stage">${monthlyMagazineReaderPageMarkup(magazine, pageIndex)}</div>
+        <nav class="monthly-magazine-reader-nav" aria-label="Magazinseiten">
+          <button type="button" data-magazine-reader-action="previous" ${pageIndex === 0 ? 'disabled' : ''}>Zurück</button>
+          <div>${[0, 1, 2].map(index => `<button class="${index === pageIndex ? 'is-active' : ''}" type="button" data-magazine-reader-action="page" data-page="${index}" aria-label="Seite ${index + 1}" aria-current="${index === pageIndex ? 'page' : 'false'}">${index + 1}</button>`).join('')}</div>
+          <button type="button" data-magazine-reader-action="next" ${pageIndex === 2 ? 'disabled' : ''}>Weiter</button>
+        </nav>
+      </div>`;
+    };
+    const movePage = direction => {
+      const nextPage = Math.max(0, Math.min(2, pageIndex + direction));
+      if (nextPage === pageIndex) return;
+      pageIndex = nextPage;
+      renderPage();
+      reader.querySelector('[data-magazine-reader-action="close"]')?.focus({ preventScroll: true });
+    };
+    reader.addEventListener('click', event => {
+      if (event.target === reader) return closeMonthlyMagazineReader();
+      const actionElement = event.target.closest('[data-magazine-reader-action]');
+      if (!actionElement) return;
+      const action = actionElement.dataset.magazineReaderAction;
+      if (action === 'close') closeMonthlyMagazineReader();
+      if (action === 'previous') movePage(-1);
+      if (action === 'next') movePage(1);
+      if (action === 'page') {
+        pageIndex = Math.max(0, Math.min(2, Number(actionElement.dataset.page) || 0));
+        renderPage();
+      }
+    });
+    let touchStartX = null;
+    reader.addEventListener('touchstart', event => { touchStartX = event.touches?.[0]?.clientX ?? null; }, { passive: true });
+    reader.addEventListener('touchend', event => {
+      if (touchStartX === null) return;
+      const endX = event.changedTouches?.[0]?.clientX ?? touchStartX;
+      const distance = endX - touchStartX;
+      touchStartX = null;
+      if (Math.abs(distance) > 55) movePage(distance < 0 ? 1 : -1);
+    }, { passive: true });
+    reader._monthlyMagazineKeydown = event => {
+      if (event.key === 'Escape') closeMonthlyMagazineReader();
+      if (event.key === 'ArrowLeft') movePage(-1);
+      if (event.key === 'ArrowRight') movePage(1);
+    };
+    document.addEventListener('keydown', reader._monthlyMagazineKeydown);
+    renderPage();
+    document.body.appendChild(reader);
+    document.body.classList.add('monthly-magazine-reader-open');
+    reader.querySelector('[data-magazine-reader-action="close"]')?.focus({ preventScroll: true });
   }
 
   function renderMonthlyMagazine() {
     if (!els.monthlyMagazine) return;
     const magazine = buildMonthlyMagazineReview(currentMonthKey());
+    const archive = monthlyMagazineArchiveKeys().map(key => key === magazine.monthKey ? magazine : buildMonthlyMagazineReview(key));
     if (els.monthlyMagazineSummary) els.monthlyMagazineSummary.textContent = `${magazine.score}% · ${magazine.isComplete ? 'Monatsfinale' : 'Live-Ausgabe'}`;
-    if (els.monthlyMagazineMobileSummary) els.monthlyMagazineMobileSummary.textContent = `${magazine.score}% · ${magazine.cover.label}`;
+    if (els.monthlyMagazineMobileSummary) els.monthlyMagazineMobileSummary.textContent = `${archive.length} Ausgabe${archive.length === 1 ? '' : 'n'} · ${magazine.score}%`;
     const coverStyle = `background-image:linear-gradient(180deg,rgba(5,9,16,.08),rgba(5,9,16,.78)),url('${escapeHtml(magazine.cover.url)}')`;
-    els.monthlyMagazine.innerHTML = `<article class="monthly-magazine-card">
-      <div class="monthly-magazine-cover" style="${coverStyle}">
+    els.monthlyMagazine.innerHTML = `<section class="monthly-magazine-gallery" aria-label="Monatsmagazin-Archiv">
+        <div class="monthly-magazine-gallery-head"><div><p class="eyebrow">Ausgaben</p><h4>Deine Monate als Magazin</h4></div><span>${archive.length} im Archiv</span></div>
+        <div class="monthly-magazine-gallery-rail">${archive.map((item, index) => renderMonthlyMagazineGalleryTile(item, archive.length - index)).join('')}</div>
+      </section>
+      <article class="monthly-magazine-card">
+      <button class="monthly-magazine-cover" type="button" data-action="open-monthly-magazine" data-id="${escapeHtml(magazine.monthKey)}" style="${coverStyle}" aria-label="Aktuelle Ausgabe ${escapeHtml(magazine.label)} öffnen">
         <div class="monthly-magazine-cover-top"><span>Life Magazine</span><b>${escapeHtml(magazine.isComplete ? 'Monatsfinale' : 'Live Preview')}</b></div>
-        <div class="monthly-magazine-cover-copy"><p>${escapeHtml(magazine.cover.label)}</p><h3>${escapeHtml(magazine.label)}</h3><span>Titelbild aus stage-21–23 · Supabase Storage</span></div>
+        <div class="monthly-magazine-cover-copy"><p>${escapeHtml(magazine.cover.label)}</p><h3>${escapeHtml(magazine.label)}</h3><span>Antippen öffnet die dreiseitige Ausgabe</span></div>
         <div class="monthly-magazine-score"><strong>${magazine.score}%</strong><span>Issue Score</span></div>
-      </div>
+      </button>
       <div class="monthly-magazine-content">
         <div class="monthly-magazine-stats">${magazine.stats.map(item => `<article><small>${escapeHtml(item.label)}</small><strong>${escapeHtml(item.value)}</strong><span>${escapeHtml(item.detail)}</span></article>`).join('')}</div>
         <section class="monthly-magazine-achievements" aria-label="Top-Erfolge des Monats">
