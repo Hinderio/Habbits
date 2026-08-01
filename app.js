@@ -4539,28 +4539,30 @@
     return { ...cover, url: companionPosterAssetUrl(cover.file) };
   }
 
-  function monthlyMagazinePoints(monthKey = currentMonthKey(), keySet = new Set(monthMissionKeys(monthKey))) {
-    let total = visibleLedgerPoints()
+  function monthlyMagazinePoints(monthKey = currentMonthKey(), keySet = new Set(monthMissionKeys(monthKey)), source = {}) {
+    const ledger = source.ledger || visibleLedgerPoints();
+    const cigarettes = source.cigarettes || visibleCigarettes();
+    let total = ledger
       .filter(point => keySet.has(toDateKey(point.earned_at)))
       .reduce((sum, point) => sum + Number(point.points || 0), 0);
-    visibleCigarettes()
+    cigarettes
       .filter(cigarette => keySet.has(toDateKey(cigarette.smoked_at)))
       .filter(cigarette => !state.pointsLedger.some(point => point.source_type === 'cigarette' && point.source_id === cigarette.id))
       .forEach(cigarette => { total += Number(cigarette.points || 0); });
     return Math.round(total);
   }
 
-  function buildMonthlyMagazineBestDay(keys = []) {
+  function buildMonthlyMagazineBestDay(keys = [], source = {}) {
     const keyFilter = new Set(keys);
     const taskCounts = new Map();
-    state.tasks.map(normalizeTask)
+    (source.tasks || state.tasks.map(normalizeTask))
       .filter(task => task.status === 'done')
       .forEach(task => {
         const key = toDateKey(task.completed_at || task.updated_at || task.created_at);
         if (key && keyFilter.has(key)) taskCounts.set(key, (taskCounts.get(key) || 0) + 1);
       });
     const fitnessCounts = new Map();
-    buildFitnessSessions('all').forEach(session => {
+    (source.sessions || buildFitnessSessions('all')).forEach(session => {
       const key = toDateKey(session.entry?.occurred_at || session.date);
       if (!key || !keyFilter.has(key)) return;
       const current = fitnessCounts.get(key) || { count: 0, km: 0, ascent: 0 };
@@ -4570,7 +4572,7 @@
       fitnessCounts.set(key, current);
     });
     const pointsByDay = new Map();
-    visibleLedgerPoints().forEach(point => {
+    (source.ledger || visibleLedgerPoints()).forEach(point => {
       const key = toDateKey(point.earned_at);
       if (!key || !keyFilter.has(key)) return;
       pointsByDay.set(key, (pointsByDay.get(key) || 0) + Number(point.points || 0));
@@ -4598,7 +4600,7 @@
     };
   }
 
-  function buildMonthlyMagazineReview(monthKey = currentMonthKey()) {
+  function buildMonthlyMagazineReview(monthKey = currentMonthKey(), source = {}) {
     const keys = monthMissionKeys(monthKey);
     const keySet = new Set(keys);
     const inMonth = value => keySet.has(toDateKey(value));
@@ -4607,19 +4609,24 @@
     const missions = activeMonthlyMissions(monthKey);
     const missionStates = missions.map(monthlyMissionState);
     const missionSummary = monthlyMissionSummary(missions);
-    const sessions = buildFitnessSessions('all').filter(session => inMonth(session.entry?.occurred_at || session.date));
+    const allSessions = source.sessions || buildFitnessSessions('all');
+    const allCigarettes = source.cigarettes || visibleCigarettes();
+    const allAlcoholUnits = source.alcoholUnits || visibleAlcoholUnits();
+    const allTasks = source.tasks || state.tasks.map(normalizeTask);
+    const allHabitEntries = source.habitEntries || visibleHabitEntries();
+    const sessions = allSessions.filter(session => inMonth(session.entry?.occurred_at || session.date));
     const jogs = sessions.filter(session => session.type === 'jogging');
     const hikes = sessions.filter(session => session.type === 'hiking');
     const runKm = sum(jogs.map(session => session.distanceKm));
     const hikeKm = sum(hikes.map(session => session.distanceKm));
     const ascent = sum(hikes.map(session => session.ascent));
-    const cigarettes = visibleCigarettes().filter(cigarette => inMonth(cigarette.smoked_at));
+    const cigarettes = allCigarettes.filter(cigarette => inMonth(cigarette.smoked_at));
     const eveningCigarettes = cigarettes.filter(cigarette => new Date(cigarette.smoked_at).getHours() >= 18).length;
-    const alcoholUnits = visibleAlcoholUnits().filter(unit => inMonth(unit.occurred_at || unit.created_at));
-    const tasksDone = state.tasks.map(normalizeTask).filter(task => task.status === 'done' && inMonth(task.completed_at || task.updated_at || task.created_at));
+    const alcoholUnits = allAlcoholUnits.filter(unit => inMonth(unit.occurred_at || unit.created_at));
+    const tasksDone = allTasks.filter(task => task.status === 'done' && inMonth(task.completed_at || task.updated_at || task.created_at));
     const routineDayKeys = new Set((state.morningRoutineLogs || []).filter(log => inMonth(log.date_key || log.completed_at)).map(log => log.date_key || toDateKey(log.completed_at)));
     const routines = routineDayKeys.size;
-    const habitEntries = visibleHabitEntries().filter(entry => inMonth(entry.occurred_at || entry.created_at));
+    const habitEntries = allHabitEntries.filter(entry => inMonth(entry.occurred_at || entry.created_at));
     const habitDays = new Set(habitEntries.map(entry => toDateKey(entry.occurred_at || entry.created_at)).filter(Boolean)).size;
     const activeDayKeys = new Set([
       ...sessions.map(session => toDateKey(session.entry?.occurred_at || session.date)),
@@ -4631,7 +4638,7 @@
     const alcoholDayKeys = new Set(alcoholUnits.map(unit => toDateKey(unit.occurred_at || unit.created_at)).filter(Boolean));
     const cleanDays = [...activeDayKeys].filter(key => !cigaretteDayKeys.has(key) && !alcoholDayKeys.has(key)).length;
     const smokeFreeEvenings = countMonthlyMissionProgress({ metric: 'smoke_free_evenings', target: 1, month_key: monthKey, title: 'Rauchfreie Abende' });
-    const points = monthlyMagazinePoints(monthKey, keySet);
+    const points = monthlyMagazinePoints(monthKey, keySet, source);
     const achievements = [
       missionSummary.completed ? { icon: 'reward', label: 'Missionen abgeschlossen', value: `${missionSummary.completed}/${missionSummary.count}`, detail: 'Monatsziele wirklich ins Ziel gebracht.', score: 120 + missionSummary.completed * 10 } : null,
       missionSummary.average ? { icon: 'habits', label: 'Missions-Fortschritt', value: `${missionSummary.average}%`, detail: `${missionSummary.count} aktive Mission${missionSummary.count === 1 ? '' : 'en'} im Fokus.`, score: missionSummary.average } : null,
@@ -4658,8 +4665,8 @@
       : missionStates.length
         ? { value: 'Keine Lücke', body: 'Alle aktiven Monatsmissionen sind erledigt oder aktuell ohne Rückstand.' }
         : { value: 'Noch frei', body: 'Erstelle 1–3 Monatsmissionen, dann erkennt das Magazine automatisch knapp verpasste Ziele.' };
-    const bestDecision = buildMonthlyMagazineBestDay(keys);
-    const compass = buildTrainingCompassModel(buildFitnessSessions('all'));
+    const bestDecision = buildMonthlyMagazineBestDay(keys, source);
+    const compass = source.compass || buildTrainingCompassModel(allSessions);
     const nextFocus = closeMission
       ? { value: closeMission.mission.title, body: monthlyMissionStatusText(closeMission) }
       : (compass?.weakest?.label
@@ -4709,18 +4716,18 @@
     };
   }
 
-  function monthlyMagazineArchiveKeys(limit = 12) {
+  function monthlyMagazineArchiveKeys(limit = 12, source = {}) {
     const current = currentMonthKey();
     const observed = new Set([current]);
     const addValue = value => {
       const match = String(value || '').match(/^(\d{4}-\d{2})/);
       if (match && match[1] <= current) observed.add(match[1]);
     };
-    visibleCigarettes().forEach(item => addValue(item.smoked_at));
-    visibleAlcoholUnits().forEach(item => addValue(item.occurred_at || item.created_at));
-    visibleHabitEntries().forEach(item => addValue(item.occurred_at || item.created_at));
-    visibleLedgerPoints().forEach(item => addValue(item.earned_at));
-    state.tasks.map(normalizeTask).forEach(item => {
+    (source.cigarettes || visibleCigarettes()).forEach(item => addValue(item.smoked_at));
+    (source.alcoholUnits || visibleAlcoholUnits()).forEach(item => addValue(item.occurred_at || item.created_at));
+    (source.habitEntries || visibleHabitEntries()).forEach(item => addValue(item.occurred_at || item.created_at));
+    (source.ledger || visibleLedgerPoints()).forEach(item => addValue(item.earned_at));
+    (source.tasks || state.tasks.map(normalizeTask)).forEach(item => {
       addValue(item.created_at);
       if (item.status === 'done') addValue(item.completed_at || item.updated_at);
     });
@@ -4884,8 +4891,17 @@
 
   function renderMonthlyMagazine() {
     if (!els.monthlyMagazine) return;
-    const magazine = buildMonthlyMagazineReview(currentMonthKey());
-    const archive = monthlyMagazineArchiveKeys().map(key => key === magazine.monthKey ? magazine : buildMonthlyMagazineReview(key));
+    const source = {
+      sessions: buildFitnessSessions('all'),
+      cigarettes: visibleCigarettes(),
+      alcoholUnits: visibleAlcoholUnits(),
+      tasks: state.tasks.map(normalizeTask),
+      habitEntries: visibleHabitEntries(),
+      ledger: visibleLedgerPoints()
+    };
+    source.compass = buildTrainingCompassModel(source.sessions);
+    const magazine = buildMonthlyMagazineReview(currentMonthKey(), source);
+    const archive = monthlyMagazineArchiveKeys(12, source).map(key => key === magazine.monthKey ? magazine : buildMonthlyMagazineReview(key, source));
     if (els.monthlyMagazineSummary) els.monthlyMagazineSummary.textContent = `${magazine.score}% · ${magazine.isComplete ? 'Monatsfinale' : 'Live-Ausgabe'}`;
     if (els.monthlyMagazineMobileSummary) els.monthlyMagazineMobileSummary.textContent = `${archive.length} Ausgabe${archive.length === 1 ? '' : 'n'} · ${magazine.score}%`;
     const coverStyle = `background-image:linear-gradient(180deg,rgba(5,9,16,.08),rgba(5,9,16,.78)),url('${escapeHtml(magazine.cover.url)}')`;
@@ -4914,7 +4930,6 @@
       </div>
     </article>`;
   }
-
 
   function toggleMonthlyMissionForm() {
     monthlyMissionFormOpen = !monthlyMissionFormOpen;
