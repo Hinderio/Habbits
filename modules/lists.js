@@ -12,7 +12,8 @@
     { id: 'vouchers', slug: 'gutscheine', title: 'Gutscheine', type: 'voucher', icon: 'ticket', color: '#f6b33f', description: 'Gutscheine, Codes und Fristen ruhig im Blick behalten.' },
     { id: 'shopping', slug: 'shopping', title: 'Shopping', type: 'shopping', icon: 'shopping', color: '#8bd7cd', description: 'Einkäufe, Mengen und Läden als klare Liste sammeln.' },
     { id: 'photos', slug: 'fotospots', title: 'Fotospots', type: 'photos', icon: 'camera', color: '#52bfd7', description: 'Spots sammeln und daraus visuelle Touren planen.' },
-    { id: 'subscriptions', slug: 'abos', title: 'Abos', type: 'subscription', icon: 'repeat', color: '#b895ff', description: 'Abos, Kosten, Laufzeiten und Kündigungsfenster ordnen.' }
+    { id: 'subscriptions', slug: 'abos', title: 'Abos', type: 'subscription', icon: 'repeat', color: '#61CBF4', description: 'Abos, Kosten, Laufzeiten und Kündigungsfenster ordnen.' },
+    { id: 'terms', slug: 'begriffe', title: 'Begriffe', type: 'generic', icon: 'book', color: '#ff8fa3', description: 'Begriffe nach Kategorien sammeln und mit Lernkarten festigen.' }
   ];
 
   const ICONS = {
@@ -21,6 +22,10 @@
     shopping: '<path d="M6 8h12l-1 12H7L6 8Z"/><path d="M9 8a3 3 0 0 1 6 0"/>',
     camera: '<path d="M4 8h4l2-3h4l2 3h4v11H4V8Z"/><circle cx="12" cy="13" r="3"/>',
     repeat: '<path d="m17 2 4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="m7 22-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>',
+    book: '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5v-16Z"/><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5v-16Z"/>',
+    close: '<path d="m6 6 12 12"/><path d="m18 6-12 12"/>',
+    chevronLeft: '<path d="m15 18-6-6 6-6"/>',
+    chevronRight: '<path d="m9 18 6-6-6-6"/>',
     plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
     edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z"/>',
     trash: '<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m9 10 .5 8"/><path d="m15 10-.5 8"/><path d="M5 6l1 15h12l1-15"/>',
@@ -33,6 +38,9 @@
   let activeListId = state.activeListId || 'photos';
   let editingSpotId = '';
   let editingTourId = '';
+  let editingTermId = '';
+  let termStudyCategory = '';
+  let termStudyIndex = 0;
   let syncLabel = 'lokal';
   let supabaseClient = null;
   let remoteReady = false;
@@ -67,7 +75,9 @@
     const listsById = new Map(DEFAULT_LISTS.map(list => [list.id, { ...list }]));
     (Array.isArray(raw.lists) ? raw.lists : []).forEach(list => {
       if (!list?.id) return;
-      listsById.set(list.id, { ...listsById.get(list.id), ...list });
+      const merged = { ...listsById.get(list.id), ...list };
+      if (list.id === 'subscriptions') merged.color = '#61CBF4';
+      listsById.set(list.id, merged);
     });
     return {
       lists: Array.from(listsById.values()),
@@ -100,7 +110,7 @@
   }
 
   function metricValue(kind) {
-    if (kind === 'open') return state.items.filter(item => !item.isDone && !item.isArchived).length;
+    if (kind === 'open') return state.items.filter(item => item.listId !== 'terms' && !item.isDone && !item.isArchived).length;
     if (kind === 'vouchers') return itemsFor('vouchers').length;
     if (kind === 'photos') return state.stops.filter(stop => !stop.isArchived).length;
     return itemsFor('subscriptions').length;
@@ -167,17 +177,20 @@
   function renderCards(target) {
     target.innerHTML = state.lists.map(list => {
       const count = list.type === 'photos' ? state.stops.filter(stop => !stop.isArchived).length : itemsFor(list.id).length;
+      const categories = list.id === 'terms' ? termCategories().length : 0;
       const done = list.type === 'photos' ? state.tours.filter(tour => !tour.isArchived).length : itemsFor(list.id).filter(item => item.isDone).length;
+      const cardType = list.type === 'photos' ? 'Touren & Orte' : list.id === 'terms' ? 'Lernkarten' : 'Liste';
+      const cardStat = list.type === 'photos' ? `${done} Touren` : list.id === 'terms' ? `${categories} ${categories === 1 ? 'Kategorie' : 'Kategorien'}` : 'Einträge';
       return `
         <article class="hf-list-card ${list.id === activeListId ? 'is-active' : ''}" style="--hf-list-tone:${escapeHtml(list.color)}">
           <button type="button" data-list-open="${escapeHtml(list.id)}">
             <span class="hf-list-card-art">${icon(list.icon)}</span>
             <span class="hf-list-card-copy">
-              <small>${escapeHtml(list.type === 'photos' ? 'Touren & Orte' : 'Liste')}</small>
+              <small>${escapeHtml(cardType)}</small>
               <strong>${escapeHtml(list.title)}</strong>
               <em>${escapeHtml(list.description)}</em>
             </span>
-            <span class="hf-list-card-stat"><b>${count}</b><small>${list.type === 'photos' ? `${done} Touren` : 'Einträge'}</small></span>
+            <span class="hf-list-card-stat"><b>${count}</b><small>${escapeHtml(cardStat)}</small></span>
           </button>
         </article>
       `;
@@ -185,6 +198,10 @@
   }
 
   function renderDetail(target, list) {
+    if (list.id === 'terms') {
+      target.innerHTML = renderTermsDetail(list);
+      return;
+    }
     if (list.type === 'photos') {
       target.innerHTML = renderPhotosDetail(list);
       return;
@@ -223,15 +240,109 @@
     `;
   }
 
+  function termCategory(item) {
+    return String(item?.metadata?.category || 'Ohne Kategorie').trim() || 'Ohne Kategorie';
+  }
+
+  function termCategories() {
+    return Array.from(new Set(itemsFor('terms').map(termCategory))).sort((a, b) => a.localeCompare(b, 'de'));
+  }
+
+  function termsInCategory(category) {
+    return itemsFor('terms').filter(item => termCategory(item) === category);
+  }
+
+  function renderTermsDetail(list) {
+    const terms = itemsFor('terms');
+    const categories = termCategories();
+    const editingTerm = editingTermId ? terms.find(term => term.id === editingTermId) : null;
+    const categoryOptions = categories.map(category => `<option value="${escapeHtml(category)}"></option>`).join('');
+    return `
+      <div class="panel-head">
+        <div><p class="eyebrow">${escapeHtml(list.title)}</p><h3>Begriffe sammeln & lernen</h3></div>
+        <span class="badge">${terms.length} Begriffe</span>
+      </div>
+      <form class="hf-list-form hf-term-form ${editingTerm ? 'is-editing' : ''}" data-form="term" data-editing-id="${escapeHtml(editingTerm?.id || '')}">
+        <label><span>Begriff</span><input name="title" value="${escapeHtml(editingTerm?.title || '')}" placeholder="z. B. Opportunitätskosten" required></label>
+        <label><span>Kategorie</span><input name="category" list="hfTermCategories" value="${escapeHtml(editingTerm ? termCategory(editingTerm) : '')}" placeholder="Auswählen oder neu eingeben" required><datalist id="hfTermCategories">${categoryOptions}</datalist></label>
+        <label class="full"><span>Erklärung</span><textarea name="explanation" rows="4" placeholder="Was bedeutet der Begriff?" required>${escapeHtml(editingTerm?.note || '')}</textarea></label>
+        <div class="hf-list-form-actions full">
+          <button class="pill primary" type="submit">${icon('plus')} ${editingTerm ? 'Änderungen speichern' : 'Begriff speichern'}</button>
+          ${editingTerm ? '<button class="pill secondary" type="button" data-action="cancel-term-edit">Abbrechen</button>' : ''}
+        </div>
+      </form>
+      <div class="hf-term-categories ${categories.length ? '' : 'is-empty'}">
+        ${categories.length ? categories.map(renderTermCategory).join('') : '<p>Noch keine Begriffe vorhanden.</p>'}
+      </div>
+      ${renderTermStudyModal()}
+    `;
+  }
+
+  function renderTermCategory(category) {
+    const terms = termsInCategory(category);
+    return `
+      <section class="hf-term-category">
+        <div class="hf-term-category-head">
+          <div><small>Kategorie</small><h4>${escapeHtml(category)}</h4><span>${terms.length} ${terms.length === 1 ? 'Begriff' : 'Begriffe'}</span></div>
+          <button class="pill secondary" type="button" data-action="start-term-study" data-category="${escapeHtml(category)}">${icon('book')} Lernmodus</button>
+        </div>
+        <div class="hf-term-list">${terms.map(renderTermRow).join('')}</div>
+      </section>
+    `;
+  }
+
+  function renderTermRow(term) {
+    return `
+      <article class="hf-term-row" data-term-id="${escapeHtml(term.id)}">
+        <div class="hf-term-copy"><strong>${escapeHtml(term.title)}</strong><span>${escapeHtml(term.note || 'Keine Erklärung hinterlegt.')}</span></div>
+        <div class="hf-term-actions">
+          <button class="hf-list-icon-btn" type="button" data-action="edit-term" aria-label="Begriff bearbeiten">${icon('edit')}</button>
+          <button class="hf-list-icon-btn danger" type="button" data-action="delete-term" aria-label="Begriff löschen">${icon('trash')}</button>
+        </div>
+      </article>
+    `;
+  }
+
+  function renderTermStudyModal() {
+    if (!termStudyCategory) return '';
+    const terms = termsInCategory(termStudyCategory);
+    if (!terms.length) {
+      termStudyCategory = '';
+      termStudyIndex = 0;
+      document.body.classList.remove('hf-term-study-open');
+      return '';
+    }
+    termStudyIndex = Math.min(Math.max(0, termStudyIndex), terms.length - 1);
+    const term = terms[termStudyIndex];
+    return `
+      <div class="hf-term-study-modal" role="dialog" aria-modal="true" aria-label="Lernmodus ${escapeHtml(termStudyCategory)}">
+        <section class="hf-term-study-shell">
+          <header class="hf-term-study-head">
+            <div><small>Lernmodus</small><h3>${escapeHtml(termStudyCategory)}</h3></div>
+            <button class="hf-list-icon-btn" type="button" data-action="close-term-study" aria-label="Lernmodus schliessen">${icon('close')}</button>
+          </header>
+          <button class="hf-term-flip-card" type="button" data-action="flip-term-card" aria-label="Lernkarte umdrehen" aria-pressed="false">
+            <span class="hf-term-flip-inner">
+              <span class="hf-term-face hf-term-front"><small>Begriff</small><strong>${escapeHtml(term.title)}</strong><em>Antippen für die Erklärung</em></span>
+              <span class="hf-term-face hf-term-back"><small>Erklärung</small><strong>${escapeHtml(term.title)}</strong><p>${escapeHtml(term.note || 'Keine Erklärung hinterlegt.')}</p></span>
+            </span>
+          </button>
+          <footer class="hf-term-study-controls">
+            <button class="hf-list-icon-btn" type="button" data-action="previous-term-card" aria-label="Vorheriger Begriff" ${termStudyIndex === 0 ? 'disabled' : ''}>${icon('chevronLeft')}</button>
+            <strong>${termStudyIndex + 1} / ${terms.length}</strong>
+            <button class="hf-list-icon-btn" type="button" data-action="next-term-card" aria-label="Nächster Begriff" ${termStudyIndex === terms.length - 1 ? 'disabled' : ''}>${icon('chevronRight')}</button>
+          </footer>
+        </section>
+      </div>
+    `;
+  }
+
   function renderPhotosDetail(list) {
     const tours = state.tours.filter(tour => !tour.isArchived).sort((a, b) => (a.sortRank || 0) - (b.sortRank || 0));
     const activeTours = tours.length ? tours : [{ id: 'demo-tour', title: 'Valais Route', region: 'Valais', demo: true }];
     const editingTour = editingTourId ? state.tours.find(tour => tour.id === editingTourId && !tour.isArchived) : null;
     const editingSpot = editingSpotId ? state.stops.find(stop => stop.id === editingSpotId && !stop.isArchived) : null;
     const tourOptions = tours.map(tour => `<option value="${escapeHtml(tour.id)}" ${tour.id === editingSpot?.tourId ? 'selected' : ''}>${escapeHtml(tour.title)}</option>`).join('');
-    const coverImageHint = editingTour?.coverUrl
-      ? 'Optional · neues Bild ersetzt das vorhandene Cover.'
-      : 'Optional · wird vor dem Speichern komprimiert.';
     const spotImageHint = editingSpot?.imageUrl
       ? 'Optional · neues Bild ersetzt den vorhandenen Anhang.'
       : 'Optional · wird vor dem Speichern komprimiert.';
@@ -244,9 +355,7 @@
         <form class="hf-list-form ${editingTour ? 'is-editing' : ''}" data-form="tour" data-editing-id="${escapeHtml(editingTour?.id || '')}">
           <label class="full"><span>Tour</span><input name="title" value="${escapeHtml(editingTour?.title || '')}" placeholder="z. B. Valais Winterroute" required></label>
           <label class="full"><span>Region</span><input name="region" value="${escapeHtml(editingTour?.region || '')}" placeholder="z. B. Valais"></label>
-          <label class="full hf-photo-upload"><span>Cover-Bild</span><input name="coverImage" type="file" accept="image/*"><small>${coverImageHint}</small></label>
           <label class="full"><span>Notiz</span><input name="note" value="${escapeHtml(editingTour?.note || '')}" placeholder="optional"></label>
-          <p class="hf-list-form-error full" data-tour-error role="status" hidden></p>
           <div class="hf-list-form-actions full">
             <button class="pill primary" type="submit">${icon('route')} ${editingTour ? 'Änderungen speichern' : 'Tour erstellen'}</button>
             ${editingTour ? '<button class="pill secondary" type="button" data-action="cancel-tour-edit">Abbrechen</button>' : ''}
@@ -337,6 +446,10 @@
         activeListId = listOpen.dataset.listOpen;
         editingSpotId = '';
         editingTourId = '';
+        editingTermId = '';
+        termStudyCategory = '';
+        termStudyIndex = 0;
+        document.body.classList.remove('hf-term-study-open');
         persist();
         render();
         document.getElementById('hfListDetail')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -359,6 +472,41 @@
         render();
         return;
       }
+      if (action === 'cancel-term-edit') {
+        editingTermId = '';
+        render();
+        return;
+      }
+      if (action === 'start-term-study') {
+        termStudyCategory = String(event.target.closest('[data-category]')?.dataset.category || '');
+        termStudyIndex = 0;
+        document.body.classList.add('hf-term-study-open');
+        render();
+        return;
+      }
+      if (action === 'close-term-study') {
+        closeTermStudy();
+        return;
+      }
+      if (action === 'flip-term-card') {
+        const card = event.target.closest('.hf-term-flip-card');
+        card?.classList.toggle('is-flipped');
+        card?.setAttribute('aria-pressed', String(card.classList.contains('is-flipped')));
+        return;
+      }
+      if (action === 'previous-term-card' || action === 'next-term-card') {
+        const direction = action === 'next-term-card' ? 1 : -1;
+        const terms = termsInCategory(termStudyCategory);
+        termStudyIndex = Math.min(Math.max(0, termStudyIndex + direction), Math.max(0, terms.length - 1));
+        render();
+        return;
+      }
+
+      const termRow = event.target.closest('[data-term-id]');
+      if (termRow && (action === 'edit-term' || action === 'delete-term')) {
+        handleTermAction(action, termRow.dataset.termId);
+        return;
+      }
 
       const row = event.target.closest('[data-item-id]');
       if (row && action) handleItemAction(action, row.dataset.itemId);
@@ -375,9 +523,32 @@
       if (!form) return;
       event.preventDefault();
       if (form.dataset.form === 'item') saveItem(form);
-      if (form.dataset.form === 'tour') void saveTour(form);
+      if (form.dataset.form === 'term') saveTerm(form);
+      if (form.dataset.form === 'tour') saveTour(form);
       if (form.dataset.form === 'spot') void saveSpot(form);
     });
+
+    document.addEventListener('keydown', event => {
+      if (!termStudyCategory) return;
+      if (event.key === 'Escape') {
+        closeTermStudy();
+        return;
+      }
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        event.preventDefault();
+        const terms = termsInCategory(termStudyCategory);
+        const direction = event.key === 'ArrowRight' ? 1 : -1;
+        termStudyIndex = Math.min(Math.max(0, termStudyIndex + direction), Math.max(0, terms.length - 1));
+        render();
+      }
+    });
+  }
+
+  function closeTermStudy() {
+    termStudyCategory = '';
+    termStudyIndex = 0;
+    document.body.classList.remove('hf-term-study-open');
+    render();
   }
 
   function handleItemAction(action, id) {
@@ -392,6 +563,34 @@
     }
     item.updatedAt = new Date().toISOString();
     saveAndSync();
+  }
+
+  function handleTermAction(action, id) {
+    const term = state.items.find(item => item.id === id && item.listId === 'terms' && !item.isArchived);
+    if (!term) return;
+    if (action === 'edit-term') {
+      editingTermId = id;
+      render();
+      window.requestAnimationFrame(() => {
+        const form = document.querySelector('#screen-lists form[data-form="term"]');
+        form?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const titleInput = form?.elements?.title;
+        titleInput?.focus({ preventScroll: true });
+        titleInput?.select();
+      });
+      return;
+    }
+    if (action === 'delete-term') {
+      term.isArchived = true;
+      term.updatedAt = new Date().toISOString();
+      if (editingTermId === id) editingTermId = '';
+      if (termStudyCategory && !termsInCategory(termStudyCategory).length) {
+        termStudyCategory = '';
+        termStudyIndex = 0;
+        document.body.classList.remove('hf-term-study-open');
+      }
+      saveAndSync();
+    }
   }
 
   function handleTourAction(action, id) {
@@ -454,58 +653,59 @@
     saveAndSync();
   }
 
-  async function saveTour(form) {
+  function saveTerm(form) {
+    const data = new FormData(form);
+    const existingTermId = String(form.dataset.editingId || '').trim();
+    const existingTerm = existingTermId ? state.items.find(item => item.id === existingTermId && item.listId === 'terms' && !item.isArchived) : null;
+    const title = String(data.get('title') || '').trim();
+    const category = String(data.get('category') || '').trim();
+    const explanation = String(data.get('explanation') || '').trim();
+    if (!title || !category || !explanation) return;
+    const now = new Date().toISOString();
+    if (existingTerm) {
+      Object.assign(existingTerm, {
+        title,
+        note: explanation,
+        metadata: { ...(existingTerm.metadata || {}), category },
+        updatedAt: now
+      });
+    } else {
+      state.items.push({
+        id: uid('term'),
+        listId: 'terms',
+        title,
+        note: explanation,
+        metadata: { category },
+        isDone: false,
+        isArchived: false,
+        sortRank: Date.now(),
+        createdAt: now,
+        updatedAt: now
+      });
+    }
+    if (!existingTermId || editingTermId === existingTermId) editingTermId = '';
+    form.reset();
+    saveAndSync();
+  }
+
+  function saveTour(form) {
     const data = new FormData(form);
     const existingTourId = String(form.dataset.editingId || '').trim();
     const existingTour = existingTourId ? state.tours.find(tour => tour.id === existingTourId && !tour.isArchived) : null;
     const title = String(data.get('title') || '').trim();
     if (!title) return;
-    const coverFile = data.get('coverImage');
-    const hasCover = coverFile && typeof coverFile === 'object' && coverFile.size > 0;
-    const errorElement = form.querySelector('[data-tour-error]');
-    const submitButton = form.querySelector('button[type="submit"]');
-    if (hasCover && !String(coverFile.type || '').startsWith('image/')) {
-      if (errorElement) {
-        errorElement.textContent = 'Bitte eine Bilddatei auswählen.';
-        errorElement.hidden = false;
-      }
-      return;
-    }
-    if (errorElement) {
-      errorElement.textContent = '';
-      errorElement.hidden = true;
-    }
-    if (submitButton) {
-      submitButton.disabled = true;
-      submitButton.textContent = hasCover ? 'Bild wird verarbeitet ...' : 'Tour wird gespeichert ...';
-    }
-    let coverUrl = existingTour?.coverUrl || '';
-    try {
-      if (hasCover) coverUrl = await compressPhotoImage(coverFile);
-    } catch (error) {
-      console.warn('[HabitFlow/lists] Tour-Cover konnte nicht verarbeitet werden.', error);
-      if (errorElement) {
-        errorElement.textContent = 'Das Bild konnte nicht verarbeitet werden. Bitte eine andere Datei wählen.';
-        errorElement.hidden = false;
-      }
-      if (submitButton) {
-        submitButton.disabled = false;
-        submitButton.innerHTML = `${icon('route')} ${existingTour ? 'Änderungen speichern' : 'Tour erstellen'}`;
-      }
-      return;
-    }
     const now = new Date().toISOString();
     const region = String(data.get('region') || '').trim();
     const note = String(data.get('note') || '').trim();
     if (existingTour) {
-      Object.assign(existingTour, { title, region, note, coverUrl, updatedAt: now });
+      Object.assign(existingTour, { title, region, note, updatedAt: now });
     } else {
       state.tours.push({
         id: uid('photo-tour'),
         title,
         region,
         note,
-        coverUrl,
+        coverUrl: '',
         sortRank: Date.now(),
         isArchived: false,
         createdAt: now,
