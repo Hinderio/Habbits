@@ -5,6 +5,8 @@
   window.__habitFlowListsInstalled = true;
 
   const STORAGE_KEY = 'habitflow-lists-v1';
+  const PHOTO_IMAGE_MAX_EDGE = 1280;
+  const PHOTO_IMAGE_QUALITY = 0.78;
   const DEFAULT_LISTS = [
     { id: 'lists', slug: 'listen', title: 'Listen', type: 'generic', icon: 'list', color: '#59d4cc', description: 'Freie Listen für kleine Sammlungen, Ideen und Dinge, die nicht in Tasks gehören.' },
     { id: 'vouchers', slug: 'gutscheine', title: 'Gutscheine', type: 'voucher', icon: 'ticket', color: '#f6b33f', description: 'Gutscheine, Codes und Fristen ruhig im Blick behalten.' },
@@ -238,8 +240,9 @@
         <form class="hf-list-form" data-form="spot">
           <label class="full"><span>Fotospot</span><input name="title" placeholder="z. B. Gornergrat" required></label>
           <label><span>Tour</span><select name="tourId" ${tourOptions ? '' : 'disabled'}>${tourOptions || '<option>Erst Tour erstellen</option>'}</select></label>
-          <label><span>Bild URL</span><input name="imageUrl" placeholder="https://..."></label>
+          <label class="full hf-photo-upload"><span>Bildanhang</span><input name="image" type="file" accept="image/*"><small>Optional · wird vor dem Speichern komprimiert.</small></label>
           <label class="full"><span>Ort / Notiz</span><input name="location" placeholder="z. B. Sonnenaufgang, 07:30"></label>
+          <p class="hf-list-form-error full" data-spot-error role="status" hidden></p>
           <button class="pill primary" type="submit">${icon('pin')} Spot speichern</button>
         </form>
       </div>
@@ -342,7 +345,7 @@
       event.preventDefault();
       if (form.dataset.form === 'item') saveItem(form);
       if (form.dataset.form === 'tour') saveTour(form);
-      if (form.dataset.form === 'spot') saveSpot(form);
+      if (form.dataset.form === 'spot') void saveSpot(form);
     });
   }
 
@@ -424,17 +427,86 @@
     saveAndSync();
   }
 
-  function saveSpot(form) {
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(reader.error || new Error('Datei konnte nicht gelesen werden.'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function loadImageFromDataUrl(dataUrl) {
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error('Bild konnte nicht verarbeitet werden.'));
+      image.src = dataUrl;
+    });
+  }
+
+  async function compressPhotoImage(file) {
+    const rawDataUrl = await readFileAsDataUrl(file);
+    const image = await loadImageFromDataUrl(rawDataUrl);
+    const maxEdge = Math.max(image.width || 0, image.height || 0);
+    if (!maxEdge) return rawDataUrl;
+    const scale = Math.min(1, PHOTO_IMAGE_MAX_EDGE / maxEdge);
+    const width = Math.max(1, Math.round((image.width || PHOTO_IMAGE_MAX_EDGE) * scale));
+    const height = Math.max(1, Math.round((image.height || PHOTO_IMAGE_MAX_EDGE) * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Bild konnte nicht verarbeitet werden.');
+    context.drawImage(image, 0, 0, width, height);
+    return canvas.toDataURL('image/jpeg', PHOTO_IMAGE_QUALITY);
+  }
+
+  async function saveSpot(form) {
     const data = new FormData(form);
     const tourId = String(data.get('tourId') || '').trim();
     const title = String(data.get('title') || '').trim();
     if (!tourId || !title) return;
+    const imageFile = data.get('image');
+    const hasImage = imageFile && typeof imageFile === 'object' && imageFile.size > 0;
+    const errorElement = form.querySelector('[data-spot-error]');
+    const submitButton = form.querySelector('button[type="submit"]');
+    if (hasImage && !String(imageFile.type || '').startsWith('image/')) {
+      if (errorElement) {
+        errorElement.textContent = 'Bitte eine Bilddatei auswählen.';
+        errorElement.hidden = false;
+      }
+      return;
+    }
+    if (errorElement) {
+      errorElement.textContent = '';
+      errorElement.hidden = true;
+    }
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.textContent = hasImage ? 'Bild wird verarbeitet ...' : 'Spot wird gespeichert ...';
+    }
+    let imageUrl = '';
+    try {
+      imageUrl = hasImage ? await compressPhotoImage(imageFile) : '';
+    } catch (error) {
+      console.warn('[HabitFlow/lists] Fotospot-Bild konnte nicht verarbeitet werden.', error);
+      if (errorElement) {
+        errorElement.textContent = 'Das Bild konnte nicht verarbeitet werden. Bitte eine andere Datei wählen.';
+        errorElement.hidden = false;
+      }
+      if (submitButton) {
+        submitButton.disabled = false;
+        submitButton.innerHTML = `${icon('pin')} Spot speichern`;
+      }
+      return;
+    }
     state.stops.push({
       id: uid('photo-stop'),
       tourId,
       title,
       location: String(data.get('location') || '').trim(),
-      imageUrl: String(data.get('imageUrl') || '').trim(),
+      imageUrl,
       stopOrder: stopsFor(tourId).length + 1,
       isArchived: false,
       createdAt: new Date().toISOString(),
