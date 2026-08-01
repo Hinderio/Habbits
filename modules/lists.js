@@ -41,6 +41,7 @@
   let editingTermId = '';
   let termStudyCategory = '';
   let termStudyIndex = 0;
+  const collapsedTermCategories = new Set();
   let syncLabel = 'lokal';
   let supabaseClient = null;
   let remoteReady = false;
@@ -280,11 +281,15 @@
 
   function renderTermCategory(category) {
     const terms = termsInCategory(category);
+    const isCollapsed = collapsedTermCategories.has(category);
     return `
-      <section class="hf-term-category">
+      <section class="hf-term-category ${isCollapsed ? 'is-collapsed' : ''}">
         <div class="hf-term-category-head">
           <div><small>Kategorie</small><h4>${escapeHtml(category)}</h4><span>${terms.length} ${terms.length === 1 ? 'Begriff' : 'Begriffe'}</span></div>
-          <button class="pill secondary" type="button" data-action="start-term-study" data-category="${escapeHtml(category)}">${icon('book')} Lernmodus</button>
+          <div class="hf-term-category-head-actions">
+            <button class="pill secondary" type="button" data-action="start-term-study" data-category="${escapeHtml(category)}">${icon('book')} Lernmodus</button>
+            <button class="hf-list-icon-btn hf-term-collapse" type="button" data-action="toggle-term-category" data-category="${escapeHtml(category)}" aria-expanded="${String(!isCollapsed)}" aria-label="Kategorie ${escapeHtml(category)} ${isCollapsed ? 'aufklappen' : 'zuklappen'}" title="Kategorie ${isCollapsed ? 'aufklappen' : 'zuklappen'}">${icon('chevronRight')}</button>
+          </div>
         </div>
         <div class="hf-term-list">${terms.map(renderTermRow).join('')}</div>
       </section>
@@ -474,6 +479,14 @@
       }
       if (action === 'cancel-term-edit') {
         editingTermId = '';
+        render();
+        return;
+      }
+      if (action === 'toggle-term-category') {
+        const category = String(event.target.closest('[data-category]')?.dataset.category || '');
+        if (!category) return;
+        if (collapsedTermCategories.has(category)) collapsedTermCategories.delete(category);
+        else collapsedTermCategories.add(category);
         render();
         return;
       }
