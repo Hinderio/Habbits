@@ -185,6 +185,7 @@
     screen.querySelector('#hfListSyncBadge').textContent = syncLabel;
     renderCards(screen.querySelector('#hfListCards'));
     renderDetail(screen.querySelector('#hfListDetail'), list);
+    renderTermStudyPortal();
   }
 
   function renderCards(target) {
@@ -372,6 +373,44 @@
     return subscriptionCost(item) * subscriptionCycle(subscriptionCycleKey(item)).annualFactor;
   }
 
+  function subscriptionIsCancelled(item) {
+    return item?.metadata?.isCancelled === true || String(item?.metadata?.isCancelled || '').toLowerCase() === 'true';
+  }
+
+  function subscriptionContractEnd(item) {
+    const value = String(item?.metadata?.contractEnd || '').trim();
+    return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : '';
+  }
+
+  function subscriptionIsExpired(item, now = new Date()) {
+    if (!subscriptionIsCancelled(item)) return false;
+    const contractEnd = subscriptionContractEnd(item);
+    if (!contractEnd) return false;
+    const end = new Date(`${contractEnd}T23:59:59`);
+    return Number.isFinite(end.getTime()) && end < now;
+  }
+
+  function subscriptionForecastCost(item, now = new Date()) {
+    const regularAnnualCost = subscriptionAnnualCost(item);
+    const contractEnd = subscriptionContractEnd(item);
+    if (!subscriptionIsCancelled(item) || !contractEnd) return regularAnnualCost;
+    const end = new Date(`${contractEnd}T23:59:59`);
+    if (!Number.isFinite(end.getTime()) || end <= now) return 0;
+    const horizon = new Date(now);
+    horizon.setFullYear(horizon.getFullYear() + 1);
+    const effectiveEnd = end < horizon ? end : horizon;
+    const remainingDays = Math.max(0, (effectiveEnd - now) / 86400000);
+    const horizonDays = Math.max(1, (horizon - now) / 86400000);
+    return regularAnnualCost * Math.min(1, remainingDays / horizonDays);
+  }
+
+  function formatContractDate(value) {
+    if (!value) return '';
+    const date = new Date(`${value}T12:00:00`);
+    if (!Number.isFinite(date.getTime())) return '';
+    return new Intl.DateTimeFormat('de-CH', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
+  }
+
   function formatCurrency(value) {
     return new Intl.NumberFormat('de-CH', { style: 'currency', currency: 'CHF', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value) || 0);
   }
@@ -380,17 +419,21 @@
     const items = itemsFor('subscriptions');
     const editingItem = editingSubscriptionId ? items.find(item => item.id === editingSubscriptionId) : null;
     const editingCycle = subscriptionCycleKey(editingItem);
+    const editingCancelled = subscriptionIsCancelled(editingItem);
+    const editingContractEnd = subscriptionContractEnd(editingItem);
     const cycleOptions = SUBSCRIPTION_CYCLES.map(cycle => `<option value="${cycle.value}" ${cycle.value === editingCycle ? 'selected' : ''}>${cycle.label}</option>`).join('');
     return `
       <div class="panel-head">
         <div><p class="eyebrow">${escapeHtml(list.title)}</p><h3>Abos & Kosten im Blick</h3></div>
-        <span class="badge">${items.filter(item => !item.isDone).length} aktiv</span>
+        <span class="badge">${items.filter(item => !item.isDone && !subscriptionIsExpired(item)).length} laufend</span>
       </div>
       ${renderSubscriptionForecast(items)}
       <form class="hf-list-form ${editingItem ? 'is-editing' : ''}" data-form="subscription" data-editing-id="${escapeHtml(editingItem?.id || '')}">
         <label class="full"><span>Abo</span><input name="title" value="${escapeHtml(editingItem?.title || '')}" placeholder="z. B. Adobe Foto Abo" required></label>
         <label><span>Kosten</span><input name="cost" type="number" min="0" step="0.01" inputmode="decimal" value="${editingItem ? escapeHtml(subscriptionCost(editingItem)) : ''}" placeholder="12.90" required></label>
         <label><span>Zyklus</span><select name="cycle" required>${cycleOptions}</select></label>
+        <label class="hf-subscription-cancel"><input name="isCancelled" type="checkbox" data-subscription-cancel-toggle ${editingCancelled ? 'checked' : ''}><span>Gekündigt</span></label>
+        <label><span>Vertragsende</span><input name="contractEnd" type="date" value="${escapeHtml(editingContractEnd)}" ${editingCancelled ? 'required' : ''}></label>
         <label class="full"><span>Notiz</span><textarea name="note" rows="2" placeholder="optional">${escapeHtml(editingItem?.note || '')}</textarea></label>
         <div class="hf-list-form-actions full">
           <button class="pill primary" type="submit">${icon('plus')} ${editingItem ? 'Änderungen speichern' : 'Abo speichern'}</button>
@@ -406,7 +449,7 @@
   function renderSubscriptionForecast(items) {
     const entries = items
       .filter(item => !item.isDone)
-      .map(item => ({ item, annualCost: subscriptionAnnualCost(item) }))
+      .map(item => ({ item, annualCost: subscriptionForecastCost(item) }))
       .filter(entry => entry.annualCost > 0)
       .sort((a, b) => b.annualCost - a.annualCost);
     const total = entries.reduce((sum, entry) => sum + entry.annualCost, 0);
@@ -427,10 +470,14 @@
     }).join('');
     const legend = entries.map((entry, index) => {
       const share = (entry.annualCost / total) * 100;
+      const contractEnd = subscriptionContractEnd(entry.item);
+      const status = subscriptionIsCancelled(entry.item)
+        ? `Gekündigt${contractEnd ? ` · bis ${formatContractDate(contractEnd)}` : ''}`
+        : subscriptionCycle(subscriptionCycleKey(entry.item)).label;
       return `
         <li style="--hf-segment-color:${SUBSCRIPTION_COLORS[index % SUBSCRIPTION_COLORS.length]}">
           <span class="hf-subscription-dot"></span>
-          <div><strong>${escapeHtml(entry.item.title)}</strong><small>${escapeHtml(subscriptionCycle(subscriptionCycleKey(entry.item)).label)} · ${share.toFixed(1)}%</small></div>
+          <div><strong>${escapeHtml(entry.item.title)}</strong><small>${escapeHtml(status)} · ${share.toFixed(1)}%</small></div>
           <b>${escapeHtml(formatCurrency(entry.annualCost))}</b>
         </li>
       `;
@@ -455,10 +502,15 @@
   function renderSubscriptionRow(item) {
     const cycle = subscriptionCycle(subscriptionCycleKey(item));
     const cost = subscriptionCost(item);
+    const contractEnd = subscriptionContractEnd(item);
+    const cancelled = subscriptionIsCancelled(item);
+    const status = cancelled
+      ? `Gekündigt${contractEnd ? ` · Vertragsende ${formatContractDate(contractEnd)}` : ''}`
+      : contractEnd ? `Vertragsende ${formatContractDate(contractEnd)}` : '';
     return `
-      <article class="hf-list-row hf-subscription-row ${item.isDone ? 'is-done' : ''}" data-subscription-id="${escapeHtml(item.id)}">
+      <article class="hf-list-row hf-subscription-row ${item.isDone || subscriptionIsExpired(item) ? 'is-done' : ''}" data-subscription-id="${escapeHtml(item.id)}">
         <button class="hf-list-check" type="button" data-action="toggle-subscription" aria-label="Abo aktiv oder inaktiv setzen">${item.isDone ? icon('check') : ''}</button>
-        <div><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(formatCurrency(cost))} · ${escapeHtml(cycle.label)} · ${escapeHtml(formatCurrency(subscriptionAnnualCost(item)))} / 12 Monate${item.note ? ` · ${item.note}` : ''}</span></div>
+        <div><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml([`${formatCurrency(cost)} · ${cycle.label}`, status, item.note].filter(Boolean).join(' · '))}</span></div>
         <button class="hf-list-icon-btn" type="button" data-action="edit-subscription" aria-label="Abo bearbeiten">${icon('edit')}</button>
         <button class="hf-list-icon-btn danger" type="button" data-action="delete-subscription" aria-label="Abo löschen">${icon('trash')}</button>
       </article>
@@ -526,7 +578,6 @@
       <div class="hf-term-categories ${categories.length ? '' : 'is-empty'}">
         ${categories.length ? categories.map(renderTermCategory).join('') : '<p>Noch keine Begriffe vorhanden.</p>'}
       </div>
-      ${renderTermStudyModal()}
     `;
   }
 
@@ -592,6 +643,25 @@
         </section>
       </div>
     `;
+  }
+
+  function renderTermStudyPortal() {
+    let portal = document.getElementById('hfTermStudyPortal');
+    if (!termStudyCategory) {
+      portal?.remove();
+      return;
+    }
+    if (!portal) {
+      portal = document.createElement('div');
+      portal.id = 'hfTermStudyPortal';
+      document.body.appendChild(portal);
+    }
+    const markup = renderTermStudyModal();
+    if (!markup) {
+      portal.remove();
+      return;
+    }
+    portal.innerHTML = markup;
   }
 
   function renderPhotosDetail(list) {
@@ -827,6 +897,16 @@
       if (form.dataset.form === 'subscription') saveSubscription(form);
       if (form.dataset.form === 'tour') saveTour(form);
       if (form.dataset.form === 'spot') void saveSpot(form);
+    });
+
+    document.addEventListener('change', event => {
+      const toggle = event.target.closest('#screen-lists [data-subscription-cancel-toggle]');
+      if (!toggle) return;
+      const form = toggle.closest('form[data-form="subscription"]');
+      const contractEnd = form?.elements?.contractEnd;
+      if (!contractEnd) return;
+      contractEnd.required = toggle.checked;
+      if (toggle.checked && !contractEnd.value) contractEnd.focus({ preventScroll: true });
     });
 
     document.addEventListener('keydown', event => {
@@ -1082,10 +1162,12 @@
     const cost = parseSubscriptionCost(data.get('cost'));
     const cycleKey = String(data.get('cycle') || '').trim();
     const cycle = subscriptionCycle(cycleKey);
-    if (!title || !SUBSCRIPTION_CYCLES.some(entry => entry.value === cycleKey) || !Number.isFinite(cost)) return;
+    const isCancelled = data.get('isCancelled') === 'on';
+    const contractEnd = String(data.get('contractEnd') || '').trim();
+    if (!title || !SUBSCRIPTION_CYCLES.some(entry => entry.value === cycleKey) || !Number.isFinite(cost) || (isCancelled && !contractEnd)) return;
     const note = String(data.get('note') || '').trim();
     const now = new Date().toISOString();
-    const metadata = { ...(existingItem?.metadata || {}), cost, cycle: cycleKey, metaA: cost, metaB: cycle.label };
+    const metadata = { ...(existingItem?.metadata || {}), cost, cycle: cycleKey, isCancelled, contractEnd, metaA: cost, metaB: cycle.label };
     if (existingItem) {
       Object.assign(existingItem, { title, note, metadata, updatedAt: now });
     } else {
