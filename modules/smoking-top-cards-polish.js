@@ -69,7 +69,7 @@
 
   function smokePausePeriods(state) {
     return (Array.isArray(state?.pausePeriods) ? state.pausePeriods : [])
-      .filter(item => item && !item.is_archived && (item.scope || item.pause_scope) === 'smoke' && item.starts_at)
+      .filter(item => item && !item.is_archived && (item.scope || item.pause_scope || 'smoke') === 'smoke' && item.starts_at)
       .map(item => ({
         start: new Date(item.starts_at).getTime(),
         end: item.ends_at ? new Date(item.ends_at).getTime() : Infinity
@@ -77,30 +77,58 @@
       .filter(item => Number.isFinite(item.start) && item.end >= item.start);
   }
 
-  function bestDaytimePause(rows, state) {
+  function recentDateKeys(days = 28) {
+    const today = new Date();
+    return new Set(Array.from({ length: days }, (_, index) => {
+      const date = new Date(today);
+      date.setDate(today.getDate() - (days - 1 - index));
+      return dateKey(date);
+    }));
+  }
+
+  function activeDaytimePauses(rows, state, days = 28) {
     const pauses = smokePausePeriods(state);
-    let best = null;
-    for (let index = 1; index < rows.length; index += 1) {
-      const previousAt = new Date(rows[index - 1]?.smoked_at).getTime();
-      const currentAt = new Date(rows[index]?.smoked_at).getTime();
+    const keys = recentDateKeys(days);
+    const values = [];
+    const activeRows = rows.filter(item => item && !item.deleted_at && !item.archived_at && !item.is_archived);
+    for (let index = 1; index < activeRows.length; index += 1) {
+      const previous = activeRows[index - 1];
+      const current = activeRows[index];
+      const previousAt = new Date(previous?.smoked_at).getTime();
+      const currentAt = new Date(current?.smoked_at).getTime();
       if (!Number.isFinite(previousAt) || !Number.isFinite(currentAt) || currentAt <= previousAt) continue;
-      if (dateKey(previousAt) !== dateKey(currentAt)) continue;
+      const currentKey = dateKey(currentAt);
+      if (!keys.has(currentKey) || dateKey(previousAt) !== currentKey) continue;
       if (pauses.some(period => period.start < currentAt && period.end > previousAt)) continue;
-      const minutes = Math.round((currentAt - previousAt) / 60000);
-      if (minutes > 0 && (best == null || minutes > best)) best = minutes;
+      const rawMinutes = Math.round((currentAt - previousAt) / 60000);
+      const deducted = Number(current?.scoring_sleep_deducted_minutes);
+      const stored = Number(current?.scoring_interval_minutes);
+      const minutes = Number.isFinite(deducted) && deducted > 0
+        ? Math.max(0, rawMinutes - deducted)
+        : Number.isFinite(stored) && stored >= 0 && stored <= rawMinutes
+          ? stored
+          : rawMinutes;
+      if (minutes > 0) values.push(minutes);
     }
-    return best;
+    return values;
+  }
+
+  function medianOf(values) {
+    const sorted = values.map(Number).filter(Number.isFinite).sort((a, b) => a - b);
+    if (!sorted.length) return null;
+    const middle = Math.floor(sorted.length / 2);
+    return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
   }
 
   function metrics() {
     const state = readState();
     const rows = smokeRows(state);
     const intervals = rows.map(item => Number(item.interval_minutes)).filter(value => Number.isFinite(value) && value > 0).sort((a, b) => a - b);
-    const middle = Math.floor(intervals.length / 2);
-    const median = intervals.length ? (intervals.length % 2 ? intervals[middle] : (intervals[middle - 1] + intervals[middle]) / 2) : null;
+    const activeIntervals = activeDaytimePauses(rows, state, 28);
+    const median = medianOf(activeIntervals);
     const latest = rows[rows.length - 1] || null;
     const pause = latest ? Math.max(0, Math.floor((Date.now() - new Date(latest.smoked_at).getTime()) / 60000)) : null;
-    const bestDaytime = bestDaytimePause(rows, state);
+    const bestDaytime = activeIntervals.length ? Math.max(...activeIntervals) : null;
     const bonusMinutes = median != null && pause != null ? Math.max(0, Math.floor(pause - median)) : 0;
     const bonusProgress = bonusMinutes > 0 && bestDaytime != null
       ? bestDaytime > median
@@ -140,6 +168,10 @@
     if (document.getElementById(STYLE_ID)) return;
     const css = `
 ${pane}>.smoking-layout{align-items:stretch!important;gap:24px!important}
+#screen-smoking .smoking-intelligence-grid{grid-template-columns:minmax(0,1.08fr) minmax(420px,.92fr)!important;align-items:stretch!important}
+#screen-smoking .smoking-intelligence-grid .smoking-visual-panel{height:100%!important}
+#screen-smoking .smoking-intelligence-grid .smoking-visual-summary-grid{align-items:stretch!important}
+#screen-smoking .smoking-intelligence-grid .smoking-visual-summary-grid>article{height:100%!important}
 #screen-smoking .smoke-control-card,${pane} .consumption-history-panel{height:100%!important;padding:clamp(22px,2.2vw,30px)!important;border:1px solid rgba(17,36,58,.08)!important;border-radius:28px!important;background:rgba(255,255,255,.9)!important;background-image:none!important;box-shadow:0 18px 45px rgba(17,36,58,.07)!important;overflow:hidden!important}
 #screen-smoking .smoke-control-card:before,#screen-smoking .smoke-control-card:after{display:none!important;content:none!important}
 #screen-smoking .smoke-control-card{display:grid!important;grid-template-rows:auto minmax(250px,1fr) auto auto;gap:18px!important}
@@ -204,7 +236,8 @@ body:not(.light) #screen-smoking .smoke-control-card,body:not(.light) ${pane} .c
 body:not(.light) #screen-smoking .smoke-ring strong,body:not(.light) #screen-smoking .hf-overview-row,body:not(.light) #screen-smoking .hf-overview-copy strong,body:not(.light) #screen-smoking .hf-overview-metrics strong,body:not(.light) #screen-smoking .hf-recent-row strong,body:not(.light) #screen-smoking .craving-coach-head h4{color:#f4f9ff!important}
 body:not(.light) #screen-smoking .smoke-ring.hf-is-bonus strong{color:#34c9c3!important}
 body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoking .smoke-ring small,body:not(.light) #screen-smoking .hf-overview-copy span,body:not(.light) #screen-smoking .hf-overview-metrics span,body:not(.light) #screen-smoking .hf-recent-row,body:not(.light) #screen-smoking .craving-coach-card p:not(.eyebrow){color:rgba(210,227,244,.68)!important}
-@media(max-width:760px){${pane}>.smoking-layout{grid-template-columns:1fr!important;gap:14px!important}${pane}>.smoking-layout>.mobile-consumption-section{display:block!important}${pane}>.smoking-layout>.mobile-consumption-section>summary{display:none!important}${pane}>.smoking-layout>.mobile-consumption-section>.consumption-history-panel,${pane}>.smoking-layout>.mobile-consumption-section:not([open])>.consumption-history-panel{display:flex!important}#screen-smoking .smoke-control-card,${pane} .consumption-history-panel{height:auto!important;width:100%!important;padding:17px!important;border-radius:26px!important}#screen-smoking .smoke-control-card{grid-template-rows:auto auto auto;gap:15px!important}#screen-smoking .smoke-ring{width:min(100%,238px)!important;padding:25px!important}#screen-smoking .smoke-ring strong{font-size:clamp(3.05rem,15vw,4.2rem)!important;letter-spacing:-.025em!important}#screen-smoking .hf-smoke-progress-bg,#screen-smoking .hf-smoke-progress-value,#screen-smoking .hf-smoke-progress-bonus{stroke-width:8}#screen-smoking .hf-smoking-actions{grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr);gap:10px}#screen-smoking .hf-pause-start-btn,#screen-smoking #recordSmokeBtn.smoke-button{height:52px!important;min-height:52px!important;border-radius:17px!important}#screen-smoking .craving-coach-card{grid-template-columns:42px minmax(0,1fr);padding:14px!important}#screen-smoking .craving-actions{grid-column:1/-1;grid-row:auto;display:grid!important;grid-template-columns:1fr 1fr}#screen-smoking .craving-actions .mini-btn{min-width:0!important}#screen-smoking .hf-overview-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:980px){#screen-smoking .smoking-intelligence-grid{grid-template-columns:1fr!important}}
+@media(max-width:760px){${pane}>.smoking-layout{grid-template-columns:1fr!important;gap:14px!important}${pane}>.smoking-layout>.mobile-consumption-section{display:block!important}${pane}>.smoking-layout>.mobile-consumption-section>summary{display:none!important}${pane}>.smoking-layout>.mobile-consumption-section>.consumption-history-panel,${pane}>.smoking-layout>.mobile-consumption-section:not([open])>.consumption-history-panel{display:flex!important}#screen-smoking .smoke-control-card,${pane} .consumption-history-panel{height:auto!important;width:100%!important;padding:17px!important;border-radius:26px!important}#screen-smoking .smoke-control-card{grid-template-rows:auto auto auto;gap:15px!important}#screen-smoking .smoke-ring{width:min(100%,238px)!important;padding:25px!important}#screen-smoking .smoke-ring strong{font-size:clamp(3.05rem,15vw,4.2rem)!important;letter-spacing:-.025em!important}#screen-smoking .hf-smoke-progress-bg,#screen-smoking .hf-smoke-progress-value,#screen-smoking .hf-smoke-progress-bonus{stroke-width:8}#screen-smoking .hf-smoking-actions{grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr);gap:10px}#screen-smoking .hf-pause-start-btn,#screen-smoking #recordSmokeBtn.smoke-button{height:52px!important;min-height:52px!important;border-radius:17px!important}#screen-smoking .craving-coach-card{grid-template-columns:42px minmax(0,1fr);padding:14px!important}#screen-smoking .craving-actions{grid-column:1/-1;grid-row:auto;display:grid!important;grid-template-columns:1fr 1fr}#screen-smoking .craving-actions .mini-btn{min-width:0!important}#screen-smoking .hf-overview-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}#screen-smoking .smoking-intelligence-grid .smoking-visual-panel{height:auto!important}}
 @media(max-width:380px){#screen-smoking .hf-smoking-actions{grid-template-columns:1fr}}
     `;
     const node = document.createElement('style');
