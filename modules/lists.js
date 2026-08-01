@@ -7,6 +7,14 @@
   const STORAGE_KEY = 'habitflow-lists-v1';
   const PHOTO_IMAGE_MAX_EDGE = 1280;
   const PHOTO_IMAGE_QUALITY = 0.78;
+  const SUBSCRIPTION_CYCLES = [
+    { value: 'daily', label: 'Täglich', annualFactor: 365 },
+    { value: 'weekly', label: 'Wöchentlich', annualFactor: 52 },
+    { value: 'monthly', label: 'Monatlich', annualFactor: 12 },
+    { value: 'quarterly', label: 'Quartalsweise', annualFactor: 4 },
+    { value: 'yearly', label: 'Jährlich', annualFactor: 1 }
+  ];
+  const SUBSCRIPTION_COLORS = ['#34c9c3', '#f6b33f', '#61cbf4', '#ff8fa3', '#8fdc9b', '#9b7de3', '#f08a73', '#5b8def'];
   const DEFAULT_LISTS = [
     { id: 'lists', slug: 'listen', title: 'Listen', type: 'generic', icon: 'list', color: '#59d4cc', description: 'Freie Listen für kleine Sammlungen, Ideen und Dinge, die nicht in Tasks gehören.' },
     { id: 'vouchers', slug: 'gutscheine', title: 'Gutscheine', type: 'voucher', icon: 'ticket', color: '#f6b33f', description: 'Gutscheine, Codes und Fristen ruhig im Blick behalten.' },
@@ -39,9 +47,13 @@
   let editingSpotId = '';
   let editingTourId = '';
   let editingTermId = '';
+  let editingShoppingId = '';
+  let editingSubscriptionId = '';
   let termStudyCategory = '';
   let termStudyIndex = 0;
+  let termStudyOrder = [];
   const collapsedTermCategories = new Set();
+  const collapsedShoppingCategories = new Set();
   let syncLabel = 'lokal';
   let supabaseClient = null;
   let remoteReady = false;
@@ -203,6 +215,14 @@
       target.innerHTML = renderTermsDetail(list);
       return;
     }
+    if (list.id === 'shopping') {
+      target.innerHTML = renderShoppingDetail(list);
+      return;
+    }
+    if (list.id === 'subscriptions') {
+      target.innerHTML = renderSubscriptionsDetail(list);
+      return;
+    }
     if (list.type === 'photos') {
       target.innerHTML = renderPhotosDetail(list);
       return;
@@ -241,8 +261,212 @@
     `;
   }
 
+  function itemCategory(item, fallback = 'Ohne Kategorie') {
+    return String(item?.metadata?.category || fallback).trim() || fallback;
+  }
+
+  function shoppingCategory(item) {
+    return itemCategory(item);
+  }
+
+  function shoppingCategories() {
+    return Array.from(new Set(itemsFor('shopping').map(shoppingCategory))).sort((a, b) => a.localeCompare(b, 'de'));
+  }
+
+  function shoppingItemsInCategory(category) {
+    return itemsFor('shopping').filter(item => shoppingCategory(item) === category);
+  }
+
+  function renderShoppingDetail(list) {
+    const items = itemsFor('shopping');
+    const categories = shoppingCategories();
+    const editingItem = editingShoppingId ? items.find(item => item.id === editingShoppingId) : null;
+    const categoryOptions = categories.map(category => `<option value="${escapeHtml(category)}"></option>`).join('');
+    return `
+      <div class="panel-head">
+        <div><p class="eyebrow">${escapeHtml(list.title)}</p><h3>Einkäufe kategorisiert planen</h3></div>
+        <span class="badge">${items.length} Einträge</span>
+      </div>
+      <form class="hf-list-form ${editingItem ? 'is-editing' : ''}" data-form="shopping" data-editing-id="${escapeHtml(editingItem?.id || '')}">
+        <label><span>Artikel</span><input name="title" value="${escapeHtml(editingItem?.title || '')}" placeholder="z. B. Hafermilch" required></label>
+        <label><span>Kategorie</span><input name="category" list="hfShoppingCategories" value="${escapeHtml(editingItem ? shoppingCategory(editingItem) : '')}" placeholder="Auswählen oder neu eingeben" required><datalist id="hfShoppingCategories">${categoryOptions}</datalist></label>
+        <label><span>Menge</span><input name="amount" value="${escapeHtml(editingItem?.metadata?.amount ?? editingItem?.metadata?.metaA ?? '')}" placeholder="z. B. 2 Stk."></label>
+        <label><span>Laden</span><input name="store" value="${escapeHtml(editingItem?.metadata?.store ?? editingItem?.metadata?.metaB ?? '')}" placeholder="z. B. Migros"></label>
+        <label class="full"><span>Notiz</span><textarea name="note" rows="2" placeholder="optional">${escapeHtml(editingItem?.note || '')}</textarea></label>
+        <div class="hf-list-form-actions full">
+          <button class="pill primary" type="submit">${icon('plus')} ${editingItem ? 'Änderungen speichern' : 'Artikel speichern'}</button>
+          ${editingItem ? '<button class="pill secondary" type="button" data-action="cancel-shopping-edit">Abbrechen</button>' : ''}
+        </div>
+      </form>
+      <div class="hf-term-categories hf-shopping-categories ${categories.length ? '' : 'is-empty'}">
+        ${categories.length ? categories.map(renderShoppingCategory).join('') : '<p>Noch keine Einkäufe vorhanden.</p>'}
+      </div>
+    `;
+  }
+
+  function renderShoppingCategory(category) {
+    const items = shoppingItemsInCategory(category);
+    const isCollapsed = collapsedShoppingCategories.has(category);
+    return `
+      <section class="hf-term-category ${isCollapsed ? 'is-collapsed' : ''}">
+        <div class="hf-term-category-head">
+          <div><small>Kategorie</small><h4>${escapeHtml(category)}</h4><span>${items.length} ${items.length === 1 ? 'Artikel' : 'Artikel'}</span></div>
+          <div class="hf-term-category-head-actions">
+            <button class="hf-list-icon-btn hf-term-collapse" type="button" data-action="toggle-shopping-category" data-category="${escapeHtml(category)}" aria-expanded="${String(!isCollapsed)}" aria-label="Kategorie ${escapeHtml(category)} ${isCollapsed ? 'aufklappen' : 'zuklappen'}" title="Kategorie ${isCollapsed ? 'aufklappen' : 'zuklappen'}">${icon('chevronRight')}</button>
+          </div>
+        </div>
+        <div class="hf-term-list">${items.map(renderShoppingRow).join('')}</div>
+      </section>
+    `;
+  }
+
+  function renderShoppingRow(item) {
+    const amount = item.metadata?.amount ?? item.metadata?.metaA;
+    const store = item.metadata?.store ?? item.metadata?.metaB;
+    const details = [amount, store, item.note].filter(Boolean).join(' · ');
+    return `
+      <article class="hf-list-row ${item.isDone ? 'is-done' : ''}" data-shopping-id="${escapeHtml(item.id)}">
+        <button class="hf-list-check" type="button" data-action="toggle-shopping" aria-label="Status wechseln">${item.isDone ? icon('check') : ''}</button>
+        <div><strong>${escapeHtml(item.title)}</strong>${details ? `<span>${escapeHtml(details)}</span>` : ''}</div>
+        <button class="hf-list-icon-btn" type="button" data-action="edit-shopping" aria-label="Artikel bearbeiten">${icon('edit')}</button>
+        <button class="hf-list-icon-btn danger" type="button" data-action="delete-shopping" aria-label="Artikel löschen">${icon('trash')}</button>
+      </article>
+    `;
+  }
+
+  function parseSubscriptionCost(value) {
+    if (typeof value === 'number') return Number.isFinite(value) && value >= 0 ? value : 0;
+    let normalized = String(value ?? '').trim().replace(/[^0-9,.'-]/g, '').replace(/'/g, '');
+    if (normalized.includes(',') && normalized.includes('.')) {
+      normalized = normalized.lastIndexOf(',') > normalized.lastIndexOf('.')
+        ? normalized.replace(/\./g, '').replace(',', '.')
+        : normalized.replace(/,/g, '');
+    } else {
+      normalized = normalized.replace(',', '.');
+    }
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+  }
+
+  function subscriptionCycleKey(item) {
+    const raw = String(item?.metadata?.cycle ?? item?.metadata?.metaB ?? 'monthly').trim().toLowerCase();
+    const aliases = {
+      daily: 'daily', 'täglich': 'daily', taeglich: 'daily', tag: 'daily',
+      weekly: 'weekly', 'wöchentlich': 'weekly', woechentlich: 'weekly', woche: 'weekly',
+      monthly: 'monthly', monatlich: 'monthly', monat: 'monthly',
+      quarterly: 'quarterly', quartalsweise: 'quarterly', 'vierteljährlich': 'quarterly', vierteljaehrlich: 'quarterly', quartal: 'quarterly',
+      yearly: 'yearly', 'jährlich': 'yearly', jaehrlich: 'yearly', annual: 'yearly', jahr: 'yearly'
+    };
+    return aliases[raw] || 'monthly';
+  }
+
+  function subscriptionCycle(key) {
+    return SUBSCRIPTION_CYCLES.find(cycle => cycle.value === key) || SUBSCRIPTION_CYCLES[2];
+  }
+
+  function subscriptionCost(item) {
+    return parseSubscriptionCost(item?.metadata?.cost ?? item?.metadata?.metaA);
+  }
+
+  function subscriptionAnnualCost(item) {
+    return subscriptionCost(item) * subscriptionCycle(subscriptionCycleKey(item)).annualFactor;
+  }
+
+  function formatCurrency(value) {
+    return new Intl.NumberFormat('de-CH', { style: 'currency', currency: 'CHF', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value) || 0);
+  }
+
+  function renderSubscriptionsDetail(list) {
+    const items = itemsFor('subscriptions');
+    const editingItem = editingSubscriptionId ? items.find(item => item.id === editingSubscriptionId) : null;
+    const editingCycle = subscriptionCycleKey(editingItem);
+    const cycleOptions = SUBSCRIPTION_CYCLES.map(cycle => `<option value="${cycle.value}" ${cycle.value === editingCycle ? 'selected' : ''}>${cycle.label}</option>`).join('');
+    return `
+      <div class="panel-head">
+        <div><p class="eyebrow">${escapeHtml(list.title)}</p><h3>Abos & Kosten im Blick</h3></div>
+        <span class="badge">${items.filter(item => !item.isDone).length} aktiv</span>
+      </div>
+      ${renderSubscriptionForecast(items)}
+      <form class="hf-list-form ${editingItem ? 'is-editing' : ''}" data-form="subscription" data-editing-id="${escapeHtml(editingItem?.id || '')}">
+        <label class="full"><span>Abo</span><input name="title" value="${escapeHtml(editingItem?.title || '')}" placeholder="z. B. Adobe Foto Abo" required></label>
+        <label><span>Kosten</span><input name="cost" type="number" min="0" step="0.01" inputmode="decimal" value="${editingItem ? escapeHtml(subscriptionCost(editingItem)) : ''}" placeholder="12.90" required></label>
+        <label><span>Zyklus</span><select name="cycle" required>${cycleOptions}</select></label>
+        <label class="full"><span>Notiz</span><textarea name="note" rows="2" placeholder="optional">${escapeHtml(editingItem?.note || '')}</textarea></label>
+        <div class="hf-list-form-actions full">
+          <button class="pill primary" type="submit">${icon('plus')} ${editingItem ? 'Änderungen speichern' : 'Abo speichern'}</button>
+          ${editingItem ? '<button class="pill secondary" type="button" data-action="cancel-subscription-edit">Abbrechen</button>' : ''}
+        </div>
+      </form>
+      <div class="hf-list-items ${items.length ? '' : 'is-empty'}">
+        ${items.length ? items.map(renderSubscriptionRow).join('') : '<p>Noch keine Abos vorhanden.</p>'}
+      </div>
+    `;
+  }
+
+  function renderSubscriptionForecast(items) {
+    const entries = items
+      .filter(item => !item.isDone)
+      .map(item => ({ item, annualCost: subscriptionAnnualCost(item) }))
+      .filter(entry => entry.annualCost > 0)
+      .sort((a, b) => b.annualCost - a.annualCost);
+    const total = entries.reduce((sum, entry) => sum + entry.annualCost, 0);
+    if (!entries.length) {
+      return `
+        <section class="hf-subscription-forecast is-empty">
+          <div><p class="eyebrow">12-Monats-Prognose</p><h4>Noch keine Kosten berechenbar</h4></div>
+          <p>Erfasse Kosten und Zyklus eines aktiven Abos, dann erscheint hier die Verteilung.</p>
+        </section>
+      `;
+    }
+    let offset = 0;
+    const segments = entries.map((entry, index) => {
+      const share = (entry.annualCost / total) * 100;
+      const segment = `<circle class="hf-subscription-segment" cx="60" cy="60" r="48" pathLength="100" transform="rotate(-90 60 60)" style="--hf-segment-color:${SUBSCRIPTION_COLORS[index % SUBSCRIPTION_COLORS.length]};stroke-dasharray:${share.toFixed(4)} ${(100 - share).toFixed(4)};stroke-dashoffset:${(-offset).toFixed(4)}"></circle>`;
+      offset += share;
+      return segment;
+    }).join('');
+    const legend = entries.map((entry, index) => {
+      const share = (entry.annualCost / total) * 100;
+      return `
+        <li style="--hf-segment-color:${SUBSCRIPTION_COLORS[index % SUBSCRIPTION_COLORS.length]}">
+          <span class="hf-subscription-dot"></span>
+          <div><strong>${escapeHtml(entry.item.title)}</strong><small>${escapeHtml(subscriptionCycle(subscriptionCycleKey(entry.item)).label)} · ${share.toFixed(1)}%</small></div>
+          <b>${escapeHtml(formatCurrency(entry.annualCost))}</b>
+        </li>
+      `;
+    }).join('');
+    return `
+      <section class="hf-subscription-forecast">
+        <div class="hf-subscription-forecast-head"><div><p class="eyebrow">12-Monats-Prognose</p><h4>Erwartete Abo-Kosten</h4></div><span>${entries.length} aktive ${entries.length === 1 ? 'Position' : 'Positionen'}</span></div>
+        <div class="hf-subscription-forecast-body">
+          <div class="hf-subscription-donut-wrap">
+            <svg class="hf-subscription-donut" viewBox="0 0 120 120" role="img" aria-label="Verteilung der erwarteten Abo-Kosten für zwölf Monate">
+              <circle class="hf-subscription-track" cx="60" cy="60" r="48"></circle>
+              ${segments}
+            </svg>
+            <div class="hf-subscription-total"><small>12 Monate</small><strong>${escapeHtml(formatCurrency(total))}</strong><span>erwartet</span></div>
+          </div>
+          <ul class="hf-subscription-legend">${legend}</ul>
+        </div>
+      </section>
+    `;
+  }
+
+  function renderSubscriptionRow(item) {
+    const cycle = subscriptionCycle(subscriptionCycleKey(item));
+    const cost = subscriptionCost(item);
+    return `
+      <article class="hf-list-row hf-subscription-row ${item.isDone ? 'is-done' : ''}" data-subscription-id="${escapeHtml(item.id)}">
+        <button class="hf-list-check" type="button" data-action="toggle-subscription" aria-label="Abo aktiv oder inaktiv setzen">${item.isDone ? icon('check') : ''}</button>
+        <div><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(formatCurrency(cost))} · ${escapeHtml(cycle.label)} · ${escapeHtml(formatCurrency(subscriptionAnnualCost(item)))} / 12 Monate${item.note ? ` · ${item.note}` : ''}</span></div>
+        <button class="hf-list-icon-btn" type="button" data-action="edit-subscription" aria-label="Abo bearbeiten">${icon('edit')}</button>
+        <button class="hf-list-icon-btn danger" type="button" data-action="delete-subscription" aria-label="Abo löschen">${icon('trash')}</button>
+      </article>
+    `;
+  }
+
   function termCategory(item) {
-    return String(item?.metadata?.category || 'Ohne Kategorie').trim() || 'Ohne Kategorie';
+    return itemCategory(item);
   }
 
   function termCategories() {
@@ -251,6 +475,33 @@
 
   function termsInCategory(category) {
     return itemsFor('terms').filter(item => termCategory(item) === category);
+  }
+
+  function shuffledTermIds(category) {
+    const source = termsInCategory(category).map(term => term.id);
+    const shuffled = source.slice();
+    for (let index = shuffled.length - 1; index > 0; index -= 1) {
+      const swapIndex = Math.floor(Math.random() * (index + 1));
+      [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+    }
+    if (shuffled.length > 1 && shuffled.every((id, index) => id === source[index])) {
+      [shuffled[0], shuffled[1]] = [shuffled[1], shuffled[0]];
+    }
+    return shuffled;
+  }
+
+  function termStudyTerms() {
+    const terms = termsInCategory(termStudyCategory);
+    const byId = new Map(terms.map(term => [term.id, term]));
+    if (!termStudyOrder.length) termStudyOrder = shuffledTermIds(termStudyCategory);
+    const ordered = termStudyOrder.map(id => byId.get(id)).filter(Boolean);
+    terms.forEach(term => {
+      if (!termStudyOrder.includes(term.id)) {
+        termStudyOrder.push(term.id);
+        ordered.push(term);
+      }
+    });
+    return ordered;
   }
 
   function renderTermsDetail(list) {
@@ -310,10 +561,11 @@
 
   function renderTermStudyModal() {
     if (!termStudyCategory) return '';
-    const terms = termsInCategory(termStudyCategory);
+    const terms = termStudyTerms();
     if (!terms.length) {
       termStudyCategory = '';
       termStudyIndex = 0;
+      termStudyOrder = [];
       document.body.classList.remove('hf-term-study-open');
       return '';
     }
@@ -452,8 +704,11 @@
         editingSpotId = '';
         editingTourId = '';
         editingTermId = '';
+        editingShoppingId = '';
+        editingSubscriptionId = '';
         termStudyCategory = '';
         termStudyIndex = 0;
+        termStudyOrder = [];
         document.body.classList.remove('hf-term-study-open');
         persist();
         render();
@@ -482,6 +737,16 @@
         render();
         return;
       }
+      if (action === 'cancel-shopping-edit') {
+        editingShoppingId = '';
+        render();
+        return;
+      }
+      if (action === 'cancel-subscription-edit') {
+        editingSubscriptionId = '';
+        render();
+        return;
+      }
       if (action === 'toggle-term-category') {
         const category = String(event.target.closest('[data-category]')?.dataset.category || '');
         if (!category) return;
@@ -493,7 +758,16 @@
       if (action === 'start-term-study') {
         termStudyCategory = String(event.target.closest('[data-category]')?.dataset.category || '');
         termStudyIndex = 0;
+        termStudyOrder = shuffledTermIds(termStudyCategory);
         document.body.classList.add('hf-term-study-open');
+        render();
+        return;
+      }
+      if (action === 'toggle-shopping-category') {
+        const category = String(event.target.closest('[data-category]')?.dataset.category || '');
+        if (!category) return;
+        if (collapsedShoppingCategories.has(category)) collapsedShoppingCategories.delete(category);
+        else collapsedShoppingCategories.add(category);
         render();
         return;
       }
@@ -509,7 +783,7 @@
       }
       if (action === 'previous-term-card' || action === 'next-term-card') {
         const direction = action === 'next-term-card' ? 1 : -1;
-        const terms = termsInCategory(termStudyCategory);
+        const terms = termStudyTerms();
         termStudyIndex = Math.min(Math.max(0, termStudyIndex + direction), Math.max(0, terms.length - 1));
         render();
         return;
@@ -518,6 +792,18 @@
       const termRow = event.target.closest('[data-term-id]');
       if (termRow && (action === 'edit-term' || action === 'delete-term')) {
         handleTermAction(action, termRow.dataset.termId);
+        return;
+      }
+
+      const shoppingRow = event.target.closest('[data-shopping-id]');
+      if (shoppingRow && ['toggle-shopping', 'edit-shopping', 'delete-shopping'].includes(action)) {
+        handleShoppingAction(action, shoppingRow.dataset.shoppingId);
+        return;
+      }
+
+      const subscriptionRow = event.target.closest('[data-subscription-id]');
+      if (subscriptionRow && ['toggle-subscription', 'edit-subscription', 'delete-subscription'].includes(action)) {
+        handleSubscriptionAction(action, subscriptionRow.dataset.subscriptionId);
         return;
       }
 
@@ -537,6 +823,8 @@
       event.preventDefault();
       if (form.dataset.form === 'item') saveItem(form);
       if (form.dataset.form === 'term') saveTerm(form);
+      if (form.dataset.form === 'shopping') saveShopping(form);
+      if (form.dataset.form === 'subscription') saveSubscription(form);
       if (form.dataset.form === 'tour') saveTour(form);
       if (form.dataset.form === 'spot') void saveSpot(form);
     });
@@ -549,7 +837,7 @@
       }
       if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
         event.preventDefault();
-        const terms = termsInCategory(termStudyCategory);
+        const terms = termStudyTerms();
         const direction = event.key === 'ArrowRight' ? 1 : -1;
         termStudyIndex = Math.min(Math.max(0, termStudyIndex + direction), Math.max(0, terms.length - 1));
         render();
@@ -560,6 +848,7 @@
   function closeTermStudy() {
     termStudyCategory = '';
     termStudyIndex = 0;
+    termStudyOrder = [];
     document.body.classList.remove('hf-term-study-open');
     render();
   }
@@ -600,10 +889,57 @@
       if (termStudyCategory && !termsInCategory(termStudyCategory).length) {
         termStudyCategory = '';
         termStudyIndex = 0;
+        termStudyOrder = [];
         document.body.classList.remove('hf-term-study-open');
       }
       saveAndSync();
     }
+  }
+
+  function focusListForm(formName) {
+    window.requestAnimationFrame(() => {
+      const form = document.querySelector(`#screen-lists form[data-form="${formName}"]`);
+      form?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const titleInput = form?.elements?.title;
+      titleInput?.focus({ preventScroll: true });
+      titleInput?.select();
+    });
+  }
+
+  function handleShoppingAction(action, id) {
+    const item = state.items.find(entry => entry.id === id && entry.listId === 'shopping' && !entry.isArchived);
+    if (!item) return;
+    if (action === 'edit-shopping') {
+      editingShoppingId = id;
+      render();
+      focusListForm('shopping');
+      return;
+    }
+    if (action === 'toggle-shopping') item.isDone = !item.isDone;
+    if (action === 'delete-shopping') {
+      item.isArchived = true;
+      if (editingShoppingId === id) editingShoppingId = '';
+    }
+    item.updatedAt = new Date().toISOString();
+    saveAndSync();
+  }
+
+  function handleSubscriptionAction(action, id) {
+    const item = state.items.find(entry => entry.id === id && entry.listId === 'subscriptions' && !entry.isArchived);
+    if (!item) return;
+    if (action === 'edit-subscription') {
+      editingSubscriptionId = id;
+      render();
+      focusListForm('subscription');
+      return;
+    }
+    if (action === 'toggle-subscription') item.isDone = !item.isDone;
+    if (action === 'delete-subscription') {
+      item.isArchived = true;
+      if (editingSubscriptionId === id) editingSubscriptionId = '';
+    }
+    item.updatedAt = new Date().toISOString();
+    saveAndSync();
   }
 
   function handleTourAction(action, id) {
@@ -697,6 +1033,76 @@
       });
     }
     if (!existingTermId || editingTermId === existingTermId) editingTermId = '';
+    form.reset();
+    saveAndSync();
+  }
+
+  function saveShopping(form) {
+    const data = new FormData(form);
+    const existingId = String(form.dataset.editingId || '').trim();
+    const existingItem = existingId ? state.items.find(item => item.id === existingId && item.listId === 'shopping' && !item.isArchived) : null;
+    const title = String(data.get('title') || '').trim();
+    const category = String(data.get('category') || '').trim();
+    if (!title || !category) return;
+    const amount = String(data.get('amount') || '').trim();
+    const store = String(data.get('store') || '').trim();
+    const note = String(data.get('note') || '').trim();
+    const now = new Date().toISOString();
+    if (existingItem) {
+      Object.assign(existingItem, {
+        title,
+        note,
+        metadata: { ...(existingItem.metadata || {}), category, amount, store, metaA: amount, metaB: store },
+        updatedAt: now
+      });
+    } else {
+      state.items.push({
+        id: uid('shopping-item'),
+        listId: 'shopping',
+        title,
+        note,
+        metadata: { category, amount, store, metaA: amount, metaB: store },
+        isDone: false,
+        isArchived: false,
+        sortRank: Date.now(),
+        createdAt: now,
+        updatedAt: now
+      });
+    }
+    editingShoppingId = '';
+    form.reset();
+    saveAndSync();
+  }
+
+  function saveSubscription(form) {
+    const data = new FormData(form);
+    const existingId = String(form.dataset.editingId || '').trim();
+    const existingItem = existingId ? state.items.find(item => item.id === existingId && item.listId === 'subscriptions' && !item.isArchived) : null;
+    const title = String(data.get('title') || '').trim();
+    const cost = parseSubscriptionCost(data.get('cost'));
+    const cycleKey = String(data.get('cycle') || '').trim();
+    const cycle = subscriptionCycle(cycleKey);
+    if (!title || !SUBSCRIPTION_CYCLES.some(entry => entry.value === cycleKey) || !Number.isFinite(cost)) return;
+    const note = String(data.get('note') || '').trim();
+    const now = new Date().toISOString();
+    const metadata = { ...(existingItem?.metadata || {}), cost, cycle: cycleKey, metaA: cost, metaB: cycle.label };
+    if (existingItem) {
+      Object.assign(existingItem, { title, note, metadata, updatedAt: now });
+    } else {
+      state.items.push({
+        id: uid('subscription'),
+        listId: 'subscriptions',
+        title,
+        note,
+        metadata,
+        isDone: false,
+        isArchived: false,
+        sortRank: Date.now(),
+        createdAt: now,
+        updatedAt: now
+      });
+    }
+    editingSubscriptionId = '';
     form.reset();
     saveAndSync();
   }
