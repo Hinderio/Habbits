@@ -25,6 +25,198 @@
   font-weight: 480 !important;
 }
 
+/* Habit story cards: matching icons and a log-based flip chart. */
+#screen-habits .habit-story-card[data-habit-story-enhanced="true"] {
+  display: block;
+  min-height: 286px;
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  perspective: 1100px;
+  transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+}
+
+#screen-habits .habit-story-card[data-habit-story-enhanced="true"]:hover,
+#screen-habits .habit-story-card[data-habit-story-enhanced="true"]:focus-visible {
+  border-color: rgba(74, 215, 209, .34);
+  box-shadow: 0 16px 34px rgba(42, 78, 104, .1);
+  outline: none;
+}
+
+#screen-habits .habit-story-flip-inner {
+  display: grid;
+  width: 100%;
+  min-height: inherit;
+  transform-style: preserve-3d;
+  transition: transform .46s cubic-bezier(.2, .72, .2, 1);
+}
+
+#screen-habits .habit-story-card.is-flipped .habit-story-flip-inner {
+  transform: rotateY(180deg);
+}
+
+#screen-habits .habit-story-face {
+  grid-area: 1 / 1;
+  width: 100%;
+  min-width: 0;
+  min-height: inherit;
+  padding: 16px;
+  box-sizing: border-box;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+#screen-habits .habit-story-front {
+  position: relative;
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding-bottom: 52px;
+}
+
+#screen-habits .habit-story-back {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  transform: rotateY(180deg);
+  background: rgba(74, 215, 209, .055);
+}
+
+#screen-habits .habit-story-switch-indicator {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 13px;
+  color: var(--primary);
+  background: rgba(74, 215, 209, .12);
+  border: 1px solid rgba(74, 215, 209, .16);
+}
+
+#screen-habits .habit-story-switch-indicator .ui-icon {
+  width: 18px;
+  height: 18px;
+}
+
+#screen-habits .habit-story-chart-head {
+  position: relative;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 34px;
+  gap: 10px;
+  align-items: center;
+}
+
+#screen-habits .habit-story-chart-head .habit-story-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 15px;
+}
+
+#screen-habits .habit-story-chart-head h4 {
+  margin-top: 2px;
+  font-size: 1rem;
+}
+
+#screen-habits .habit-story-chart-head .habit-story-switch-indicator {
+  position: static;
+}
+
+#screen-habits .habit-story-chart-shell {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+#screen-habits .habit-story-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 126px;
+  overflow: visible;
+}
+
+#screen-habits .habit-story-chart-grid {
+  stroke: rgba(95, 119, 146, .17);
+  stroke-width: 1;
+}
+
+#screen-habits .habit-story-chart-line {
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+#screen-habits .habit-story-chart-dot {
+  fill: var(--card);
+  stroke: var(--primary);
+  stroke-width: 4;
+}
+
+#screen-habits .habit-story-chart-label {
+  fill: var(--muted);
+  font-size: 18px;
+  font-weight: 760;
+}
+
+#screen-habits .habit-story-chart-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(95, 119, 146, .14);
+}
+
+#screen-habits .habit-story-chart-summary span,
+#screen-habits .habit-story-chart-empty span {
+  color: var(--muted);
+  font-size: .82rem;
+}
+
+#screen-habits .habit-story-chart-summary strong {
+  font-size: 1.05rem;
+}
+
+#screen-habits .habit-story-chart-empty {
+  min-height: 170px;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 8px;
+  text-align: center;
+  color: var(--primary);
+}
+
+#screen-habits .habit-story-chart-empty .ui-icon {
+  width: 36px;
+  height: 36px;
+}
+
+#screen-habits .habit-story-chart-empty strong {
+  color: var(--text);
+}
+
+body.light #screen-habits .habit-story-back {
+  background: rgba(74, 215, 209, .075);
+}
+
+@media (max-width: 760px) {
+  #screen-habits .habit-story-card[data-habit-story-enhanced="true"] {
+    min-height: 264px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #screen-habits .habit-story-flip-inner {
+    transition: none;
+  }
+}
+
 #cigaretteHeatmapVisual {
   --hf-smoke-level-1: rgba(143, 240, 167, .38);
   --hf-smoke-level-2: rgba(74, 215, 209, .36);
