@@ -30,6 +30,9 @@
 .hf-list-form .hf-list-icon{width:17px;height:17px}
 .hf-list-form.is-editing{border-color:rgba(74,215,209,.3);box-shadow:inset 0 0 0 1px rgba(74,215,209,.08)}
 .hf-list-form-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.hf-subscription-cancel{min-height:52px;padding:12px 14px;display:flex!important;flex-direction:row!important;align-items:center;gap:11px;border:1px solid rgba(74,215,209,.18);border-radius:18px;background:rgba(74,215,209,.07)}
+.hf-subscription-cancel input{width:20px;height:20px;flex:0 0 20px;margin:0;padding:0;accent-color:var(--primary);box-shadow:none}
+.hf-subscription-cancel span{color:var(--text)!important;font-size:.9rem!important;font-weight:850!important;text-transform:none!important;letter-spacing:0!important}
 .hf-photo-upload input[type="file"]{width:100%;padding:13px 14px;border-radius:18px;border:1px dashed rgba(74,215,209,.28);background:rgba(74,215,209,.06);color:var(--text)}
 .hf-photo-upload small{display:block;color:var(--muted);font-size:.78rem;font-weight:760;line-height:1.35}
 .hf-list-form-error{margin:0;color:#ff8f8f;font-size:.82rem;font-weight:800;line-height:1.35}
@@ -91,6 +94,7 @@
 .hf-term-copy span{display:-webkit-box;margin-top:4px;color:var(--muted);font-size:.86rem;line-height:1.4;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .hf-term-actions{display:flex;align-items:center;gap:7px}
 .hf-term-study-open{overflow:hidden}
+#hfTermStudyPortal{position:relative;z-index:120}
 .hf-term-study-modal{position:fixed;inset:0;z-index:120;display:grid;place-items:center;padding:18px;background:rgba(3,8,13,.72);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
 .hf-term-study-shell{width:min(680px,100%);max-height:calc(100svh - 36px);overflow:auto;padding:18px;border-radius:28px;background:var(--card-strong);border:1px solid var(--card-border);box-shadow:var(--shadow)}
 .hf-term-study-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:16px}
@@ -146,6 +150,7 @@ body.light .hf-term-row{background:rgba(255,255,255,.68);border-color:rgba(17,36
 body.light .hf-term-study-modal{background:rgba(223,234,246,.7)}
 body.light .hf-subscription-forecast{border-color:rgba(17,36,58,.1)}
 body.light .hf-subscription-legend li{border-color:rgba(17,36,58,.08)}
+body.light .hf-subscription-cancel{background:rgba(74,215,209,.08);border-color:rgba(13,151,149,.18)}
 .bottom-nav{grid-template-columns:repeat(9,minmax(0,1fr)) !important;width:min(96vw,1080px)}
 @media (max-width:860px){
   .hf-list-hero{flex-direction:column}
