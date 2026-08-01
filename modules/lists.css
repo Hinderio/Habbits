@@ -26,7 +26,7 @@
 .hf-list-form label{display:grid;gap:7px}
 .hf-list-form label span{font-size:.78rem;text-transform:uppercase;letter-spacing:.11em;color:var(--muted);font-weight:900}
 .hf-list-form .full{grid-column:1/-1}
-.hf-list-form .pill{justify-self:start;display:inline-flex;align-items:center;gap:8px}
+.hf-list-form .pill{justify-self:start;align-self:flex-start;display:inline-flex;align-items:center;gap:8px}
 .hf-list-form .hf-list-icon{width:17px;height:17px}
 .hf-list-form.is-editing{border-color:rgba(74,215,209,.3);box-shadow:inset 0 0 0 1px rgba(74,215,209,.08)}
 .hf-list-form-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
