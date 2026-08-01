@@ -32,6 +32,7 @@
   let state = readState();
   let activeListId = state.activeListId || 'photos';
   let editingSpotId = '';
+  let editingTourId = '';
   let syncLabel = 'lokal';
   let supabaseClient = null;
   let remoteReady = false;
@@ -225,9 +226,13 @@
   function renderPhotosDetail(list) {
     const tours = state.tours.filter(tour => !tour.isArchived).sort((a, b) => (a.sortRank || 0) - (b.sortRank || 0));
     const activeTours = tours.length ? tours : [{ id: 'demo-tour', title: 'Valais Route', region: 'Valais', demo: true }];
+    const editingTour = editingTourId ? state.tours.find(tour => tour.id === editingTourId && !tour.isArchived) : null;
     const editingSpot = editingSpotId ? state.stops.find(stop => stop.id === editingSpotId && !stop.isArchived) : null;
     const tourOptions = tours.map(tour => `<option value="${escapeHtml(tour.id)}" ${tour.id === editingSpot?.tourId ? 'selected' : ''}>${escapeHtml(tour.title)}</option>`).join('');
-    const imageHint = editingSpot?.imageUrl
+    const coverImageHint = editingTour?.coverUrl
+      ? 'Optional · neues Bild ersetzt das vorhandene Cover.'
+      : 'Optional · wird vor dem Speichern komprimiert.';
+    const spotImageHint = editingSpot?.imageUrl
       ? 'Optional · neues Bild ersetzt den vorhandenen Anhang.'
       : 'Optional · wird vor dem Speichern komprimiert.';
     return `
@@ -236,16 +241,21 @@
         <span class="badge">${state.stops.filter(stop => !stop.isArchived).length} Spots</span>
       </div>
       <div class="hf-photo-grid">
-        <form class="hf-list-form" data-form="tour">
-          <label class="full"><span>Tour</span><input name="title" placeholder="z. B. Valais Winterroute" required></label>
-          <label><span>Region</span><input name="region" placeholder="z. B. Valais"></label>
-          <label><span>Cover URL</span><input name="coverUrl" placeholder="https://..."></label>
-          <button class="pill primary" type="submit">${icon('route')} Tour erstellen</button>
+        <form class="hf-list-form ${editingTour ? 'is-editing' : ''}" data-form="tour" data-editing-id="${escapeHtml(editingTour?.id || '')}">
+          <label class="full"><span>Tour</span><input name="title" value="${escapeHtml(editingTour?.title || '')}" placeholder="z. B. Valais Winterroute" required></label>
+          <label class="full"><span>Region</span><input name="region" value="${escapeHtml(editingTour?.region || '')}" placeholder="z. B. Valais"></label>
+          <label class="full hf-photo-upload"><span>Cover-Bild</span><input name="coverImage" type="file" accept="image/*"><small>${coverImageHint}</small></label>
+          <label class="full"><span>Notiz</span><input name="note" value="${escapeHtml(editingTour?.note || '')}" placeholder="optional"></label>
+          <p class="hf-list-form-error full" data-tour-error role="status" hidden></p>
+          <div class="hf-list-form-actions full">
+            <button class="pill primary" type="submit">${icon('route')} ${editingTour ? 'Änderungen speichern' : 'Tour erstellen'}</button>
+            ${editingTour ? '<button class="pill secondary" type="button" data-action="cancel-tour-edit">Abbrechen</button>' : ''}
+          </div>
         </form>
         <form class="hf-list-form ${editingSpot ? 'is-editing' : ''}" data-form="spot" data-editing-id="${escapeHtml(editingSpot?.id || '')}">
           <label class="full"><span>Fotospot</span><input name="title" value="${escapeHtml(editingSpot?.title || '')}" placeholder="z. B. Gornergrat" required></label>
           <label><span>Tour</span><select name="tourId" ${tourOptions ? '' : 'disabled'}>${tourOptions || '<option>Erst Tour erstellen</option>'}</select></label>
-          <label class="full hf-photo-upload"><span>Bildanhang</span><input name="image" type="file" accept="image/*"><small>${imageHint}</small></label>
+          <label class="full hf-photo-upload"><span>Bildanhang</span><input name="image" type="file" accept="image/*"><small>${spotImageHint}</small></label>
           <label class="full"><span>Ort / Notiz</span><input name="location" value="${escapeHtml(editingSpot?.location || '')}" placeholder="z. B. Sonnenaufgang, 07:30"></label>
           <p class="hf-list-form-error full" data-spot-error role="status" hidden></p>
           <div class="hf-list-form-actions full">
@@ -326,6 +336,7 @@
       if (listOpen) {
         activeListId = listOpen.dataset.listOpen;
         editingSpotId = '';
+        editingTourId = '';
         persist();
         render();
         document.getElementById('hfListDetail')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -340,6 +351,11 @@
       const action = event.target.closest('[data-action]')?.dataset.action;
       if (action === 'cancel-spot-edit') {
         editingSpotId = '';
+        render();
+        return;
+      }
+      if (action === 'cancel-tour-edit') {
+        editingTourId = '';
         render();
         return;
       }
@@ -359,7 +375,7 @@
       if (!form) return;
       event.preventDefault();
       if (form.dataset.form === 'item') saveItem(form);
-      if (form.dataset.form === 'tour') saveTour(form);
+      if (form.dataset.form === 'tour') void saveTour(form);
       if (form.dataset.form === 'spot') void saveSpot(form);
     });
   }
@@ -381,14 +397,23 @@
   function handleTourAction(action, id) {
     const tour = state.tours.find(entry => entry.id === id);
     if (!tour) return;
+    if (action === 'edit-tour') {
+      editingTourId = id;
+      editingSpotId = '';
+      render();
+      window.requestAnimationFrame(() => {
+        const form = document.querySelector('#screen-lists form[data-form="tour"]');
+        form?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const titleInput = form?.elements?.title;
+        titleInput?.focus({ preventScroll: true });
+        titleInput?.select();
+      });
+      return;
+    }
     if (action === 'delete-tour') {
       tour.isArchived = true;
       state.stops.filter(stop => stop.tourId === id).forEach(stop => { stop.isArchived = true; });
-    }
-    if (action === 'edit-tour') {
-      const title = window.prompt('Tour bearbeiten', tour.title);
-      if (title === null) return;
-      tour.title = title.trim() || tour.title;
+      if (editingTourId === id) editingTourId = '';
     }
     tour.updatedAt = new Date().toISOString();
     saveAndSync();
@@ -398,6 +423,7 @@
     const stop = state.stops.find(entry => entry.id === id);
     if (!stop) return;
     editingSpotId = id;
+    editingTourId = '';
     render();
     window.requestAnimationFrame(() => {
       const form = document.querySelector('#screen-lists form[data-form="spot"]');
@@ -428,20 +454,65 @@
     saveAndSync();
   }
 
-  function saveTour(form) {
+  async function saveTour(form) {
     const data = new FormData(form);
+    const existingTourId = String(form.dataset.editingId || '').trim();
+    const existingTour = existingTourId ? state.tours.find(tour => tour.id === existingTourId && !tour.isArchived) : null;
     const title = String(data.get('title') || '').trim();
     if (!title) return;
-    state.tours.push({
-      id: uid('photo-tour'),
-      title,
-      region: String(data.get('region') || '').trim(),
-      coverUrl: String(data.get('coverUrl') || '').trim(),
-      sortRank: Date.now(),
-      isArchived: false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    });
+    const coverFile = data.get('coverImage');
+    const hasCover = coverFile && typeof coverFile === 'object' && coverFile.size > 0;
+    const errorElement = form.querySelector('[data-tour-error]');
+    const submitButton = form.querySelector('button[type="submit"]');
+    if (hasCover && !String(coverFile.type || '').startsWith('image/')) {
+      if (errorElement) {
+        errorElement.textContent = 'Bitte eine Bilddatei auswählen.';
+        errorElement.hidden = false;
+      }
+      return;
+    }
+    if (errorElement) {
+      errorElement.textContent = '';
+      errorElement.hidden = true;
+    }
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.textContent = hasCover ? 'Bild wird verarbeitet ...' : 'Tour wird gespeichert ...';
+    }
+    let coverUrl = existingTour?.coverUrl || '';
+    try {
+      if (hasCover) coverUrl = await compressPhotoImage(coverFile);
+    } catch (error) {
+      console.warn('[HabitFlow/lists] Tour-Cover konnte nicht verarbeitet werden.', error);
+      if (errorElement) {
+        errorElement.textContent = 'Das Bild konnte nicht verarbeitet werden. Bitte eine andere Datei wählen.';
+        errorElement.hidden = false;
+      }
+      if (submitButton) {
+        submitButton.disabled = false;
+        submitButton.innerHTML = `${icon('route')} ${existingTour ? 'Änderungen speichern' : 'Tour erstellen'}`;
+      }
+      return;
+    }
+    const now = new Date().toISOString();
+    const region = String(data.get('region') || '').trim();
+    const note = String(data.get('note') || '').trim();
+    if (existingTour) {
+      Object.assign(existingTour, { title, region, note, coverUrl, updatedAt: now });
+    } else {
+      state.tours.push({
+        id: uid('photo-tour'),
+        title,
+        region,
+        note,
+        coverUrl,
+        sortRank: Date.now(),
+        isArchived: false,
+        createdAt: now,
+        updatedAt: now
+      });
+    }
+    if (!existingTourId || editingTourId === existingTourId) editingTourId = '';
     form.reset();
     saveAndSync();
   }
