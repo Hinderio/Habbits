@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v239-fitness-equal-row-grid';
+const CACHE_NAME = 'habitflow-v240-beauty-pass';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
