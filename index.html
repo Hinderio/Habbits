@@ -152,13 +152,17 @@
         </details>
 
         <details class="mobile-dashboard-section" open>
-          <summary><span>Trends & XP</span><small>Analyse öffnen</small></summary>
+          <summary><span>Habit-Rhythmus & Trends</span><small>14 Tage synchron</small></summary>
         <div class="dashboard-chart-toolbar glass" aria-label="Zeitraum der Dashboard-Diagramme">
           <button id="chartPrevWindowBtn" class="mini-btn" type="button">← Früher</button>
           <span id="chartRangeLabel" class="chart-range-label">Letzte 14 Tage</span>
           <button id="chartTodayWindowBtn" class="mini-btn primary" type="button">Heute</button>
           <button id="chartNextWindowBtn" class="mini-btn" type="button">Später →</button>
         </div>
+        <section class="panel glass dashboard-history-heatmap">
+          <div class="panel-head"><div><p class="eyebrow">Heatmap</p><h3>Habit-Rhythmus</h3></div><span id="habitHeatmapRangeBadge" class="subtle">14 Tage</span></div>
+          <div id="habitHeatmap" class="habit-heatmap"></div>
+        </section>
         <div class="grid two-columns">
           <section class="panel glass dashboard-chart-panel">
             <div class="panel-head chart-head">
@@ -172,14 +176,6 @@
             <div class="chart-wrap"><canvas id="pointsChart"></canvas></div>
           </section>
         </div>
-        </details>
-
-        <details class="mobile-dashboard-section" open>
-          <summary><span>Habit-Rhythmus</span><small>14 Tage Heatmap</small></summary>
-        <section class="panel glass">
-          <div class="panel-head"><div><p class="eyebrow">Heatmap</p><h3>Habit-Rhythmus</h3></div><span class="subtle">14 Tage</span></div>
-          <div id="habitHeatmap" class="habit-heatmap"></div>
-        </section>
         </details>
 
         <details class="mobile-dashboard-section" open>
