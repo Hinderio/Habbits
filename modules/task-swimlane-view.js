@@ -201,7 +201,7 @@
     const mark = escapeHtml(initials(lane.title, lane.type === 'neutral' ? '–' : 'KA'));
     const type = lane.type === 'project' ? 'Projekt' : lane.type === 'category' ? 'Kategorie' : 'Ohne Zuordnung';
     const markHtml = lane.type === 'project'
-      ? `<button class="task-swimlane-lane-mark" type="button" data-action="open-project-detail" data-id="${escapeHtml(lane.entityId)}" title="Projekt öffnen">${mark}</button>`
+      ? `<button class="task-swimlane-lane-mark is-project" type="button" data-action="open-project-detail" data-id="${escapeHtml(lane.entityId)}" title="Projekt öffnen">${mark}</button>`
       : `<span class="task-swimlane-lane-mark">${mark}</span>`;
     return `<div class="task-swimlane-row-label" style="--lane-color:${escapeHtml(lane.color)}">${markHtml}<div class="task-swimlane-lane-copy"><strong>${escapeHtml(lane.title)}</strong><small>${type}</small><span class="task-swimlane-dots" title="Gefüllt: aktiv · Rahmen: Backlog">${countDots(lane, rangedTasks)}</span></div></div>`;
   }
@@ -262,7 +262,8 @@
     });
     const line = points.map(point => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ');
     const area = `M ${points[0].x.toFixed(1)} 86 L ${points.map(point => `${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(' L ')} L ${points.at(-1).x.toFixed(1)} 86 Z`;
-    const html = `<svg viewBox="0 0 1000 92" preserveAspectRatio="none" role="img" aria-label="Aufwandsvolumen pro Woche"><line class="task-volume-grid" x1="0" y1="86" x2="1000" y2="86"></line><line class="task-volume-grid" x1="0" y1="50" x2="1000" y2="50"></line><path class="task-volume-area" d="${area}"></path><polyline class="task-volume-line" points="${line}"></polyline>${points.map(point => `<circle class="task-volume-point" cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="4"><title>${point.value} Aufwand</title></circle>`).join('')}</svg>`;
+    const markers = points.map(point => `<i class="task-volume-point" style="left:${(point.x / 10).toFixed(2)}%;top:${((point.y / 92) * 100).toFixed(2)}%" title="${point.value} Aufwand"></i>`).join('');
+    const html = `<div class="task-volume-plot"><svg viewBox="0 0 1000 92" preserveAspectRatio="none" role="img" aria-label="Aufwandsvolumen pro Woche"><line class="task-volume-grid" vector-effect="non-scaling-stroke" x1="0" y1="86" x2="1000" y2="86"></line><line class="task-volume-grid" vector-effect="non-scaling-stroke" x1="0" y1="50" x2="1000" y2="50"></line><path class="task-volume-area" d="${area}"></path><polyline class="task-volume-line" vector-effect="non-scaling-stroke" points="${line}"></polyline></svg><span class="task-volume-points" aria-hidden="true">${markers}</span></div>`;
     return { total, peak: max, html };
   }
 
@@ -286,10 +287,13 @@
     const currentWeeks = Math.round(rangeDays() / 7);
     const canvasWidth = Math.max(920, currentWeeks * 112);
     root.className = 'task-swimlane-view';
+    const volumeHtml = `<section class="task-swimlane-volume"><div class="task-swimlane-volume-copy"><p class="eyebrow">Volumen</p><strong>${volume.total} Aufwand</strong><span>Spitze ${volume.peak} pro Woche</span></div><div class="task-swimlane-volume-chart">${volume.html}</div></section>`;
+    const timelineHtml = model.lanes.length
+      ? `<div class="task-swimlane-scroll"><div class="task-swimlane-canvas" style="width:${canvasWidth}px">${volumeHtml}${buildAxis()}${groupRows(model.lanes)}</div></div>`
+      : `${volumeHtml}<div class="task-swimlane-empty">Noch keine offenen Aufgaben für die Timeline vorhanden.</div>`;
     root.innerHTML = `<header class="task-swimlane-head"><div><p class="eyebrow">Planung</p><h3>Task-Timeline</h3></div><div class="task-swimlane-summary"><span><i></i>${dated.length - backlog} aktiv</span><span class="is-outline"><i></i>${backlog} Backlog</span><span>${model.lanes.length} Swimlanes</span></div></header>
       <div class="task-swimlane-controls"><div class="task-swimlane-date-fields"><label>Von<input type="date" data-swimlane-date="start" value="${dateKey(ui.start)}"></label><label>Bis<input type="date" data-swimlane-date="end" value="${dateKey(ui.end)}"></label></div><div class="task-swimlane-presets" aria-label="Zeitraum"><button type="button" data-swimlane-weeks="4" class="${currentWeeks === 4 ? 'is-active' : ''}">4 Wo.</button><button type="button" data-swimlane-weeks="8" class="${currentWeeks === 8 ? 'is-active' : ''}">8 Wo.</button><button type="button" data-swimlane-weeks="12" class="${currentWeeks === 12 ? 'is-active' : ''}">12 Wo.</button><button type="button" data-swimlane-weeks="24" class="${currentWeeks === 24 ? 'is-active' : ''}">24 Wo.</button></div><div class="task-swimlane-nav"><button type="button" data-swimlane-shift="-1" aria-label="Früher">←</button><button type="button" data-swimlane-today class="is-primary">Heute</button><button type="button" data-swimlane-shift="1" aria-label="Später">→</button></div></div>
-      <section class="task-swimlane-volume"><div class="task-swimlane-volume-copy"><p class="eyebrow">Volumen</p><strong>${volume.total} Aufwand</strong><span>Spitze ${volume.peak} pro Woche</span></div><div class="task-swimlane-volume-chart">${volume.html}</div></section>
-      ${model.lanes.length ? `<div class="task-swimlane-scroll"><div class="task-swimlane-canvas" style="width:${canvasWidth}px">${buildAxis()}${groupRows(model.lanes)}</div></div>` : '<div class="task-swimlane-empty">Noch keine offenen Aufgaben für die Timeline vorhanden.</div>'}
+      ${timelineHtml}
       ${unscheduled(model.lanes)}${before || after ? `<div class="task-swimlane-range-note">Ausserhalb des Ausschnitts: ${before} früher · ${after} später. Über den Datenslicer kannst du sie direkt einblenden.</div>` : ''}`;
   }
 
