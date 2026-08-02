@@ -3808,9 +3808,17 @@ body.light .task-detail-facts article,body.light .task-detail-image{background:r
 @media (min-width:1181px){
   .fitness-journey-grid{align-items:stretch}
   .fitness-journey-grid>.mobile-fitness-section,
-  .fitness-intelligence-grid>.mobile-fitness-section{height:100%}
+  .fitness-intelligence-grid>.mobile-fitness-section{
+    display:grid;
+    grid-template-rows:minmax(0,1fr);
+    align-self:stretch;
+    height:100%;
+  }
   .fitness-journey-grid>.mobile-fitness-section>.fitness-journey-card,
-  .fitness-intelligence-grid>.mobile-fitness-section>.fitness-intelligence-card{height:100%}
+  .fitness-intelligence-grid>.mobile-fitness-section>.fitness-intelligence-card{
+    align-self:stretch;
+    height:100%;
+  }
 }
 .fitness-intelligence-card{
   min-width:0;
