@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v236-fitness-track-containment';
+const CACHE_NAME = 'habitflow-v237-training-compass-layout';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
