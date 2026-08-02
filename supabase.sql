@@ -123,6 +123,7 @@ create table if not exists public.tasks (
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   title text not null,
   description text,
+  category text,
   effort smallint not null default 3 check (effort between 1 and 5),
   priority text not null default 'medium' check (priority in ('low','medium','high','urgent')),
   status text not null default 'open' check (status in ('open','in_progress','done','archived')),
