@@ -900,6 +900,7 @@
   let coachSession = loadCoachSession();
   let morningRoutineSession = loadMorningRoutineSession();
   let editingSmokeId = null;
+  let editingAlcoholUnitId = null;
   let editingHabitId = null;
   let editingHabitEntryId = null;
   let expandedMeditationHabitId = null;
@@ -1473,6 +1474,9 @@
       if (action === 'cancel-smoke-edit') cancelSmokeEdit();
       if (action === 'delete-smoke') deleteSmoke(id);
       if (action === 'delete-alcohol') deleteAlcoholLog(id);
+      if (action === 'edit-alcohol-unit') editAlcoholUnit(id);
+      if (action === 'save-alcohol-unit') saveAlcoholUnit(id);
+      if (action === 'cancel-alcohol-unit-edit') cancelAlcoholUnitEdit();
       if (action === 'delete-alcohol-unit') deleteAlcoholUnit(id);
       if (action === 'log-alcohol-unit') recordAlcoholUnit(actionEl.dataset.drinkType);
       if (action === 'switch-consumption-mode') switchConsumptionMode(actionEl.dataset.mode);
@@ -5972,8 +5976,8 @@
         </div>
         <div class="list-actions">
           <span class="badge ${cls ? '' : 'muted'} ${cls}">${c.points > 0 ? '+' : ''}${c.points} Pkt.</span>
-          ${isEditing ? '' : `<button class="mini-btn" type="button" data-action="edit-smoke" data-id="${c.id}">Bearbeiten</button>`}
-          <button class="mini-btn danger" type="button" data-action="delete-smoke" data-id="${c.id}">Löschen</button>
+          ${isEditing ? '' : `<button class="consumption-icon-action" type="button" data-action="edit-smoke" data-id="${c.id}" aria-label="Zigaretten-Eintrag bearbeiten" title="Bearbeiten">${svgIcon('edit', 'ui-icon')}</button>`}
+          <button class="consumption-icon-action consumption-icon-action-delete" type="button" data-action="delete-smoke" data-id="${c.id}" aria-label="Zigaretten-Eintrag löschen" title="Löschen">${svgIcon('trash', 'ui-icon')}</button>
         </div>
       </article>`;
     }).join('')}</div>`;
@@ -6027,19 +6031,38 @@
     const units = [...visibleAlcoholUnits()]
       .sort((a, b) => sortDate(b.occurred_at || b.created_at) - sortDate(a.occurred_at || a.created_at));
     if (!units.length) {
-      return '<div class="empty-state">Noch keine Alkohol-Einheit erfasst. Neue Einheiten erscheinen hier und können später gelöscht werden.</div>';
+      return '<div class="empty-state">Noch keine Alkohol-Einheit erfasst. Neue Einheiten erscheinen hier und können später bearbeitet oder gelöscht werden.</div>';
     }
     return `<div class="stack-list tall alcohol-history-modal-list">${units.map(unit => {
       const points = alcoholPointsForUnit(unit.id);
       const pointsLabel = points ? `${formatSignedPoints(points)} Pkt.` : '0 Pkt.';
-      return `<article class="list-card compact">
+      const isEditing = editingAlcoholUnitId === unit.id;
+      const editBlock = isEditing
+        ? (() => {
+            const [dateValue = '', timeValue = ''] = toDateTimeLocalValue(unit.occurred_at || unit.created_at).split('T');
+            const typeOptions = Object.entries(ALCOHOL_TYPES).map(([value, label]) => `<option value="${value}" ${unit.drink_type === value ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('');
+            return `<div class="alcohol-edit-grid">
+              <label><span>Getränk</span><select id="alcohol-type-${unit.id}">${typeOptions}</select></label>
+              <label><span>Datum</span><input id="alcohol-date-${unit.id}" type="date" value="${dateValue}" max="${toDateKey(new Date())}" /></label>
+              <label><span>Zeit</span><input id="alcohol-time-${unit.id}" type="time" value="${timeValue}" step="60" /></label>
+              <label class="full"><span>Notiz</span><input id="alcohol-note-${unit.id}" type="text" value="${escapeHtml(unit.note || '')}" placeholder="optional" maxlength="240" /></label>
+              <div class="alcohol-edit-actions full">
+                <button class="mini-btn primary" type="button" data-action="save-alcohol-unit" data-id="${unit.id}">Speichern</button>
+                <button class="mini-btn" type="button" data-action="cancel-alcohol-unit-edit" data-id="${unit.id}">Abbrechen</button>
+              </div>
+            </div>`;
+          })()
+        : '';
+      return `<article class="list-card compact ${isEditing ? 'is-editing' : ''}">
         <div class="list-card-main">
           <h4>${escapeHtml(alcoholTypeLabel(unit.drink_type))}</h4>
           <p class="meta">${formatDateTime(unit.occurred_at || unit.created_at)}${unit.note ? ` · ${escapeHtml(unit.note)}` : ''}</p>
+          ${editBlock}
         </div>
         <div class="list-actions">
           <span class="badge muted">${escapeHtml(pointsLabel)}</span>
-          <button class="mini-btn danger" type="button" data-action="delete-alcohol-unit" data-id="${unit.id}">Löschen</button>
+          ${isEditing ? '' : `<button class="consumption-icon-action" type="button" data-action="edit-alcohol-unit" data-id="${unit.id}" aria-label="Alkohol-Eintrag bearbeiten" title="Bearbeiten">${svgIcon('edit', 'ui-icon')}</button>`}
+          <button class="consumption-icon-action consumption-icon-action-delete" type="button" data-action="delete-alcohol-unit" data-id="${unit.id}" aria-label="Alkohol-Eintrag löschen" title="Löschen">${svgIcon('trash', 'ui-icon')}</button>
         </div>
       </article>`;
     }).join('')}</div>`;
@@ -10968,12 +10991,68 @@
     syncWithSupabase({ silent: true });
   }
 
+  function editAlcoholUnit(id) {
+    if (!state.alcoholUnits.some(unit => unit.id === id)) return;
+    editingAlcoholUnitId = id;
+    renderHistoryModal();
+  }
+
+  function cancelAlcoholUnitEdit() {
+    editingAlcoholUnitId = null;
+    renderHistoryModal();
+  }
+
+  function saveAlcoholUnit(id) {
+    const unit = state.alcoholUnits.find(item => item.id === id);
+    const typeInput = $(`#alcohol-type-${cssEscape(id)}`);
+    const dateInput = $(`#alcohol-date-${cssEscape(id)}`);
+    const timeInput = $(`#alcohol-time-${cssEscape(id)}`);
+    const noteInput = $(`#alcohol-note-${cssEscape(id)}`);
+    if (!unit || !typeInput || !dateInput || !timeInput || !noteInput) return;
+
+    const nextDate = localDateTimeFromParts(dateInput.value, timeInput.value);
+    if (Number.isNaN(nextDate.getTime())) {
+      toast('Bitte Datum und Zeit vollständig eintragen.');
+      return;
+    }
+    if (nextDate.getTime() > Date.now() + 60_000) {
+      toast('Der Zeitpunkt darf nicht in der Zukunft liegen.');
+      return;
+    }
+
+    const previousKey = toDateKey(unit.occurred_at || unit.created_at);
+    const nextKey = toDateKey(nextDate);
+    unit.occurred_at = nextDate.toISOString();
+    unit.drink_type = ALCOHOL_TYPES[typeInput.value] ? typeInput.value : 'other';
+    unit.note = noteInput.value.trim().slice(0, 240);
+    unit.updated_at = nowIso();
+    unit.synced = false;
+    editingAlcoholUnitId = null;
+
+    ensureAlcoholDayLog(nextKey, unit.note);
+    if (previousKey !== nextKey && !alcoholUnitsOnDate(previousKey).length) {
+      const previousDayLog = alcoholForDate(previousKey);
+      if (previousDayLog) {
+        previousDayLog.consumed = false;
+        previousDayLog.updated_at = nowIso();
+        previousDayLog.synced = false;
+      }
+    }
+    dedupeAlcoholLogs(state);
+    recalculateAlcoholScores();
+    saveState();
+    renderHistoryModal();
+    toast('Alkohol-Eintrag aktualisiert');
+    syncWithSupabase({ silent: true, pullFirst: false });
+  }
+
   async function deleteAlcoholUnit(id) {
     const unit = state.alcoholUnits.find(a => a.id === id);
     if (!unit) return;
     if (!confirm('Alkohol-Einheit wirklich löschen?')) return;
     const removedLedgerIds = state.pointsLedger.filter(entry => isAlcoholPointsEntry(entry) && entry.source_id === id).map(entry => entry.id);
     state.alcoholUnits = state.alcoholUnits.filter(a => a.id !== id);
+    if (editingAlcoholUnitId === id) editingAlcoholUnitId = null;
     state.pointsLedger = state.pointsLedger.filter(entry => !(isAlcoholPointsEntry(entry) && entry.source_id === id));
     markRemoteDeleted('alcohol_events', id);
     markRemoteDeletedMany('points_ledger', removedLedgerIds);
