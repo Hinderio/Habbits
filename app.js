@@ -1050,6 +1050,7 @@
       monthlyMagazineSummary: $('#monthlyMagazineSummary'),
       monthlyMagazineMobileSummary: $('#monthlyMagazineMobileSummary'),
       habitHeatmap: $('#habitHeatmap'),
+      habitHeatmapRangeBadge: $('#habitHeatmapRangeBadge'),
       trendMetricSelect: $('#trendMetricSelect'),
       trendChartTitle: $('#trendChartTitle'),
       chartRangeLabel: $('#chartRangeLabel'),
@@ -3518,7 +3519,13 @@
   function moveDashboardChartWindow(deltaDays = 0, { reset = false } = {}) {
     dashboardChartOffsetDays = reset ? 0 : normalizeDashboardChartOffset(dashboardChartOffsetDays + Number(deltaDays || 0));
     localStorage.setItem(DASHBOARD_CHART_WINDOW_KEY, String(dashboardChartOffsetDays));
-    renderCharts();
+    const keys = dashboardChartKeys();
+    renderHabitHeatmap(keys);
+    renderCharts(keys);
+  }
+
+  function dashboardChartKeys() {
+    return daysBack(14, dashboardChartOffsetDays);
   }
 
   function dashboardChartRangeLabel(keys = []) {
@@ -3535,6 +3542,7 @@
     const label = dashboardChartRangeLabel(keys);
     if (els.chartRangeLabel) els.chartRangeLabel.textContent = label;
     if (els.pointsChartRangeBadge) els.pointsChartRangeBadge.textContent = dashboardChartOffsetDays ? 'historisch' : '14 Tage';
+    if (els.habitHeatmapRangeBadge) els.habitHeatmapRangeBadge.textContent = dashboardChartOffsetDays ? 'historisch' : '14 Tage';
     if (els.chartNextWindowBtn) {
       els.chartNextWindowBtn.disabled = dashboardChartOffsetDays <= 0;
       els.chartNextWindowBtn.setAttribute('aria-disabled', String(dashboardChartOffsetDays <= 0));
@@ -5682,10 +5690,9 @@
     return { title: 'Punkteentwicklung', label: 'Punkte', data: keys.map(k => pointsOnDate(k)), beginAtZero: true, toneMode: 'score' };
   }
 
-  function renderHabitHeatmap() {
+  function renderHabitHeatmap(keys = dashboardChartKeys()) {
     if (!els.habitHeatmap) return;
     const activeHabits = state.habits.filter(h => !h.is_archived);
-    const keys = daysBack(14);
     if (!activeHabits.length) {
       els.habitHeatmap.innerHTML = '<div class="empty-state">Noch keine aktiven Habits vorhanden. Sobald du Habits anlegst oder loggst, erscheint hier dein Rhythmus.</div>';
       return;
@@ -10443,10 +10450,9 @@
       </div>
     </article>`;
   }
-  function renderCharts() {
-    if (!window.Chart) return;
-    const keys = daysBack(14, dashboardChartOffsetDays);
+  function renderCharts(keys = dashboardChartKeys()) {
     syncDashboardChartControls(keys);
+    if (!window.Chart) return;
     const labels = keys.map(k => new Date(`${k}T12:00:00`).toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' }));
     const trend = getTrendMetricConfig(keys);
     const pointsData = keys.map(k => pointsOnDate(k));
