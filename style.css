@@ -3768,7 +3768,7 @@ body.light .task-detail-facts article,body.light .task-detail-image{background:r
 /* v114 · Training Compass + Personal Best Museum */
 .fitness-intelligence-grid{
   display:grid;
-  grid-template-columns:repeat(2,minmax(0,1fr));
+  grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);
   gap:14px;
   align-items:stretch;
 }
@@ -3829,14 +3829,14 @@ body.light .task-detail-facts article,body.light .task-detail-image{background:r
 .personal-best-head span:not(.personal-best-badge){display:block;color:var(--muted);line-height:1.38;font-weight:720}
 .training-compass-body{
   display:grid;
-  grid-template-columns:220px minmax(0,1fr);
+  grid-template-columns:200px minmax(0,1fr);
   gap:16px;
   align-items:center;
 }
 .training-compass-profile{
   position:relative;
   width:100%;
-  max-width:220px;
+  max-width:200px;
   aspect-ratio:1;
   margin-inline:auto;
   border-radius:28px;
@@ -3960,7 +3960,19 @@ body.light .task-detail-facts article,body.light .task-detail-image{background:r
 .training-compass-area.is-low{border-color:rgba(255,112,112,.22);background:rgba(255,112,112,.07)}
 .training-compass-area.is-watch{border-color:rgba(255,184,77,.22);background:rgba(255,184,77,.07)}
 .training-compass-area.is-good,.training-compass-area.is-strong{border-color:rgba(143,240,167,.18)}
-.training-compass-area-head{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:9px;align-items:center}
+.training-compass-area-head{
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr);
+  grid-template-areas:
+    "icon copy"
+    "icon score";
+  column-gap:9px;
+  row-gap:4px;
+  align-items:start;
+}
+.training-compass-area-head>.training-compass-area-icon{grid-area:icon}
+.training-compass-area-head>div{grid-area:copy;min-width:0}
+.training-compass-area-head>b{grid-area:score;justify-self:end}
 .training-compass-area-icon{width:38px;height:38px;border-radius:15px;display:grid;place-items:center;background:rgba(74,215,209,.12);color:var(--primary)}
 .training-compass-area-icon.is-duo{width:46px;grid-template-columns:1fr 1fr;gap:1px;padding:0 5px}
 .training-compass-area-icon.is-duo .ui-icon{width:17px;height:17px}
@@ -3968,8 +3980,8 @@ body.light .task-detail-facts article,body.light .task-detail-image{background:r
 .training-compass-area.is-healthy .training-compass-area-icon{background:rgba(143,240,167,.14);color:#4fbf76}
 .training-compass-area.is-meditation .training-compass-area-icon{background:rgba(232,184,80,.14);color:#d69d24}
 .training-compass-area-icon .ui-icon{width:20px;height:20px}
-.training-compass-area strong{display:block;font-size:.95rem}
-.training-compass-area small{display:block;color:var(--muted);font-size:.72rem;font-weight:850;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.training-compass-area strong{display:block;font-size:.92rem;line-height:1.16}
+.training-compass-area small{display:block;margin-top:2px;color:var(--muted);font-size:.69rem;font-weight:850;line-height:1.25;white-space:normal;overflow-wrap:anywhere}
 .training-compass-area b{font-size:.95rem;color:var(--primary)}
 .training-compass-bar{height:7px;border-radius:999px;background:rgba(255,255,255,.075);overflow:hidden}
 .training-compass-bar i{display:block;height:100%;border-radius:inherit;background:var(--primary)}
@@ -3980,7 +3992,10 @@ body.light .task-detail-facts article,body.light .task-detail-image{background:r
 .training-compass-footer{
   margin-top:14px;
   display:grid;
-  grid-template-columns:auto minmax(0,1fr) auto;
+  grid-template-columns:minmax(0,1fr) auto;
+  grid-template-areas:
+    "label strongest"
+    "message message";
   gap:10px;
   align-items:center;
   padding:12px 14px;
@@ -3988,9 +4003,9 @@ body.light .task-detail-facts article,body.light .task-detail-image{background:r
   background:rgba(74,215,209,.075);
   border:1px solid rgba(74,215,209,.12);
 }
-.training-compass-footer strong{color:var(--primary)}
-.training-compass-footer span{color:var(--text);font-weight:820;line-height:1.34}
-.training-compass-footer em{font-style:normal;color:var(--muted);font-size:.78rem;font-weight:850;white-space:nowrap}
+.training-compass-footer strong{grid-area:label;color:var(--primary)}
+.training-compass-footer span{grid-area:message;color:var(--text);font-weight:820;line-height:1.34}
+.training-compass-footer em{grid-area:strongest;font-style:normal;color:var(--muted);font-size:.78rem;font-weight:850;white-space:nowrap}
 .personal-best-head{margin-bottom:14px}
 .personal-best-badge{
   min-width:54px;
@@ -4068,7 +4083,7 @@ body.light .training-compass-footer{background:rgba(74,215,209,.09);border-color
   .training-compass-dial,.training-compass-profile{max-width:240px}
   .training-compass-center{width:104px;min-height:104px;border-radius:34px}
   .training-compass-quadrants{grid-template-columns:1fr}
-  .training-compass-footer{grid-template-columns:1fr;align-items:start}
+  .training-compass-footer{grid-template-columns:1fr;grid-template-areas:"label" "message" "strongest";align-items:start}
   .training-compass-footer em{white-space:normal}
   .personal-best-grid{grid-template-columns:1fr}
   .personal-best-card{min-height:0;border-radius:21px}
