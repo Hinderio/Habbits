@@ -681,6 +681,7 @@
             <label><span>Priorität</span><select name="priority"><option value="low">Niedrig</option><option value="medium" selected>Normal</option><option value="high">Hoch</option><option value="urgent">Kritisch</option></select></label>
             <label><span>Fällig</span><input name="due_at" type="datetime-local" /></label>
             <label><span>Zyklus</span><select id="taskRecurrenceSelect" name="recurrence"><option value="none" selected>Einmalig</option><option value="monthly">Monatlich automatisch</option></select></label>
+            <label><span>Kategorie</span><input name="category" list="taskCategoryOptions" maxlength="80" placeholder="Auswählen oder neu eingeben" /><datalist id="taskCategoryOptions"></datalist></label>
             <div id="taskRecurrenceHint" class="task-cycle-hint full">Einmalige Aufgabe ohne automatische Folgekarten.</div>
             <label class="full"><span>Notiz</span><textarea name="description" rows="3" placeholder="optional · Links werden automatisch klickbar"></textarea></label>
             <label class="full task-image-upload"><span>Bildanhang</span><input name="images" type="file" accept="image/*" multiple /><small id="taskImageHint">Optional · bis zu 3 Bilder, komprimiert und nur im Task-Detail sichtbar.</small></label>
