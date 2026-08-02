@@ -3772,6 +3772,23 @@ body.light .task-detail-facts article,body.light .task-detail-image{background:r
   gap:14px;
   align-items:stretch;
 }
+.fitness-hub-shell{
+  width:100%;
+  min-width:0;
+  max-width:100%;
+  grid-template-columns:minmax(0,1fr);
+}
+.fitness-hub-shell>*{
+  min-width:0;
+  max-width:100%;
+}
+.fitness-session-strip{
+  width:100%;
+  min-width:0;
+  max-width:100%;
+  overflow-x:auto;
+  overflow-y:hidden;
+}
 .fitness-journey-grid>.mobile-fitness-section,
 .fitness-intelligence-grid>.mobile-fitness-section{
   min-width:0;
