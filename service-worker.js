@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v237-training-compass-layout';
+const CACHE_NAME = 'habitflow-v238-fitness-paired-heights';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
