@@ -183,7 +183,7 @@
     const backlog = isBacklog(task);
     const status = backlog ? 'Backlog' : String(task.status || 'open') === 'in_progress' ? 'In Bearbeitung' : 'Offen';
     const title = `${task.title} · ${status} · Aufwand ${effort}/5 · fällig ${formatDate(item.date, true)}`;
-    return `<button class="task-swimlane-tile${backlog ? ' is-backlog' : ''}" type="button" data-action="open-task-detail" data-id="${escapeHtml(task.id)}" style="--task-left:${left.toFixed(3)}%;--lane-color:${escapeHtml(lane.color)};--priority-color:${priorityColor(task.priority)};top:${15 + track * 68}px" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"><span class="task-swimlane-tile-top"><span>${effort}</span><i class="task-swimlane-priority"></i></span><b>${escapeHtml(taskInitials(task.title))}</b></button>`;
+    return `<button class="task-swimlane-tile${backlog ? ' is-backlog' : ''}" type="button" data-action="open-task-detail" data-id="${escapeHtml(task.id)}" style="left:${left.toFixed(3)}%;top:${15 + track * 68}px;--lane-color:${escapeHtml(lane.color)};--priority-color:${priorityColor(task.priority)}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"><span class="task-swimlane-tile-top"><span>${effort}</span><i class="task-swimlane-priority"></i></span><b>${escapeHtml(taskInitials(task.title))}</b></button>`;
   }
 
   function countDots(lane, rangedTasks) {
