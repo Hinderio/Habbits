@@ -4513,8 +4513,10 @@
       <p>${escapeHtml(monthlyMissionStatusText(value))}</p>
       <div class="monthly-mission-actions">
         ${manualControls}
-        <button class="mini-btn" type="button" data-action="archive-monthly-mission" data-id="${escapeHtml(value.mission.id)}">Ausblenden</button>
-        <button class="mini-btn danger-mini" type="button" data-action="delete-monthly-mission" data-id="${escapeHtml(value.mission.id)}">Löschen</button>
+        <div class="monthly-mission-icon-actions">
+          <button class="consumption-icon-action" type="button" data-action="archive-monthly-mission" data-id="${escapeHtml(value.mission.id)}" aria-label="Monatsmission ausblenden" title="Ausblenden">${svgIcon('archive', 'ui-icon')}</button>
+          <button class="consumption-icon-action consumption-icon-action-delete" type="button" data-action="delete-monthly-mission" data-id="${escapeHtml(value.mission.id)}" aria-label="Monatsmission löschen" title="Löschen">${svgIcon('trash', 'ui-icon')}</button>
+        </div>
       </div>
     </article>`;
   }
