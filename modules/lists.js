@@ -53,6 +53,7 @@
   let termStudyIndex = 0;
   let termStudyOrder = [];
   const collapsedTermCategories = new Set();
+  const initializedTermCategories = new Set();
   const collapsedShoppingCategories = new Set();
   let syncLabel = 'lokal';
   let supabaseClient = null;
@@ -559,6 +560,11 @@
   function renderTermsDetail(list) {
     const terms = itemsFor('terms');
     const categories = termCategories();
+    categories.forEach(category => {
+      if (initializedTermCategories.has(category)) return;
+      initializedTermCategories.add(category);
+      collapsedTermCategories.add(category);
+    });
     const editingTerm = editingTermId ? terms.find(term => term.id === editingTermId) : null;
     const categoryOptions = categories.map(category => `<option value="${escapeHtml(category)}"></option>`).join('');
     return `
