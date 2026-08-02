@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v234-task-swimlane-layout';
+const CACHE_NAME = 'habitflow-v235-fitness-columns';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
