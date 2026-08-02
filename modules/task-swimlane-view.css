@@ -16,20 +16,22 @@ body:not(.light) .task-swimlane-date-fields input{color-scheme:dark}
 .task-swimlane-presets button.is-active,.task-swimlane-nav button.is-primary{background:var(--primary);border-color:var(--primary);color:#08202c}
 .task-swimlane-nav{display:flex;align-items:center;justify-content:flex-end;gap:6px}
 .task-swimlane-volume{display:grid;grid-template-columns:var(--timeline-label-width) minmax(0,1fr);min-height:142px;border-bottom:1px solid var(--card-border)}
-.task-swimlane-volume-copy{padding:20px 18px 18px 26px;border-right:1px solid var(--card-border)}
+.task-swimlane-volume-copy{position:sticky;left:0;z-index:4;padding:20px 18px 18px 26px;border-right:1px solid var(--card-border);background:var(--card-strong)}
 .task-swimlane-volume-copy strong{display:block;margin-top:8px;font-size:1.45rem}
 .task-swimlane-volume-copy span{display:block;margin-top:4px;color:var(--muted);font-size:.82rem;font-weight:700}
 .task-swimlane-volume-chart{position:relative;min-width:0;padding:16px 26px 10px}
-.task-swimlane-volume-chart svg{display:block;width:100%;height:92px;overflow:visible}
+.task-volume-plot{position:relative;height:92px}
+.task-swimlane-volume-chart svg{position:absolute;inset:0;display:block;width:100%;max-width:100%;height:92px;overflow:visible}
 .task-volume-grid{stroke:var(--card-border);stroke-width:1}
 .task-volume-area{fill:color-mix(in srgb,var(--primary) 12%,transparent)}
 .task-volume-line{fill:none;stroke:var(--primary);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
-.task-volume-point{fill:var(--card-strong);stroke:var(--primary);stroke-width:2}
+.task-volume-points{position:absolute;inset:0;display:block;pointer-events:none}
+.task-volume-point{position:absolute;width:9px;height:9px;border:2px solid var(--primary);border-radius:50%;background:var(--card-strong);transform:translate(-50%,-50%)}
 .task-volume-empty{display:grid;place-items:center;height:92px;color:var(--muted);font-weight:750}
 .task-swimlane-scroll{overflow-x:auto;overscroll-behavior-inline:contain;scrollbar-width:thin}
 .task-swimlane-canvas{min-width:920px}
 .task-swimlane-axis{display:grid;grid-template-columns:var(--timeline-label-width) minmax(0,1fr);min-height:72px;border-bottom:1px solid var(--card-border)}
-.task-swimlane-axis-title{display:flex;align-items:flex-end;padding:0 18px 13px 26px;border-right:1px solid var(--card-border);color:var(--muted);font-size:.7rem;font-weight:900;text-transform:uppercase}
+.task-swimlane-axis-title{position:sticky;left:0;z-index:4;display:flex;align-items:flex-end;padding:0 18px 13px 26px;border-right:1px solid var(--card-border);background:var(--card-strong);color:var(--muted);font-size:.7rem;font-weight:900;text-transform:uppercase}
 .task-swimlane-axis-track{position:relative;min-width:0}
 .task-swimlane-month{position:absolute;top:10px;color:var(--text);font-size:.76rem;font-weight:900;text-transform:uppercase;transform:translateX(4px)}
 .task-swimlane-tick{position:absolute;bottom:0;height:37px;border-left:1px dashed var(--card-border)}
@@ -38,9 +40,10 @@ body:not(.light) .task-swimlane-date-fields input{color-scheme:dark}
 .task-swimlane-today span{position:absolute;top:4px;left:50%;transform:translateX(-50%);padding:3px 7px;border-radius:999px;background:var(--primary);color:#08202c;font-size:.62rem;font-weight:900;white-space:nowrap}
 .task-swimlane-group-label{padding:12px 26px 8px;border-bottom:1px solid var(--card-border);color:var(--primary);font-size:.68rem;font-weight:950;text-transform:uppercase}
 .task-swimlane-row{display:grid;grid-template-columns:var(--timeline-label-width) minmax(0,1fr);min-height:96px;border-bottom:1px solid var(--card-border)}
-.task-swimlane-row-label{display:grid;grid-template-columns:44px minmax(0,1fr);align-items:center;gap:11px;padding:14px 14px 14px 20px;border-right:1px solid var(--card-border);background:color-mix(in srgb,var(--lane-color) 5%,transparent)}
+.task-swimlane-row-label{position:sticky;left:0;z-index:4;display:grid;grid-template-columns:44px minmax(0,1fr);align-items:center;gap:11px;padding:14px 14px 14px 20px;border-right:1px solid var(--card-border);background:color-mix(in srgb,var(--lane-color) 5%,var(--card-strong))}
 .task-swimlane-lane-mark{display:grid;place-items:center;width:44px;height:44px;border:1px solid color-mix(in srgb,var(--lane-color) 55%,var(--card-border));border-radius:50%;background:color-mix(in srgb,var(--lane-color) 24%,var(--card-strong));color:var(--text);font-size:.75rem;font-weight:950}
 button.task-swimlane-lane-mark{cursor:pointer;font:inherit;font-size:.75rem;font-weight:950}
+button.task-swimlane-lane-mark.is-project{border:6px solid color-mix(in srgb,var(--lane-color) 28%,var(--card-strong));background:var(--lane-color);color:#0b1828;box-shadow:0 0 0 1px color-mix(in srgb,var(--lane-color) 62%,var(--card-border))}
 .task-swimlane-lane-copy{min-width:0}
 .task-swimlane-lane-copy strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.9rem}
 .task-swimlane-lane-copy small{display:block;margin-top:4px;color:var(--muted);font-size:.66rem;font-weight:800;text-transform:uppercase}
@@ -64,6 +67,6 @@ button.task-swimlane-lane-mark{cursor:pointer;font:inherit;font-size:.75rem;font
 #screen-tasks .task-swimlane-unscheduled-list button[data-action="open-task-detail"]{display:inline-flex!important}
 .task-swimlane-unscheduled-list i{width:8px;height:8px;border-radius:50%;background:var(--lane-color)}
 .task-swimlane-range-note{padding:11px 26px;color:var(--muted);font-size:.72rem;font-weight:750;border-top:1px solid var(--card-border)}
-@media(max-width:900px){.task-swimlane-view{--timeline-label-width:190px}.task-swimlane-controls{grid-template-columns:1fr}.task-swimlane-nav{justify-content:flex-start}.task-swimlane-presets{order:3}.task-swimlane-volume{grid-template-columns:1fr}.task-swimlane-volume-copy{border-right:0;border-bottom:1px solid var(--card-border);padding-bottom:12px}.task-swimlane-volume-chart{padding-top:10px}}
+@media(max-width:900px){.task-swimlane-view{--timeline-label-width:190px}.task-swimlane-controls{grid-template-columns:1fr}.task-swimlane-nav{justify-content:flex-start}.task-swimlane-presets{order:3}}
 @media(max-width:760px){#taskTimelineToggleBtn{grid-column:1;grid-row:3}#taskSwimlaneToggleBtn{grid-column:2;grid-row:3}.task-swimlane-panel{margin-inline:0}.task-swimlane-view{--timeline-label-width:154px}.task-swimlane-head{padding:18px 16px 14px;flex-direction:column}.task-swimlane-summary{justify-content:flex-start}.task-swimlane-controls{padding:14px 16px}.task-swimlane-date-fields{grid-template-columns:1fr 1fr}.task-swimlane-presets{display:grid;grid-template-columns:repeat(4,1fr)}.task-swimlane-presets button{padding-inline:5px}.task-swimlane-nav{display:grid;grid-template-columns:44px 1fr 44px}.task-swimlane-nav button{padding-inline:8px}.task-swimlane-volume-copy{padding-inline:16px}.task-swimlane-volume-chart{padding-inline:16px}.task-swimlane-canvas{min-width:780px}.task-swimlane-axis-title{padding-left:16px}.task-swimlane-group-label{padding-left:16px}.task-swimlane-row-label{padding-left:12px;grid-template-columns:38px minmax(0,1fr);gap:8px}.task-swimlane-lane-mark{width:38px;height:38px}.task-swimlane-unscheduled{padding:16px}.task-swimlane-range-note{padding-inline:16px}}
 @media(max-width:420px){.task-swimlane-date-fields{grid-template-columns:1fr}.task-swimlane-head h3{font-size:1.32rem}}
