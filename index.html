@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="modules/habit-card-typography.css" />
   <link rel="stylesheet" href="modules/lists.css" />
+  <link rel="stylesheet" href="modules/task-swimlane-view.css" />
 </head>
 <body>
   <div id="toast" class="save-toast hidden" role="status" aria-live="polite"></div>
@@ -564,6 +565,7 @@
             <button id="taskBacklogToggleBtn" class="pill secondary" type="button" aria-expanded="false">Backlog <span id="taskBacklogCount" class="inline-count">0</span></button>
             <button id="taskArchiveToggleBtn" class="pill secondary" type="button" aria-expanded="false">Archiv <span id="taskArchiveCount" class="inline-count">0</span></button>
             <button id="taskTimelineToggleBtn" class="pill secondary" type="button" aria-expanded="false">Task-Kalender</button>
+            <button id="taskSwimlaneToggleBtn" class="pill secondary" type="button" aria-expanded="false">Task-Timeline</button>
             <button id="taskFormToggleBtn" class="bubble-add-btn" type="button" aria-label="Aufgaben-Formular öffnen"><span data-icon="plus"></span></button>
           </div>
         </div>
@@ -710,6 +712,9 @@
           </div>
           <div id="taskTimeline" class="task-timeline"></div>
         </section>
+        <section id="taskSwimlanePanel" class="panel glass task-swimlane-panel hidden" aria-hidden="true">
+          <div id="taskSwimlaneView"></div>
+        </section>
         <section class="panel glass">
           <div class="panel-head"><div><p class="eyebrow">Kanban</p><h3>Aufgaben-Board</h3></div><span id="taskPointsPreview" class="badge muted">Aufwand × 20 Pkt.</span></div>
           <div id="tasksList" class="kanban-shell"></div>
@@ -815,5 +820,6 @@
   <script src="modules/lists.js"></script>
   
   <script src="app.js"></script>
+  <script src="modules/task-swimlane-view.js"></script>
 </body>
 </html>
