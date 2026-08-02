@@ -2797,6 +2797,17 @@ body:not(.light) .calendar-panel:before{
 
 .pause-overview-mobile-section{display:contents}
 .pause-overview-mobile-section>summary{display:none}
+.pause-overview-content{
+  overflow:hidden;
+  max-height:2400px;
+  opacity:1;
+  transition:max-height .22s ease,opacity .18s ease,margin .18s ease;
+}
+.pause-overview-content.is-collapsed{
+  max-height:0;
+  opacity:0;
+  margin-top:-8px;
+}
 .pause-card-log-list{
   display:grid;
   gap:8px;
@@ -2876,6 +2887,8 @@ body.light .pause-card-log-row{
 @media (max-width:760px){
   .pause-overview-mobile-section{display:block}
   .pause-overview-panel{margin-top:0}
+  .pause-overview-toggle{display:none}
+  .pause-overview-content.is-collapsed{display:block;max-height:none;opacity:1;margin-top:0}
   .pause-overview-mobile-section>summary,
   .mobile-fitness-section>summary{
     display:flex;
