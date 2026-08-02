@@ -3805,6 +3805,13 @@ body.light .task-detail-facts article,body.light .task-detail-image{background:r
   .fitness-journey-grid>.mobile-fitness-section,
   .fitness-intelligence-grid>.mobile-fitness-section{display:block}
 }
+@media (min-width:1181px){
+  .fitness-journey-grid{align-items:stretch}
+  .fitness-journey-grid>.mobile-fitness-section,
+  .fitness-intelligence-grid>.mobile-fitness-section{height:100%}
+  .fitness-journey-grid>.mobile-fitness-section>.fitness-journey-card,
+  .fitness-intelligence-grid>.mobile-fitness-section>.fitness-intelligence-card{height:100%}
+}
 .fitness-intelligence-card{
   min-width:0;
   height:100%;
