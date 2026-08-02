@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v238-fitness-paired-heights';
+const CACHE_NAME = 'habitflow-v239-fitness-equal-row-grid';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
