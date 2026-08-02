@@ -4764,7 +4764,7 @@
   }
 
   function renderMonthlyMagazineGalleryTile(magazine, issueNumber) {
-    const coverStyle = `background-image:linear-gradient(180deg,rgba(5,9,16,.04),rgba(5,9,16,.72)),url('${escapeHtml(magazine.cover.url)}')`;
+    const coverStyle = `background-image:url('${escapeHtml(magazine.cover.url)}')`;
     return `<button class="monthly-magazine-issue" type="button" data-action="open-monthly-magazine" data-id="${escapeHtml(magazine.monthKey)}" style="${coverStyle}" aria-label="${escapeHtml(magazine.label)} öffnen">
       <span class="monthly-magazine-issue-number">${String(issueNumber).padStart(2, '0')}</span>
       <span class="monthly-magazine-issue-copy"><strong>${escapeHtml(magazine.label)}</strong><small>${magazine.score}% · ${escapeHtml(magazine.isComplete ? 'Finale' : 'Live')}</small></span>
@@ -4916,7 +4916,7 @@
     const archive = monthlyMagazineArchiveKeys(12, source).map(key => key === magazine.monthKey ? magazine : buildMonthlyMagazineReview(key, source));
     if (els.monthlyMagazineSummary) els.monthlyMagazineSummary.textContent = `${magazine.score}% · ${magazine.isComplete ? 'Monatsfinale' : 'Live-Ausgabe'}`;
     if (els.monthlyMagazineMobileSummary) els.monthlyMagazineMobileSummary.textContent = `${archive.length} Ausgabe${archive.length === 1 ? '' : 'n'} · ${magazine.score}%`;
-    const coverStyle = `background-image:linear-gradient(180deg,rgba(5,9,16,.08),rgba(5,9,16,.78)),url('${escapeHtml(magazine.cover.url)}')`;
+    const coverStyle = `background-image:url('${escapeHtml(magazine.cover.url)}')`;
     els.monthlyMagazine.innerHTML = `<section class="monthly-magazine-gallery" aria-label="Monatsmagazin-Archiv">
         <div class="monthly-magazine-gallery-head"><div><p class="eyebrow">Ausgaben</p><h4>Deine Monate als Magazin</h4></div><span>${archive.length} im Archiv</span></div>
         <div class="monthly-magazine-gallery-rail">${archive.map((item, index) => renderMonthlyMagazineGalleryTile(item, archive.length - index)).join('')}</div>
