@@ -145,6 +145,7 @@ create table if not exists public.task_ideas (
   category text not null default 'focus' check (category in ('focus','health','consumption','habit','admin','experiment')),
   story_points smallint not null default 2 check (story_points in (1,2,3,5,8)),
   priority text not null default 'medium' check (priority in ('low','medium','high','urgent')),
+  project_id uuid,
   idea_status text not null default 'open' check (idea_status in ('open','accepted','dismissed')),
   source_key text,
   generated_task_id uuid,
@@ -173,6 +174,7 @@ create table if not exists public.activity_ideas (
   transport text[] not null default array['any']::text[],
   story_points smallint not null default 2 check (story_points in (1,2,3,5,8)),
   priority text not null default 'medium' check (priority in ('low','medium','high','urgent')),
+  project_id uuid,
   task_title text,
   task_description text,
   tags text[] not null default array[]::text[],
@@ -302,6 +304,7 @@ alter table public.habit_definitions drop constraint if exists habit_definitions
 alter table public.habit_definitions add constraint habit_definitions_type_check check (type in ('number','weight','boolean','duration'));
 
 alter table public.tasks add column if not exists priority text not null default 'medium';
+alter table public.tasks add column if not exists category text;
 alter table public.tasks add column if not exists backlog_rank numeric(12,4);
 alter table public.tasks add column if not exists done_archived_at timestamptz;
 alter table public.tasks add column if not exists done_archive_rank numeric(12,4);
@@ -309,6 +312,7 @@ alter table public.tasks drop constraint if exists tasks_priority_check;
 alter table public.tasks add constraint tasks_priority_check check (priority in ('low','medium','high','urgent'));
 alter table public.tasks drop constraint if exists tasks_status_check;
 alter table public.tasks add constraint tasks_status_check check (status in ('open','in_progress','done','archived'));
+create index if not exists idx_tasks_user_category on public.tasks (user_id, category) where category is not null;
 
 alter table public.task_ideas add column if not exists user_id uuid references auth.users(id) on delete cascade;
 alter table public.task_ideas alter column user_id set default auth.uid();
@@ -317,6 +321,7 @@ alter table public.task_ideas add column if not exists description text;
 alter table public.task_ideas add column if not exists category text not null default 'focus';
 alter table public.task_ideas add column if not exists story_points smallint not null default 2;
 alter table public.task_ideas add column if not exists priority text not null default 'medium';
+alter table public.task_ideas add column if not exists project_id uuid;
 alter table public.task_ideas add column if not exists idea_status text not null default 'open';
 alter table public.task_ideas add column if not exists source_key text;
 alter table public.task_ideas add column if not exists generated_task_id uuid;
@@ -352,6 +357,7 @@ alter table public.activity_ideas add column if not exists weather text[] not nu
 alter table public.activity_ideas add column if not exists transport text[] not null default array['any']::text[];
 alter table public.activity_ideas add column if not exists story_points smallint not null default 2;
 alter table public.activity_ideas add column if not exists priority text not null default 'medium';
+alter table public.activity_ideas add column if not exists project_id uuid;
 alter table public.activity_ideas add column if not exists task_title text;
 alter table public.activity_ideas add column if not exists task_description text;
 alter table public.activity_ideas add column if not exists tags text[] not null default array[]::text[];
@@ -397,8 +403,10 @@ create index if not exists idx_alcohol_events_user_time on public.alcohol_events
 create index if not exists idx_tasks_user_due on public.tasks(user_id, status, due_at);
 create index if not exists idx_tasks_user_done_archive on public.tasks(user_id, done_archived_at desc, done_archive_rank);
 create index if not exists idx_task_ideas_user_status on public.task_ideas(user_id, idea_status, updated_at desc);
+create index if not exists idx_task_ideas_user_project on public.task_ideas(user_id, project_id, idea_status);
 create index if not exists idx_activity_ideas_user_active on public.activity_ideas(user_id, is_archived, updated_at desc);
 create index if not exists idx_activity_ideas_user_category on public.activity_ideas(user_id, category, mood);
+create index if not exists idx_activity_ideas_user_project on public.activity_ideas(user_id, project_id, is_archived);
 create index if not exists idx_appointments_user_starts_at on public.appointments(user_id, starts_at desc);
 create index if not exists idx_appointments_type_starts_at on public.appointments(user_id, appointment_type, starts_at desc);
 create index if not exists idx_appointments_series on public.appointments(user_id, series_id, series_index) where series_id is not null;
