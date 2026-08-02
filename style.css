@@ -3025,6 +3025,7 @@ body.light .task-cycle-hint.is-active{
   background:rgba(255,255,255,.045);
   border:1px solid rgba(255,255,255,.065);
 }
+.dashboard-history-heatmap{margin-bottom:18px}
 .chart-range-label{
   min-height:38px;
   flex:1 1 auto;
