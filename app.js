@@ -430,9 +430,7 @@
     weight: '00000000-0000-4000-8000-000000000101',
     water: '00000000-0000-4000-8000-000000000102',
     sport: '00000000-0000-4000-8000-000000000103',
-    meditation: '00000000-0000-4000-8000-000000000104',
-    dumbbells: '00000000-0000-4000-8000-000000000105',
-    swimming: '00000000-0000-4000-8000-000000000106'
+    meditation: '00000000-0000-4000-8000-000000000104'
   });
   const SYNC_TABLES = ['habit_definitions', 'habit_entries', 'cigarette_events', 'alcohol_logs', 'alcohol_events', 'tasks', 'task_ideas', 'appointments', 'points_ledger', 'pause_periods', 'weekly_reviews', 'monthly_missions'];
   const IDLE_SYNC_CHECK_MS = 60_000;
@@ -441,7 +439,7 @@
   const SELF_WRITE_ECHO_GRACE_MS = 4_000;
   const REMOTE_DELETE_TOMBSTONE_TTL_DAYS = 3650;
   const OPTIONAL_SYNC_TABLES = new Set(['alcohol_events', 'appointments', 'task_ideas', 'pause_periods', 'weekly_reviews', 'monthly_missions']);
-  const BUILT_IN_DEFAULT_HABIT_NAMES = new Set(['gewicht', 'wasser', 'sport', 'meditation', 'hanteln', 'schwimmen']);
+  const BUILT_IN_DEFAULT_HABIT_NAMES = new Set(['gewicht', 'wasser', 'sport', 'meditation']);
   const PAUSE_SCOPE_META = {
     smoke: { label: 'Rauchen', eyebrow: 'Konsum-Pause', helper: 'Rauch-Logs im Zeitraum bleiben gespeichert, werden in Auswertungen aber pausiert betrachtet.' },
     alcohol: { label: 'Alkohol', eyebrow: 'Konsum-Pause', helper: 'Alkohol-Einheiten im Zeitraum bleiben gespeichert, werden in Auswertungen aber pausiert betrachtet.' },
@@ -625,8 +623,6 @@
     meditation: '<path d="M12 5a2 2 0 1 0 0 .01"/><path d="M8 20c1.5-2 2.7-3 4-3s2.5 1 4 3"/><path d="M5 15c2.5-2 4.8-3 7-3s4.5 1 7 3"/>',
     standingDesk: '<path d="M5 10h14"/><path d="M7 10v10"/><path d="M17 10v10"/><path d="M9 20h6"/><rect x="8" y="4" width="8" height="5" rx="1.5"/><path d="M12 9v3"/>',
     pushups: '<path d="M6.2 7.2a1.7 1.7 0 1 0 0 .01"/><path d="M8 8.8h5.2l4.2 3.2"/><path d="M5.4 12.8h12.8"/><path d="M8.1 9.2 5.8 16"/><path d="M16.8 12.2 19.4 18"/><path d="M4.2 18.5h15.6"/><path d="M6.8 15.5h10.6"/>',
-    dumbbells: '<path d="M3 9v6"/><path d="M6 7v10"/><path d="M9 11h6"/><path d="M18 7v10"/><path d="M21 9v6"/>',
-    swimming: '<path d="M4 17c1.2-1 2.4-1 3.6 0s2.4 1 3.6 0 2.4-1 3.6 0 2.4 1 3.6 0"/><path d="M4 21c1.2-1 2.4-1 3.6 0s2.4 1 3.6 0 2.4-1 3.6 0 2.4 1 3.6 0"/><path d="m9 13 4-5 4 3"/><path d="M13 8 9 6"/><path d="M17 5a1.7 1.7 0 1 0 0 .01"/>',
     bread: '<path d="M5 20V10a7 7 0 0 1 14 0v10H5Z"/><path d="M8 20v-8a4 4 0 0 1 8 0v8"/><path d="M9 15h.01"/><path d="M15 15h.01"/>',
     jogging: '<path d="M13 4a1.8 1.8 0 1 0 0 .01"/><path d="m11 8 3 2 3-1"/><path d="m14 10-3 4"/><path d="m11 14 4 6"/><path d="M10 14 6 19"/><path d="M4 9h3"/><path d="M3 13h4"/>',
     hiking: '<path d="m3 20 6-10 4 6 3-5 5 9H3Z"/><path d="M9 10 12 4l4 7"/><path d="M15 20v-7"/><path d="M12 16h6"/>',
@@ -681,8 +677,6 @@
     if (iconRaw.includes('🧘') || name.includes('meditation')) return 'meditation';
     if (name.includes('stehpult') || name.includes('steh pult') || name.includes('standing desk') || name.includes('stand desk') || name.includes('stehschreibtisch') || name.includes('schreibtisch') || name.includes('ergonom')) return 'standingDesk';
     if (name.includes('liegestutz') || name.includes('liegestuetz') || name.includes('liegestutze') || name.includes('liegestutzen') || name.includes('pushup') || name.includes('push-up') || name.includes('push up')) return 'pushups';
-    if (name.includes('hantel') || name.includes('kraft') || name.includes('dumbbell') || name.includes('weights') || name.includes('gewichtheben')) return 'dumbbells';
-    if (name.includes('schwimm') || name.includes('swim')) return 'swimming';
     if (name.includes('brot') || name.includes('bread')) return 'bread';
     if (name.includes('joggen') || name.includes('jogging')) return 'jogging';
     if (name.includes('wandern') || name.includes('hiking')) return 'hiking';
@@ -726,7 +720,7 @@
       || name.includes('desk');
     if (isSystemMeditationHabit(habit) || icon === 'meditation' || name.includes('meditation') || name.includes('atem')) return HABIT_CATEGORY_META.mind;
     if (isErgonomic) return HABIT_CATEGORY_META.ergonomics;
-    if (['sport', 'jogging', 'hiking', 'walking', 'pushups', 'dumbbells', 'swimming'].includes(icon) || name.includes('sport') || name.includes('fitness') || name.includes('spazieren') || name.includes('wandern') || name.includes('hantel') || name.includes('schwimm')) return HABIT_CATEGORY_META.sport;
+    if (['sport', 'jogging', 'hiking', 'walking', 'pushups'].includes(icon) || name.includes('sport') || name.includes('fitness') || name.includes('spazieren') || name.includes('wandern')) return HABIT_CATEGORY_META.sport;
     if (icon === 'bread' || name.includes('ernaehr') || name.includes('ernahr') || name.includes('essen') || name.includes('brot') || name.includes('protein') || name.includes('gemuese') || name.includes('gemuse')) return HABIT_CATEGORY_META.nutrition;
     if (icon === 'water' || name.includes('wasser') || name.includes('trinken') || name.includes('hydr')) return HABIT_CATEGORY_META.hydration;
     if (icon === 'weight' || name.includes('gewicht') || name.includes('schlaf') || name.includes('gesund')) return HABIT_CATEGORY_META.health;
@@ -939,8 +933,6 @@
   let remoteTaskBacklogRankSupported = true;
   let remoteTaskDoneArchiveSupported = true;
   let remoteTaskIdeasSupported = true;
-  let remoteTaskIdeaProjectSupported = true;
-  let remoteActivityIdeaProjectSupported = true;
   let remoteActivityIdeasSupported = true;
   let remoteHabitTargetPeriodSupported = true;
   let pendingTriggerSmokeId = null;
@@ -1341,8 +1333,6 @@
     if (els.taskRecurrenceSelect) els.taskRecurrenceSelect.addEventListener('change', updateTaskRecurrenceHint);
     if (els.taskForm.elements.images) els.taskForm.elements.images.addEventListener('change', updateTaskImageHint);
     if (els.appointmentForm?.elements?.starts_at) els.appointmentForm.elements.starts_at.addEventListener('change', syncAppointmentEndDefault);
-    if (els.appointmentForm?.elements?.is_birthday) els.appointmentForm.elements.is_birthday.addEventListener('change', syncAppointmentBirthdayRecurrence);
-    if (els.appointmentForm?.elements?.recurrence) els.appointmentForm.elements.recurrence.addEventListener('change', syncAppointmentBirthdayRecurrence);
     if (els.cancelHabitEditBtn) els.cancelHabitEditBtn.addEventListener('click', () => closeHabitForm({ clearForm: true }));
     if (els.cancelTaskEditBtn) els.cancelTaskEditBtn.addEventListener('click', () => closeTaskForm({ clearForm: true }));
     if (els.cancelAppointmentEditBtn) els.cancelAppointmentEditBtn.addEventListener('click', () => closeAppointmentForm({ clearForm: true }));
@@ -1686,11 +1676,7 @@
     const created = nowIso();
     return {
       version: 1,
-      habits: [
-        createSystemMeditationHabit(created),
-        createSystemDumbbellsHabit(created),
-        createSystemSwimmingHabit(created)
-      ],
+      habits: [createSystemMeditationHabit(created)],
       habitEntries: [],
       cigarettes: [],
       alcoholLogs: [],
@@ -1785,78 +1771,18 @@
     };
   }
 
-  function createSystemDumbbellsHabit(created = nowIso()) {
-    return {
-      id: DEFAULT_HABIT_IDS.dumbbells,
-      name: 'Hanteln',
-      type: 'number',
-      unit: 'Sätze',
-      direction: 'increase',
-      target: 3,
-      target_period: 'day',
-      icon: 'dumbbells',
-      color: '#5098b8',
-      system_key: 'dumbbells',
-      is_archived: false,
-      created_at: created,
-      updated_at: created,
-      synced: false
-    };
-  }
-
-  function createSystemSwimmingHabit(created = nowIso()) {
-    return {
-      id: DEFAULT_HABIT_IDS.swimming,
-      name: 'Schwimmen',
-      type: 'duration',
-      unit: 'Min.',
-      direction: 'increase',
-      target: 30,
-      target_period: 'day',
-      icon: 'swimming',
-      color: '#5098b8',
-      system_key: 'swimming',
-      is_archived: false,
-      created_at: created,
-      updated_at: created,
-      synced: false
-    };
-  }
-
   function ensureSystemHabits(nextState = state) {
     const meditationHabit = nextState.habits.find(h => h.system_key === 'meditation' || String(h.name || '').trim().toLowerCase() === 'meditation');
     if (!meditationHabit) {
       nextState.habits.push(createSystemMeditationHabit());
-    } else {
-      meditationHabit.system_key = 'meditation';
-      meditationHabit.type = meditationHabit.type || 'duration';
-      meditationHabit.unit = meditationHabit.unit || 'Min.';
-      meditationHabit.icon = meditationHabit.icon || '🧘';
-      meditationHabit.target_period = normalizeHabitTargetPeriod(meditationHabit.target_period || 'day');
-      meditationHabit.is_archived = false;
+      return nextState;
     }
-    const dumbbellsHabit = nextState.habits.find(h => h.system_key === 'dumbbells' || String(h.name || '').trim().toLowerCase() === 'hanteln');
-    if (!dumbbellsHabit) {
-      nextState.habits.push(createSystemDumbbellsHabit());
-    } else {
-      dumbbellsHabit.system_key = 'dumbbells';
-      dumbbellsHabit.type = dumbbellsHabit.type || 'number';
-      dumbbellsHabit.unit = dumbbellsHabit.unit || 'Sätze';
-      dumbbellsHabit.icon = dumbbellsHabit.icon || 'dumbbells';
-      dumbbellsHabit.target_period = normalizeHabitTargetPeriod(dumbbellsHabit.target_period || 'day');
-      dumbbellsHabit.is_archived = false;
-    }
-    const swimmingHabit = nextState.habits.find(h => h.system_key === 'swimming' || String(h.name || '').trim().toLowerCase() === 'schwimmen');
-    if (!swimmingHabit) {
-      nextState.habits.push(createSystemSwimmingHabit());
-    } else {
-      swimmingHabit.system_key = 'swimming';
-      swimmingHabit.type = swimmingHabit.type || 'duration';
-      swimmingHabit.unit = swimmingHabit.unit || 'Min.';
-      swimmingHabit.icon = swimmingHabit.icon || 'swimming';
-      swimmingHabit.target_period = normalizeHabitTargetPeriod(swimmingHabit.target_period || 'day');
-      swimmingHabit.is_archived = false;
-    }
+    meditationHabit.system_key = 'meditation';
+    meditationHabit.type = meditationHabit.type || 'duration';
+    meditationHabit.unit = meditationHabit.unit || 'Min.';
+    meditationHabit.icon = meditationHabit.icon || '🧘';
+    meditationHabit.target_period = normalizeHabitTargetPeriod(meditationHabit.target_period || 'day');
+    meditationHabit.is_archived = false;
     return nextState;
   }
 
@@ -2373,20 +2299,11 @@
     return parseTaskIdeaMetaFromDescription(idea.description || '').description;
   }
 
-  function taskIdeaProjectId(idea = {}) {
-    const parsed = parseTaskIdeaMetaFromDescription(idea.description || '');
-    return String(idea.project_id || idea.projectId || parsed.meta.project_id || '').trim();
-  }
-
   function taskIdeaDescriptionForStorage(idea = {}) {
-    const parsed = parseTaskIdeaMetaFromDescription(idea.description || '');
-    const clean = parsed.description.trim();
-    const rating = normalizeTaskIdeaRating(idea.rating ?? parsed.meta.rating);
-    const projectId = taskIdeaProjectId(idea);
-    const meta = {};
-    if (rating) meta.rating = rating;
-    if (projectId) meta.project_id = projectId;
-    if (!Object.keys(meta).length) return clean || null;
+    const clean = taskIdeaDescriptionForDisplay(idea).trim();
+    const rating = normalizeTaskIdeaRating(idea.rating);
+    if (!rating) return clean || null;
+    const meta = { rating };
     return `${clean ? `${clean}\n\n` : ''}<!--hf-idea-meta:${encodeURIComponent(JSON.stringify(meta))}-->`;
   }
 
@@ -2493,14 +2410,11 @@
     const status = TASK_IDEA_STATUSES.has(String(idea.idea_status || idea.status || '').trim()) ? String(idea.idea_status || idea.status).trim() : 'open';
     const category = TASK_IDEA_CATEGORIES[String(idea.category || '').trim()] ? String(idea.category).trim() : 'focus';
     const rating = normalizeTaskIdeaRating(idea.rating ?? idea.idea_rating ?? idea.stars ?? parsedDescription.meta.rating);
-    const projectId = String(idea.project_id || idea.projectId || parsedDescription.meta.project_id || '').trim() || null;
     return {
       ...idea,
       title: String(idea.title || '').trim(),
       description: parsedDescription.description,
       rating,
-      project_id: projectId,
-      projectId: projectId,
       category,
       story_points: [1, 2, 3, 5, 8].includes(story) ? story : 2,
       priority: normalizeTaskPriority(idea.priority),
@@ -2571,20 +2485,19 @@
   }
 
   function isPhysicalHabit(habit = {}) {
-    return ['sport', 'jogging', 'hiking', 'walking', 'pushups', 'dumbbells', 'swimming'].includes(habitIconKey(habit));
+    return ['sport', 'jogging', 'hiking', 'walking', 'pushups'].includes(habitIconKey(habit));
   }
 
   function defaultHabitDna(habit = {}) {
     const type = habit.type || 'number';
     const icon = habitIconKey(habit);
-    const isSportHabit = ['sport', 'jogging', 'hiking', 'walking', 'pushups', 'dumbbells', 'swimming'].includes(icon);
     return {
       difficulty: type === 'boolean' ? 1 : type === 'duration' ? 3 : type === 'weight' ? 2 : 2,
-      energy: isSportHabit ? 4 : icon === 'meditation' ? 2 : type === 'boolean' ? 2 : 3,
+      energy: ['sport', 'jogging', 'hiking', 'walking', 'pushups'].includes(icon) ? 4 : icon === 'meditation' ? 2 : type === 'boolean' ? 2 : 3,
       preferred_time: icon === 'meditation' ? 'evening' : type === 'weight' ? 'morning' : 'flexible',
-      emotional_hurdle: icon === 'meditation' ? 'resistance' : isSportHabit ? 'tiredness' : 'consistency',
-      trigger: icon === 'meditation' ? 'bedtime' : isSportHabit ? 'afterwork' : type === 'weight' ? 'wakeup' : 'routine',
-      reward: icon === 'meditation' ? 'calm' : isSportHabit ? 'energy' : type === 'weight' ? 'clarity' : 'progress'
+      emotional_hurdle: icon === 'meditation' ? 'resistance' : ['sport', 'jogging', 'hiking', 'walking', 'pushups'].includes(icon) ? 'tiredness' : 'consistency',
+      trigger: icon === 'meditation' ? 'bedtime' : ['sport', 'jogging', 'hiking', 'walking', 'pushups'].includes(icon) ? 'afterwork' : type === 'weight' ? 'wakeup' : 'routine',
+      reward: icon === 'meditation' ? 'calm' : ['sport', 'jogging', 'hiking', 'walking', 'pushups'].includes(icon) ? 'energy' : type === 'weight' ? 'clarity' : 'progress'
     };
   }
 
@@ -2770,34 +2683,6 @@
 
   function appointmentsOnDate(key) {
     return state.appointments.filter(appointment => appointmentOccursOnDate(appointment, key)).sort(compareAppointments);
-  }
-
-  function pushCalendarIndexEntry(index, key, value) {
-    if (!key) return;
-    const items = index.get(key);
-    if (items) items.push(value);
-    else index.set(key, [value]);
-  }
-
-  function buildCalendarAppointmentIndex(startKey, endKey) {
-    const index = new Map();
-    state.appointments.forEach(appointment => {
-      const appointmentStartKey = toDateKey(appointment?.starts_at);
-      const appointmentEndKey = toDateKey(appointment?.ends_at || appointment?.starts_at);
-      if (!appointmentStartKey || !appointmentEndKey || appointmentStartKey > appointmentEndKey) return;
-      if (appointmentStartKey > endKey || appointmentEndKey < startKey) return;
-      const firstKey = appointmentStartKey < startKey ? startKey : appointmentStartKey;
-      const lastKey = appointmentEndKey > endKey ? endKey : appointmentEndKey;
-      const cursor = new Date(`${firstKey}T12:00:00`);
-      let cursorKey = firstKey;
-      while (cursorKey <= lastKey) {
-        pushCalendarIndexEntry(index, cursorKey, appointment);
-        cursor.setDate(cursor.getDate() + 1);
-        cursorKey = toDateKey(cursor);
-      }
-    });
-    index.forEach(items => items.sort(compareAppointments));
-    return index;
   }
 
   function isActiveTask(task) {
@@ -5057,7 +4942,6 @@
       </div>
     </article>`;
   }
-
 
   function toggleMonthlyMissionForm() {
     monthlyMissionFormOpen = !monthlyMissionFormOpen;
@@ -9451,8 +9335,6 @@
       priority: normalizeTaskPriority(item.priority),
       task_title: String(item.task_title || title).trim(),
       task_description: String(item.task_description || summary).trim(),
-      project_id: String(item.project_id || item.projectId || '').trim() || null,
-      projectId: String(item.project_id || item.projectId || '').trim() || null,
       tags: list(item.tags, []),
       source: String(item.source || 'custom').trim(),
       is_archived: Boolean(item.is_archived || item.deleted_at),
@@ -9660,7 +9542,6 @@
       transport: item.transport || ['any'],
       story_points: Number(item.story_points || 2),
       priority: normalizeTaskPriority(item.priority),
-      project_id: item.project_id || item.projectId || null,
       task_title: item.task_title || item.title,
       task_description: item.task_description || item.summary || null,
       tags: item.tags || [],
@@ -9772,13 +9653,7 @@
     if (!supabaseClient || !currentUserId() || !remoteActivityIdeasSupported) return false;
     try {
       const rows = rowsForCurrentUser(leisureActivityRowsForRemote([activity]));
-      let { error } = await supabaseClient.from(ACTIVITY_CATALOG_TABLE).upsert(rows, { onConflict: 'user_id,id' });
-      if (error && remoteActivityIdeaProjectSupported && isMissingRemoteColumnError(error, 'project_id')) {
-        remoteActivityIdeaProjectSupported = false;
-        const fallbackRows = rows.map(({ project_id, ...row }) => row);
-        const retry = await supabaseClient.from(ACTIVITY_CATALOG_TABLE).upsert(fallbackRows, { onConflict: 'user_id,id' });
-        error = retry.error;
-      }
+      const { error } = await supabaseClient.from(ACTIVITY_CATALOG_TABLE).upsert(rows, { onConflict: 'user_id,id' });
       if (error) {
         if (isMissingActivityRelationError(error)) {
           remoteActivityIdeasSupported = false;
@@ -9804,13 +9679,7 @@
     try {
       for (let index = 0; index < rows.length; index += chunkSize) {
         const batch = rows.slice(index, index + chunkSize);
-        let { error } = await supabaseClient.from(ACTIVITY_CATALOG_TABLE).upsert(rowsForCurrentUser(batch), { onConflict: 'user_id,id' });
-        if (error && remoteActivityIdeaProjectSupported && isMissingRemoteColumnError(error, 'project_id')) {
-          remoteActivityIdeaProjectSupported = false;
-          const fallbackBatch = batch.map(({ project_id, ...row }) => row);
-          const retry = await supabaseClient.from(ACTIVITY_CATALOG_TABLE).upsert(rowsForCurrentUser(fallbackBatch), { onConflict: 'user_id,id' });
-          error = retry.error;
-        }
+        const { error } = await supabaseClient.from(ACTIVITY_CATALOG_TABLE).upsert(rowsForCurrentUser(batch), { onConflict: 'user_id,id' });
         if (error) {
           if (isMissingActivityRelationError(error)) {
             remoteActivityIdeasSupported = false;
@@ -10061,8 +9930,6 @@
       category: activity.idea_category || 'experiment',
       story_points: activity.story_points || 2,
       priority: normalizeTaskPriority(activity.priority),
-      project_id: activity.project_id || activity.projectId || null,
-      projectId: activity.project_id || activity.projectId || null,
       idea_status: 'open',
       source_key: `activity:${activity.id}`,
       generated_task_id: null,
@@ -10101,9 +9968,6 @@
       priority: normalizeTaskPriority(activity.priority),
       due_at: null,
       status: nextStatus,
-      project_id: activity.project_id || activity.projectId || null,
-      projectId: activity.project_id || activity.projectId || null,
-      project_link_cleared_at: (activity.project_id || activity.projectId) ? null : undefined,
       backlog_rank: nextStatus === TASK_BACKLOG_STATUS ? nextBacklogRank() : null,
       completed_at: null,
       done_archived_at: null,
@@ -10499,20 +10363,6 @@
       .sort((a, b) => taskPriorityMeta(b).rank - taskPriorityMeta(a).rank || compareTasks(a, b));
   }
 
-  function buildCalendarTaskIndex(startKey, endKey) {
-    const index = new Map();
-    state.tasks
-      .map(normalizeTask)
-      .forEach(task => {
-        if (!isActiveTask(task)) return;
-        const dueKey = toDateKey(task.due_at);
-        if (!dueKey || dueKey < startKey || dueKey > endKey) return;
-        pushCalendarIndexEntry(index, dueKey, task);
-      });
-    index.forEach(items => items.sort((a, b) => taskPriorityMeta(b).rank - taskPriorityMeta(a).rank || compareTasks(a, b)));
-    return index;
-  }
-
   function renderCalendarTaskDots(tasks) {
     if (!tasks.length) return '';
     const visible = tasks.slice(0, 7);
@@ -10535,24 +10385,17 @@
     const start = new Date(first);
     const day = first.getDay() || 7;
     start.setDate(first.getDate() - day + 1);
-    const end = new Date(start);
-    end.setDate(start.getDate() + 41);
-    const startKey = toDateKey(start);
-    const endKey = toDateKey(end);
-    const todayKey = toDateKey(new Date());
-    const appointmentIndex = buildCalendarAppointmentIndex(startKey, endKey);
-    const taskIndex = buildCalendarTaskIndex(startKey, endKey);
 
     const cells = [];
     for (let i = 0; i < 42; i++) {
       const date = new Date(start);
       date.setDate(start.getDate() + i);
       const key = toDateKey(date);
-      const appointments = appointmentIndex.get(key) || [];
-      const tasks = taskIndex.get(key) || [];
+      const appointments = appointmentsOnDate(key);
+      const tasks = calendarTasksOnDate(key);
       const chips = renderCalendarAppointmentChips(appointments);
       const taskDots = renderCalendarTaskDots(tasks);
-      cells.push(`<button class="calendar-day ${date.getMonth() !== month ? 'is-muted' : ''} ${key === todayKey ? 'is-today' : ''} ${key === selectedCalendarDate ? 'is-selected' : ''} ${appointments.length ? 'has-appointments' : ''} ${tasks.length ? 'has-task-dots' : ''}" type="button" data-action="select-day" data-day="${key}">
+      cells.push(`<button class="calendar-day ${date.getMonth() !== month ? 'is-muted' : ''} ${key === toDateKey(new Date()) ? 'is-today' : ''} ${key === selectedCalendarDate ? 'is-selected' : ''} ${appointments.length ? 'has-appointments' : ''} ${tasks.length ? 'has-task-dots' : ''}" type="button" data-action="select-day" data-day="${key}">
         <span class="calendar-day-head"><strong>${date.getDate()}</strong>${appointments.length ? `<em class="day-appointment-count">${appointments.length}</em>` : ''}</span>
         <span class="day-chips">${chips}</span>
         ${taskDots}
@@ -11821,7 +11664,6 @@ async function deleteAlcoholLog(id) {
     const title = String(data.get('title') || '').trim();
     if (!title) return;
     const created = nowIso();
-    const projectId = String(data.get('project_id') || '').trim() || null;
     state.taskIdeas.push(normalizeTaskIdea({
       id: uid(),
       title,
@@ -11829,8 +11671,6 @@ async function deleteAlcoholLog(id) {
       category: data.get('category'),
       story_points: Number(data.get('story_points') || 2),
       priority: normalizeTaskPriority(data.get('priority')),
-      project_id: projectId,
-      projectId: projectId,
       idea_status: 'open',
       source_key: null,
       generated_task_id: null,
@@ -11864,7 +11704,6 @@ async function deleteAlcoholLog(id) {
     if (!idea || idea.idea_status !== 'open') return;
     const created = nowIso();
     const nextStatus = targetStatus === TASK_BACKLOG_STATUS ? TASK_BACKLOG_STATUS : 'open';
-    const projectId = taskIdeaProjectId(idea) || null;
     const task = {
       id: uid(),
       title: idea.title,
@@ -11873,9 +11712,6 @@ async function deleteAlcoholLog(id) {
       priority: normalizeTaskPriority(idea.priority),
       due_at: dueAt || null,
       status: nextStatus,
-      project_id: projectId,
-      projectId: projectId,
-      project_link_cleared_at: projectId ? null : undefined,
       backlog_rank: nextStatus === TASK_BACKLOG_STATUS ? nextBacklogRank() : null,
       completed_at: null,
       done_archived_at: null,
@@ -12203,12 +12039,10 @@ async function deleteAlcoholLog(id) {
   function createAppointment(event) {
     event.preventDefault();
     if (!els.appointmentForm) return;
-    syncAppointmentBirthdayRecurrence();
     const data = new FormData(els.appointmentForm);
     const startsAt = validIsoOrNull(data.get('starts_at'));
     const endsAt = validIsoOrNull(data.get('ends_at'));
-    const isBirthday = Boolean(data.get('is_birthday'));
-    const recurrence = isBirthday ? 'yearly' : normalizeAppointmentRecurrence(data.get('recurrence'));
+    const recurrence = normalizeAppointmentRecurrence(data.get('recurrence'));
     const values = {
       title: String(data.get('title') || '').trim(),
       description: String(data.get('description') || '').trim(),
@@ -12219,7 +12053,7 @@ async function deleteAlcoholLog(id) {
       recurrence,
       series_id: null,
       series_index: null,
-      is_birthday: isBirthday,
+      is_birthday: Boolean(data.get('is_birthday')),
       updated_at: nowIso(),
       synced: false
     };
@@ -12291,7 +12125,6 @@ async function deleteAlcoholLog(id) {
     fields.description.value = appointment.description || '';
     if (fields.recurrence) fields.recurrence.value = normalizeAppointmentRecurrence(appointment.recurrence) || 'once';
     if (fields.is_birthday) fields.is_birthday.checked = Boolean(appointment.is_birthday);
-    syncAppointmentBirthdayRecurrence();
     els.appointmentFormTitle.textContent = 'Termin bearbeiten';
     els.appointmentSubmitBtn.textContent = 'Änderungen speichern';
     els.cancelAppointmentEditBtn.classList.remove('hidden');
@@ -12367,12 +12200,6 @@ async function deleteAlcoholLog(id) {
     if (Number.isNaN(end.getTime()) || end.getTime() <= start.getTime()) {
       fields.ends_at.value = toDateTimeLocalValue(new Date(start.getTime() + 60 * 60 * 1000).toISOString());
     }
-  }
-
-  function syncAppointmentBirthdayRecurrence() {
-    const fields = els.appointmentForm?.elements;
-    if (!fields?.is_birthday?.checked || !fields?.recurrence) return;
-    fields.recurrence.value = 'yearly';
   }
 
   function moveMonth(delta) {
@@ -13397,40 +13224,29 @@ async function deleteAlcoholLog(id) {
     return false;
   }
 
-  function taskIdeaRowsForSync({ forceAll = false, includeProject = remoteTaskIdeaProjectSupported } = {}) {
-    return rowsPendingSync('task_ideas', state.taskIdeas || [], { forceAll }).map(idea => {
-      const row = {
-        id: idea.id,
-        title: idea.title,
-        description: taskIdeaDescriptionForStorage(idea),
-        category: TASK_IDEA_CATEGORIES[idea.category] ? idea.category : 'focus',
-        story_points: Number(idea.story_points || 2),
-        priority: normalizeTaskPriority(idea.priority),
-        idea_status: TASK_IDEA_STATUSES.has(idea.idea_status) ? idea.idea_status : 'open',
-        source_key: idea.source_key || null,
-        generated_task_id: idea.generated_task_id || null,
-        accepted_at: idea.accepted_at || null,
-        dismissed_at: idea.dismissed_at || null,
-        created_at: idea.created_at,
-        updated_at: idea.updated_at || nowIso()
-      };
-      if (includeProject) row.project_id = taskIdeaProjectId(idea) || null;
-      return row;
-    });
+  function taskIdeaRowsForSync({ forceAll = false } = {}) {
+    return rowsPendingSync('task_ideas', state.taskIdeas || [], { forceAll }).map(idea => ({
+      id: idea.id,
+      title: idea.title,
+      description: taskIdeaDescriptionForStorage(idea),
+      category: TASK_IDEA_CATEGORIES[idea.category] ? idea.category : 'focus',
+      story_points: Number(idea.story_points || 2),
+      priority: normalizeTaskPriority(idea.priority),
+      idea_status: TASK_IDEA_STATUSES.has(idea.idea_status) ? idea.idea_status : 'open',
+      source_key: idea.source_key || null,
+      generated_task_id: idea.generated_task_id || null,
+      accepted_at: idea.accepted_at || null,
+      dismissed_at: idea.dismissed_at || null,
+      created_at: idea.created_at,
+      updated_at: idea.updated_at || nowIso()
+    }));
   }
 
   async function upsertTaskIdeaRows({ forceAll = false } = {}) {
     if (!remoteTaskIdeasSupported) return false;
     const rows = taskIdeaRowsForSync({ forceAll });
     if (!rows.length) return false;
-    let { error } = await supabaseClient.from('task_ideas').upsert(rowsForCurrentUser(rows), { onConflict: 'id' });
-    if (error && remoteTaskIdeaProjectSupported && isMissingRemoteColumnError(error, 'project_id')) {
-      remoteTaskIdeaProjectSupported = false;
-      console.warn('Remote Ideenpool-Tabelle hat noch keine project_id-Spalte. Sync läuft vorübergehend ohne Projektspalte, bis supabase.sql angewendet ist.', error);
-      const fallbackRows = taskIdeaRowsForSync({ forceAll, includeProject: false });
-      const retry = await supabaseClient.from('task_ideas').upsert(rowsForCurrentUser(fallbackRows), { onConflict: 'id' });
-      error = retry.error;
-    }
+    const { error } = await supabaseClient.from('task_ideas').upsert(rowsForCurrentUser(rows), { onConflict: 'id' });
     if (!error) {
       markRowsSynced('taskIdeas', rows);
       saveState({ skipRender: true });
@@ -13864,11 +13680,6 @@ async function deleteAlcoholLog(id) {
     if (!localIdea) return remoteIdea;
     const next = { ...remoteIdea };
     if (!normalizeTaskIdeaRating(next.rating) && normalizeTaskIdeaRating(localIdea.rating)) next.rating = normalizeTaskIdeaRating(localIdea.rating);
-    const localProjectId = taskIdeaProjectId(localIdea);
-    if (!taskIdeaProjectId(next) && localProjectId) {
-      next.project_id = localProjectId;
-      next.projectId = localProjectId;
-    }
     return next;
   }
 
@@ -13972,7 +13783,7 @@ async function deleteAlcoholLog(id) {
   const mapRemoteAlcohol = a => ({ id: a.id, log_date: a.log_date, consumed: a.consumed, note: a.note, created_at: a.created_at, updated_at: a.updated_at, synced: true });
   const mapRemoteAlcoholEvent = a => ({ id: a.id, occurred_at: a.occurred_at, drink_type: a.drink_type || 'other', note: a.note, created_at: a.created_at, updated_at: a.updated_at, synced: true });
   const mapRemoteTask = t => ({ id: t.id, title: t.title, description: t.description, effort: t.effort, priority: normalizeTaskPriority(t.priority), status: TASK_COLUMNS.some(column => column.status === t.status) ? t.status : 'open', due_at: t.due_at, completed_at: t.completed_at, points: t.points, backlog_rank: t.backlog_rank, done_archived_at: t.done_archived_at, done_archive_rank: t.done_archive_rank, created_at: t.created_at, updated_at: t.updated_at, synced: true });
-  const mapRemoteTaskIdea = idea => normalizeTaskIdea({ id: idea.id, title: idea.title, description: idea.description, project_id: idea.project_id || null, category: idea.category, story_points: idea.story_points, priority: idea.priority, idea_status: idea.idea_status, source_key: idea.source_key, generated_task_id: idea.generated_task_id, accepted_at: idea.accepted_at, dismissed_at: idea.dismissed_at, created_at: idea.created_at, updated_at: idea.updated_at, synced: true });
+  const mapRemoteTaskIdea = idea => normalizeTaskIdea({ id: idea.id, title: idea.title, description: idea.description, category: idea.category, story_points: idea.story_points, priority: idea.priority, idea_status: idea.idea_status, source_key: idea.source_key, generated_task_id: idea.generated_task_id, accepted_at: idea.accepted_at, dismissed_at: idea.dismissed_at, created_at: idea.created_at, updated_at: idea.updated_at, synced: true });
   const mapRemoteAppointment = a => normalizeAppointment({
     id: a.id,
     title: a.title,
