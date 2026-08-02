@@ -933,6 +933,7 @@
   let remoteTaskInProgressSupported = true;
   let remoteTaskBacklogRankSupported = true;
   let remoteTaskDoneArchiveSupported = true;
+  let remoteTaskCategorySupported = true;
   let remoteTaskIdeasSupported = true;
   let remoteActivityIdeasSupported = true;
   let remoteHabitTargetPeriodSupported = true;
@@ -2372,6 +2373,7 @@
       id: uid(),
       title: completed.title,
       description: taskDescriptionForDisplay(completed),
+      category: normalizeTaskCategory(completed.category),
       effort: completed.effort || 3,
       priority: normalizeTaskPriority(completed.priority),
       status: 'open',
@@ -2398,6 +2400,7 @@
     const normalized = {
       ...task,
       description: parsedDescription.description,
+      category: normalizeTaskCategory(task.category),
       images: normalizeTaskImages(task.images || task.media || parsedDescription.media),
       status,
       priority: normalizeTaskPriority(task.priority),
@@ -2406,6 +2409,26 @@
     };
     normalized.recurrence = normalizeTaskRecurrence(task.recurrence || parsedDescription.recurrence, normalized);
     return normalized;
+  }
+
+  function normalizeTaskCategory(value = '') {
+    return String(value || '').trim().replace(/\s+/g, ' ').slice(0, 80);
+  }
+
+  function taskCategoryValues() {
+    const categories = new Map();
+    state.tasks.forEach(task => {
+      const category = normalizeTaskCategory(task.category);
+      const key = category.toLocaleLowerCase('de-CH');
+      if (category && !categories.has(key)) categories.set(key, category);
+    });
+    return Array.from(categories.values()).sort((a, b) => a.localeCompare(b, 'de-CH'));
+  }
+
+  function syncTaskCategoryOptions() {
+    const datalist = document.getElementById('taskCategoryOptions');
+    if (!datalist) return;
+    datalist.innerHTML = taskCategoryValues().map(category => `<option value="${escapeHtml(category)}"></option>`).join('');
   }
 
   function normalizeTaskIdea(idea = {}) {
@@ -3086,6 +3109,7 @@
 
   function openTaskForm() {
     taskFormOpen = true;
+    syncTaskCategoryOptions();
     syncTaskFormPanel();
     requestAnimationFrame(() => els.taskForm?.elements?.title?.focus({ preventScroll: true }));
   }
@@ -10242,6 +10266,7 @@
           <span class="badge muted ${taskPriorityClass(normalized.priority)}">${escapeHtml(priority.label)}</span>
           <span class="badge muted">${escapeHtml(statusLabel)}</span>
           <span class="badge muted">Aufwand ${Number(normalized.effort || 3)}/5</span>
+          ${normalized.category ? `<span class="badge muted">${escapeHtml(normalized.category)}</span>` : ''}
           ${recurrence ? `<span class="badge task-recurrence-badge">${escapeHtml(recurrence)}</span>` : ''}
           ${images.length ? `<span class="badge muted task-image-badge">${images.length} Bild${images.length === 1 ? '' : 'er'}</span>` : ''}
         </div>
@@ -11564,6 +11589,7 @@ async function deleteAlcoholLog(id) {
     const values = {
       title: String(data.get('title') || '').trim(),
       description: String(data.get('description') || '').trim(),
+      category: normalizeTaskCategory(data.get('category')),
       effort: Number(data.get('effort') || 3),
       priority: normalizeTaskPriority(data.get('priority')),
       due_at: dueAt,
@@ -12038,8 +12064,10 @@ async function deleteAlcoholLog(id) {
     if (!task) return;
     editingTaskId = id;
     const fields = els.taskForm.elements;
+    syncTaskCategoryOptions();
     fields.title.value = task.title || '';
     fields.description.value = taskDescriptionForDisplay(task);
+    if (fields.category) fields.category.value = normalizeTaskCategory(task.category);
     fields.effort.value = String(task.effort || 3);
     fields.priority.value = normalizeTaskPriority(task.priority);
     fields.due_at.value = toDateTimeLocalValue(task.due_at);
@@ -12065,6 +12093,7 @@ async function deleteAlcoholLog(id) {
       els.taskForm.elements.effort.value = '3';
       els.taskForm.elements.priority.value = 'medium';
       if (els.taskForm.elements.recurrence) els.taskForm.elements.recurrence.value = 'none';
+      if (els.taskForm.elements.category) els.taskForm.elements.category.value = '';
       if (els.taskForm.elements.images) els.taskForm.elements.images.value = '';
       if (els.taskForm.elements.remove_images) els.taskForm.elements.remove_images.checked = false;
     }
@@ -13359,6 +13388,7 @@ async function deleteAlcoholLog(id) {
         created_at: t.created_at,
         updated_at: t.updated_at || nowIso()
       };
+      if (remoteTaskCategorySupported) row.category = normalizeTaskCategory(t.category) || null;
       if (remoteTaskPrioritySupported) row.priority = normalizeTaskPriority(t.priority);
       if (remoteTaskBacklogRankSupported && t.backlog_rank != null) row.backlog_rank = Number(t.backlog_rank) || null;
       if (remoteTaskDoneArchiveSupported) {
@@ -13372,7 +13402,7 @@ async function deleteAlcoholLog(id) {
   async function upsertTaskRows({ forceAll = false } = {}) {
     const rows = taskRowsForSync({ forceAll });
     if (!rows.length) return false;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    for (let attempt = 0; attempt < 4; attempt += 1) {
       const activeRows = taskRowsForSync({ forceAll });
       if (!activeRows.length) return false;
       const { error } = await supabaseClient.from('tasks').upsert(rowsForCurrentUser(activeRows), { onConflict: 'id' });
@@ -13399,6 +13429,11 @@ async function deleteAlcoholLog(id) {
       if (remoteTaskDoneArchiveSupported && (isMissingRemoteColumnError(error, 'done_archived_at') || isMissingRemoteColumnError(error, 'done_archive_rank'))) {
         remoteTaskDoneArchiveSupported = false;
         console.warn('Remote Tasks-Tabelle hat noch keine Archiv-Spalten für erledigte Aufgaben. Das Archiv bleibt lokal, bis supabase.sql angewendet ist.', error);
+        continue;
+      }
+      if (remoteTaskCategorySupported && isMissingRemoteColumnError(error, 'category')) {
+        remoteTaskCategorySupported = false;
+        console.warn('Remote Tasks-Tabelle hat noch keine category-Spalte. Kategorien bleiben lokal, bis sql/add-task-categories.sql angewendet ist.', error);
         continue;
       }
       throw error;
@@ -13782,6 +13817,7 @@ async function deleteAlcoholLog(id) {
       next.done_archived_at = localTask.done_archived_at || next.done_archived_at || null;
       next.done_archive_rank = localTask.done_archive_rank ?? next.done_archive_rank ?? null;
     }
+    if (!remoteTaskCategorySupported) next.category = normalizeTaskCategory(localTask.category);
     return next;
   }
 
@@ -13867,7 +13903,7 @@ async function deleteAlcoholLog(id) {
   const mapRemoteCigarette = c => ({ id: c.id, smoked_at: c.smoked_at, interval_minutes: c.interval_minutes, alcohol_context: c.alcohol_context, points: c.points, note: c.note, created_at: c.created_at, updated_at: c.updated_at, synced: true });
   const mapRemoteAlcohol = a => ({ id: a.id, log_date: a.log_date, consumed: a.consumed, note: a.note, created_at: a.created_at, updated_at: a.updated_at, synced: true });
   const mapRemoteAlcoholEvent = a => ({ id: a.id, occurred_at: a.occurred_at, drink_type: a.drink_type || 'other', note: a.note, created_at: a.created_at, updated_at: a.updated_at, synced: true });
-  const mapRemoteTask = t => ({ id: t.id, title: t.title, description: t.description, effort: t.effort, priority: normalizeTaskPriority(t.priority), status: TASK_COLUMNS.some(column => column.status === t.status) ? t.status : 'open', due_at: t.due_at, completed_at: t.completed_at, points: t.points, backlog_rank: t.backlog_rank, done_archived_at: t.done_archived_at, done_archive_rank: t.done_archive_rank, created_at: t.created_at, updated_at: t.updated_at, synced: true });
+  const mapRemoteTask = t => ({ id: t.id, title: t.title, description: t.description, category: normalizeTaskCategory(t.category), effort: t.effort, priority: normalizeTaskPriority(t.priority), status: TASK_COLUMNS.some(column => column.status === t.status) ? t.status : 'open', due_at: t.due_at, completed_at: t.completed_at, points: t.points, backlog_rank: t.backlog_rank, done_archived_at: t.done_archived_at, done_archive_rank: t.done_archive_rank, created_at: t.created_at, updated_at: t.updated_at, synced: true });
   const mapRemoteTaskIdea = idea => normalizeTaskIdea({ id: idea.id, title: idea.title, description: idea.description, category: idea.category, story_points: idea.story_points, priority: idea.priority, idea_status: idea.idea_status, source_key: idea.source_key, generated_task_id: idea.generated_task_id, accepted_at: idea.accepted_at, dismissed_at: idea.dismissed_at, created_at: idea.created_at, updated_at: idea.updated_at, synced: true });
   const mapRemoteAppointment = a => normalizeAppointment({
     id: a.id,
