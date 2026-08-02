@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v242-pauses-accordion';
+const CACHE_NAME = 'habitflow-v243-finance-list';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
