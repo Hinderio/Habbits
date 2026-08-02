@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v230-monthly-magazine';
+const CACHE_NAME = 'habitflow-v231-task-swimlane';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -22,6 +22,8 @@ const MODULE_ASSETS = [
   './modules/habit-defaults-extension.js',
   './modules/habits.js',
   './modules/tasks.js',
+  './modules/task-swimlane-view.js',
+  './modules/task-swimlane-view.css',
   './modules/fitness.js',
   './modules/consumption.js',
   './modules/smoking-tip-modal.js',
