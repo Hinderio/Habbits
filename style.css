@@ -3768,9 +3768,25 @@ body.light .task-detail-facts article,body.light .task-detail-image{background:r
 /* v114 · Training Compass + Personal Best Museum */
 .fitness-intelligence-grid{
   display:grid;
-  grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);
+  grid-template-columns:repeat(2,minmax(0,1fr));
   gap:14px;
   align-items:stretch;
+}
+.fitness-journey-grid>.mobile-fitness-section,
+.fitness-intelligence-grid>.mobile-fitness-section{
+  min-width:0;
+  width:100%;
+  max-width:100%;
+}
+.fitness-journey-card,
+.fitness-intelligence-card{
+  width:100%;
+  max-width:100%;
+  box-sizing:border-box;
+}
+@media (min-width:761px){
+  .fitness-journey-grid>.mobile-fitness-section,
+  .fitness-intelligence-grid>.mobile-fitness-section{display:block}
 }
 .fitness-intelligence-card{
   min-width:0;
