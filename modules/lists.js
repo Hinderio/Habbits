@@ -15,13 +15,27 @@
     { value: 'yearly', label: 'Jährlich', annualFactor: 1 }
   ];
   const SUBSCRIPTION_COLORS = ['#34c9c3', '#f6b33f', '#61cbf4', '#ff8fa3', '#8fdc9b', '#9b7de3', '#f08a73', '#5b8def'];
+  const FINANCE_KINDS = [
+    { value: 'investment', label: 'Investition' },
+    { value: 'credit', label: 'Guthaben' },
+    { value: 'debt', label: 'Schuld' }
+  ];
+  const FINANCE_UNITS = [
+    { value: 'chf', label: 'CHF' },
+    { value: 'visits', label: 'Besuche' },
+    { value: 'units', label: 'Einheiten' },
+    { value: 'hours', label: 'Stunden' },
+    { value: 'days', label: 'Tage' }
+  ];
+  const FINANCE_COLORS = ['#35c9a5', '#61cbf4', '#f6b33f'];
   const DEFAULT_LISTS = [
     { id: 'lists', slug: 'listen', title: 'Listen', type: 'generic', icon: 'list', color: '#59d4cc', description: 'Freie Listen für kleine Sammlungen, Ideen und Dinge, die nicht in Tasks gehören.' },
     { id: 'vouchers', slug: 'gutscheine', title: 'Gutscheine', type: 'voucher', icon: 'ticket', color: '#f6b33f', description: 'Gutscheine, Codes und Fristen ruhig im Blick behalten.' },
     { id: 'shopping', slug: 'shopping', title: 'Shopping', type: 'shopping', icon: 'shopping', color: '#8bd7cd', description: 'Einkäufe, Mengen und Läden als klare Liste sammeln.' },
     { id: 'photos', slug: 'fotospots', title: 'Fotospots', type: 'photos', icon: 'camera', color: '#52bfd7', description: 'Spots sammeln und daraus visuelle Touren planen.' },
     { id: 'subscriptions', slug: 'abos', title: 'Abos', type: 'subscription', icon: 'repeat', color: '#61CBF4', description: 'Abos, Kosten, Laufzeiten und Kündigungsfenster ordnen.' },
-    { id: 'terms', slug: 'begriffe', title: 'Begriffe', type: 'generic', icon: 'book', color: '#ff8fa3', description: 'Begriffe nach Kategorien sammeln und mit Lernkarten festigen.' }
+    { id: 'terms', slug: 'begriffe', title: 'Begriffe', type: 'generic', icon: 'book', color: '#ff8fa3', description: 'Begriffe nach Kategorien sammeln und mit Lernkarten festigen.' },
+    { id: 'finance', slug: 'finanzen', title: 'Finanzen', type: 'generic', icon: 'wallet', color: '#6fd6a8', description: 'Investitionen, Guthaben und offene Schulden in einem ruhigen Finanzbild.' }
   ];
 
   const ICONS = {
@@ -31,6 +45,10 @@
     camera: '<path d="M4 8h4l2-3h4l2 3h4v11H4V8Z"/><circle cx="12" cy="13" r="3"/>',
     repeat: '<path d="m17 2 4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="m7 22-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>',
     book: '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5v-16Z"/><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5v-16Z"/>',
+    wallet: '<path d="M3 6h15a3 3 0 0 1 3 3v10H5a2 2 0 0 1-2-2V6Z"/><path d="M3 6a3 3 0 0 1 3-3h11v3"/><path d="M15 11h6v5h-6a2.5 2.5 0 0 1 0-5Z"/>',
+    trend: '<path d="m3 17 6-6 4 4 8-8"/><path d="M14 7h7v7"/>',
+    credit: '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 10h18"/><path d="M7 15h3"/>',
+    debt: '<path d="M16 3h5v5"/><path d="m21 3-7 7"/><path d="M8 21H3v-5"/><path d="m3 21 7-7"/>',
     close: '<path d="m6 6 12 12"/><path d="m18 6-12 12"/>',
     chevronLeft: '<path d="m15 18-6-6 6-6"/>',
     chevronRight: '<path d="m9 18 6-6-6-6"/>',
@@ -49,6 +67,7 @@
   let editingTermId = '';
   let editingShoppingId = '';
   let editingSubscriptionId = '';
+  let editingFinanceId = '';
   let termStudyCategory = '';
   let termStudyIndex = 0;
   let termStudyOrder = [];
@@ -152,8 +171,8 @@
       <section class="hero-card hf-list-hero glass">
         <div>
           <p class="eyebrow">List OS</p>
-          <h2>Listen, Spots und Abos ruhig ordnen</h2>
-          <p>Shopping, Gutscheine, Fotospots und wiederkehrende Dinge als klare Cards statt verstreuter Notizen.</p>
+          <h2>Listen, Wissen und Werte ruhig ordnen</h2>
+          <p>Shopping, Gutscheine, Fotospots, Finanzen und wiederkehrende Dinge als klare Cards statt verstreuter Notizen.</p>
         </div>
         <button id="hfListQuickAdd" class="pill primary" type="button">${icon('plus')} Eintrag erstellen</button>
       </section>
@@ -194,8 +213,8 @@
       const count = list.type === 'photos' ? state.stops.filter(stop => !stop.isArchived).length : itemsFor(list.id).length;
       const categories = list.id === 'terms' ? termCategories().length : 0;
       const done = list.type === 'photos' ? state.tours.filter(tour => !tour.isArchived).length : itemsFor(list.id).filter(item => item.isDone).length;
-      const cardType = list.type === 'photos' ? 'Touren & Orte' : list.id === 'terms' ? 'Lernkarten' : 'Liste';
-      const cardStat = list.type === 'photos' ? `${done} Touren` : list.id === 'terms' ? `${categories} ${categories === 1 ? 'Kategorie' : 'Kategorien'}` : 'Einträge';
+      const cardType = list.type === 'photos' ? 'Touren & Orte' : list.id === 'terms' ? 'Lernkarten' : list.id === 'finance' ? 'Werte & Verpflichtungen' : 'Liste';
+      const cardStat = list.type === 'photos' ? `${done} Touren` : list.id === 'terms' ? `${categories} ${categories === 1 ? 'Kategorie' : 'Kategorien'}` : list.id === 'finance' ? 'Positionen' : 'Einträge';
       return `
         <article class="hf-list-card ${list.id === activeListId ? 'is-active' : ''}" style="--hf-list-tone:${escapeHtml(list.color)}">
           <button type="button" data-list-open="${escapeHtml(list.id)}">
@@ -223,6 +242,10 @@
     }
     if (list.id === 'subscriptions') {
       target.innerHTML = renderSubscriptionsDetail(list);
+      return;
+    }
+    if (list.id === 'finance') {
+      target.innerHTML = renderFinanceDetail(list);
       return;
     }
     if (list.type === 'photos') {
@@ -518,6 +541,181 @@
     `;
   }
 
+  function financeKind(item) {
+    const value = String(item?.metadata?.financeKind || 'investment');
+    return FINANCE_KINDS.some(kind => kind.value === value) ? value : 'investment';
+  }
+
+  function financeUnit(item) {
+    const value = String(item?.metadata?.unit || 'chf');
+    return FINANCE_UNITS.some(unit => unit.value === value) ? value : 'chf';
+  }
+
+  function financeUnitLabel(value) {
+    return FINANCE_UNITS.find(unit => unit.value === value)?.label || 'CHF';
+  }
+
+  function financeAmount(item) {
+    return parseSubscriptionCost(item?.metadata?.amount);
+  }
+
+  function financeTotal(item) {
+    return parseSubscriptionCost(item?.metadata?.totalAmount);
+  }
+
+  function financeDirection(item) {
+    return item?.metadata?.direction === 'payable' ? 'payable' : 'receivable';
+  }
+
+  function financeDate(item) {
+    const value = String(item?.metadata?.dueDate || '').trim();
+    return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : '';
+  }
+
+  function formatFinanceValue(value, unit = 'chf') {
+    if (unit === 'chf') return formatCurrency(value);
+    return `${new Intl.NumberFormat('de-CH', { maximumFractionDigits: 2 }).format(Number(value) || 0)} ${financeUnitLabel(unit)}`;
+  }
+
+  function formatSignedCurrency(value) {
+    const amount = Number(value) || 0;
+    return `${amount > 0 ? '+' : ''}${formatCurrency(amount)}`;
+  }
+
+  function financeSummary(items) {
+    const active = items.filter(item => !item.isDone);
+    const investments = active.filter(item => financeKind(item) === 'investment' && financeUnit(item) === 'chf');
+    const credits = active.filter(item => financeKind(item) === 'credit');
+    const debts = active.filter(item => financeKind(item) === 'debt');
+    const invested = investments.reduce((sum, item) => sum + financeAmount(item), 0);
+    const basis = investments.reduce((sum, item) => sum + financeTotal(item), 0);
+    const creditChf = credits.filter(item => financeUnit(item) === 'chf').reduce((sum, item) => sum + financeAmount(item), 0);
+    const creditUnits = credits.filter(item => financeUnit(item) !== 'chf').length;
+    const receivable = debts.filter(item => financeDirection(item) === 'receivable').reduce((sum, item) => sum + financeAmount(item), 0);
+    const payable = debts.filter(item => financeDirection(item) === 'payable').reduce((sum, item) => sum + financeAmount(item), 0);
+    return { active, investments, credits, debts, invested, basis, creditChf, creditUnits, receivable, payable, net: invested + creditChf + receivable - payable };
+  }
+
+  function renderFinanceDetail(list) {
+    const items = itemsFor('finance');
+    const summary = financeSummary(items);
+    const editingItem = editingFinanceId ? items.find(item => item.id === editingFinanceId) : null;
+    const editingKind = financeKind(editingItem);
+    const editingUnit = financeUnit(editingItem);
+    const kindOptions = FINANCE_KINDS.map(kind => `<option value="${kind.value}" ${kind.value === editingKind ? 'selected' : ''}>${kind.label}</option>`).join('');
+    const unitOptions = FINANCE_UNITS.map(unit => `<option value="${unit.value}" ${unit.value === editingUnit ? 'selected' : ''}>${unit.label}</option>`).join('');
+    return `
+      <div class="panel-head">
+        <div><p class="eyebrow">${escapeHtml(list.title)}</p><h3>Dein Finanzbild</h3></div>
+        <span class="badge">${summary.active.length} aktiv</span>
+      </div>
+      ${renderFinanceOverview(summary)}
+      <form class="hf-list-form hf-finance-form ${editingItem ? 'is-editing' : ''}" data-form="finance" data-editing-id="${escapeHtml(editingItem?.id || '')}">
+        <label><span>Art</span><select name="kind" data-finance-kind required>${kindOptions}</select></label>
+        <label><span>Bezeichnung</span><input name="title" value="${escapeHtml(editingItem?.title || '')}" placeholder="z. B. ETF Welt, Fitnessabo oder Darlehen" required></label>
+        <label><span data-finance-amount-label>${editingKind === 'credit' ? 'Restguthaben' : editingKind === 'debt' ? 'Betrag' : 'Aktueller Wert'}</span><input name="amount" type="number" min="0" step="0.01" inputmode="decimal" value="${editingItem ? escapeHtml(financeAmount(editingItem)) : ''}" placeholder="0.00" required></label>
+        <label data-finance-total-field ${editingKind === 'debt' ? 'hidden' : ''}><span data-finance-total-label>${editingKind === 'credit' ? 'Ursprüngliches Guthaben' : 'Einstand'}</span><input name="totalAmount" type="number" min="0" step="0.01" inputmode="decimal" value="${editingItem ? escapeHtml(financeTotal(editingItem) || '') : ''}" placeholder="optional"></label>
+        <label data-finance-unit-field ${editingKind !== 'credit' ? 'hidden' : ''}><span>Einheit</span><select name="unit">${unitOptions}</select></label>
+        <label data-finance-direction-field ${editingKind !== 'debt' ? 'hidden' : ''}><span>Richtung</span><select name="direction"><option value="receivable" ${financeDirection(editingItem) === 'receivable' ? 'selected' : ''}>Jemand schuldet mir</option><option value="payable" ${financeDirection(editingItem) === 'payable' ? 'selected' : ''}>Ich schulde jemandem</option></select></label>
+        <label><span data-finance-party-label>${editingKind === 'investment' ? 'Depot / Anbieter' : editingKind === 'credit' ? 'Anbieter' : 'Gegenpartei'}</span><input name="counterparty" value="${escapeHtml(editingItem?.metadata?.counterparty || '')}" placeholder="optional"></label>
+        <label><span data-finance-date-label>${editingKind === 'investment' ? 'Stand per' : editingKind === 'credit' ? 'Gültig bis' : 'Fällig am'}</span><input name="dueDate" type="date" value="${escapeHtml(financeDate(editingItem))}"></label>
+        <label class="full"><span>Notiz</span><textarea name="note" rows="2" placeholder="Kontext, Konditionen oder nächster Schritt">${escapeHtml(editingItem?.note || '')}</textarea></label>
+        <div class="hf-list-form-actions full">
+          <button class="pill primary" type="submit">${icon('plus')} ${editingItem ? 'Änderungen speichern' : 'Position speichern'}</button>
+          ${editingItem ? '<button class="pill secondary" type="button" data-action="cancel-finance-edit">Abbrechen</button>' : ''}
+        </div>
+      </form>
+      <div class="hf-finance-groups ${items.length ? '' : 'is-empty'}">
+        ${items.length ? FINANCE_KINDS.map(kind => renderFinanceGroup(kind, items.filter(item => financeKind(item) === kind.value))).join('') : '<p>Noch keine Finanzpositionen vorhanden.</p>'}
+      </div>
+    `;
+  }
+
+  function renderFinanceOverview(summary) {
+    const result = summary.basis > 0 ? summary.invested - summary.basis : 0;
+    const positiveParts = [
+      { label: 'Investitionen', value: summary.invested },
+      { label: 'Guthaben', value: summary.creditChf },
+      { label: 'Forderungen', value: summary.receivable }
+    ].filter(entry => entry.value > 0);
+    const positiveTotal = positiveParts.reduce((sum, entry) => sum + entry.value, 0);
+    let offset = 0;
+    const segments = positiveParts.map((entry, index) => {
+      const share = (entry.value / positiveTotal) * 100;
+      const segment = `<circle class="hf-subscription-segment" cx="60" cy="60" r="48" pathLength="100" transform="rotate(-90 60 60)" style="--hf-segment-color:${FINANCE_COLORS[index]};stroke-dasharray:${share.toFixed(4)} ${(100 - share).toFixed(4)};stroke-dashoffset:${(-offset).toFixed(4)}"></circle>`;
+      offset += share;
+      return segment;
+    }).join('');
+    const legend = positiveParts.map((entry, index) => `<li style="--hf-segment-color:${FINANCE_COLORS[index]}"><span class="hf-subscription-dot"></span><div><strong>${escapeHtml(entry.label)}</strong><small>${positiveTotal ? ((entry.value / positiveTotal) * 100).toFixed(1) : '0.0'}% der positiven Werte</small></div><b>${escapeHtml(formatCurrency(entry.value))}</b></li>`).join('');
+    return `
+      <section class="hf-finance-overview">
+        <div class="hf-finance-metrics">
+          <div><small>Investiert</small><strong>${escapeHtml(formatCurrency(summary.invested))}</strong><span>${summary.investments.length} ${summary.investments.length === 1 ? 'Position' : 'Positionen'}</span></div>
+          <div><small>Entwicklung</small><strong class="${result >= 0 ? 'is-positive' : 'is-negative'}">${summary.basis > 0 ? escapeHtml(formatSignedCurrency(result)) : '–'}</strong><span>${summary.basis > 0 ? 'gegenüber Einstand' : 'Einstand noch offen'}</span></div>
+          <div><small>Guthaben</small><strong>${escapeHtml(formatCurrency(summary.creditChf))}</strong><span>${summary.creditUnits ? `plus ${summary.creditUnits} in Einheiten` : 'verfügbar'}</span></div>
+          <div><small>Netto-Schulden</small><strong class="${summary.receivable - summary.payable >= 0 ? 'is-positive' : 'is-negative'}">${escapeHtml(formatSignedCurrency(summary.receivable - summary.payable))}</strong><span>${escapeHtml(`${formatCurrency(summary.receivable)} rein · ${formatCurrency(summary.payable)} raus`)}</span></div>
+        </div>
+        <div class="hf-finance-balance">
+          <div class="hf-finance-balance-copy"><p class="eyebrow">Finanzkompass</p><h4>${positiveParts.length ? 'Deine Werte auf einen Blick' : 'Bereit für dein erstes Finanzbild'}</h4><p>${positiveParts.length ? `Netto-Position ${formatCurrency(summary.net)}. Verpflichtungen werden separat abgezogen.` : 'Erfasse eine Investition, ein Guthaben oder eine Schuld. Die Übersicht baut sich automatisch auf.'}</p></div>
+          ${positiveParts.length ? `<div class="hf-finance-distribution"><div class="hf-subscription-donut-wrap"><svg class="hf-subscription-donut" viewBox="0 0 120 120" role="img" aria-label="Verteilung deiner positiven Finanzwerte"><circle class="hf-subscription-track" cx="60" cy="60" r="48"></circle>${segments}</svg><div class="hf-subscription-total"><small>Netto</small><strong>${escapeHtml(formatCurrency(summary.net))}</strong><span>Position</span></div></div><ul class="hf-subscription-legend">${legend}</ul></div>` : ''}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderFinanceGroup(kind, items) {
+    if (!items.length) return '';
+    const activeCount = items.filter(item => !item.isDone).length;
+    return `
+      <section class="hf-finance-group" data-finance-group="${kind.value}">
+        <div class="hf-finance-group-head"><div class="hf-finance-group-icon">${icon(kind.value === 'investment' ? 'trend' : kind.value === 'credit' ? 'credit' : 'debt')}</div><div><small>${escapeHtml(kind.label)}</small><h4>${kind.value === 'investment' ? 'Vermögen aufbauen' : kind.value === 'credit' ? 'Verfügbare Guthaben' : 'Offene Beziehungen'}</h4></div><span>${activeCount} aktiv</span></div>
+        <div class="hf-list-items">${items.map(renderFinanceRow).join('')}</div>
+      </section>
+    `;
+  }
+
+  function renderFinanceRow(item) {
+    const kind = financeKind(item);
+    const unit = financeUnit(item);
+    const amount = financeAmount(item);
+    const total = financeTotal(item);
+    const date = financeDate(item);
+    const party = String(item.metadata?.counterparty || '').trim();
+    const direction = financeDirection(item);
+    const details = [];
+    if (kind === 'investment' && total > 0) details.push(`${formatSignedCurrency(amount - total)} seit Einstand`);
+    if (kind === 'credit' && total > 0) details.push(`${Math.min(100, (amount / total) * 100).toFixed(0)}% verfügbar`);
+    if (kind === 'debt') details.push(direction === 'receivable' ? 'Du erhältst' : 'Du schuldest');
+    if (party) details.push(party);
+    if (date) details.push(`${kind === 'investment' ? 'Stand' : kind === 'credit' ? 'gültig bis' : 'fällig'} ${formatContractDate(date)}`);
+    if (item.note) details.push(item.note);
+    const progress = kind === 'credit' && total > 0 ? Math.min(100, Math.max(0, (amount / total) * 100)) : 0;
+    return `
+      <article class="hf-list-row hf-finance-row ${item.isDone ? 'is-done' : ''}" data-finance-id="${escapeHtml(item.id)}">
+        <button class="hf-list-check" type="button" data-action="toggle-finance" aria-label="Position ${item.isDone ? 'reaktivieren' : 'abschliessen'}">${item.isDone ? icon('check') : ''}</button>
+        <div class="hf-finance-row-copy"><small>${escapeHtml(FINANCE_KINDS.find(entry => entry.value === kind)?.label || '')}</small><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(details.join(' · '))}</span>${progress ? `<i><b style="width:${progress.toFixed(2)}%"></b></i>` : ''}</div>
+        <b class="hf-finance-row-value ${kind === 'debt' && direction === 'payable' ? 'is-negative' : ''}">${escapeHtml(formatFinanceValue(amount, unit))}</b>
+        <div class="hf-finance-row-actions"><button class="hf-list-icon-btn" type="button" data-action="edit-finance" aria-label="Position bearbeiten">${icon('edit')}</button><button class="hf-list-icon-btn danger" type="button" data-action="delete-finance" aria-label="Position löschen">${icon('trash')}</button></div>
+      </article>
+    `;
+  }
+
+  function updateFinanceFormFields(form) {
+    if (!form) return;
+    const kind = String(form.elements?.kind?.value || 'investment');
+    const setText = (selector, value) => { const node = form.querySelector(selector); if (node) node.textContent = value; };
+    const totalField = form.querySelector('[data-finance-total-field]');
+    const unitField = form.querySelector('[data-finance-unit-field]');
+    const directionField = form.querySelector('[data-finance-direction-field]');
+    if (totalField) totalField.hidden = kind === 'debt';
+    if (unitField) unitField.hidden = kind !== 'credit';
+    if (directionField) directionField.hidden = kind !== 'debt';
+    setText('[data-finance-amount-label]', kind === 'credit' ? 'Restguthaben' : kind === 'debt' ? 'Betrag' : 'Aktueller Wert');
+    setText('[data-finance-total-label]', kind === 'credit' ? 'Ursprüngliches Guthaben' : 'Einstand');
+    setText('[data-finance-party-label]', kind === 'investment' ? 'Depot / Anbieter' : kind === 'credit' ? 'Anbieter' : 'Gegenpartei');
+    setText('[data-finance-date-label]', kind === 'investment' ? 'Stand per' : kind === 'credit' ? 'Gültig bis' : 'Fällig am');
+  }
+
   function termCategory(item) {
     return itemCategory(item);
   }
@@ -782,6 +980,7 @@
         editingTermId = '';
         editingShoppingId = '';
         editingSubscriptionId = '';
+        editingFinanceId = '';
         termStudyCategory = '';
         termStudyIndex = 0;
         termStudyOrder = [];
@@ -820,6 +1019,11 @@
       }
       if (action === 'cancel-subscription-edit') {
         editingSubscriptionId = '';
+        render();
+        return;
+      }
+      if (action === 'cancel-finance-edit') {
+        editingFinanceId = '';
         render();
         return;
       }
@@ -883,6 +1087,12 @@
         return;
       }
 
+      const financeRow = event.target.closest('[data-finance-id]');
+      if (financeRow && ['toggle-finance', 'edit-finance', 'delete-finance'].includes(action)) {
+        handleFinanceAction(action, financeRow.dataset.financeId);
+        return;
+      }
+
       const row = event.target.closest('[data-item-id]');
       if (row && action) handleItemAction(action, row.dataset.itemId);
 
@@ -901,18 +1111,25 @@
       if (form.dataset.form === 'term') saveTerm(form);
       if (form.dataset.form === 'shopping') saveShopping(form);
       if (form.dataset.form === 'subscription') saveSubscription(form);
+      if (form.dataset.form === 'finance') saveFinance(form);
       if (form.dataset.form === 'tour') saveTour(form);
       if (form.dataset.form === 'spot') void saveSpot(form);
     });
 
     document.addEventListener('change', event => {
+      const financeKindSelect = event.target.closest('#screen-lists [data-finance-kind]');
+      if (financeKindSelect) {
+        updateFinanceFormFields(financeKindSelect.closest('form[data-form="finance"]'));
+        return;
+      }
       const toggle = event.target.closest('#screen-lists [data-subscription-cancel-toggle]');
-      if (!toggle) return;
-      const form = toggle.closest('form[data-form="subscription"]');
-      const contractEnd = form?.elements?.contractEnd;
-      if (!contractEnd) return;
-      contractEnd.required = toggle.checked;
-      if (toggle.checked && !contractEnd.value) contractEnd.focus({ preventScroll: true });
+      if (toggle) {
+        const form = toggle.closest('form[data-form="subscription"]');
+        const contractEnd = form?.elements?.contractEnd;
+        if (!contractEnd) return;
+        contractEnd.required = toggle.checked;
+        if (toggle.checked && !contractEnd.value) contractEnd.focus({ preventScroll: true });
+      }
     });
 
     document.addEventListener('keydown', event => {
@@ -1023,6 +1240,24 @@
     if (action === 'delete-subscription') {
       item.isArchived = true;
       if (editingSubscriptionId === id) editingSubscriptionId = '';
+    }
+    item.updatedAt = new Date().toISOString();
+    saveAndSync();
+  }
+
+  function handleFinanceAction(action, id) {
+    const item = state.items.find(entry => entry.id === id && entry.listId === 'finance' && !entry.isArchived);
+    if (!item) return;
+    if (action === 'edit-finance') {
+      editingFinanceId = id;
+      render();
+      focusListForm('finance');
+      return;
+    }
+    if (action === 'toggle-finance') item.isDone = !item.isDone;
+    if (action === 'delete-finance') {
+      item.isArchived = true;
+      if (editingFinanceId === id) editingFinanceId = '';
     }
     item.updatedAt = new Date().toISOString();
     saveAndSync();
@@ -1191,6 +1426,43 @@
       });
     }
     editingSubscriptionId = '';
+    form.reset();
+    saveAndSync();
+  }
+
+  function saveFinance(form) {
+    const data = new FormData(form);
+    const existingId = String(form.dataset.editingId || '').trim();
+    const existingItem = existingId ? state.items.find(item => item.id === existingId && item.listId === 'finance' && !item.isArchived) : null;
+    const title = String(data.get('title') || '').trim();
+    const kind = String(data.get('kind') || '').trim();
+    const amount = parseSubscriptionCost(data.get('amount'));
+    if (!title || !FINANCE_KINDS.some(entry => entry.value === kind) || !Number.isFinite(amount)) return;
+    const totalAmount = kind === 'debt' ? 0 : parseSubscriptionCost(data.get('totalAmount'));
+    const unit = kind === 'credit' && FINANCE_UNITS.some(entry => entry.value === data.get('unit')) ? String(data.get('unit')) : 'chf';
+    const direction = kind === 'debt' && data.get('direction') === 'payable' ? 'payable' : 'receivable';
+    const counterparty = String(data.get('counterparty') || '').trim();
+    const dueDate = String(data.get('dueDate') || '').trim();
+    const note = String(data.get('note') || '').trim();
+    const now = new Date().toISOString();
+    const metadata = { ...(existingItem?.metadata || {}), financeKind: kind, amount, totalAmount, unit, direction, counterparty, dueDate };
+    if (existingItem) {
+      Object.assign(existingItem, { title, note, metadata, updatedAt: now });
+    } else {
+      state.items.push({
+        id: uid('finance-item'),
+        listId: 'finance',
+        title,
+        note,
+        metadata,
+        isDone: false,
+        isArchived: false,
+        sortRank: Date.now(),
+        createdAt: now,
+        updatedAt: now
+      });
+    }
+    editingFinanceId = '';
     form.reset();
     saveAndSync();
   }
