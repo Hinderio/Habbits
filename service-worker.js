@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v241-pauses-collapsed';
+const CACHE_NAME = 'habitflow-v242-pauses-accordion';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
