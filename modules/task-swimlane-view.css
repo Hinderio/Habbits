@@ -51,6 +51,7 @@ button.task-swimlane-lane-mark{cursor:pointer;font:inherit;font-size:.75rem;font
 .task-swimlane-track{position:relative;min-width:0;background-image:repeating-linear-gradient(to right,transparent 0,transparent calc(7.142857% - 1px),color-mix(in srgb,var(--card-border) 70%,transparent) calc(7.142857% - 1px),color-mix(in srgb,var(--card-border) 70%,transparent) 7.142857%)}
 .task-swimlane-track .task-swimlane-today{top:0}
 .task-swimlane-tile{position:absolute;z-index:2;left:0;top:15px;display:grid!important;visibility:visible;opacity:1;grid-template-rows:auto 1fr;width:58px;height:58px;transform:translateX(-50%);border:1px solid color-mix(in srgb,var(--lane-color) 78%,#fff);border-radius:8px;background:var(--lane-color);color:#0b1828;padding:6px;box-shadow:0 5px 14px rgba(17,36,58,.11);cursor:pointer;text-align:center}
+#screen-tasks .task-swimlane-track .task-swimlane-tile[data-action="open-task-detail"]{display:grid!important}
 .task-swimlane-tile.is-backlog{border:2px dashed var(--lane-color);background:color-mix(in srgb,var(--lane-color) 18%,var(--card-strong));color:var(--text);box-shadow:none}
 .task-swimlane-tile-top{display:flex;align-items:center;justify-content:space-between;gap:5px;font-size:.64rem;font-weight:950}
 .task-swimlane-priority{width:7px;height:7px;border-radius:50%;background:var(--priority-color);box-shadow:0 0 0 2px color-mix(in srgb,var(--card-strong) 75%,transparent)}
@@ -60,6 +61,7 @@ button.task-swimlane-lane-mark{cursor:pointer;font:inherit;font-size:.75rem;font
 .task-swimlane-unscheduled-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:11px}
 .task-swimlane-unscheduled-list{display:flex;gap:8px;flex-wrap:wrap}
 .task-swimlane-unscheduled-list button{display:inline-flex;align-items:center;gap:8px;min-height:38px;border:1px solid var(--card-border);border-radius:8px;background:var(--card-strong);color:var(--text);padding:7px 10px;font:inherit;font-size:.76rem;font-weight:800;cursor:pointer}
+#screen-tasks .task-swimlane-unscheduled-list button[data-action="open-task-detail"]{display:inline-flex!important}
 .task-swimlane-unscheduled-list i{width:8px;height:8px;border-radius:50%;background:var(--lane-color)}
 .task-swimlane-range-note{padding:11px 26px;color:var(--muted);font-size:.72rem;font-weight:750;border-top:1px solid var(--card-border)}
 @media(max-width:900px){.task-swimlane-view{--timeline-label-width:190px}.task-swimlane-controls{grid-template-columns:1fr}.task-swimlane-nav{justify-content:flex-start}.task-swimlane-presets{order:3}.task-swimlane-volume{grid-template-columns:1fr}.task-swimlane-volume-copy{border-right:0;border-bottom:1px solid var(--card-border);padding-bottom:12px}.task-swimlane-volume-chart{padding-top:10px}}
