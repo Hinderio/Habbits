@@ -12,6 +12,7 @@
   const MORNING_ROUTINE_SESSION_KEY = 'habitflow-morning-routine-session-v1';
   const MORNING_ROUTINE_VARIANT_KEY = 'habitflow-morning-routine-variant-offset-v1';
   const RULES_UI_KEY = 'habitflow-rules-open';
+  const PAUSES_UI_KEY = 'habitflow-pauses-open';
   const HABIT_DNA_UI_KEY = 'habitflow-habit-dna-open';
   const HABIT_CARD_UI_KEY = 'habitflow-habit-cards-open';
   const CONSUMPTION_MODE_KEY = 'habitflow-consumption-mode';
@@ -939,6 +940,7 @@
   let remoteHabitTargetPeriodSupported = true;
   let pendingTriggerSmokeId = null;
   let rulesExpanded = localStorage.getItem(RULES_UI_KEY) !== 'collapsed';
+  let pausesExpanded = localStorage.getItem(PAUSES_UI_KEY) === 'expanded';
   let expandedHabitDnaIds = loadExpandedHabitDnaIds();
   let expandedHabitCardIds = loadExpandedHabitCardIds();
   let activeConsumptionMode = localStorage.getItem(CONSUMPTION_MODE_KEY) === 'alcohol' ? 'alcohol' : 'smoke';
@@ -968,6 +970,7 @@
   async function init() {
     cacheEls();
     applyRulesVisibility();
+    applyPausesVisibility();
     applyConsumptionMode();
     applyTheme();
     fillSettingsForm();
@@ -1071,6 +1074,8 @@
       recordAlcoholUnitBtn: $('#recordAlcoholUnitBtn'),
       toggleRulesBtn: $('#toggleRulesBtn'),
       rulesContent: $('#rulesContent'),
+      togglePausesBtn: $('#togglePausesBtn'),
+      consumptionPauseContent: $('#consumptionPauseContent'),
       consumptionModeButtons: $$('.consumption-switch-btn'),
       consumptionPanes: $$('.consumption-pane'),
       alcoholUnitHistory: $('#alcoholUnitHistory'),
@@ -1297,6 +1302,7 @@
     if (els.emergencyCravingBtn) els.emergencyCravingBtn.addEventListener('click', startEmergencyCravingFlow);
     if (els.recordAlcoholUnitBtn) els.recordAlcoholUnitBtn.addEventListener('click', () => recordAlcoholUnit());
     if (els.toggleRulesBtn) els.toggleRulesBtn.addEventListener('click', toggleRulesVisibility);
+    if (els.togglePausesBtn) els.togglePausesBtn.addEventListener('click', togglePausesVisibility);
     els.trendMetricSelect.addEventListener('change', () => {
       selectedTrendMetric = els.trendMetricSelect.value;
       localStorage.setItem(TREND_METRIC_KEY, selectedTrendMetric);
@@ -12939,6 +12945,19 @@ async function deleteAlcoholLog(id) {
     rulesExpanded = !rulesExpanded;
     localStorage.setItem(RULES_UI_KEY, rulesExpanded ? 'expanded' : 'collapsed');
     applyRulesVisibility();
+  }
+
+  function applyPausesVisibility() {
+    if (!els.consumptionPauseContent || !els.togglePausesBtn) return;
+    els.consumptionPauseContent.classList.toggle('is-collapsed', !pausesExpanded);
+    els.togglePausesBtn.setAttribute('aria-expanded', String(pausesExpanded));
+    els.togglePausesBtn.textContent = pausesExpanded ? 'Pausen ausblenden' : 'Pausen einblenden';
+  }
+
+  function togglePausesVisibility() {
+    pausesExpanded = !pausesExpanded;
+    localStorage.setItem(PAUSES_UI_KEY, pausesExpanded ? 'expanded' : 'collapsed');
+    applyPausesVisibility();
   }
 
   function applyConsumptionMode() {
