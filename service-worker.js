@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v240-beauty-pass';
+const CACHE_NAME = 'habitflow-v241-pauses-collapsed';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
