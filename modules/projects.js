@@ -2,6 +2,7 @@
   'use strict';
 
   const STORAGE_KEY = 'habitflow-state-v1';
+  const DELETED_RECORDS_KEY = 'habitflow-project-deleted-records-v1';
   const TABLE_PROJECTS = 'projects';
   const TABLE_PHASES = 'project_phases';
   const TABLE_MILESTONES = 'project_milestones';
@@ -72,6 +73,31 @@
       if (!current || new Date(item.updated_at || item.created_at || 0) >= new Date(current.updated_at || current.created_at || 0)) map.set(item.id, item);
     });
     return Array.from(map.values());
+  }
+
+  function readDeletedProjectRecords() {
+    try {
+      const stored = JSON.parse(window.localStorage?.getItem(DELETED_RECORDS_KEY) || '{}');
+      return {
+        [TABLE_PHASES]: new Set(Array.isArray(stored[TABLE_PHASES]) ? stored[TABLE_PHASES].map(String) : []),
+        [TABLE_MILESTONES]: new Set(Array.isArray(stored[TABLE_MILESTONES]) ? stored[TABLE_MILESTONES].map(String) : [])
+      };
+    } catch {
+      return { [TABLE_PHASES]: new Set(), [TABLE_MILESTONES]: new Set() };
+    }
+  }
+
+  function projectRecordWasDeleted(table, id) {
+    return readDeletedProjectRecords()[table]?.has(String(id)) || false;
+  }
+
+  function rememberDeletedProjectRecord(table, id) {
+    const deleted = readDeletedProjectRecords();
+    deleted[table]?.add(String(id));
+    window.localStorage?.setItem(DELETED_RECORDS_KEY, JSON.stringify({
+      [TABLE_PHASES]: Array.from(deleted[TABLE_PHASES]),
+      [TABLE_MILESTONES]: Array.from(deleted[TABLE_MILESTONES])
+    }));
   }
 
   function projectInitials(title = '') {
@@ -165,11 +191,12 @@
 
   function normalizeState(input = {}) {
     const next = { ...input };
+    const deleted = readDeletedProjectRecords();
     next.tasks = Array.isArray(next.tasks) ? dedupeById(next.tasks.map(normalizeTask)) : [];
     next.projects = Array.isArray(next.projects) ? next.projects.map(normalizeProject).filter(project => project.id && project.title && !project.is_archived) : [];
     // Keep archived records as tombstones so the merge layer cannot resurrect deleted rows.
-    next.projectPhases = Array.isArray(next.projectPhases) ? next.projectPhases.map(normalizePhase).filter(phase => phase.id && phase.project_id && phase.name) : [];
-    next.projectMilestones = Array.isArray(next.projectMilestones) ? next.projectMilestones.map(normalizeMilestone).filter(item => item.id && item.project_id && item.title) : [];
+    next.projectPhases = Array.isArray(next.projectPhases) ? next.projectPhases.map(normalizePhase).map(phase => deleted[TABLE_PHASES].has(phase.id) ? { ...phase, is_archived: true } : phase).filter(phase => phase.id && phase.project_id && phase.name) : [];
+    next.projectMilestones = Array.isArray(next.projectMilestones) ? next.projectMilestones.map(normalizeMilestone).map(item => deleted[TABLE_MILESTONES].has(item.id) ? { ...item, is_archived: true } : item).filter(item => item.id && item.project_id && item.title) : [];
     if (Array.isArray(next.pointsLedger)) next.pointsLedger = dedupeById(next.pointsLedger);
     return next;
   }
@@ -218,8 +245,8 @@
   }
 
   function projectTasks(state, projectId) { return state.tasks.filter(task => task.project_id === projectId && (task.status || 'open') !== 'archived'); }
-  function projectPhases(state, projectId) { return state.projectPhases.filter(phase => phase.project_id === projectId && !phase.is_archived).sort((a, b) => a.start_date.localeCompare(b.start_date)); }
-  function projectMilestones(state, projectId) { return state.projectMilestones.filter(item => item.project_id === projectId && !item.is_archived).sort((a, b) => a.milestone_date.localeCompare(b.milestone_date)); }
+  function projectPhases(state, projectId) { return state.projectPhases.filter(phase => phase.project_id === projectId && !phase.is_archived && !projectRecordWasDeleted(TABLE_PHASES, phase.id)).sort((a, b) => a.start_date.localeCompare(b.start_date)); }
+  function projectMilestones(state, projectId) { return state.projectMilestones.filter(item => item.project_id === projectId && !item.is_archived && !projectRecordWasDeleted(TABLE_MILESTONES, item.id)).sort((a, b) => a.milestone_date.localeCompare(b.milestone_date)); }
   function milestonePhaseLabel(milestone, phases = []) { return milestone.phase_id ? (phases.find(phase => phase.id === milestone.phase_id)?.name || 'Phase') : 'Projektweit'; }
   function milestonesForPhase(milestones = [], phaseId = '') { return milestones.filter(item => !item.phase_id || item.phase_id === phaseId); }
   function phaseOptions(phases = [], selectedPhaseId = '') { return `<option value="">Projektweit</option>${phases.map(phase => `<option value="${escapeHtml(phase.id)}" ${phase.id === selectedPhaseId ? 'selected' : ''}>${escapeHtml(phase.name)}</option>`).join('')}`; }
@@ -475,18 +502,26 @@
   function setProjectError(text) { const node = document.getElementById('projectFormError'); if (node) node.textContent = text || ''; }
   async function requireRemoteUser() { const supabase = getSupabaseClient(); const userId = await currentUserId(); if (!supabase || !userId) throw new Error('Supabase ist nicht verbunden.'); return { supabase, userId }; }
 
-  async function archiveRemoteProjectRecord(table, id, archivedAt) {
+  async function deleteRemoteProjectRecord(table, id) {
     const { supabase, userId } = await requireRemoteUser();
     const { data, error } = await supabase
       .from(table)
-      .update({ is_archived: true, updated_at: archivedAt })
+      .delete()
       .eq('id', id)
       .eq('user_id', userId)
       .select('id');
     if (error) throw error;
-    if (!Array.isArray(data) || !data.some(row => String(row.id) === String(id))) {
-      throw new Error('Der Eintrag konnte in Supabase nicht archiviert werden.');
+    const { data: remaining, error: verificationError } = await supabase
+      .from(table)
+      .select('id')
+      .eq('id', id)
+      .eq('user_id', userId)
+      .limit(1);
+    if (verificationError) throw verificationError;
+    if (Array.isArray(remaining) && remaining.length) {
+      throw new Error('Der Eintrag ist in Supabase noch vorhanden und wurde nicht gelöscht.');
     }
+    return Array.isArray(data) ? data : [];
   }
 
   async function saveProject(event) {
@@ -613,9 +648,9 @@
     const milestone = state.projectMilestones.find(item => item.id === id);
     if (!milestone) return;
     try {
-      const archivedAt = nowIso();
-      await archiveRemoteProjectRecord(TABLE_MILESTONES, id, archivedAt);
-      state.projectMilestones = state.projectMilestones.map(item => item.id === id ? { ...item, is_archived: true, updated_at: archivedAt, synced: true } : item);
+      await deleteRemoteProjectRecord(TABLE_MILESTONES, id);
+      rememberDeletedProjectRecord(TABLE_MILESTONES, id);
+      state.projectMilestones = state.projectMilestones.filter(item => item.id !== id);
       writeState(state);
       renderDetail(milestone.project_id);
       render();
@@ -654,9 +689,9 @@
     const phase = state.projectPhases.find(item => item.id === id);
     if (!phase) return;
     try {
-      const archivedAt = nowIso();
-      await archiveRemoteProjectRecord(TABLE_PHASES, id, archivedAt);
-      state.projectPhases = state.projectPhases.map(item => item.id === id ? { ...item, is_archived: true, updated_at: archivedAt, synced: true } : item);
+      await deleteRemoteProjectRecord(TABLE_PHASES, id);
+      rememberDeletedProjectRecord(TABLE_PHASES, id);
+      state.projectPhases = state.projectPhases.filter(item => item.id !== id);
       writeState(state);
       renderDetail(phase.project_id);
       render();
