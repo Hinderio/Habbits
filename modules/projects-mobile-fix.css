@@ -111,12 +111,13 @@ body .milestone-chip em{
 body .phase-timeline-with-milestones .phase-timeline-track{
   position:relative;
   overflow:visible;
-  margin-bottom:18px;
+  margin-top:24px;
+  margin-bottom:8px;
 }
 body .phase-milestone-marker{
   position:absolute;
   top:-5px;
-  bottom:-17px;
+  height:25px;
   width:1px;
   transform:translateX(-50%);
   pointer-events:auto;
@@ -131,7 +132,7 @@ body .phase-milestone-marker i{
 }
 body .phase-milestone-marker b{
   position:absolute;
-  top:27px;
+  bottom:22px;
   left:50%;
   transform:translateX(-50%);
   max-width:44px;
@@ -260,10 +261,7 @@ body .phase-milestone-marker b{
     gap: 8px !important;
     width: 100% !important;
   }
-}
 
-
-@media (max-width: 760px) {
   .project-detail-modal:not(.hidden) .project-milestone-region,
   .project-detail-modal:not(.hidden) .project-phase-list {
     display: block !important;
