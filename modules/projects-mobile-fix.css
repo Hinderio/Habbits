@@ -144,6 +144,27 @@ body .phase-milestone-marker b{
   font-weight:900;
   letter-spacing:.08em;
 }
+body .project-today-marker{
+  position:absolute;
+  top:-12px;
+  bottom:-24px;
+  z-index:3;
+  width:1px;
+  transform:translateX(-50%);
+  background:rgba(13,24,39,.82);
+  pointer-events:none;
+}
+body .project-today-marker b{
+  position:absolute;
+  bottom:calc(100% + 3px);
+  left:50%;
+  transform:translateX(-50%);
+  color:#0d1827;
+  font-size:.58rem;
+  font-weight:900;
+  letter-spacing:.04em;
+  white-space:nowrap;
+}
 
 @media (max-width: 760px) {
   body .project-form-grid input[type="color"]{
