@@ -82,7 +82,7 @@
       .filter(phase => String(phase.project_id) === String(projectId) && !phase.is_archived)
       .sort((a, b) => String(a.start_date).localeCompare(String(b.start_date)));
 
-    const list = form.nextElementSibling;
+    const list = form.closest('#projectDetailContent')?.querySelector('.project-phase-list');
     if (list) {
       list.innerHTML = phases.length ? phases.map(phase => renderPhaseCard(phase, project)).join('') : '<div class="project-empty">Noch keine Phasen. Erstelle die erste Projektphase.</div>';
     }
