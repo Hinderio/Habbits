@@ -261,3 +261,27 @@ body .phase-milestone-marker b{
     width: 100% !important;
   }
 }
+
+
+@media (max-width: 760px) {
+  .project-detail-modal:not(.hidden) .project-milestone-region,
+  .project-detail-modal:not(.hidden) .project-phase-list {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+
+  .project-detail-modal:not(.hidden) .project-milestone-region.milestone-list {
+    display: flex !important;
+    flex-wrap: wrap !important;
+  }
+
+  .project-detail-modal:not(.hidden) .phase-card .list-actions {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: flex-end !important;
+    grid-template-columns: none !important;
+  }
+}
