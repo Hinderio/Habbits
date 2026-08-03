@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v246-project-detail-tools';
+const CACHE_NAME = 'habitflow-v247-project-detail-polish';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
