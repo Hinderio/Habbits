@@ -19,7 +19,8 @@
   const PHASE_STATUS = { open: 'Offen', active: 'In Arbeit', done: 'Erledigt' };
   const PROJECT_ACTION_ICONS = {
     edit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4.4L19.7 8.7a2.1 2.1 0 0 0 0-3l-1.4-1.4a2.1 2.1 0 0 0-3 0L4 15.6V20Z"></path><path d="m13.8 5.8 4.4 4.4"></path></svg>',
-    trash: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 7V5h6v2"></path><path d="M7 7l1 13h8l1-13"></path></svg>'
+    trash: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 7V5h6v2"></path><path d="M7 7l1 13h8l1-13"></path></svg>',
+    check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"></path></svg>'
   };
 
   let editingProjectId = '';
@@ -325,6 +326,18 @@
     }).join('');
   }
 
+  function projectTodayMarker(project, showLabel = false) {
+    const startDate = validDate(project.start_date);
+    const endDate = validDate(project.end_date) || startDate;
+    const currentDate = todayDate();
+    if (!startDate || !endDate || currentDate < startDate || currentDate > endDate) return '';
+    const start = new Date(`${startDate}T12:00:00`).getTime();
+    const end = new Date(`${endDate}T12:00:00`).getTime();
+    const current = new Date(`${currentDate}T12:00:00`).getTime();
+    const left = Math.max(0, Math.min(100, ((current - start) / Math.max(1, end - start)) * 100));
+    return `<span class="project-today-marker" style="left:${left}%" aria-label="Heute" title="Heute">${showLabel ? '<b>Heute</b>' : ''}</span>`;
+  }
+
   function scheduleTaskBadgePaint() {
     if (taskBadgeRaf) return;
     taskBadgeRaf = window.requestAnimationFrame(() => { taskBadgeRaf = 0; decorateTaskProjectBadges(); });
@@ -489,19 +502,19 @@
       <div class="project-section-head"><div><p class="eyebrow">Projektstruktur</p><h3>Phasen &amp; Meilensteine</h3></div><span class="badge muted">Verwalten</span></div>
       ${renderProjectEditors(project, phases, milestones)}
       <div class="project-section-head project-overview-head"><div><p class="eyebrow">Timeline</p><h3>Projektübersicht</h3></div><span class="badge muted">${phases.length} Phase${phases.length === 1 ? '' : 'n'} · ${milestones.length} Meilenstein${milestones.length === 1 ? '' : 'e'}</span></div>
-      <div class="project-phase-list">${phases.length ? phases.map(phase => renderPhase(phase, project, milestonesForPhase(milestones, phase.id))).join('') : '<div class="project-empty">Noch keine Phasen. Erstelle die erste Projektphase.</div>'}</div>
+      <div class="project-phase-list">${phases.length ? phases.map((phase, index) => renderPhase(phase, project, milestonesForPhase(milestones, phase.id), index === 0)).join('') : '<div class="project-empty">Noch keine Phasen. Erstelle die erste Projektphase.</div>'}</div>
       ${renderProjectNotes(project, state)}
       <div class="project-section-head"><div><p class="eyebrow">Tasks</p><h3>Verknüpfte Aufgaben</h3></div><span class="badge muted">${tasks.length} Task${tasks.length === 1 ? '' : 's'}</span></div>
       ${renderTaskTools(project, state)}
       <div class="project-task-list">${tasks.length ? tasks.map(task => renderTaskRow(task)).join('') : '<div class="project-empty">Noch keine Tasks verknüpft.</div>'}</div>
-      <div class="form-actions project-detail-actions">${projectActionButton('edit-project', project.id, 'Projekt bearbeiten', 'edit')}<button class="pill secondary" type="button" data-action="mark-project-done" data-id="${escapeHtml(project.id)}">Als abgeschlossen markieren</button></div>`;
+      <div class="form-actions project-detail-actions">${projectActionButton('edit-project', project.id, 'Projekt bearbeiten', 'edit')}<button class="pill primary project-complete-button" type="button" data-action="mark-project-done" data-id="${escapeHtml(project.id)}"><span class="project-complete-icon" aria-hidden="true">${PROJECT_ACTION_ICONS.check}</span><span>Als abgeschlossen markieren</span></button></div>`;
   }
 
   function renderMilestone(milestone, phases = []) {
     return `<article class="milestone-chip"><strong>${escapeHtml(milestoneAbbr(milestone.title))}</strong><span>${escapeHtml(milestone.title)}</span><small>${dateLabel(milestone.milestone_date)}</small><em>${escapeHtml(milestonePhaseLabel(milestone, phases))}</em>${projectActionButton('edit-milestone', milestone.id, 'Meilenstein bearbeiten', 'edit')}${projectActionButton('delete-milestone', milestone.id, 'Meilenstein löschen', 'trash', true)}</article>`;
   }
 
-  function renderPhase(phase, project, milestones = []) {
+  function renderPhase(phase, project, milestones = [], showTodayLabel = false) {
     const start = new Date(`${project.start_date || phase.start_date}T12:00:00`).getTime();
     const end = new Date(`${project.end_date || phase.end_date || project.start_date}T12:00:00`).getTime();
     const phaseStart = new Date(`${phase.start_date}T12:00:00`).getTime();
@@ -509,7 +522,7 @@
     const span = Math.max(1, end - start);
     const left = Math.max(0, Math.min(96, ((phaseStart - start) / span) * 100));
     const width = Math.max(8, Math.min(100 - left, ((phaseEnd - phaseStart || 86400000) / span) * 100));
-    return `<article class="phase-card project-phase-overview"><div><strong>${escapeHtml(phase.name)}</strong><span class="subtle">${PHASE_STATUS[phase.status]}</span></div><div class="phase-timeline phase-timeline-with-milestones"><div class="phase-timeline-track"><i style="margin-left:${left}%;width:${width}%"></i>${milestoneMarkers(project, milestones)}</div><div class="phase-timeline-dates"><span>${dateLabel(phase.start_date)}</span><span>${dateLabel(phase.end_date)}</span></div></div></article>`;
+    return `<article class="phase-card project-phase-overview"><div><strong>${escapeHtml(phase.name)}</strong><span class="subtle">${PHASE_STATUS[phase.status]}</span></div><div class="phase-timeline phase-timeline-with-milestones"><div class="phase-timeline-track"><i style="margin-left:${left}%;width:${width}%"></i>${projectTodayMarker(project, showTodayLabel)}${milestoneMarkers(project, milestones)}</div><div class="phase-timeline-dates"><span>${dateLabel(phase.start_date)}</span><span>${dateLabel(phase.end_date)}</span></div></div></article>`;
   }
 
   function renderTaskTools(project, state) {
