@@ -136,6 +136,7 @@
     }
     const button = form.querySelector('button[type="submit"]');
     if (button) button.textContent = 'Meilenstein aktualisieren';
+    form.closest('details')?.setAttribute('open', '');
     form.scrollIntoView({ behavior: 'smooth', block: 'center' });
     form.elements.title.focus();
   }
