@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v243-finance-list';
+const CACHE_NAME = 'habitflow-v244-project-timeline-crud';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
