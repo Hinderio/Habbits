@@ -6,6 +6,7 @@
   const TABLE_PROJECTS = 'projects';
   const TABLE_PHASES = 'project_phases';
   const TABLE_MILESTONES = 'project_milestones';
+  const TABLE_NOTES = 'project_notes';
   const DEFAULT_PROJECT_COLOR = '#4ad7d1';
   const PROJECT_META_RE = /\n?\s*<!--hf-project-meta:([^>]+)-->/;
   const CLOSED_TASK_STATUSES = new Set(['done', 'archived', 'closed', 'completed']);
@@ -80,10 +81,11 @@
       const stored = JSON.parse(window.localStorage?.getItem(DELETED_RECORDS_KEY) || '{}');
       return {
         [TABLE_PHASES]: new Set(Array.isArray(stored[TABLE_PHASES]) ? stored[TABLE_PHASES].map(String) : []),
-        [TABLE_MILESTONES]: new Set(Array.isArray(stored[TABLE_MILESTONES]) ? stored[TABLE_MILESTONES].map(String) : [])
+        [TABLE_MILESTONES]: new Set(Array.isArray(stored[TABLE_MILESTONES]) ? stored[TABLE_MILESTONES].map(String) : []),
+        [TABLE_NOTES]: new Set(Array.isArray(stored[TABLE_NOTES]) ? stored[TABLE_NOTES].map(String) : [])
       };
     } catch {
-      return { [TABLE_PHASES]: new Set(), [TABLE_MILESTONES]: new Set() };
+      return { [TABLE_PHASES]: new Set(), [TABLE_MILESTONES]: new Set(), [TABLE_NOTES]: new Set() };
     }
   }
 
@@ -96,7 +98,8 @@
     deleted[table]?.add(String(id));
     window.localStorage?.setItem(DELETED_RECORDS_KEY, JSON.stringify({
       [TABLE_PHASES]: Array.from(deleted[TABLE_PHASES]),
-      [TABLE_MILESTONES]: Array.from(deleted[TABLE_MILESTONES])
+      [TABLE_MILESTONES]: Array.from(deleted[TABLE_MILESTONES]),
+      [TABLE_NOTES]: Array.from(deleted[TABLE_NOTES])
     }));
   }
 
@@ -189,6 +192,20 @@
     };
   }
 
+  function normalizeProjectNote(note = {}) {
+    const created = validIso(note.created_at || note.createdAt) || nowIso();
+    return {
+      id: String(note.id || uid('note')),
+      project_id: String(note.project_id || note.projectId || ''),
+      category: String(note.category || 'Allgemein').trim().slice(0, 60) || 'Allgemein',
+      body: String(note.body || note.text || '').trim().slice(0, 2000),
+      is_archived: Boolean(note.is_archived),
+      created_at: created,
+      updated_at: validIso(note.updated_at || note.updatedAt) || created,
+      synced: note.synced === true
+    };
+  }
+
   function normalizeState(input = {}) {
     const next = { ...input };
     const deleted = readDeletedProjectRecords();
@@ -197,6 +214,7 @@
     // Keep archived records as tombstones so the merge layer cannot resurrect deleted rows.
     next.projectPhases = Array.isArray(next.projectPhases) ? next.projectPhases.map(normalizePhase).map(phase => deleted[TABLE_PHASES].has(phase.id) ? { ...phase, is_archived: true } : phase).filter(phase => phase.id && phase.project_id && phase.name) : [];
     next.projectMilestones = Array.isArray(next.projectMilestones) ? next.projectMilestones.map(normalizeMilestone).map(item => deleted[TABLE_MILESTONES].has(item.id) ? { ...item, is_archived: true } : item).filter(item => item.id && item.project_id && item.title) : [];
+    next.projectNotes = Array.isArray(next.projectNotes) ? next.projectNotes.map(normalizeProjectNote).map(item => deleted[TABLE_NOTES].has(item.id) ? { ...item, is_archived: true } : item).filter(item => item.id && item.project_id && item.body) : [];
     if (Array.isArray(next.pointsLedger)) next.pointsLedger = dedupeById(next.pointsLedger);
     return next;
   }
@@ -234,8 +252,9 @@
         incoming.projects = mergeById(existing.projects, incoming.projects);
         incoming.projectPhases = mergeById(existing.projectPhases, incoming.projectPhases);
         incoming.projectMilestones = mergeById(existing.projectMilestones, incoming.projectMilestones);
+        incoming.projectNotes = mergeById(existing.projectNotes, incoming.projectNotes);
         const projectByTask = new Map(existing.tasks.filter(task => task.project_id).map(task => [task.id, task.project_id]));
-        incoming.tasks = incoming.tasks.map(task => projectByTask.has(task.id) && !task.project_id ? { ...task, project_id: projectByTask.get(task.id) } : task);
+        incoming.tasks = incoming.tasks.map(task => projectByTask.has(task.id) && !task.project_id && !task.project_link_cleared_at ? { ...task, project_id: projectByTask.get(task.id) } : task);
         return originalSetItem(key, JSON.stringify(incoming));
       } catch (error) {
         console.warn('[HabitFlow/projects] Projektfelder konnten beim Speichern nicht gemerged werden.', error);
@@ -247,6 +266,7 @@
   function projectTasks(state, projectId) { return state.tasks.filter(task => task.project_id === projectId && (task.status || 'open') !== 'archived'); }
   function projectPhases(state, projectId) { return state.projectPhases.filter(phase => phase.project_id === projectId && !phase.is_archived && !projectRecordWasDeleted(TABLE_PHASES, phase.id)).sort((a, b) => a.start_date.localeCompare(b.start_date)); }
   function projectMilestones(state, projectId) { return state.projectMilestones.filter(item => item.project_id === projectId && !item.is_archived && !projectRecordWasDeleted(TABLE_MILESTONES, item.id)).sort((a, b) => a.milestone_date.localeCompare(b.milestone_date)); }
+  function projectNotes(state, projectId) { return state.projectNotes.filter(item => item.project_id === projectId && !item.is_archived && !projectRecordWasDeleted(TABLE_NOTES, item.id)).sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at))); }
   function milestonePhaseLabel(milestone, phases = []) { return milestone.phase_id ? (phases.find(phase => phase.id === milestone.phase_id)?.name || 'Phase') : 'Projektweit'; }
   function milestonesForPhase(milestones = [], phaseId = '') { return milestones.filter(item => !item.phase_id || item.phase_id === phaseId); }
   function phaseOptions(phases = [], selectedPhaseId = '') { return `<option value="">Projektweit</option>${phases.map(phase => `<option value="${escapeHtml(phase.id)}" ${phase.id === selectedPhaseId ? 'selected' : ''}>${escapeHtml(phase.name)}</option>`).join('')}`; }
@@ -433,6 +453,20 @@
     return `<button class="project-card" type="button" data-action="open-project-detail" data-id="${escapeHtml(project.id)}"><div class="project-card-head"><div>${projectBadge(project)}<small>Projekt</small><h3>${escapeHtml(project.title)}</h3></div><span class="badge ${status.cls}">${status.label}</span></div><p>${escapeHtml(project.description || 'Noch keine Kurzbeschreibung hinterlegt.')}</p><div class="project-progress-track" aria-label="Fortschritt ${progress}%"><i style="width:${progress}%"></i></div><div class="project-card-meta"><div><small>Start</small><strong>${dateLabel(project.start_date)}</strong></div><div><small>Ende</small><strong>${dateLabel(project.end_date)}</strong></div><div><small>Fortschritt</small><strong>${progress}%</strong></div><div><small>Tasks</small><strong>${tasks.length}</strong></div></div><div class="project-card-footer"><span class="subtle">${escapeHtml(nextMilestone(project, state))}</span><span class="mini-btn">Öffnen</span></div></button>`;
   }
 
+  function renderProjectEditors(project, phases) {
+    return `<div class="project-editor-grid"><details class="project-editor-toggle" data-project-editor="phase"><summary><span><small>Phase</small>Phase erfassen oder bearbeiten</span><span class="project-editor-chevron" aria-hidden="true">⌄</span></summary><form class="phase-form" data-project-phase-form data-project-id="${escapeHtml(project.id)}"><label><span>Phase</span><input name="name" required placeholder="z. B. Konzept" /></label><label><span>Start</span><input name="start_date" type="date" value="${escapeHtml(project.start_date || todayDate())}" required /></label><label><span>Ende</span><input name="end_date" type="date" value="${escapeHtml(project.end_date || project.start_date || todayDate())}" required /></label><label><span>Status</span><select name="status"><option value="open">Offen</option><option value="active">In Arbeit</option><option value="done">Erledigt</option></select></label><button class="mini-btn primary" type="submit">Phase speichern</button></form></details><details class="project-editor-toggle" data-project-editor="milestone"><summary><span><small>Meilenstein</small>Meilenstein erfassen oder bearbeiten</span><span class="project-editor-chevron" aria-hidden="true">⌄</span></summary><form class="milestone-form" data-project-milestone-form data-project-id="${escapeHtml(project.id)}"><label><span>Meilenstein</span><input name="title" required placeholder="z. B. Go-Live" /></label><label><span>Datum</span><input name="milestone_date" type="date" value="${escapeHtml(project.end_date || project.start_date || todayDate())}" required /></label><label><span>Phase</span><select name="phase_id">${phaseOptions(phases)}</select></label><button class="mini-btn primary" type="submit">Meilenstein speichern</button></form></details></div>`;
+  }
+
+  function renderProjectNote(note) {
+    return `<article class="project-note-card"><div class="project-note-head"><span>${escapeHtml(note.category)}</span><div class="list-actions">${projectActionButton('edit-project-note', note.id, 'Notiz bearbeiten', 'edit')}${projectActionButton('delete-project-note', note.id, 'Notiz löschen', 'trash', true)}</div></div><p>${escapeHtml(note.body).replace(/\n/g, '<br>')}</p><small>${dateLabel(note.updated_at)}</small></article>`;
+  }
+
+  function renderProjectNotes(project, state) {
+    const notes = projectNotes(state, project.id);
+    const categories = [...new Set(notes.map(note => note.category).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
+    return `<div class="project-section-head"><div><p class="eyebrow">Notizen</p><h3>Projektnotizen</h3></div><span class="badge muted">${notes.length} Notiz${notes.length === 1 ? '' : 'en'}</span></div><details class="project-editor-toggle project-note-editor" data-project-editor="note"><summary><span><small>Notizzettel</small>Notiz erfassen oder bearbeiten</span><span class="project-editor-chevron" aria-hidden="true">⌄</span></summary><form class="project-note-form" data-project-note-form data-project-id="${escapeHtml(project.id)}"><label><span>Kategorie</span><input name="category" list="project-note-categories-${escapeHtml(project.id)}" required placeholder="z. B. Recherche" /></label><label class="project-note-body"><span>Notiz</span><textarea name="body" rows="4" required placeholder="Gedanke, Entscheid oder offene Frage"></textarea></label><datalist id="project-note-categories-${escapeHtml(project.id)}">${categories.map(category => `<option value="${escapeHtml(category)}"></option>`).join('')}</datalist><button class="mini-btn primary" type="submit">Notiz speichern</button></form></details><div class="project-note-list">${notes.length ? notes.map(renderProjectNote).join('') : '<div class="project-empty">Noch keine Projektnotiz. Halte Entscheide, Fragen und Erkenntnisse direkt hier fest.</div>'}</div>`;
+  }
+
   function renderDetail(projectId) {
     const state = readState();
     const project = state.projects.find(item => item.id === projectId);
@@ -444,7 +478,17 @@
     const phases = projectPhases(state, project.id);
     const milestones = projectMilestones(state, project.id);
     const status = STATUS[project.status] || STATUS.planned;
-    node.innerHTML = `<div class="project-detail-head">${projectBadge(project)}<p class="eyebrow">Projekt</p><h2>${escapeHtml(project.title)}</h2><p>${escapeHtml(project.description || 'Noch keine Beschreibung.')}</p></div><div class="project-detail-grid"><article class="project-detail-box"><small>Status</small><h3><span class="badge ${status.cls}">${status.label}</span></h3><p class="subtle">${dateLabel(project.start_date)} bis ${dateLabel(project.end_date)}</p></article><article class="project-detail-box"><small>Fortschritt</small><h3>${progress}%</h3><div class="project-progress-track"><i style="width:${progress}%"></i></div></article><article class="project-detail-box"><small>Ziel / Outcome</small><p class="subtle">${escapeHtml(project.outcome_note || 'Noch kein Outcome notiert.')}</p></article><article class="project-detail-box project-next-step"><small>Nächster sinnvoller Schritt</small><p>${escapeHtml(nextStep(project, state, progress))}</p></article></div><div class="project-section-head"><div><p class="eyebrow">Phasen / Gantt MVP</p><h3>Timeline</h3></div><span class="badge muted">${phases.length} Phase${phases.length === 1 ? '' : 'n'} · ${milestones.length} Meilenstein${milestones.length === 1 ? '' : 'e'}</span></div><form class="phase-form" data-project-phase-form data-project-id="${escapeHtml(project.id)}"><label><span>Phase</span><input name="name" required placeholder="z. B. Konzept" /></label><label><span>Start</span><input name="start_date" type="date" value="${escapeHtml(project.start_date || todayDate())}" required /></label><label><span>Ende</span><input name="end_date" type="date" value="${escapeHtml(project.end_date || project.start_date || todayDate())}" required /></label><label><span>Status</span><select name="status"><option value="open">Offen</option><option value="active">In Arbeit</option><option value="done">Erledigt</option></select></label><button class="mini-btn primary" type="submit">Phase speichern</button></form><form class="milestone-form" data-project-milestone-form data-project-id="${escapeHtml(project.id)}"><label><span>Meilenstein</span><input name="title" required placeholder="z. B. Go-Live" /></label><label><span>Datum</span><input name="milestone_date" type="date" value="${escapeHtml(project.end_date || project.start_date || todayDate())}" required /></label><label><span>Phase</span><select name="phase_id">${phaseOptions(phases)}</select></label><button class="mini-btn primary" type="submit">Meilenstein speichern</button></form>${milestones.length ? `<div class="milestone-list project-milestone-region">${milestones.map(milestone => renderMilestone(milestone, phases)).join('')}</div>` : '<div class="project-empty project-milestone-region">Noch keine Meilensteine. Setze wichtige Termine als Orientierungspunkte.</div>'}<div class="project-phase-list">${phases.length ? phases.map(phase => renderPhase(phase, project, milestonesForPhase(milestones, phase.id))).join('') : '<div class="project-empty">Noch keine Phasen. Erstelle die erste Projektphase.</div>'}</div><div class="project-section-head"><div><p class="eyebrow">Tasks</p><h3>Verknüpfte Aufgaben</h3></div><span class="badge muted">${tasks.length} Task${tasks.length === 1 ? '' : 's'}</span></div>${renderTaskTools(project, state)}<div class="project-task-list">${tasks.length ? tasks.map(task => renderTaskRow(task)).join('') : '<div class="project-empty">Noch keine Tasks verknüpft.</div>'}</div><div class="form-actions project-detail-actions"><button class="pill secondary" type="button" data-action="edit-project" data-id="${escapeHtml(project.id)}">Projekt bearbeiten</button><button class="pill secondary" type="button" data-action="mark-project-done" data-id="${escapeHtml(project.id)}">Als abgeschlossen markieren</button></div>`;
+    node.innerHTML = `<div class="project-detail-head">${projectBadge(project)}<p class="eyebrow">Projekt</p><h2>${escapeHtml(project.title)}</h2><p>${escapeHtml(project.description || 'Noch keine Beschreibung.')}</p></div>
+      <div class="project-detail-grid"><article class="project-detail-box"><small>Status</small><h3><span class="badge ${status.cls}">${status.label}</span></h3><p class="subtle">${dateLabel(project.start_date)} bis ${dateLabel(project.end_date)}</p></article><article class="project-detail-box"><small>Fortschritt</small><h3>${progress}%</h3><div class="project-progress-track"><i style="width:${progress}%"></i></div></article><article class="project-detail-box"><small>Ziel / Outcome</small><p class="subtle">${escapeHtml(project.outcome_note || 'Noch kein Outcome notiert.')}</p></article><article class="project-detail-box project-next-step"><small>Nächster sinnvoller Schritt</small><p>${escapeHtml(nextStep(project, state, progress))}</p></article></div>
+      <div class="project-section-head"><div><p class="eyebrow">Phasen / Gantt MVP</p><h3>Timeline</h3></div><span class="badge muted">${phases.length} Phase${phases.length === 1 ? '' : 'n'} · ${milestones.length} Meilenstein${milestones.length === 1 ? '' : 'e'}</span></div>
+      ${renderProjectEditors(project, phases)}
+      ${milestones.length ? `<div class="milestone-list project-milestone-region">${milestones.map(milestone => renderMilestone(milestone, phases)).join('')}</div>` : '<div class="project-empty project-milestone-region">Noch keine Meilensteine. Setze wichtige Termine als Orientierungspunkte.</div>'}
+      <div class="project-phase-list">${phases.length ? phases.map(phase => renderPhase(phase, project, milestonesForPhase(milestones, phase.id))).join('') : '<div class="project-empty">Noch keine Phasen. Erstelle die erste Projektphase.</div>'}</div>
+      ${renderProjectNotes(project, state)}
+      <div class="project-section-head"><div><p class="eyebrow">Tasks</p><h3>Verknüpfte Aufgaben</h3></div><span class="badge muted">${tasks.length} Task${tasks.length === 1 ? '' : 's'}</span></div>
+      ${renderTaskTools(project, state)}
+      <div class="project-task-list">${tasks.length ? tasks.map(task => renderTaskRow(task)).join('') : '<div class="project-empty">Noch keine Tasks verknüpft.</div>'}</div>
+      <div class="form-actions project-detail-actions">${projectActionButton('edit-project', project.id, 'Projekt bearbeiten', 'edit')}<button class="pill secondary" type="button" data-action="mark-project-done" data-id="${escapeHtml(project.id)}">Als abgeschlossen markieren</button></div>`;
   }
 
   function renderMilestone(milestone, phases = []) {
@@ -563,6 +607,7 @@
     if (!(form instanceof HTMLFormElement)) return;
     const data = new FormData(form);
     const projectId = form.dataset.projectId;
+    const editingPhaseId = form.dataset.editingPhaseId || '';
     const name = String(data.get('name') || '').trim();
     const start = validDate(data.get('start_date'));
     const end = validDate(data.get('end_date'));
@@ -572,18 +617,22 @@
 
     try {
       const now = nowIso();
-      const phase = normalizePhase({ id: uid('phase'), project_id: projectId, name, start_date: start, end_date: end, status: data.get('status'), created_at: now, updated_at: now, synced: true });
+      const state = readState();
+      const existing = editingPhaseId ? state.projectPhases.find(item => item.id === editingPhaseId) : null;
+      const phase = normalizePhase({ ...(existing || {}), id: existing?.id || uid('phase'), project_id: projectId, name, start_date: start, end_date: end, status: data.get('status'), created_at: existing?.created_at || now, updated_at: now, synced: true });
       const { supabase, userId } = await requireRemoteUser();
       const row = { id: phase.id, user_id: userId, project_id: phase.project_id, name: phase.name, start_date: phase.start_date, end_date: phase.end_date, status: phase.status, is_archived: false, created_at: phase.created_at, updated_at: phase.updated_at };
       const { error } = await supabase.from(TABLE_PHASES).upsert(row, { onConflict: 'id' });
       if (error) throw error;
-      const state = readState();
-      state.projectPhases = [phase, ...state.projectPhases.filter(item => item.id !== phase.id)];
+      state.projectPhases = existing ? state.projectPhases.map(item => item.id === phase.id ? phase : item) : [phase, ...state.projectPhases.filter(item => item.id !== phase.id)];
       writeState(state);
+      delete form.dataset.editingPhaseId;
+      const button = form.querySelector('button[type="submit"]');
+      if (button) button.textContent = 'Phase speichern';
       form.reset();
       renderDetail(projectId);
       render();
-      toast('Phase gespeichert');
+      toast(existing ? 'Phase aktualisiert' : 'Phase gespeichert');
     } catch (error) {
       console.warn('[HabitFlow/projects] Phase konnte nicht gespeichert werden.', error);
       toast(error.message || 'Phase konnte nicht gespeichert werden.');
@@ -639,6 +688,7 @@
     if (form.elements.phase_id) form.elements.phase_id.value = milestone.phase_id || '';
     const button = form.querySelector('button[type="submit"]');
     if (button) button.textContent = 'Meilenstein aktualisieren';
+    form.closest('details')?.setAttribute('open', '');
     form.scrollIntoView({ behavior: 'smooth', block: 'center' });
     form.elements.title?.focus();
   }
@@ -658,30 +708,22 @@
     } catch (error) { toast(error.message || 'Meilenstein konnte nicht gelöscht werden.'); }
   }
 
-  async function editPhase(id) {
+  function editPhase(id) {
     const state = readState();
     const phase = state.projectPhases.find(item => item.id === id);
     if (!phase) return;
-    const name = prompt('Phasenname', phase.name);
-    if (name == null) return;
-    const start = prompt('Startdatum YYYY-MM-DD', phase.start_date);
-    if (start == null) return;
-    const end = prompt('Enddatum YYYY-MM-DD', phase.end_date);
-    if (end == null) return;
-    const status = prompt('Status: open, active, done', phase.status);
-    if (!String(name).trim() || !validDate(start) || !validDate(end) || validDate(end) < validDate(start)) return toast('Ungültige Phasendaten.');
-    try {
-      const updated = normalizePhase({ ...phase, name, start_date: start, end_date: end, status, updated_at: nowIso(), synced: true });
-      const { supabase, userId } = await requireRemoteUser();
-      const row = { id: updated.id, user_id: userId, project_id: updated.project_id, name: updated.name, start_date: updated.start_date, end_date: updated.end_date, status: updated.status, is_archived: false, created_at: updated.created_at, updated_at: updated.updated_at };
-      const { error } = await supabase.from(TABLE_PHASES).upsert(row, { onConflict: 'id' });
-      if (error) throw error;
-      state.projectPhases = state.projectPhases.map(item => item.id === id ? updated : item);
-      writeState(state);
-      renderDetail(updated.project_id);
-      render();
-      toast('Phase aktualisiert');
-    } catch (error) { toast(error.message || 'Phase konnte nicht aktualisiert werden.'); }
+    const form = Array.from(document.querySelectorAll('[data-project-phase-form]')).find(item => item.dataset.projectId === phase.project_id);
+    if (!form) return;
+    form.dataset.editingPhaseId = phase.id;
+    form.elements.name.value = phase.name || '';
+    form.elements.start_date.value = validDate(phase.start_date) || todayDate();
+    form.elements.end_date.value = validDate(phase.end_date) || validDate(phase.start_date) || todayDate();
+    form.elements.status.value = PHASE_STATUS[phase.status] ? phase.status : 'open';
+    const button = form.querySelector('button[type="submit"]');
+    if (button) button.textContent = 'Phase aktualisieren';
+    form.closest('details')?.setAttribute('open', '');
+    form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    form.elements.name?.focus();
   }
 
   async function deletePhase(id) {
@@ -699,6 +741,68 @@
     } catch (error) { toast(error.message || 'Phase konnte nicht gelöscht werden.'); }
   }
 
+  async function saveProjectNote(event) {
+    event.preventDefault();
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement)) return;
+    const data = new FormData(form);
+    const projectId = form.dataset.projectId;
+    const editingNoteId = form.dataset.editingNoteId || '';
+    const category = String(data.get('category') || '').trim();
+    const body = String(data.get('body') || '').trim();
+    if (!projectId || !category || !body) return toast('Notiz braucht Kategorie und Inhalt.');
+    try {
+      const state = readState();
+      const existing = editingNoteId ? state.projectNotes.find(item => item.id === editingNoteId) : null;
+      const now = nowIso();
+      const note = normalizeProjectNote({ ...(existing || {}), id: existing?.id || uid('note'), project_id: projectId, category, body, created_at: existing?.created_at || now, updated_at: now, synced: true });
+      const { supabase, userId } = await requireRemoteUser();
+      const row = { id: note.id, user_id: userId, project_id: note.project_id, category: note.category, body: note.body, is_archived: false, created_at: note.created_at, updated_at: note.updated_at };
+      const { error } = await supabase.from(TABLE_NOTES).upsert(row, { onConflict: 'id' });
+      if (error) throw error;
+      state.projectNotes = existing ? state.projectNotes.map(item => item.id === note.id ? note : item) : [note, ...state.projectNotes];
+      writeState(state);
+      delete form.dataset.editingNoteId;
+      form.reset();
+      renderDetail(projectId);
+      render();
+      toast(existing ? 'Notiz aktualisiert' : 'Notiz gespeichert');
+    } catch (error) {
+      console.warn('[HabitFlow/projects] Projektnotiz konnte nicht gespeichert werden.', error);
+      toast(isMissingRemoteRelationError(error) ? 'Bitte zuerst das Supabase-Skript für Projektnotizen ausführen.' : (error.message || 'Notiz konnte nicht gespeichert werden.'));
+    }
+  }
+
+  function editProjectNote(id) {
+    const note = readState().projectNotes.find(item => item.id === id);
+    if (!note) return;
+    const form = Array.from(document.querySelectorAll('[data-project-note-form]')).find(item => item.dataset.projectId === note.project_id);
+    if (!form) return;
+    form.dataset.editingNoteId = note.id;
+    form.elements.category.value = note.category || 'Allgemein';
+    form.elements.body.value = note.body || '';
+    const button = form.querySelector('button[type="submit"]');
+    if (button) button.textContent = 'Notiz aktualisieren';
+    form.closest('details')?.setAttribute('open', '');
+    form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    form.elements.body?.focus();
+  }
+
+  async function deleteProjectNote(id) {
+    const state = readState();
+    const note = state.projectNotes.find(item => item.id === id);
+    if (!note) return;
+    try {
+      await deleteRemoteProjectRecord(TABLE_NOTES, id);
+      rememberDeletedProjectRecord(TABLE_NOTES, id);
+      state.projectNotes = state.projectNotes.filter(item => item.id !== id);
+      writeState(state);
+      renderDetail(note.project_id);
+      render();
+      toast('Notiz gelöscht');
+    } catch (error) { toast(error.message || 'Notiz konnte nicht gelöscht werden.'); }
+  }
+
   async function linkTask(projectId, taskId) {
     if (!taskId) return toast('Bitte Task auswählen.');
     try {
@@ -706,7 +810,7 @@
       const { error } = await supabase.from('tasks').update({ project_id: projectId, updated_at: nowIso() }).eq('id', taskId);
       if (error) throw error;
       const state = readState();
-      state.tasks = state.tasks.map(task => task.id === taskId ? { ...task, project_id: projectId, updated_at: nowIso(), synced: true } : task);
+      state.tasks = state.tasks.map(task => task.id === taskId ? { ...task, project_id: projectId, projectId, project_link_cleared_at: null, updated_at: nowIso(), synced: true } : task);
       writeState(state);
       renderDetail(projectId);
       render();
@@ -719,10 +823,15 @@
     const task = state.tasks.find(item => item.id === taskId);
     if (!task) return;
     try {
-      const { supabase } = await requireRemoteUser();
-      const { error } = await supabase.from('tasks').update({ project_id: null, updated_at: nowIso() }).eq('id', taskId);
+      const updatedAt = nowIso();
+      const { supabase, userId } = await requireRemoteUser();
+      const { data, error } = await supabase.from('tasks').update({ project_id: null, updated_at: updatedAt }).eq('id', taskId).eq('user_id', userId).select('id,project_id,updated_at');
       if (error) throw error;
-      state.tasks = state.tasks.map(item => item.id === taskId ? { ...item, project_id: null, updated_at: nowIso(), synced: true } : item);
+      if (!Array.isArray(data) || data.length !== 1 || data[0].project_id !== null) throw new Error('Die Projektverknüpfung wurde in Supabase nicht entfernt.');
+      const { data: verification, error: verificationError } = await supabase.from('tasks').select('id,project_id,updated_at').eq('id', taskId).eq('user_id', userId).maybeSingle();
+      if (verificationError) throw verificationError;
+      if (!verification || verification.project_id !== null) throw new Error('Die Projektverknüpfung ist in Supabase noch vorhanden.');
+      state.tasks = state.tasks.map(item => item.id === taskId ? { ...item, project_id: null, projectId: null, project_link_cleared_at: updatedAt, updated_at: verification.updated_at || updatedAt, synced: true } : item);
       writeState(state);
       renderDetail(task.project_id);
       render();
@@ -793,28 +902,38 @@
       const projectQuery = supabase.from(TABLE_PROJECTS).select('*').eq('user_id', userId).eq('is_archived', false);
       let phaseQuery = supabase.from(TABLE_PHASES).select('*').eq('user_id', userId).eq('is_archived', false);
       let milestoneQuery = supabase.from(TABLE_MILESTONES).select('*').eq('user_id', userId).eq('is_archived', false);
+      let noteQuery = supabase.from(TABLE_NOTES).select('*').eq('user_id', userId).eq('is_archived', false);
       if (projectId) {
         phaseQuery = phaseQuery.eq('project_id', projectId);
         milestoneQuery = milestoneQuery.eq('project_id', projectId);
+        noteQuery = noteQuery.eq('project_id', projectId);
       }
       const taskLinkQuery = supabase.from('tasks').select('id,project_id,updated_at').eq('user_id', userId).not('project_id', 'is', null);
-      const [projectsRemote, phasesRemote, milestonesRemote, taskLinksRemote] = await Promise.all([projectQuery, phaseQuery, milestoneQuery, taskLinkQuery]);
+      const [projectsRemote, phasesRemote, milestonesRemote, notesRemote, taskLinksRemote] = await Promise.all([projectQuery, phaseQuery, milestoneQuery, noteQuery, taskLinkQuery]);
       if (projectsRemote.error) throw projectsRemote.error;
       if (phasesRemote.error) throw phasesRemote.error;
       if (milestonesRemote.error && !isMissingRemoteRelationError(milestonesRemote.error)) throw milestonesRemote.error;
+      if (notesRemote.error && !isMissingRemoteRelationError(notesRemote.error)) throw notesRemote.error;
       if (taskLinksRemote.error && !isMissingRemoteColumnError(taskLinksRemote.error, 'project_id')) throw taskLinksRemote.error;
       const state = readState();
       const remoteProjects = (projectsRemote.data || []).map(row => normalizeProject({ ...row, synced: true }));
       const remotePhases = (phasesRemote.data || []).map(row => normalizePhase({ ...row, synced: true }));
       const remoteMilestones = (milestonesRemote.data || []).map(row => normalizeMilestone({ ...row, synced: true }));
-      const remoteTaskLinks = new Map((taskLinksRemote.data || []).filter(row => row?.id && row.project_id).map(row => [String(row.id), String(row.project_id)]));
+      const remoteNotes = (notesRemote.data || []).map(row => normalizeProjectNote({ ...row, synced: true }));
+      const remoteTaskLinks = new Map((taskLinksRemote.data || []).filter(row => row?.id && row.project_id).map(row => [String(row.id), row]));
       state.projects = mergeById(state.projects, remoteProjects);
       state.projectPhases = projectId ? [...remotePhases, ...state.projectPhases.filter(phase => phase.project_id !== projectId)] : remotePhases;
       state.projectMilestones = projectId ? [...remoteMilestones, ...state.projectMilestones.filter(item => item.project_id !== projectId)] : remoteMilestones;
+      state.projectNotes = projectId ? [...remoteNotes, ...state.projectNotes.filter(item => item.project_id !== projectId)] : remoteNotes;
       if (remoteTaskLinks.size) {
         state.tasks = state.tasks.map(task => {
-          const projectLink = remoteTaskLinks.get(String(task.id));
-          return projectLink && task.project_id !== projectLink ? { ...task, project_id: projectLink, projectId: projectLink } : task;
+          const remoteLink = remoteTaskLinks.get(String(task.id));
+          if (!remoteLink) return task;
+          const clearedAt = new Date(task.project_link_cleared_at || 0).getTime();
+          const remoteAt = new Date(remoteLink.updated_at || 0).getTime();
+          if (clearedAt && clearedAt >= remoteAt) return task;
+          const projectLink = String(remoteLink.project_id);
+          return task.project_id !== projectLink ? { ...task, project_id: projectLink, projectId: projectLink, project_link_cleared_at: null } : task;
         });
       }
       writeState(state);
@@ -835,6 +954,7 @@
       if (event.target?.id === 'projectForm') saveProject(event);
       if (event.target?.matches?.('[data-project-phase-form]')) savePhase(event);
       if (event.target?.matches?.('[data-project-milestone-form]')) saveMilestone(event);
+      if (event.target?.matches?.('[data-project-note-form]')) saveProjectNote(event);
     });
     document.addEventListener('click', event => {
       const actionEl = event.target.closest?.('[data-action]');
@@ -851,6 +971,8 @@
       if (action === 'delete-phase') deletePhase(id);
       if (action === 'edit-milestone') editMilestone(id);
       if (action === 'delete-milestone') deleteMilestone(id);
+      if (action === 'edit-project-note') editProjectNote(id);
+      if (action === 'delete-project-note') deleteProjectNote(id);
       if (action === 'link-selected-task') linkTask(id, document.getElementById('projectTaskSelect')?.value || '');
       if (action === 'unlink-task') unlinkTask(id);
       if (action === 'create-project-task') createProjectTask(id);
