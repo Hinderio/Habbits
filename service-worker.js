@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v249-consumption-quick-capture';
+const CACHE_NAME = 'habitflow-v250-monthly-mission-edit';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
