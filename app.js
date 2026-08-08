@@ -435,6 +435,7 @@
   });
   const SYNC_TABLES = ['habit_definitions', 'habit_entries', 'cigarette_events', 'alcohol_logs', 'alcohol_events', 'tasks', 'task_ideas', 'appointments', 'points_ledger', 'pause_periods', 'weekly_reviews', 'monthly_missions'];
   const IDLE_SYNC_CHECK_MS = 60_000;
+  const MOBILE_CONSUMPTION_PULL_MS = 8_000;
   const SAFETY_REMOTE_PULL_MS = 10 * 60_000;
   const REMOTE_PULL_DEBOUNCE_MS = 1_500;
   const SELF_WRITE_ECHO_GRACE_MS = 4_000;
@@ -900,6 +901,8 @@
   let lastForegroundSyncAt = 0;
   let lastRealtimeRestartAt = 0;
   let realtimeReconnectTimer = null;
+  let mobileConsumptionPullInFlight = false;
+  let lastMobileConsumptionFingerprint = '';
   let selectedCalendarDate = toDateKey(new Date());
   let calendarCursor = new Date();
   let charts = { trend: null, points: null };
@@ -3107,6 +3110,11 @@
     if (targetScreen === 'fitness') {
       activeHabitsPane = 'overview';
       renderFitnessHub();
+    }
+    if (targetScreen === 'smoking') {
+      renderSmokingQuickCapture();
+      notifyConsumptionLiveUpdate('screen-opened');
+      pullMobileConsumptionSnapshot();
     }
   }
 
@@ -5925,6 +5933,12 @@
     renderConsumptionMobileOverview(last);
     renderSmokeHistoryLauncher();
     applyConsumptionMode();
+  }
+
+  function notifyConsumptionLiveUpdate(reason = 'state') {
+    window.dispatchEvent(new CustomEvent('habitflow:consumption-live-update', {
+      detail: { reason, at: Date.now() }
+    }));
   }
 
   function renderSmokingQuickCapture() {
@@ -10784,6 +10798,7 @@
     recalculateSmokeDailyBonuses(new Set([todayKey]));
     saveState({ skipRender: true, skipSmokeRecalc: true });
     renderSmokingQuickCapture();
+    notifyConsumptionLiveUpdate('cigarette-recorded');
     toast(points > 0 ? `Zigarette erfasst · +${points} Punkte` : `Zigarette erfasst · ${points} Punkte`);
     scheduleConsumptionBackgroundRender();
     setTimeout(() => syncWithSupabase({ silent: true }), 0);
@@ -10809,7 +10824,10 @@
     cigarette.updated_at = nowIso();
     cigarette.synced = false;
     pendingTriggerSmokeId = null;
-    saveState();
+    saveState({ skipRender: true });
+    renderSmokingQuickCapture();
+    notifyConsumptionLiveUpdate('trigger-saved');
+    scheduleConsumptionBackgroundRender();
     toast(`Trigger gespeichert: ${meta.label}`);
     syncWithSupabase({ silent: true, pullFirst: false });
   }
@@ -13003,6 +13021,7 @@ async function deleteAlcoholLog(id) {
   function initOngoingSync() {
     if (!isSupabaseConfigured()) return;
     setInterval(runIdleSyncCheck, IDLE_SYNC_CHECK_MS);
+    setInterval(pullMobileConsumptionSnapshot, MOBILE_CONSUMPTION_PULL_MS);
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
         const hiddenFor = lastPageHiddenAt ? Date.now() - lastPageHiddenAt : 0;
@@ -13040,7 +13059,64 @@ async function deleteAlcoholLog(id) {
     if (restartRealtime) restartRemoteSubscription();
     if (now - lastForegroundSyncAt < FOREGROUND_SYNC_DEBOUNCE_MS) return;
     lastForegroundSyncAt = now;
+    if (shouldRunMobileConsumptionPull()) {
+      pullMobileConsumptionSnapshot().finally(() => runIdleSyncCheck({ forceSafetyPull: true }));
+      return;
+    }
     runIdleSyncCheck({ forceSafetyPull: true });
+  }
+
+  function shouldRunMobileConsumptionPull() {
+    const isMobile = typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 760px)').matches;
+    const isVisible = !document.visibilityState || document.visibilityState === 'visible';
+    return Boolean(
+      isMobile
+      && isVisible
+      && isAuthenticated()
+      && document.body?.dataset?.activeScreen === 'smoking'
+      && activeConsumptionMode === 'smoke'
+    );
+  }
+
+  function cigaretteSnapshotFingerprint(rows = []) {
+    return (rows || [])
+      .filter(item => item?.id)
+      .map(item => [
+        item.id,
+        item.updated_at || item.created_at || '',
+        item.smoked_at || '',
+        item.note || ''
+      ].join(':'))
+      .sort()
+      .join('|');
+  }
+
+  async function pullMobileConsumptionSnapshot() {
+    if (!shouldRunMobileConsumptionPull() || mobileConsumptionPullInFlight || syncInFlight) return;
+    mobileConsumptionPullInFlight = true;
+    try {
+      const result = await fetchRemoteTable('cigarette_events');
+      const remoteRows = Array.isArray(result?.data) ? result.data : [];
+      const remoteFingerprint = cigaretteSnapshotFingerprint(remoteRows);
+      if (remoteFingerprint === lastMobileConsumptionFingerprint) return;
+      lastMobileConsumptionFingerprint = remoteFingerprint;
+
+      const before = cigaretteSnapshotFingerprint(state.cigarettes);
+      state.cigarettes = mergeById(state.cigarettes, remoteRows, mapRemoteCigarette);
+      dedupeStateCollections(state);
+      migrateCigaretteScoring();
+      const after = cigaretteSnapshotFingerprint(state.cigarettes);
+      if (after === before) return;
+
+      saveState({ skipRender: true, skipSmokeRecalc: true });
+      renderSmokingQuickCapture();
+      notifyConsumptionLiveUpdate('mobile-remote-pull');
+      scheduleConsumptionBackgroundRender();
+    } catch (error) {
+      console.warn('Mobiler Konsum-Abgleich fehlgeschlagen', error);
+    } finally {
+      mobileConsumptionPullInFlight = false;
+    }
   }
 
   function remoteSubscriptionHealthy() {
@@ -13372,6 +13448,7 @@ async function deleteAlcoholLog(id) {
       saveState({ skipRender: true });
       lastSyncAt = new Date();
       safeRender();
+      notifyConsumptionLiveUpdate('supabase-sync');
       if (!silent) toast('Sync abgeschlossen');
     } catch (error) {
       console.error(error);
