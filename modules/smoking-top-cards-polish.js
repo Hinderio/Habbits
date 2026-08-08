@@ -369,7 +369,20 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
 
   function schedule(delay = 80) {
     window.clearTimeout(timer);
-    timer = window.setTimeout(render, delay);
+    timer = window.setTimeout(() => {
+      timer = null;
+      render();
+    }, delay);
+  }
+
+  function renderLiveUpdate() {
+    window.clearTimeout(timer);
+    timer = null;
+    if (busy) {
+      schedule(0);
+      return;
+    }
+    render();
   }
 
   function init() {
@@ -379,6 +392,7 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
     window.addEventListener('storage', event => {
       if (!event.key || event.key === STATE_KEY) schedule();
     });
+    window.addEventListener('habitflow:consumption-live-update', renderLiveUpdate);
     document.addEventListener('click', event => {
       const action = event.target?.closest?.('[data-action]')?.dataset?.action || '';
       if (action === 'rotate-craving-tip') $('#screen-smoking .craving-coach-card')?.classList.add('hf-show-coach-details');
