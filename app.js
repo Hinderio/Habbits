@@ -961,6 +961,7 @@
   let gamificationShowLocked = localStorage.getItem(GAMIFICATION_LOCKED_KEY) === 'show';
   let gamificationBadgeShelfOpen = false;
   let monthlyMissionFormOpen = localStorage.getItem(MONTHLY_MISSION_FORM_KEY) === 'open';
+  let editingMonthlyMissionId = null;
   let selectedCompanionStage = null;
   let leisurePullTimer = null;
 
@@ -1422,9 +1423,11 @@
       if (action === 'toggle-monthly-mission-form') toggleMonthlyMissionForm();
       if (action === 'create-monthly-mission-preset') createMonthlyMissionFromPreset(id);
       if (action === 'create-monthly-mission-custom') createCustomMonthlyMission();
+      if (action === 'edit-monthly-mission') editMonthlyMission(id);
+      if (action === 'save-monthly-mission-edit') saveMonthlyMissionEdit();
+      if (action === 'cancel-monthly-mission-edit') cancelMonthlyMissionEdit();
       if (action === 'increment-monthly-mission') incrementMonthlyMission(id);
       if (action === 'decrement-monthly-mission') decrementMonthlyMission(id);
-      if (action === 'archive-monthly-mission') archiveMonthlyMission(id);
       if (action === 'delete-monthly-mission') deleteMonthlyMission(id);
       if (action === 'open-monthly-magazine') openMonthlyMagazineReader(id || currentMonthKey());
       if (action === 'open-task-detail') openTaskDetail(id);
@@ -4489,7 +4492,7 @@
   function activeMonthlyMissions(monthKey = currentMonthKey()) {
     return (state.monthlyMissions || [])
       .map(normalizeMonthlyMission)
-      .filter(mission => mission.month_key === monthKey && !mission.is_archived)
+      .filter(mission => mission.month_key === monthKey)
       .sort((a, b) => {
         const aa = monthlyMissionState(a);
         const bb = monthlyMissionState(b);
@@ -4525,7 +4528,7 @@
       <div class="monthly-mission-actions">
         ${manualControls}
         <div class="monthly-mission-icon-actions">
-          <button class="consumption-icon-action" type="button" data-action="archive-monthly-mission" data-id="${escapeHtml(value.mission.id)}" aria-label="Monatsmission ausblenden" title="Ausblenden">${svgIcon('archive', 'ui-icon')}</button>
+          <button class="consumption-icon-action" type="button" data-action="edit-monthly-mission" data-id="${escapeHtml(value.mission.id)}" aria-label="Monatsmission bearbeiten" title="Bearbeiten">${svgIcon('edit', 'ui-icon')}</button>
           <button class="consumption-icon-action consumption-icon-action-delete" type="button" data-action="delete-monthly-mission" data-id="${escapeHtml(value.mission.id)}" aria-label="Monatsmission löschen" title="Löschen">${svgIcon('trash', 'ui-icon')}</button>
         </div>
       </div>
@@ -4537,6 +4540,10 @@
     const monthKey = currentMonthKey();
     const missions = activeMonthlyMissions(monthKey);
     const summary = monthlyMissionSummary(missions);
+    const editingMission = editingMonthlyMissionId
+      ? missions.find(mission => mission.id === editingMonthlyMissionId) || null
+      : null;
+    if (editingMonthlyMissionId && !editingMission) editingMonthlyMissionId = null;
     const syncHint = remoteMonthlyMissionsSupported && isAuthenticated()
       ? 'Supabase bereit'
       : remoteMonthlyMissionsSupported
@@ -4547,31 +4554,38 @@
     const visibleMissions = missions.slice(0, 3);
     const hiddenCount = Math.max(0, missions.length - visibleMissions.length);
     const missionCards = visibleMissions.length
-      ? `<div class="monthly-mission-grid">${visibleMissions.map(renderMonthlyMissionCard).join('')}</div>${hiddenCount ? `<div class="monthly-mission-more">${hiddenCount} weitere Mission${hiddenCount === 1 ? '' : 'en'} bewusst verborgen, damit das Dashboard ruhig bleibt.</div>` : ''}`
+      ? `<div class="monthly-mission-grid">${visibleMissions.map(renderMonthlyMissionCard).join('')}</div>${hiddenCount ? `<div class="monthly-mission-more">${hiddenCount} weitere Mission${hiddenCount === 1 ? '' : 'en'} im Monatsfokus.</div>` : ''}`
       : `<div class="monthly-mission-empty"><strong>Starte deinen Monat mit 1–3 starken Missionen.</strong><p>Tippe auf „+ Mission“, wähle eine Vorlage oder formuliere ein eigenes Monatsziel. Die App berechnet automatische Missionen aus deinen bestehenden Fitness-, Konsum-, Routine- und Task-Daten.</p></div>`;
     const presetIds = new Set(missions.map(mission => `${mission.metric}:${mission.target}:${mission.title.toLowerCase()}`));
     const presetButtons = MONTHLY_MISSION_PRESETS.map(preset => {
       const disabled = presetIds.has(`${preset.metric}:${preset.target}:${preset.title.toLowerCase()}`);
       return `<button class="monthly-preset-btn ${disabled ? 'is-disabled' : ''}" type="button" data-action="create-monthly-mission-preset" data-id="${escapeHtml(preset.id)}" ${disabled ? 'disabled aria-disabled="true"' : ''}><strong>${escapeHtml(preset.title)}</strong><span>${escapeHtml(monthlyMissionMetricMeta(preset.metric).source)}</span></button>`;
     }).join('');
+    const selectedMetric = editingMission?.metric || 'manual_count';
+    const metricOptions = Object.entries(MONTHLY_MISSION_METRICS)
+      .map(([key, item]) => `<option value="${escapeHtml(key)}" ${selectedMetric === key ? 'selected' : ''}>${escapeHtml(item.label)}</option>`)
+      .join('');
     const form = monthlyMissionFormOpen ? `<div class="monthly-mission-builder">
-      <div class="monthly-preset-grid">${presetButtons}</div>
+      ${editingMission ? '' : `<div class="monthly-preset-grid">${presetButtons}</div>`}
       <div class="monthly-custom-row">
-        <label><span>Eigene Mission</span><input id="monthlyMissionTitle" type="text" maxlength="80" placeholder="z. B. 3 soziale Abende" /></label>
-        <label><span>Ziel</span><input id="monthlyMissionTarget" type="number" min="1" max="999" value="4" inputmode="numeric" /></label>
-        <label><span>Quelle</span><select id="monthlyMissionMetric">${Object.entries(MONTHLY_MISSION_METRICS).map(([key, item]) => `<option value="${escapeHtml(key)}">${escapeHtml(item.label)}</option>`).join('')}</select></label>
-        <button class="pill primary" type="button" data-action="create-monthly-mission-custom">Mission erstellen</button>
+        <label><span>Eigene Mission</span><input id="monthlyMissionTitle" type="text" maxlength="80" value="${escapeHtml(editingMission?.title || '')}" placeholder="z. B. 3 soziale Abende" /></label>
+        <label><span>Ziel</span><input id="monthlyMissionTarget" type="number" min="1" max="999" value="${editingMission?.target || 4}" inputmode="numeric" /></label>
+        <label><span>Quelle</span><select id="monthlyMissionMetric">${metricOptions}</select></label>
+        <div class="monthly-mission-form-actions">
+          ${editingMission
+            ? `<button class="pill primary" type="button" data-action="save-monthly-mission-edit">Änderungen speichern</button><button class="pill secondary" type="button" data-action="cancel-monthly-mission-edit">Abbrechen</button>`
+            : `<button class="pill primary" type="button" data-action="create-monthly-mission-custom">Mission erstellen</button>`}
+        </div>
       </div>
     </div>` : '';
     els.monthlyMissions.innerHTML = `<div class="monthly-mission-hero">
         <div class="monthly-mission-orb"><strong>${summary.average}%</strong><span>${escapeHtml(monthKeyLabel(monthKey))}</span></div>
         <div><p class="eyebrow">Monats-Missionen</p><h3>${missions.length ? 'Dein Monatsfokus bleibt sichtbar' : 'Wähle deine erste Monats-Mission'}</h3><p>${missions.length ? `${summary.count} aktive Mission${summary.count === 1 ? '' : 'en'} · ${summary.completed} abgeschlossen · ${escapeHtml(syncHint)}` : `Vorlagen wählen, ohne dein Dashboard zu überladen · ${escapeHtml(syncHint)}`}</p></div>
-        <button class="pill secondary" type="button" data-action="toggle-monthly-mission-form" aria-expanded="${monthlyMissionFormOpen ? 'true' : 'false'}">${monthlyMissionFormOpen ? 'Auswahl schliessen' : '+ Mission'}</button>
+        <button class="pill secondary" type="button" data-action="toggle-monthly-mission-form" aria-expanded="${monthlyMissionFormOpen ? 'true' : 'false'}">${monthlyMissionFormOpen ? (editingMission ? 'Bearbeiten schliessen' : 'Auswahl schliessen') : '+ Mission'}</button>
       </div>
       ${missionCards}
       ${form}`;
   }
-
 
   function monthKeyRange(monthKey = currentMonthKey()) {
     const [year, month] = String(monthKey || currentMonthKey()).split('-').map(Number);
@@ -4994,8 +5008,50 @@
 
   function toggleMonthlyMissionForm() {
     monthlyMissionFormOpen = !monthlyMissionFormOpen;
+    if (!monthlyMissionFormOpen) editingMonthlyMissionId = null;
     localStorage.setItem(MONTHLY_MISSION_FORM_KEY, monthlyMissionFormOpen ? 'open' : 'closed');
     renderMonthlyMissions();
+  }
+
+  function editMonthlyMission(id) {
+    const mission = (state.monthlyMissions || [])
+      .map(normalizeMonthlyMission)
+      .find(item => item.id === id && item.month_key === currentMonthKey());
+    if (!mission) return;
+    editingMonthlyMissionId = mission.id;
+    monthlyMissionFormOpen = true;
+    localStorage.setItem(MONTHLY_MISSION_FORM_KEY, 'open');
+    renderMonthlyMissions();
+    requestAnimationFrame(() => $('#monthlyMissionTitle')?.focus());
+  }
+
+  function cancelMonthlyMissionEdit() {
+    editingMonthlyMissionId = null;
+    monthlyMissionFormOpen = false;
+    localStorage.setItem(MONTHLY_MISSION_FORM_KEY, 'closed');
+    renderMonthlyMissions();
+  }
+
+  function saveMonthlyMissionEdit() {
+    if (!editingMonthlyMissionId) return;
+    const titleInput = $('#monthlyMissionTitle');
+    const targetInput = $('#monthlyMissionTarget');
+    const metricInput = $('#monthlyMissionMetric');
+    const metric = normalizeMonthlyMissionMetric(metricInput?.value || 'manual_count');
+    const title = String(titleInput?.value || '').trim() || monthlyMissionMetricMeta(metric).label;
+    const target = Math.max(1, Math.min(999, Math.round(Number(targetInput?.value || 1) || 1)));
+    const missionId = editingMonthlyMissionId;
+    editingMonthlyMissionId = null;
+    monthlyMissionFormOpen = false;
+    localStorage.setItem(MONTHLY_MISSION_FORM_KEY, 'closed');
+    const mission = updateMonthlyMission(missionId, () => ({
+      title,
+      target,
+      metric,
+      category: monthlyMissionMetricMeta(metric).category,
+      is_archived: false
+    }));
+    if (mission) toast(`${mission.title} aktualisiert.`);
   }
 
   function createMonthlyMission(data = {}) {
@@ -5062,14 +5118,14 @@
     updateMonthlyMission(id, current => ({ manual_count: Math.max(0, Number(current.manual_count || 0) - 1) }));
   }
 
-  function archiveMonthlyMission(id) {
-    const mission = updateMonthlyMission(id, () => ({ is_archived: true }));
-    if (mission) toast('Mission ausgeblendet.');
-  }
-
   function deleteMonthlyMission(id) {
     const mission = (state.monthlyMissions || []).find(item => item.id === id);
     if (!mission) return;
+    if (editingMonthlyMissionId === id) {
+      editingMonthlyMissionId = null;
+      monthlyMissionFormOpen = false;
+      localStorage.setItem(MONTHLY_MISSION_FORM_KEY, 'closed');
+    }
     state.monthlyMissions = state.monthlyMissions.filter(item => item.id !== id);
     markRemoteDeleted('monthly_missions', id);
     saveState();
