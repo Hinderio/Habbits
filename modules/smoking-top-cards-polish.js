@@ -13,6 +13,7 @@
   const pane = '#screen-smoking .consumption-pane[data-consumption-pane="smoke"]';
   let busy = false;
   let timer = null;
+  let liveSnapshot = null;
 
   const $ = (selector, root = document) => root?.querySelector?.(selector);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
@@ -24,6 +25,18 @@
     } catch {
       return {};
     }
+  }
+
+  function cloneLiveSnapshot(snapshot) {
+    if (!snapshot || typeof snapshot !== 'object') return null;
+    return {
+      cigarettes: Array.isArray(snapshot.cigarettes)
+        ? snapshot.cigarettes.map(item => item && typeof item === 'object' ? { ...item } : item)
+        : [],
+      pausePeriods: Array.isArray(snapshot.pausePeriods)
+        ? snapshot.pausePeriods.map(item => item && typeof item === 'object' ? { ...item } : item)
+        : []
+    };
   }
 
   function dateKey(value) {
@@ -354,7 +367,7 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
     if (busy) return;
     busy = true;
     try {
-      const data = metrics(snapshot || readState());
+      const data = metrics(snapshot || liveSnapshot || readState());
       style();
       ring(data);
       actions();
@@ -369,19 +382,20 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
     window.clearTimeout(timer);
     timer = window.setTimeout(() => {
       timer = null;
-      render();
+      render(liveSnapshot);
     }, delay);
   }
 
   function renderLiveUpdate(event) {
     window.clearTimeout(timer);
     timer = null;
-    const snapshot = event?.detail?.snapshot || null;
+    const snapshot = cloneLiveSnapshot(event?.detail?.snapshot);
+    if (snapshot) liveSnapshot = snapshot;
     if (busy) {
       schedule(0);
       return;
     }
-    render(snapshot);
+    render(liveSnapshot);
   }
 
   function init() {
@@ -389,7 +403,10 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
     [150, 450, 1000, 2200].forEach(delay => window.setTimeout(render, delay));
     window.setInterval(render, 30000);
     window.addEventListener('storage', event => {
-      if (!event.key || event.key === STATE_KEY) schedule();
+      if (!event.key || event.key === STATE_KEY) {
+        liveSnapshot = null;
+        schedule();
+      }
     });
     window.addEventListener('habitflow:consumption-live-update', renderLiveUpdate);
     document.addEventListener('click', event => {
