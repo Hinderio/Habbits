@@ -438,6 +438,10 @@
   const SAFETY_REMOTE_PULL_MS = 10 * 60_000;
   const REMOTE_PULL_DEBOUNCE_MS = 1_500;
   const SELF_WRITE_ECHO_GRACE_MS = 4_000;
+  const FOREGROUND_SYNC_DEBOUNCE_MS = 1_200;
+  const REALTIME_RESTART_AFTER_HIDDEN_MS = 10_000;
+  const REALTIME_RESTART_DEBOUNCE_MS = 5_000;
+  const REALTIME_RECONNECT_DELAY_MS = 2_500;
   const REMOTE_DELETE_TOMBSTONE_TTL_DAYS = 3650;
   const OPTIONAL_SYNC_TABLES = new Set(['alcohol_events', 'appointments', 'task_ideas', 'pause_periods', 'weekly_reviews', 'monthly_missions']);
   const BUILT_IN_DEFAULT_HABIT_NAMES = new Set(['gewicht', 'wasser', 'sport', 'meditation']);
@@ -892,6 +896,10 @@
   let lastRemotePullAt = 0;
   let suppressRemotePullUntil = 0;
   let remotePullTimer = null;
+  let lastPageHiddenAt = 0;
+  let lastForegroundSyncAt = 0;
+  let lastRealtimeRestartAt = 0;
+  let realtimeReconnectTimer = null;
   let selectedCalendarDate = toDateKey(new Date());
   let calendarCursor = new Date();
   let charts = { trend: null, points: null };
@@ -12996,25 +13004,71 @@ async function deleteAlcoholLog(id) {
     if (!isSupabaseConfigured()) return;
     setInterval(runIdleSyncCheck, IDLE_SYNC_CHECK_MS);
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') runIdleSyncCheck({ forceSafetyPull: true });
-      if (document.visibilityState === 'hidden' && hasPendingSyncWork()) syncWithSupabase({ silent: true, pullFirst: false, pullAfter: false });
-      if (document.visibilityState === 'hidden' && hasPendingLeisureCatalogSync()) syncLeisureCatalogWithSupabase({ silent: true });
+      if (document.visibilityState === 'visible') {
+        const hiddenFor = lastPageHiddenAt ? Date.now() - lastPageHiddenAt : 0;
+        requestForegroundSync({ restartRealtime: hiddenFor >= REALTIME_RESTART_AFTER_HIDDEN_MS });
+        return;
+      }
+      lastPageHiddenAt = Date.now();
+      if (hasPendingSyncWork()) syncWithSupabase({ silent: true, pullFirst: false, pullAfter: false });
+      if (hasPendingLeisureCatalogSync()) syncLeisureCatalogWithSupabase({ silent: true });
     });
-    window.addEventListener('online', () => { runIdleSyncCheck({ forceSafetyPull: true }); syncLeisureCatalogWithSupabase({ silent: true }); });
-    window.addEventListener('pagehide', () => { if (hasPendingSyncWork()) syncWithSupabase({ silent: true, pullFirst: false, pullAfter: false }); if (hasPendingLeisureCatalogSync()) syncLeisureCatalogWithSupabase({ silent: true }); });
-    window.addEventListener('beforeunload', () => { if (hasPendingSyncWork()) syncWithSupabase({ silent: true, pullFirst: false, pullAfter: false }); if (hasPendingLeisureCatalogSync()) syncLeisureCatalogWithSupabase({ silent: true }); });
+    window.addEventListener('pageshow', event => {
+      const hiddenFor = lastPageHiddenAt ? Date.now() - lastPageHiddenAt : 0;
+      requestForegroundSync({ restartRealtime: Boolean(event.persisted) || hiddenFor >= REALTIME_RESTART_AFTER_HIDDEN_MS });
+    });
+    window.addEventListener('focus', () => requestForegroundSync());
+    window.addEventListener('online', () => {
+      requestForegroundSync({ restartRealtime: true });
+      syncLeisureCatalogWithSupabase({ silent: true });
+    });
+    window.addEventListener('pagehide', () => {
+      lastPageHiddenAt = Date.now();
+      if (hasPendingSyncWork()) syncWithSupabase({ silent: true, pullFirst: false, pullAfter: false });
+      if (hasPendingLeisureCatalogSync()) syncLeisureCatalogWithSupabase({ silent: true });
+    });
+    window.addEventListener('beforeunload', () => {
+      if (hasPendingSyncWork()) syncWithSupabase({ silent: true, pullFirst: false, pullAfter: false });
+      if (hasPendingLeisureCatalogSync()) syncLeisureCatalogWithSupabase({ silent: true });
+    });
+  }
+
+  function requestForegroundSync({ restartRealtime = false } = {}) {
+    if (!isAuthenticated()) return;
+    renderTimers();
+    const now = Date.now();
+    if (restartRealtime) restartRemoteSubscription();
+    if (now - lastForegroundSyncAt < FOREGROUND_SYNC_DEBOUNCE_MS) return;
+    lastForegroundSyncAt = now;
+    runIdleSyncCheck({ forceSafetyPull: true });
+  }
+
+  function remoteSubscriptionHealthy() {
+    if (!syncSubscription) return false;
+    const channelState = String(syncSubscription.state || '').toLowerCase();
+    if (channelState && channelState !== 'joined' && channelState !== 'joining') return false;
+    const realtime = supabaseClient?.realtime;
+    if (typeof realtime?.isConnected === 'function' && !realtime.isConnected()) return false;
+    return true;
   }
 
   function runIdleSyncCheck({ forceSafetyPull = false } = {}) {
-    if (!isAuthenticated() || syncInFlight) return;
+    if (!isAuthenticated()) return;
     if (document.visibilityState && document.visibilityState !== 'visible') return;
+    if (!remoteSubscriptionHealthy()) {
+      restartRemoteSubscription();
+      forceSafetyPull = true;
+    }
+    if (syncInFlight) {
+      if (forceSafetyPull) syncWithSupabase({ silent: true, pullOnly: true });
+      return;
+    }
     if (hasPendingSyncWork()) {
-      syncWithSupabase({ silent: true, pullFirst: false, pullAfter: false });
+      syncWithSupabase({ silent: true, pullFirst: false, pullAfter: forceSafetyPull });
       return;
     }
     if (hasPendingLeisureCatalogSync()) {
       syncLeisureCatalogWithSupabase({ silent: true });
-      return;
     }
     if (forceSafetyPull || shouldRunSafetyRemotePull()) {
       syncWithSupabase({ silent: true, pullOnly: true });
@@ -13963,7 +14017,7 @@ async function deleteAlcoholLog(id) {
     const userId = currentUserId();
     if (!supabaseClient || !userId || syncSubscription || !supabaseClient.channel) return;
     try {
-      const channel = supabaseClient.channel(`habitflow-private-sync-${userId.slice(0, 8)}`);
+      const channel = supabaseClient.channel(`habitflow-private-sync-${userId.slice(0, 8)}-${Date.now().toString(36)}`);
       SYNC_TABLES.forEach(table => {
         if (table === 'task_ideas' && !remoteTaskIdeasSupported) return;
         channel.on('postgres_changes', { event: '*', schema: 'public', table, filter: `user_id=eq.${userId}` }, scheduleRemotePull);
@@ -13971,22 +14025,52 @@ async function deleteAlcoholLog(id) {
       if (remoteActivityIdeasSupported) {
         channel.on('postgres_changes', { event: '*', schema: 'public', table: ACTIVITY_CATALOG_TABLE, filter: `user_id=eq.${userId}` }, scheduleLeisureRemotePull);
       }
-      syncSubscription = channel.subscribe();
+      syncSubscription = channel;
+      channel.subscribe(status => {
+        if (syncSubscription !== channel) return;
+        if (status === 'SUBSCRIBED') {
+          clearTimeout(realtimeReconnectTimer);
+          realtimeReconnectTimer = null;
+          return;
+        }
+        if (status !== 'CHANNEL_ERROR' && status !== 'TIMED_OUT' && status !== 'CLOSED') return;
+        syncSubscription = null;
+        clearTimeout(realtimeReconnectTimer);
+        realtimeReconnectTimer = setTimeout(() => {
+          realtimeReconnectTimer = null;
+          if (!isAuthenticated() || (document.visibilityState && document.visibilityState !== 'visible')) return;
+          subscribeToRemoteChanges();
+          runIdleSyncCheck({ forceSafetyPull: true });
+        }, REALTIME_RECONNECT_DELAY_MS);
+      });
     } catch (error) {
       console.warn('Realtime Sync konnte nicht aktiviert werden.', error);
     }
   }
 
+  function restartRemoteSubscription() {
+    if (!isAuthenticated()) return;
+    const now = Date.now();
+    if (now - lastRealtimeRestartAt < REALTIME_RESTART_DEBOUNCE_MS) return;
+    lastRealtimeRestartAt = now;
+    clearRemoteSubscription();
+    subscribeToRemoteChanges();
+  }
+
   function clearRemoteSubscription() {
     clearTimeout(leisurePullTimer);
+    clearTimeout(remotePullTimer);
+    clearTimeout(realtimeReconnectTimer);
     leisurePullTimer = null;
-    if (!supabaseClient || !syncSubscription) return;
+    remotePullTimer = null;
+    realtimeReconnectTimer = null;
+    const channel = syncSubscription;
+    syncSubscription = null;
+    if (!supabaseClient || !channel) return;
     try {
-      if (supabaseClient.removeChannel) supabaseClient.removeChannel(syncSubscription);
+      if (supabaseClient.removeChannel) supabaseClient.removeChannel(channel);
     } catch (error) {
       console.warn('Realtime Sync konnte nicht sauber getrennt werden.', error);
-    } finally {
-      syncSubscription = null;
     }
   }
 
