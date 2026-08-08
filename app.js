@@ -911,6 +911,7 @@
   let editingAppointmentId = null;
   let renderQueued = false;
   let deferredRenderPending = false;
+  let consumptionBackgroundRenderQueued = false;
   let habitFormOpen = false;
   let taskFormOpen = false;
   let taskIdeasOpen = false;
@@ -2921,11 +2922,15 @@
     }
   }
 
-  function saveState({ skipRender = false } = {}) {
+  function saveState({ skipRender = false, skipSmokeRecalc = false } = {}) {
     if (state?.deletedRemoteIds) state.deletedRemoteIds = combineDeletedRemoteIds(state.deletedRemoteIds, readRemoteDeleteArchive());
-    if (Array.isArray(state?.cigarettes) && state.cigarettes.length) recalculateSmokeIntervals({ markUpdated: false });
+    if (!skipSmokeRecalc && Array.isArray(state?.cigarettes) && state.cigarettes.length) {
+      recalculateSmokeIntervals({ markUpdated: false });
+    }
     writeRemoteDeleteArchive(state.deletedRemoteIds);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    const serializedState = JSON.stringify(state);
+    window.HabitFlowRuntime?.skipNextSmokingDomainPersistenceNormalization?.();
+    localStorage.setItem(STORAGE_KEY, serializedState);
     if (!skipRender) queueRender();
   }
 
@@ -5856,6 +5861,33 @@
     renderConsumptionMobileOverview(last);
     renderSmokeHistoryLauncher();
     applyConsumptionMode();
+  }
+
+  function renderSmokingQuickCapture() {
+    const last = getLastCigarette();
+    const smokeCount = visibleCigarettes().length;
+    renderTimers();
+    if (els.lastSmokePoints) els.lastSmokePoints.textContent = `${smokeCount} Eintrag${smokeCount === 1 ? '' : 'e'}`;
+    renderSmokingTip(last);
+    renderTriggerCapture();
+    renderConsumptionMobileOverview(last);
+    renderSmokeHistoryLauncher();
+    applyConsumptionMode();
+    renderSyncStatus();
+  }
+
+  function scheduleConsumptionBackgroundRender() {
+    if (consumptionBackgroundRenderQueued) return;
+    consumptionBackgroundRenderQueued = true;
+    const complete = () => {
+      consumptionBackgroundRenderQueued = false;
+      queueRender();
+    };
+    if (typeof window.requestIdleCallback === 'function') {
+      window.requestIdleCallback(complete, { timeout: 1400 });
+      return;
+    }
+    setTimeout(complete, 220);
   }
 
   function loadExpandedHabitCardIds() {
@@ -10666,7 +10698,8 @@
     scoringContext.consecutiveRecoveryBonus = smokeRecoveryRepeatBonus(last, scoringContext);
     const interval = scoringContext.interval;
     const points = cigarettePoints(scoringContext.scoringInterval, scoringContext);
-    const todayAlcohol = Boolean(alcoholForDate(toDateKey(new Date()))?.consumed || alcoholUnitsOnDate(toDateKey(new Date())).length);
+    const todayKey = toDateKey(smokedAt);
+    const todayAlcohol = Boolean(alcoholForDate(todayKey)?.consumed || alcoholUnitsOnDate(todayKey).length);
     const entry = {
       id: uid(),
       smoked_at: smokedAt,
@@ -10684,10 +10717,12 @@
     state.cigarettes.push(entry);
     pendingTriggerSmokeId = entry.id;
     addPoints('cigarette', entry.id, points, cigarettePointReason(scoringContext.scoringInterval, scoringContext), smokedAt);
-    recalculateSmokeDailyBonuses(new Set([toDateKey(smokedAt)]));
-    saveState();
+    recalculateSmokeDailyBonuses(new Set([todayKey]));
+    saveState({ skipRender: true, skipSmokeRecalc: true });
+    renderSmokingQuickCapture();
     toast(points > 0 ? `Zigarette erfasst · +${points} Punkte` : `Zigarette erfasst · ${points} Punkte`);
-    syncWithSupabase({ silent: true });
+    scheduleConsumptionBackgroundRender();
+    setTimeout(() => syncWithSupabase({ silent: true }), 0);
   }
   function renderTriggerCapture() {
     if (!els.triggerCaptureCard) return;
