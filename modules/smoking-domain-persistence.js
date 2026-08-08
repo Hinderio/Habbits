@@ -9,6 +9,9 @@
   const nativeSetItem = window.localStorage?.setItem?.bind(window.localStorage);
   const nativeGetItem = window.localStorage?.getItem?.bind(window.localStorage);
   const nativeRemoveItem = window.localStorage?.removeItem?.bind(window.localStorage);
+  let cachedStorageValue = null;
+  let cachedNormalizedValue = null;
+  let skipNextWriteNormalization = false;
   if (!nativeSetItem || !nativeGetItem) return;
 
   function isDisabled() {
@@ -132,18 +135,26 @@
   }
 
   function normalizeJsonString(value) {
+    if (value === cachedStorageValue) return cachedNormalizedValue;
     if (typeof value !== 'string' || !value.trim().startsWith('{')) return value;
     try {
       const parsed = JSON.parse(value);
       const normalized = normalizeState(parsed);
-      return normalized.changed ? JSON.stringify(normalized.state) : value;
+      const nextValue = normalized.changed ? JSON.stringify(normalized.state) : value;
+      cachedStorageValue = value;
+      cachedNormalizedValue = nextValue;
+      return nextValue;
     } catch (error) {
       return value;
     }
   }
 
   window.localStorage.setItem = function setItemWithSmokingDomain(key, value) {
-    const nextValue = key === STORAGE_KEY ? normalizeJsonString(value) : value;
+    if (key !== STORAGE_KEY) return nativeSetItem(key, value);
+    const nextValue = skipNextWriteNormalization ? value : normalizeJsonString(value);
+    skipNextWriteNormalization = false;
+    cachedStorageValue = nextValue;
+    cachedNormalizedValue = nextValue;
     return nativeSetItem(key, nextValue);
   };
 
@@ -153,6 +164,9 @@
   };
 
   window.HabitFlowRuntime = window.HabitFlowRuntime || {};
+  window.HabitFlowRuntime.skipNextSmokingDomainPersistenceNormalization = function skipNextSmokingDomainPersistenceNormalization() {
+    skipNextWriteNormalization = true;
+  };
   window.HabitFlowRuntime.normalizeSmokingStateWithDomain = function normalizeSmokingStateWithDomain(state) {
     return normalizeState(state).state;
   };
@@ -163,7 +177,7 @@
   };
 
   modules.register('smoking-domain-persistence', {
-    description: 'Uses smoking-domain scoring as a safe local state and cigarette ledger normalizer. No UI or sync calls are triggered directly.',
+    description: 'Uses smoking-domain scoring as a cached local state and cigarette ledger normalizer. Verified app writes bypass duplicate normalization.',
     active: true,
     storageKey: STORAGE_KEY,
     disableKey: DISABLE_KEY
