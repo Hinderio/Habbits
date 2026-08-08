@@ -120,8 +120,7 @@
     return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
   }
 
-  function metrics() {
-    const state = readState();
+  function metrics(state = readState()) {
     const rows = smokeRows(state);
     const intervals = rows.map(item => Number(item.interval_minutes)).filter(value => Number.isFinite(value) && value > 0).sort((a, b) => a - b);
     const activeIntervals = activeDaytimePauses(rows, state, 28);
@@ -247,10 +246,9 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
     document.head.appendChild(node);
   }
 
-  function ring() {
+  function ring(data) {
     const box = $('#screen-smoking .smoke-ring');
     if (!box) return;
-    const data = metrics();
     const label = $('small', box);
     const live = $('#smokePauseLive', box) || $('strong', box);
     const hint = $('#smokePauseHint', box);
@@ -322,7 +320,7 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
     if (open && open.textContent !== 'Coach öffnen') open.textContent = 'Coach öffnen';
   }
 
-  function overview() {
+  function overview(data) {
     const root = $('#smokeHistory');
     const panel = $(`${pane} .consumption-history-panel`);
     if (!root || !panel) return;
@@ -330,7 +328,6 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
     if (title && title.textContent !== 'Heute im Überblick') title.textContent = 'Heute im Überblick';
     const badge = $('#lastSmokePoints', panel);
     if (badge) badge.textContent = 'Mehr';
-    const data = metrics();
     const focus = data.pause == null ? 'Erste bewusste Pause setzen.' : data.pause >= data.next ? 'Pause halten und nicht verhandeln.' : `${duration(data.next)} als nächste saubere Marke.`;
     const recent = data.recent.length ? data.recent.map(item => {
       const points = Number(item.points || 0);
@@ -353,15 +350,16 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
     }
   }
 
-  function render() {
+  function render(snapshot = null) {
     if (busy) return;
     busy = true;
     try {
+      const data = metrics(snapshot || readState());
       style();
-      ring();
+      ring(data);
       actions();
       coach();
-      overview();
+      overview(data);
     } finally {
       busy = false;
     }
@@ -375,14 +373,15 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
     }, delay);
   }
 
-  function renderLiveUpdate() {
+  function renderLiveUpdate(event) {
     window.clearTimeout(timer);
     timer = null;
+    const snapshot = event?.detail?.snapshot || null;
     if (busy) {
       schedule(0);
       return;
     }
-    render();
+    render(snapshot);
   }
 
   function init() {
