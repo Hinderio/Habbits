@@ -1007,7 +1007,10 @@
 
   function registerServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
-    navigator.serviceWorker.register('./service-worker.js').catch(error => console.warn('Service Worker konnte nicht registriert werden.', error));
+    navigator.serviceWorker
+      .register('./service-worker.js', { updateViaCache: 'none' })
+      .then(registration => registration.update())
+      .catch(error => console.warn('Service Worker konnte nicht registriert werden.', error));
   }
 
   function cacheEls() {
@@ -5935,9 +5938,20 @@
     applyConsumptionMode();
   }
 
+  function consumptionLiveSnapshot() {
+    return {
+      cigarettes: state.cigarettes,
+      pausePeriods: state.pausePeriods || []
+    };
+  }
+
   function notifyConsumptionLiveUpdate(reason = 'state') {
     window.dispatchEvent(new CustomEvent('habitflow:consumption-live-update', {
-      detail: { reason, at: Date.now() }
+      detail: {
+        reason,
+        at: Date.now(),
+        snapshot: consumptionLiveSnapshot()
+      }
     }));
   }
 
@@ -13102,9 +13116,12 @@ async function deleteAlcoholLog(id) {
       lastMobileConsumptionFingerprint = remoteFingerprint;
 
       const before = cigaretteSnapshotFingerprint(state.cigarettes);
-      state.cigarettes = mergeById(state.cigarettes, remoteRows, mapRemoteCigarette);
-      dedupeStateCollections(state);
-      migrateCigaretteScoring();
+      const localById = new Map(state.cigarettes.map(item => [item.id, item]));
+      state.cigarettes = mergeById(state.cigarettes, remoteRows, row => {
+        const remote = mapRemoteCigarette(row);
+        const local = localById.get(remote.id);
+        return local ? { ...local, ...remote } : remote;
+      });
       const after = cigaretteSnapshotFingerprint(state.cigarettes);
       if (after === before) return;
 
