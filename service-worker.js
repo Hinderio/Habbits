@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v250-monthly-mission-edit';
+const CACHE_NAME = 'habitflow-v251-iphone-sync-resume';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
