@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v257-task-steps';
+const CACHE_NAME = 'habitflow-v258-task-steps-db';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -46,7 +46,7 @@ const MODULE_ASSETS = [
   './modules/projects-ui-polish.js',
   './modules/project-timeline-view.js'
 ];
-const SQL_ASSETS = ['./sql/add-appointment-series.sql', './sql/add-projects.sql'];
+const SQL_ASSETS = ['./sql/add-appointment-series.sql', './sql/add-projects.sql', './sql/add-task-steps.sql'];
 const ASSETS = ['./', './index.html', './style.css', './app.js', './supabase-config.js', './supabase-schema.js', './manifest.json', './icons/coach-clean.svg', './data/activity-ideas.json', ...SQL_ASSETS, ...MODULE_ASSETS];
 const NETWORK_FIRST_PATHS = new Set(['/', '/index.html', '/app.js', '/style.css', '/supabase-config.js', '/supabase-schema.js', '/manifest.json', ...SQL_ASSETS.map(path => path.replace(/^\./, '')), ...MODULE_ASSETS.map(path => path.replace(/^\./, ''))]);
 
