@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v256-chatgpt-list';
+const CACHE_NAME = 'habitflow-v257-task-steps';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
