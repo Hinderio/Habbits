@@ -8,7 +8,8 @@
     Promise.all([
       fetch('./supabase.sql', { cache: 'no-store' }).then(response => response.ok ? response.text() : ''),
       fetch('./sql/add-appointment-series.sql', { cache: 'no-store' }).then(response => response.ok ? response.text() : ''),
-      fetch('./sql/add-projects.sql', { cache: 'no-store' }).then(response => response.ok ? response.text() : '')
+      fetch('./sql/add-projects.sql', { cache: 'no-store' }).then(response => response.ok ? response.text() : ''),
+      fetch('./sql/add-task-steps.sql', { cache: 'no-store' }).then(response => response.ok ? response.text() : '')
     ]).then(parts => {
       const sql = parts.filter(Boolean).join('\n\n-- HabitFlow extension --\n\n');
       if (sql.trim()) window.HABITFLOW_SUPABASE_SQL = sql;
