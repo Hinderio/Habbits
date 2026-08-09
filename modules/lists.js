@@ -35,7 +35,8 @@
     { id: 'photos', slug: 'fotospots', title: 'Fotospots', type: 'photos', icon: 'camera', color: '#52bfd7', description: 'Spots sammeln und daraus visuelle Touren planen.' },
     { id: 'subscriptions', slug: 'abos', title: 'Abos', type: 'subscription', icon: 'repeat', color: '#61CBF4', description: 'Abos, Kosten, Laufzeiten und Kündigungsfenster ordnen.' },
     { id: 'terms', slug: 'begriffe', title: 'Begriffe', type: 'generic', icon: 'book', color: '#ff8fa3', description: 'Begriffe nach Kategorien sammeln und mit Lernkarten festigen.' },
-    { id: 'finance', slug: 'finanzen', title: 'Finanzen', type: 'generic', icon: 'wallet', color: '#6fd6a8', description: 'Investitionen, Guthaben und offene Schulden in einem ruhigen Finanzbild.' }
+    { id: 'finance', slug: 'finanzen', title: 'Finanzen', type: 'generic', icon: 'wallet', color: '#6fd6a8', description: 'Investitionen, Guthaben und offene Schulden in einem ruhigen Finanzbild.' },
+    { id: 'chatgpt', slug: 'chatgpt', title: 'ChatGPT', type: 'generic', icon: 'message', color: '#7f9fd4', description: 'Wichtige Projekte und Threads gruppiert sichern und direkt wieder öffnen.' }
   ];
 
   const ICONS = {
@@ -57,7 +58,9 @@
     trash: '<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m9 10 .5 8"/><path d="m15 10-.5 8"/><path d="M5 6l1 15h12l1-15"/>',
     check: '<path d="m5 12 4 4L19 6"/>',
     route: '<circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M9 6h3a3 3 0 0 1 0 6h-1a3 3 0 0 0 0 6h4"/>',
-    pin: '<path d="M12 21s7-5.2 7-12a7 7 0 1 0-14 0c0 6.8 7 12 7 12Z"/><circle cx="12" cy="9" r="2.5"/>'
+    pin: '<path d="M12 21s7-5.2 7-12a7 7 0 1 0-14 0c0 6.8 7 12 7 12Z"/><circle cx="12" cy="9" r="2.5"/>',
+    message: '<path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8Z"/><path d="M8 9h8"/><path d="M8 13h5"/>',
+    external: '<path d="M15 3h6v6"/><path d="m10 14 11-11"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>'
   };
 
   let state = readState();
@@ -68,12 +71,14 @@
   let editingShoppingId = '';
   let editingSubscriptionId = '';
   let editingFinanceId = '';
+  let editingChatgptId = '';
   let termStudyCategory = '';
   let termStudyIndex = 0;
   let termStudyOrder = [];
   const collapsedTermCategories = new Set();
   const initializedTermCategories = new Set();
   const collapsedShoppingCategories = new Set();
+  const collapsedChatgptProjects = new Set();
   let syncLabel = 'lokal';
   let supabaseClient = null;
   let remoteReady = false;
@@ -213,8 +218,8 @@
       const count = list.type === 'photos' ? state.stops.filter(stop => !stop.isArchived).length : itemsFor(list.id).length;
       const categories = list.id === 'terms' ? termCategories().length : 0;
       const done = list.type === 'photos' ? state.tours.filter(tour => !tour.isArchived).length : itemsFor(list.id).filter(item => item.isDone).length;
-      const cardType = list.type === 'photos' ? 'Touren & Orte' : list.id === 'terms' ? 'Lernkarten' : list.id === 'finance' ? 'Werte & Verpflichtungen' : 'Liste';
-      const cardStat = list.type === 'photos' ? `${done} Touren` : list.id === 'terms' ? `${categories} ${categories === 1 ? 'Kategorie' : 'Kategorien'}` : list.id === 'finance' ? 'Positionen' : 'Einträge';
+      const cardType = list.type === 'photos' ? 'Touren & Orte' : list.id === 'terms' ? 'Lernkarten' : list.id === 'finance' ? 'Werte & Verpflichtungen' : list.id === 'chatgpt' ? 'Threads & Projekte' : 'Liste';
+      const cardStat = list.type === 'photos' ? `${done} Touren` : list.id === 'terms' ? `${categories} ${categories === 1 ? 'Kategorie' : 'Kategorien'}` : list.id === 'finance' ? 'Positionen' : list.id === 'chatgpt' ? 'Threads' : 'Einträge';
       return `
         <article class="hf-list-card ${list.id === activeListId ? 'is-active' : ''}" style="--hf-list-tone:${escapeHtml(list.color)}">
           <button type="button" data-list-open="${escapeHtml(list.id)}">
@@ -246,6 +251,10 @@
     }
     if (list.id === 'finance') {
       target.innerHTML = renderFinanceDetail(list);
+      return;
+    }
+    if (list.id === 'chatgpt') {
+      target.innerHTML = renderChatgptDetail(list);
       return;
     }
     if (list.type === 'photos') {
@@ -300,6 +309,104 @@
 
   function shoppingItemsInCategory(category) {
     return itemsFor('shopping').filter(item => shoppingCategory(item) === category);
+  }
+
+
+  function chatgptProject(item) {
+    return String(item?.metadata?.project || item?.metadata?.category || 'Ohne Projekt').trim() || 'Ohne Projekt';
+  }
+
+  function chatgptProjects() {
+    return Array.from(new Set(itemsFor('chatgpt').map(chatgptProject))).sort((a, b) => a.localeCompare(b, 'de'));
+  }
+
+  function chatgptItemsInProject(project) {
+    return itemsFor('chatgpt').filter(item => chatgptProject(item) === project);
+  }
+
+  function normalizedExternalUrl(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    try {
+      const candidate = /^[a-z][a-z0-9+.-]*:/i.test(raw) ? raw : `https://${raw}`;
+      const parsed = new URL(candidate);
+      return ['http:', 'https:'].includes(parsed.protocol) ? parsed.href : '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function chatgptLinkLabel(value) {
+    try {
+      return new URL(value).hostname.replace(/^www\./, '');
+    } catch (_) {
+      return 'ChatGPT-Link';
+    }
+  }
+
+  function renderChatgptDetail(list) {
+    const items = itemsFor('chatgpt');
+    const projects = chatgptProjects();
+    const editingItem = editingChatgptId ? items.find(item => item.id === editingChatgptId) : null;
+    const projectOptions = projects.map(project => `<option value="${escapeHtml(project)}"></option>`).join('');
+    return `
+      <div class="panel-head">
+        <div><p class="eyebrow">${escapeHtml(list.title)}</p><h3>Wichtige Threads nach Projekt ordnen</h3></div>
+        <span class="badge">${items.length} ${items.length === 1 ? 'Thread' : 'Threads'}</span>
+      </div>
+      <form class="hf-list-form hf-chatgpt-form ${editingItem ? 'is-editing' : ''}" data-form="chatgpt" data-editing-id="${escapeHtml(editingItem?.id || '')}">
+        <label><span>Titel</span><input name="title" value="${escapeHtml(editingItem?.title || '')}" placeholder="z. B. HabitFlow Performance-Fix" required></label>
+        <label><span>Projekt</span><input name="project" list="hfChatgptProjects" value="${escapeHtml(editingItem ? chatgptProject(editingItem) : '')}" placeholder="Auswählen oder neu eingeben" required><datalist id="hfChatgptProjects">${projectOptions}</datalist></label>
+        <label class="full"><span>Thread-Link</span><input name="url" type="text" inputmode="url" value="${escapeHtml(editingItem?.metadata?.url || '')}" placeholder="https://chatgpt.com/c/..." required></label>
+        <label class="full"><span>Notiz</span><textarea name="note" rows="2" placeholder="Worum geht es in diesem Thread?">${escapeHtml(editingItem?.note || '')}</textarea></label>
+        <p class="hf-list-form-error full" data-chatgpt-error role="status" hidden></p>
+        <div class="hf-list-form-actions full">
+          <button class="pill primary" type="submit">${icon('plus')} ${editingItem ? 'Änderungen speichern' : 'Thread speichern'}</button>
+          ${editingItem ? '<button class="pill secondary" type="button" data-action="cancel-chatgpt-edit">Abbrechen</button>' : ''}
+        </div>
+      </form>
+      <div class="hf-term-categories hf-chatgpt-projects ${projects.length ? '' : 'is-empty'}">
+        ${projects.length ? projects.map(renderChatgptProject).join('') : '<p>Noch keine ChatGPT-Threads gespeichert.</p>'}
+      </div>
+    `;
+  }
+
+  function renderChatgptProject(project) {
+    const items = chatgptItemsInProject(project);
+    const isCollapsed = collapsedChatgptProjects.has(project);
+    return `
+      <section class="hf-term-category hf-chatgpt-project ${isCollapsed ? 'is-collapsed' : ''}" data-project="${escapeHtml(project)}">
+        <div class="hf-term-category-head">
+          <div>
+            <small>Projekt</small>
+            <h4><span class="hf-chatgpt-project-tag">${icon('message')}${escapeHtml(project)}</span></h4>
+            <span>${items.length} ${items.length === 1 ? 'gespeicherter Thread' : 'gespeicherte Threads'}</span>
+          </div>
+          <div class="hf-term-category-head-actions">
+            <button class="hf-list-icon-btn hf-term-collapse" type="button" data-action="toggle-chatgpt-project" aria-label="${isCollapsed ? 'Projekt öffnen' : 'Projekt schliessen'}" aria-expanded="${String(!isCollapsed)}">${icon('chevronRight')}</button>
+          </div>
+        </div>
+        <div class="hf-term-list hf-chatgpt-list">
+          ${items.map(renderChatgptRow).join('')}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderChatgptRow(item) {
+    const url = normalizedExternalUrl(item.metadata?.url);
+    return `
+      <article class="hf-list-row hf-chatgpt-row" data-chatgpt-id="${escapeHtml(item.id)}">
+        <div class="hf-chatgpt-copy">
+          <strong>${escapeHtml(item.title)}</strong>
+          <span class="hf-chatgpt-domain">${escapeHtml(chatgptLinkLabel(url))}</span>
+          ${item.note ? `<p>${escapeHtml(item.note)}</p>` : ''}
+        </div>
+        <a class="hf-chatgpt-open" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" aria-label="Thread ${escapeHtml(item.title)} öffnen">${icon('external')}<span>Öffnen</span></a>
+        <button class="hf-list-icon-btn" type="button" data-action="edit-chatgpt" aria-label="Thread bearbeiten">${icon('edit')}</button>
+        <button class="hf-list-icon-btn danger" type="button" data-action="delete-chatgpt" aria-label="Thread löschen">${icon('trash')}</button>
+      </article>
+    `;
   }
 
   function renderShoppingDetail(list) {
@@ -830,7 +937,7 @@
       <div class="hf-term-study-modal" role="dialog" aria-modal="true" aria-label="Lernmodus ${escapeHtml(termStudyCategory)}">
         <section class="hf-term-study-shell">
           <header class="hf-term-study-head">
-            <div><small>Lernmodus</small><h3>${escapeHtml(termStudyCategory)}</h3></div>
+            <div><small>Lernmodus</small><span class="hf-term-study-category-tag">${escapeHtml(termStudyCategory)}</span></div>
             <button class="hf-list-icon-btn" type="button" data-action="close-term-study" aria-label="Lernmodus schliessen">${icon('close')}</button>
           </header>
           <button class="hf-term-flip-card" type="button" data-action="flip-term-card" aria-label="Lernkarte umdrehen" aria-pressed="false">
@@ -981,6 +1088,7 @@
         editingShoppingId = '';
         editingSubscriptionId = '';
         editingFinanceId = '';
+        editingChatgptId = '';
         termStudyCategory = '';
         termStudyIndex = 0;
         termStudyOrder = [];
@@ -1027,6 +1135,11 @@
         render();
         return;
       }
+      if (action === 'cancel-chatgpt-edit') {
+        editingChatgptId = '';
+        render();
+        return;
+      }
       if (action === 'toggle-term-category') {
         const category = String(event.target.closest('[data-category]')?.dataset.category || '');
         if (!category) return;
@@ -1051,6 +1164,14 @@
         render();
         return;
       }
+      if (action === 'toggle-chatgpt-project') {
+        const project = String(event.target.closest('[data-project]')?.dataset.project || '');
+        if (!project) return;
+        if (collapsedChatgptProjects.has(project)) collapsedChatgptProjects.delete(project);
+        else collapsedChatgptProjects.add(project);
+        render();
+        return;
+      }
       if (action === 'close-term-study') {
         closeTermStudy();
         return;
@@ -1066,6 +1187,12 @@
         const terms = termStudyTerms();
         termStudyIndex = Math.min(Math.max(0, termStudyIndex + direction), Math.max(0, terms.length - 1));
         render();
+        return;
+      }
+
+      const chatgptRow = event.target.closest('[data-chatgpt-id]');
+      if (chatgptRow && ['edit-chatgpt', 'delete-chatgpt'].includes(action)) {
+        handleChatgptAction(action, chatgptRow.dataset.chatgptId);
         return;
       }
 
@@ -1112,6 +1239,7 @@
       if (form.dataset.form === 'shopping') saveShopping(form);
       if (form.dataset.form === 'subscription') saveSubscription(form);
       if (form.dataset.form === 'finance') saveFinance(form);
+      if (form.dataset.form === 'chatgpt') saveChatgpt(form);
       if (form.dataset.form === 'tour') saveTour(form);
       if (form.dataset.form === 'spot') void saveSpot(form);
     });
@@ -1225,6 +1353,24 @@
     }
     item.updatedAt = new Date().toISOString();
     saveAndSync();
+  }
+
+
+  function handleChatgptAction(action, id) {
+    const item = state.items.find(entry => entry.id === id && entry.listId === 'chatgpt' && !entry.isArchived);
+    if (!item) return;
+    if (action === 'edit-chatgpt') {
+      editingChatgptId = id;
+      render();
+      focusListForm('chatgpt');
+      return;
+    }
+    if (action === 'delete-chatgpt') {
+      item.isArchived = true;
+      item.updatedAt = new Date().toISOString();
+      if (editingChatgptId === id) editingChatgptId = '';
+      saveAndSync();
+    }
   }
 
   function handleSubscriptionAction(action, id) {
@@ -1391,6 +1537,50 @@
       });
     }
     editingShoppingId = '';
+    form.reset();
+    saveAndSync();
+  }
+
+
+  function saveChatgpt(form) {
+    const data = new FormData(form);
+    const existingId = String(form.dataset.editingId || '').trim();
+    const existingItem = existingId ? state.items.find(item => item.id === existingId && item.listId === 'chatgpt' && !item.isArchived) : null;
+    const title = String(data.get('title') || '').trim();
+    const project = String(data.get('project') || '').trim();
+    const url = normalizedExternalUrl(data.get('url'));
+    const errorElement = form.querySelector('[data-chatgpt-error]');
+    if (!title || !project || !url) {
+      if (errorElement) {
+        errorElement.textContent = 'Bitte Titel, Projekt und einen gültigen http/https-Link angeben.';
+        errorElement.hidden = false;
+      }
+      return;
+    }
+    if (errorElement) {
+      errorElement.textContent = '';
+      errorElement.hidden = true;
+    }
+    const note = String(data.get('note') || '').trim();
+    const now = new Date().toISOString();
+    const metadata = { ...(existingItem?.metadata || {}), project, category: project, url };
+    if (existingItem) {
+      Object.assign(existingItem, { title, note, metadata, updatedAt: now });
+    } else {
+      state.items.push({
+        id: uid('chatgpt-thread'),
+        listId: 'chatgpt',
+        title,
+        note,
+        metadata,
+        isDone: false,
+        isArchived: false,
+        sortRank: Date.now(),
+        createdAt: now,
+        updatedAt: now
+      });
+    }
+    editingChatgptId = '';
     form.reset();
     saveAndSync();
   }
