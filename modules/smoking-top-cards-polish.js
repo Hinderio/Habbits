@@ -386,17 +386,29 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
     }, delay);
   }
 
-  function renderLiveUpdate(event) {
+  function applyLiveSnapshot(snapshot) {
     window.clearTimeout(timer);
     timer = null;
-    const snapshot = cloneLiveSnapshot(event?.detail?.snapshot);
-    if (snapshot) liveSnapshot = snapshot;
+    const nextSnapshot = cloneLiveSnapshot(snapshot);
+    if (nextSnapshot) liveSnapshot = nextSnapshot;
     if (busy) {
       schedule(0);
-      return;
+      return Boolean(nextSnapshot);
     }
     render(liveSnapshot);
+    return Boolean(nextSnapshot);
   }
+
+  function renderLiveUpdate(event) {
+    applyLiveSnapshot(event?.detail?.snapshot);
+  }
+
+  window.HabitFlowSmokingCircle = Object.freeze({
+    update: applyLiveSnapshot,
+    refresh() {
+      render(liveSnapshot || readState());
+    }
+  });
 
   function init() {
     render();
