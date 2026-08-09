@@ -687,6 +687,17 @@
             <label><span>Zyklus</span><select id="taskRecurrenceSelect" name="recurrence"><option value="none" selected>Einmalig</option><option value="monthly">Monatlich automatisch</option></select></label>
             <label><span>Kategorie</span><input name="category" list="taskCategoryOptions" maxlength="80" placeholder="Auswählen oder neu eingeben" /><datalist id="taskCategoryOptions"></datalist></label>
             <div id="taskRecurrenceHint" class="task-cycle-hint full">Einmalige Aufgabe ohne automatische Folgekarten.</div>
+            <section class="task-steps-editor full" aria-labelledby="taskStepsEditorTitle">
+              <div class="task-steps-editor-head">
+                <div><span id="taskStepsEditorTitle">Zwischenschritte</span><small>Checkliste für grössere Aufgaben</small></div>
+                <span id="taskStepsEditorCount" class="badge muted">0 Schritte</span>
+              </div>
+              <div class="task-step-entry">
+                <input id="taskStepInput" type="text" maxlength="160" placeholder="Nächsten Schritt hinzufügen" />
+                <button id="taskStepAddBtn" class="icon-btn" type="button" aria-label="Zwischenschritt hinzufügen" title="Zwischenschritt hinzufügen"><span data-icon="plus"></span></button>
+              </div>
+              <div id="taskStepsEditorList" class="task-steps-editor-list"><p class="task-steps-editor-empty">Noch keine Zwischenschritte.</p></div>
+            </section>
             <label class="full"><span>Notiz</span><textarea name="description" rows="3" placeholder="optional · Links werden automatisch klickbar"></textarea></label>
             <label class="full task-image-upload"><span>Bildanhang</span><input name="images" type="file" accept="image/*" multiple /><small id="taskImageHint">Optional · bis zu 3 Bilder, komprimiert und nur im Task-Detail sichtbar.</small></label>
             <label id="taskImageRemoveLabel" class="full task-image-remove hidden"><input name="remove_images" type="checkbox" value="1" /><span>Bestehende Bilder beim Speichern entfernen</span></label>
