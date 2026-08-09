@@ -37,7 +37,9 @@
   const SMOKE_DAILY_BONUS_PER_LESS = 10;
   const TASK_RECURRENCE_MARKER_RE = /\n?\s*<!--hf-task-rec:([^>]+)-->/;
   const TASK_MEDIA_MARKER_RE = /\n?\s*<!--hf-task-media:([^>]+)-->/;
+  const TASK_STEPS_MARKER_RE = /\n?\s*<!--hf-task-steps:([^>]+)-->/;
   const TASK_IMAGE_LIMIT = 3;
+  const TASK_STEP_LIMIT = 50;
   const TASK_IMAGE_MAX_EDGE = 1280;
   const TASK_IMAGE_QUALITY = 0.78;
   const TASK_IDEA_META_MARKER_RE = /\n?\s*<!--hf-idea-meta:([^>]+)-->/;
@@ -919,6 +921,7 @@
   let historyModalMode = null;
   let historyModalHabitId = null;
   let editingTaskId = null;
+  let taskStepsDraft = [];
   let editingAppointmentId = null;
   let renderQueued = false;
   let deferredRenderPending = false;
@@ -1159,6 +1162,10 @@
       taskPointsPreview: $('#taskPointsPreview'),
       taskRecurrenceSelect: $('#taskRecurrenceSelect'),
       taskRecurrenceHint: $('#taskRecurrenceHint'),
+      taskStepInput: $('#taskStepInput'),
+      taskStepAddBtn: $('#taskStepAddBtn'),
+      taskStepsEditorList: $('#taskStepsEditorList'),
+      taskStepsEditorCount: $('#taskStepsEditorCount'),
       taskImageHint: $('#taskImageHint'),
       taskImageRemoveLabel: $('#taskImageRemoveLabel'),
       taskDetailModal: $('#taskDetailModal'),
@@ -1357,6 +1364,16 @@
     if (els.taskForm.elements.due_at) els.taskForm.elements.due_at.addEventListener('change', updateTaskRecurrenceHint);
     if (els.taskRecurrenceSelect) els.taskRecurrenceSelect.addEventListener('change', updateTaskRecurrenceHint);
     if (els.taskForm.elements.images) els.taskForm.elements.images.addEventListener('change', updateTaskImageHint);
+    if (els.taskStepAddBtn) els.taskStepAddBtn.addEventListener('click', addTaskStepDraft);
+    if (els.taskStepInput) els.taskStepInput.addEventListener('keydown', event => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      addTaskStepDraft();
+    });
+    if (els.taskStepsEditorList) {
+      els.taskStepsEditorList.addEventListener('input', updateTaskStepDraftFromEditor);
+      els.taskStepsEditorList.addEventListener('change', updateTaskStepDraftFromEditor);
+    }
     if (els.appointmentForm?.elements?.starts_at) els.appointmentForm.elements.starts_at.addEventListener('change', syncAppointmentEndDefault);
     if (els.cancelHabitEditBtn) els.cancelHabitEditBtn.addEventListener('click', () => closeHabitForm({ clearForm: true }));
     if (els.cancelTaskEditBtn) els.cancelTaskEditBtn.addEventListener('click', () => closeTaskForm({ clearForm: true }));
@@ -1446,6 +1463,8 @@
       if (action === 'open-monthly-magazine') openMonthlyMagazineReader(id || currentMonthKey());
       if (action === 'open-task-detail') openTaskDetail(id);
       if (action === 'close-task-detail') closeTaskDetail();
+      if (action === 'remove-task-step-draft') removeTaskStepDraft(id);
+      if (action === 'toggle-task-step') toggleTaskStep(actionEl.dataset.taskId || id, actionEl.dataset.stepId, Boolean(actionEl.checked));
       if (action === 'edit-task') editTask(id);
       if (action === 'delete-task') deleteTask(id);
       if (action === 'archive-task') archiveTask(id);
@@ -2131,13 +2150,48 @@
     }
   }
 
+  function normalizeTaskSteps(steps = []) {
+    const list = Array.isArray(steps) ? steps : [];
+    return list
+      .map((step, index) => {
+        const title = String(step?.title || step?.text || '').trim().replace(/\s+/g, ' ').slice(0, 160);
+        if (!title) return null;
+        const done = Boolean(step?.done ?? step?.is_done ?? step?.completed);
+        return {
+          id: String(step?.id || `step-${index + 1}`),
+          title,
+          done,
+          created_at: validIsoOrNull(step?.created_at || step?.createdAt),
+          completed_at: done ? validIsoOrNull(step?.completed_at || step?.completedAt) : null
+        };
+      })
+      .filter(Boolean)
+      .slice(0, TASK_STEP_LIMIT);
+  }
+
+  function parseTaskStepsFromDescription(description = '') {
+    const raw = String(description || '');
+    const match = raw.match(TASK_STEPS_MARKER_RE);
+    if (!match) return { description: raw, steps: [] };
+    const cleaned = raw.replace(TASK_STEPS_MARKER_RE, '').trim();
+    try {
+      const decoded = JSON.parse(decodeURIComponent(match[1] || ''));
+      return { description: cleaned, steps: normalizeTaskSteps(decoded?.steps || decoded || []) };
+    } catch (error) {
+      console.warn('Task-Zwischenschritte konnten nicht gelesen werden.', error);
+      return { description: cleaned, steps: [] };
+    }
+  }
+
   function parseTaskContentFromDescription(description = '') {
     const recurrenceParsed = parseTaskRecurrenceFromDescription(description);
     const mediaParsed = parseTaskMediaFromDescription(recurrenceParsed.description);
+    const stepsParsed = parseTaskStepsFromDescription(mediaParsed.description);
     return {
-      description: mediaParsed.description,
+      description: stepsParsed.description,
       recurrence: recurrenceParsed.recurrence,
-      media: mediaParsed.media
+      media: mediaParsed.media,
+      steps: stepsParsed.steps
     };
   }
 
@@ -2176,14 +2230,27 @@
     return taskImages(task).length > 0;
   }
 
+  function taskSteps(task = {}) {
+    const parsed = parseTaskContentFromDescription(task.description || '');
+    return normalizeTaskSteps(Array.isArray(task.steps) ? task.steps : parsed.steps);
+  }
+
+  function taskStepProgress(task = {}) {
+    const steps = taskSteps(task);
+    const done = steps.filter(step => step.done).length;
+    return { steps, done, total: steps.length, percent: steps.length ? Math.round((done / steps.length) * 100) : 0 };
+  }
+
   function taskDescriptionForStorage(task = {}) {
     const clean = taskDescriptionForDisplay(task).trim();
     const recurrence = normalizeTaskRecurrence(task.recurrence, task);
     const images = taskImages(task);
+    const steps = taskSteps(task);
     const parts = [];
     if (clean) parts.push(clean);
     if (recurrence) parts.push(`<!--hf-task-rec:${encodeURIComponent(JSON.stringify(recurrence))}-->`);
     if (images.length) parts.push(`<!--hf-task-media:${encodeURIComponent(JSON.stringify({ images }))}-->`);
+    if (steps.length) parts.push(`<!--hf-task-steps:${encodeURIComponent(JSON.stringify({ steps }))}-->`);
     return parts.length ? parts.join('\n\n') : null;
   }
 
@@ -2408,6 +2475,7 @@
       backlog_rank: null,
       points: 0,
       recurrence: nextRecurrence,
+      steps: taskSteps(completed).map(step => ({ ...step, done: false, created_at: created, completed_at: null })),
       created_at: created,
       updated_at: created,
       synced: false
@@ -2426,6 +2494,7 @@
       description: parsedDescription.description,
       category: normalizeTaskCategory(task.category),
       images: normalizeTaskImages(task.images || task.media || parsedDescription.media),
+      steps: normalizeTaskSteps(Array.isArray(task.steps) ? task.steps : parsedDescription.steps),
       status,
       priority: normalizeTaskPriority(task.priority),
       done_archived_at: doneArchivedAt,
@@ -2453,6 +2522,64 @@
     const datalist = document.getElementById('taskCategoryOptions');
     if (!datalist) return;
     datalist.innerHTML = taskCategoryValues().map(category => `<option value="${escapeHtml(category)}"></option>`).join('');
+  }
+
+  function taskStepDraftCountLabel() {
+    const done = taskStepsDraft.filter(step => step.done).length;
+    const total = taskStepsDraft.length;
+    return total ? `${done}/${total} erledigt` : '0 Schritte';
+  }
+
+  function renderTaskStepsEditor() {
+    if (els.taskStepsEditorCount) els.taskStepsEditorCount.textContent = taskStepDraftCountLabel();
+    if (!els.taskStepsEditorList) return;
+    if (!taskStepsDraft.length) {
+      els.taskStepsEditorList.innerHTML = '<p class="task-steps-editor-empty">Noch keine Zwischenschritte.</p>';
+      return;
+    }
+    els.taskStepsEditorList.innerHTML = taskStepsDraft.map(step => `
+      <div class="task-step-editor-row ${step.done ? 'is-done' : ''}" data-step-editor-row data-step-id="${escapeHtml(step.id)}">
+        <input class="task-step-editor-check" type="checkbox" data-role="task-step-done" aria-label="Zwischenschritt erledigt" ${step.done ? 'checked' : ''} />
+        <input class="task-step-editor-title" type="text" data-role="task-step-title" maxlength="160" value="${escapeHtml(step.title)}" aria-label="Zwischenschritt" />
+        <button class="icon-btn danger" type="button" data-action="remove-task-step-draft" data-id="${escapeHtml(step.id)}" aria-label="Zwischenschritt löschen" title="Zwischenschritt löschen"><span data-icon="trash"></span></button>
+      </div>`).join('');
+    renderStaticIcons();
+  }
+
+  function addTaskStepDraft() {
+    if (!els.taskStepInput) return;
+    const title = String(els.taskStepInput.value || '').trim().replace(/\s+/g, ' ').slice(0, 160);
+    if (!title) {
+      els.taskStepInput.focus();
+      return;
+    }
+    if (taskStepsDraft.length >= TASK_STEP_LIMIT) {
+      toast(`Maximal ${TASK_STEP_LIMIT} Zwischenschritte pro Aufgabe.`);
+      return;
+    }
+    taskStepsDraft.push({ id: uid(), title, done: false, created_at: nowIso(), completed_at: null });
+    els.taskStepInput.value = '';
+    renderTaskStepsEditor();
+    els.taskStepInput.focus();
+  }
+
+  function removeTaskStepDraft(id) {
+    taskStepsDraft = taskStepsDraft.filter(step => step.id !== id);
+    renderTaskStepsEditor();
+  }
+
+  function updateTaskStepDraftFromEditor(event) {
+    const row = event.target.closest('[data-step-editor-row]');
+    if (!row) return;
+    const step = taskStepsDraft.find(item => item.id === row.dataset.stepId);
+    if (!step) return;
+    if (event.target.matches('[data-role="task-step-title"]')) step.title = String(event.target.value || '').slice(0, 160);
+    if (event.target.matches('[data-role="task-step-done"]')) {
+      step.done = Boolean(event.target.checked);
+      step.completed_at = step.done ? nowIso() : null;
+      row.classList.toggle('is-done', step.done);
+      if (els.taskStepsEditorCount) els.taskStepsEditorCount.textContent = taskStepDraftCountLabel();
+    }
   }
 
   function normalizeTaskIdea(idea = {}) {
@@ -10264,6 +10391,7 @@
       <h4>${escapeHtml(task.title)}</h4>
       <p class="meta">Backlog · Aufwand ${task.effort}/5 · Priorität ${escapeHtml(priorityMeta.label)} · ${escapeHtml(dueLabel)}</p>
       ${descriptionPreview}
+      ${renderTaskStepsPreview(task)}
       ${renderOverdueDots(task)}
       <div class="list-actions compact-actions backlog-actions">
         <button class="mini-btn primary" type="button" data-action="move-backlog-task" data-status="open" data-id="${task.id}">In Offen</button>
@@ -10318,6 +10446,33 @@
     </article>`;
   }
 
+  function renderTaskStepsPreview(task = {}) {
+    const progress = taskStepProgress(task);
+    if (!progress.total) return '';
+    return `<div class="task-step-progress task-step-progress-compact" aria-label="${progress.done} von ${progress.total} Zwischenschritten erledigt">
+      <div class="task-step-progress-head"><span>Zwischenschritte</span><strong>${progress.done}/${progress.total}</strong></div>
+      <div class="task-step-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress.percent}"><span style="width:${progress.percent}%"></span></div>
+    </div>`;
+  }
+
+  function renderTaskStepsSection(task = {}) {
+    const progress = taskStepProgress(task);
+    if (!progress.total) return '';
+    return `<section class="task-detail-steps" aria-labelledby="taskDetailStepsTitle">
+      <div class="task-detail-section-head">
+        <div><p class="eyebrow">Zwischenschritte</p><h3 id="taskDetailStepsTitle">${progress.done} von ${progress.total} erledigt</h3></div>
+        <span class="badge muted">${progress.percent}%</span>
+      </div>
+      <div class="task-step-progress"><div class="task-step-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress.percent}"><span style="width:${progress.percent}%"></span></div></div>
+      <div class="task-step-checklist">
+        ${progress.steps.map(step => `<label class="task-step-check ${step.done ? 'is-done' : ''}">
+          <input type="checkbox" data-action="toggle-task-step" data-task-id="${escapeHtml(task.id)}" data-step-id="${escapeHtml(step.id)}" ${step.done ? 'checked' : ''} />
+          <span>${escapeHtml(step.title)}</span>
+        </label>`).join('')}
+      </div>
+    </section>`;
+  }
+
   function renderTaskCard(task) {
     const status = task.status || 'open';
     const priority = normalizeTaskPriority(task.priority);
@@ -10352,6 +10507,7 @@
       <h4>${escapeHtml(task.title)}</h4>
       <p class="meta">${escapeHtml(statusLabel)} · Aufwand ${task.effort}/5 · Priorität ${escapeHtml(priorityMeta.label)} · ${task.due_at ? `${isOverdue ? 'Überfällig' : 'Fällig'} ${formatDateTime(task.due_at)}` : 'ohne Fälligkeitsdatum'}</p>
       ${descriptionPreview}
+      ${renderTaskStepsPreview(task)}
       ${renderOverdueDots(task)}
       <div class="list-actions compact-actions">
         ${primaryAction}
@@ -10384,6 +10540,7 @@
     const description = taskDescriptionForDisplay(normalized);
     const recurrence = taskRecurrenceLabel(normalized);
     const images = taskImages(normalized);
+    const steps = taskSteps(normalized);
     const statusLabel = TASK_COLUMNS.find(column => column.status === status)?.title || 'Offen';
     const primaryAction = status === 'open'
       ? `<button class="pill primary" type="button" data-action="move-task" data-status="in_progress" data-id="${normalized.id}">In Bearbeitung</button>`
@@ -10403,6 +10560,7 @@
           ${normalized.category ? `<span class="badge muted">${escapeHtml(normalized.category)}</span>` : ''}
           ${recurrence ? `<span class="badge task-recurrence-badge">${escapeHtml(recurrence)}</span>` : ''}
           ${images.length ? `<span class="badge muted task-image-badge">${images.length} Bild${images.length === 1 ? '' : 'er'}</span>` : ''}
+          ${steps.length ? `<span class="badge muted">${steps.filter(step => step.done).length}/${steps.length} Schritte</span>` : ''}
         </div>
       </div>
     </div>
@@ -10417,6 +10575,7 @@
         <article><small>Punkte</small><strong>+${Number(normalized.points || taskPoints(normalized))}</strong><span>${status === 'done' ? 'verbucht' : 'bei Abschluss'}</span></article>
       </aside>
     </div>
+    ${renderTaskStepsSection(normalized)}
     ${renderTaskImageGallery(normalized)}
     <div class="task-detail-actions">
       ${primaryAction}
@@ -11731,6 +11890,7 @@ async function deleteAlcoholLog(id) {
       title: String(data.get('title') || '').trim(),
       description: String(data.get('description') || '').trim(),
       category: normalizeTaskCategory(data.get('category')),
+      steps: normalizeTaskSteps(taskStepsDraft),
       effort: Number(data.get('effort') || 3),
       priority: normalizeTaskPriority(data.get('priority')),
       due_at: dueAt,
@@ -12199,6 +12359,22 @@ async function deleteAlcoholLog(id) {
   }
 
 
+  function toggleTaskStep(taskId, stepId, checked) {
+    const task = state.tasks.find(item => item.id === taskId);
+    if (!task) return;
+    const steps = taskSteps(task);
+    const step = steps.find(item => item.id === stepId);
+    if (!step) return;
+    step.done = Boolean(checked);
+    step.completed_at = step.done ? nowIso() : null;
+    task.steps = steps;
+    task.updated_at = nowIso();
+    task.synced = false;
+    saveState();
+    refreshTaskDetailIfOpen();
+    syncWithSupabase({ silent: true, pullFirst: false });
+  }
+
   function editTask(id) {
     if (els.taskDetailModal && !els.taskDetailModal.classList.contains('hidden')) closeTaskDetail();
     const task = state.tasks.find(t => t.id === id);
@@ -12208,6 +12384,8 @@ async function deleteAlcoholLog(id) {
     syncTaskCategoryOptions();
     fields.title.value = task.title || '';
     fields.description.value = taskDescriptionForDisplay(task);
+    taskStepsDraft = taskSteps(task);
+    renderTaskStepsEditor();
     if (fields.category) fields.category.value = normalizeTaskCategory(task.category);
     fields.effort.value = String(task.effort || 3);
     fields.priority.value = normalizeTaskPriority(task.priority);
@@ -12229,6 +12407,9 @@ async function deleteAlcoholLog(id) {
 
   function resetTaskFormMode({ clearForm = true } = {}) {
     editingTaskId = null;
+    taskStepsDraft = [];
+    if (els.taskStepInput) els.taskStepInput.value = '';
+    renderTaskStepsEditor();
     if (clearForm) {
       els.taskForm.reset();
       els.taskForm.elements.effort.value = '3';
