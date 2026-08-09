@@ -99,7 +99,8 @@
 .hf-term-study-shell{width:min(680px,100%);max-height:calc(100svh - 36px);overflow:auto;padding:18px;border-radius:28px;background:var(--card-strong);border:1px solid var(--card-border);box-shadow:var(--shadow)}
 .hf-term-study-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:16px}
 .hf-term-study-head small{display:block;color:var(--primary);font-size:.7rem;font-weight:900;text-transform:uppercase;letter-spacing:.12em;margin-bottom:4px}
-.hf-term-study-head h3{font-size:1.25rem}
+.hf-term-study-category-tag{display:inline-flex;align-items:center;gap:8px;min-height:30px;padding:7px 11px;border:1px solid rgba(74,215,209,.24);border-radius:999px;background:rgba(74,215,209,.1);color:var(--text);font-size:.78rem;font-weight:900;line-height:1;letter-spacing:0}
+.hf-term-study-category-tag:before{content:"";width:7px;height:7px;flex:0 0 7px;border-radius:50%;background:var(--primary)}
 .hf-term-flip-card{width:100%;height:clamp(310px,52vh,420px);padding:0;border:0;background:transparent;color:var(--text);perspective:1200px}
 .hf-term-flip-card:hover{transform:none}
 .hf-term-flip-inner{position:relative;display:block;width:100%;height:100%;transform-style:preserve-3d;transition:transform .42s ease}
@@ -140,6 +141,21 @@
 .hf-subscription-legend b{font-size:.85rem;letter-spacing:0;text-align:right}
 .hf-subscription-forecast.is-empty{grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:center}
 .hf-subscription-forecast.is-empty p:last-child{color:var(--muted);font-size:.88rem;line-height:1.45}
+.hf-chatgpt-form input[name="url"]{font-variant-ligatures:none}
+.hf-chatgpt-project-tag{display:inline-flex!important;align-items:center;gap:8px;width:max-content;max-width:100%;min-height:32px;padding:7px 11px;border:1px solid rgba(127,159,212,.28);border-radius:999px;background:rgba(127,159,212,.12);color:var(--text)!important;font-size:.82rem!important;font-weight:900!important;line-height:1!important;letter-spacing:0!important;overflow-wrap:anywhere}
+.hf-chatgpt-project-tag .hf-list-icon{width:16px;height:16px;flex:0 0 16px;color:#6f8fc5}
+.hf-chatgpt-row{grid-template-columns:minmax(0,1fr) auto auto auto}
+.hf-chatgpt-copy{min-width:0}
+.hf-chatgpt-copy strong{font-size:1rem;line-height:1.25}
+.hf-chatgpt-copy .hf-chatgpt-domain{display:block;margin-top:4px;color:#6f8fc5;font-size:.7rem;font-weight:900;letter-spacing:.04em}
+.hf-chatgpt-copy p{display:-webkit-box;margin:6px 0 0;color:var(--muted);font-size:.85rem;line-height:1.4;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.hf-chatgpt-open{min-height:42px;padding:0 13px;display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid rgba(127,159,212,.25);border-radius:16px;background:rgba(127,159,212,.12);color:var(--text);font-size:.8rem;font-weight:900;text-decoration:none;white-space:nowrap}
+.hf-chatgpt-open:hover{background:rgba(127,159,212,.2)}
+.hf-chatgpt-open .hf-list-icon{width:17px;height:17px;color:#6f8fc5}
+.hf-chatgpt-open span{display:inline;margin:0;color:inherit;font-size:inherit;line-height:1}
+body.light .hf-term-study-category-tag{border-color:rgba(13,151,149,.2);background:rgba(74,215,209,.09)}
+body.light .hf-chatgpt-project-tag,body.light .hf-chatgpt-open{border-color:rgba(76,112,171,.2);background:rgba(127,159,212,.12)}
+body.light .hf-chatgpt-row{background:rgba(255,255,255,.68);border-color:rgba(17,36,58,.08)}
 body.light .hf-list-form,body.light .hf-tour-card,body.light .hf-list-row{background:rgba(255,255,255,.64);border-color:rgba(17,36,58,.08)}
 body.light .hf-tour-line:before{background:rgba(17,36,58,.1)}
 body.light .hf-tour-head span{color:#fff}
@@ -255,4 +271,10 @@ body.light .hf-finance-groups.is-empty{border-color:rgba(17,36,58,.1)}
   .hf-finance-row-actions{grid-column:2;justify-content:flex-end}
   .hf-finance-group-head{grid-template-columns:40px minmax(0,1fr) auto}
   .hf-finance-group-icon{width:40px;height:40px;border-radius:14px}
+}
+
+@media (max-width:520px){
+  .hf-chatgpt-row{grid-template-columns:minmax(0,1fr) auto auto;align-items:start}
+  .hf-chatgpt-copy{grid-column:1/-1}
+  .hf-chatgpt-open{justify-self:start}
 }
