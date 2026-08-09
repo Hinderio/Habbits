@@ -5946,11 +5946,13 @@
   }
 
   function notifyConsumptionLiveUpdate(reason = 'state') {
+    const snapshot = consumptionLiveSnapshot();
+    window.HabitFlowSmokingCircle?.update?.(snapshot);
     window.dispatchEvent(new CustomEvent('habitflow:consumption-live-update', {
       detail: {
         reason,
         at: Date.now(),
-        snapshot: consumptionLiveSnapshot()
+        snapshot
       }
     }));
   }
