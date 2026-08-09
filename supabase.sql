@@ -124,6 +124,7 @@ create table if not exists public.tasks (
   title text not null,
   description text,
   category text,
+  steps jsonb not null default '[]'::jsonb,
   effort smallint not null default 3 check (effort between 1 and 5),
   priority text not null default 'medium' check (priority in ('low','medium','high','urgent')),
   status text not null default 'open' check (status in ('open','in_progress','done','archived')),
@@ -305,6 +306,7 @@ alter table public.habit_definitions add constraint habit_definitions_type_check
 
 alter table public.tasks add column if not exists priority text not null default 'medium';
 alter table public.tasks add column if not exists category text;
+alter table public.tasks add column if not exists steps jsonb not null default '[]'::jsonb;
 alter table public.tasks add column if not exists backlog_rank numeric(12,4);
 alter table public.tasks add column if not exists done_archived_at timestamptz;
 alter table public.tasks add column if not exists done_archive_rank numeric(12,4);
@@ -312,6 +314,8 @@ alter table public.tasks drop constraint if exists tasks_priority_check;
 alter table public.tasks add constraint tasks_priority_check check (priority in ('low','medium','high','urgent'));
 alter table public.tasks drop constraint if exists tasks_status_check;
 alter table public.tasks add constraint tasks_status_check check (status in ('open','in_progress','done','archived'));
+alter table public.tasks drop constraint if exists tasks_steps_array_check;
+alter table public.tasks add constraint tasks_steps_array_check check (jsonb_typeof(steps) = 'array');
 create index if not exists idx_tasks_user_category on public.tasks (user_id, category) where category is not null;
 
 alter table public.task_ideas add column if not exists user_id uuid references auth.users(id) on delete cascade;
