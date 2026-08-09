@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v255-smoking-circle-direct-update';
+const CACHE_NAME = 'habitflow-v256-chatgpt-list';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
