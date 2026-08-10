@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v264-instant-smoke-edit';
+const CACHE_NAME = 'habitflow-v265-instant-smoke-delete';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
