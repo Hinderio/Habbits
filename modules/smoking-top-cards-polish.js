@@ -189,6 +189,8 @@ ${pane}>.smoking-layout{align-items:stretch!important;gap:24px!important}
 #screen-smoking .smoke-control-card,${pane} .consumption-history-panel{height:100%!important;padding:clamp(22px,2.2vw,30px)!important;border:1px solid rgba(17,36,58,.08)!important;border-radius:28px!important;background:rgba(255,255,255,.9)!important;background-image:none!important;box-shadow:0 18px 45px rgba(17,36,58,.07)!important;overflow:hidden!important}
 #screen-smoking .smoke-control-card:before,#screen-smoking .smoke-control-card:after{display:none!important;content:none!important}
 #screen-smoking .smoke-control-card{display:grid!important;grid-template-rows:auto minmax(250px,1fr) auto auto;gap:18px!important}
+@media(min-width:761px){#screen-smoking .smoke-control-card.hf-trigger-open{height:auto!important;min-height:100%!important;grid-template-rows:auto minmax(250px,1fr) auto auto auto!important}}
+#screen-smoking #triggerCaptureCard{grid-column:1/-1;scroll-margin-block:16px 120px}
 #screen-smoking .smoke-control-card .panel-head.compact,${pane} .consumption-history-panel .panel-head{margin:0!important;min-height:46px;align-items:flex-start!important}
 #screen-smoking .smoke-ring{position:relative!important;width:min(100%,310px)!important;aspect-ratio:1/1;align-self:center;justify-self:center;display:grid!important;place-items:center!important;align-content:center!important;gap:7px!important;padding:34px!important;border:0!important;border-radius:50%!important;background:transparent!important;background-image:none!important;box-shadow:none!important;text-align:center}
 #screen-smoking .hf-smoke-progress-svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg);pointer-events:none}
