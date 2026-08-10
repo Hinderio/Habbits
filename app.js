@@ -6235,6 +6235,47 @@
     </div>`;
   }
 
+  function renderSmokeHistoryItem(c) {
+    const cls = c.points < 0 ? 'danger-text' : c.points >= 40 ? 'positive-text' : '';
+    const isEditing = editingSmokeId === c.id;
+    const editBlock = isEditing
+      ? (() => {
+          const [dateValue = '', timeValue = ''] = toDateTimeLocalValue(c.smoked_at).split('T');
+          return `<div class="smoke-edit-row">
+            <label><span>Datum</span><input id="smoke-date-${c.id}" type="date" value="${dateValue}" max="${toDateKey(new Date())}" /></label>
+            <label><span>Zeit</span><input id="smoke-time-${c.id}" type="time" value="${timeValue}" step="60" /></label>
+            <div class="smoke-edit-actions">
+              <button class="mini-btn primary" type="button" data-action="save-smoke-time" data-id="${c.id}">Speichern</button>
+              <button class="mini-btn" type="button" data-action="cancel-smoke-edit" data-id="${c.id}">Abbrechen</button>
+            </div>
+          </div>`;
+        })()
+      : '';
+
+    return `<article class="list-card ${isEditing ? 'is-editing' : ''}" data-smoke-history-id="${escapeHtml(c.id)}">
+      <div class="list-card-main">
+        <h4>${formatDateTime(c.smoked_at)}</h4>
+        <p class="meta">Pause davor: <strong>${c.interval_minutes == null ? '–' : formatDuration(c.interval_minutes)}</strong>${Number(c.scoring_sleep_deducted_minutes || 0) > 0 ? ` · aktiv gewertet: ${formatDuration(Number(c.scoring_interval_minutes || 0))}` : ''}${c.alcohol_context ? ' · Alkohol-Kontext' : ''}</p>
+        ${editBlock}
+      </div>
+      <div class="list-actions">
+        <span class="badge ${cls ? '' : 'muted'} ${cls}">${c.points > 0 ? '+' : ''}${c.points} Pkt.</span>
+        ${isEditing ? '' : `<button class="consumption-icon-action" type="button" data-action="edit-smoke" data-id="${c.id}" aria-label="Zigaretten-Eintrag bearbeiten" title="Bearbeiten">${svgIcon('edit', 'ui-icon')}</button>`}
+        <button class="consumption-icon-action consumption-icon-action-delete" type="button" data-action="delete-smoke" data-id="${c.id}" aria-label="Zigaretten-Eintrag löschen" title="Löschen">${svgIcon('trash', 'ui-icon')}</button>
+      </div>
+    </article>`;
+  }
+
+  function renderSmokeHistoryItemInPlace(id) {
+    const cigarette = state.cigarettes.find(c => c.id === id);
+    const row = els.historyModalContent?.querySelector(`[data-smoke-history-id="${cssEscape(id)}"]`);
+    if (!cigarette || !row || historyModalMode !== 'smoke') {
+      renderHistoryModal();
+      return;
+    }
+    row.outerHTML = renderSmokeHistoryItem(cigarette);
+  }
+
   function renderSmokeHistoryList() {
     const items = [...visibleCigarettes()]
       .sort((a, b) => new Date(b.smoked_at) - new Date(a.smoked_at));
@@ -6243,35 +6284,7 @@
       return '<div class="empty-state">Noch keine Zigarette erfasst. Neue Einträge erscheinen hier und können später bearbeitet oder gelöscht werden.</div>';
     }
 
-    return `<div class="stack-list tall smoke-history-modal-list">${items.map(c => {
-      const cls = c.points < 0 ? 'danger-text' : c.points >= 40 ? 'positive-text' : '';
-      const isEditing = editingSmokeId === c.id;
-      const editBlock = isEditing
-        ? (() => {
-            const [dateValue = '', timeValue = ''] = toDateTimeLocalValue(c.smoked_at).split('T');
-            return `<div class="smoke-edit-row">
-              <label><span>Datum</span><input id="smoke-date-${c.id}" type="date" value="${dateValue}" max="${toDateKey(new Date())}" /></label>
-              <label><span>Zeit</span><input id="smoke-time-${c.id}" type="time" value="${timeValue}" step="60" /></label>
-              <div class="smoke-edit-actions">
-                <button class="mini-btn primary" type="button" data-action="save-smoke-time" data-id="${c.id}">Speichern</button>
-                <button class="mini-btn" type="button" data-action="cancel-smoke-edit" data-id="${c.id}">Abbrechen</button>
-              </div>
-            </div>`;
-          })()
-        : '';
-      return `<article class="list-card ${isEditing ? 'is-editing' : ''}">
-        <div class="list-card-main">
-          <h4>${formatDateTime(c.smoked_at)}</h4>
-          <p class="meta">Pause davor: <strong>${c.interval_minutes == null ? '–' : formatDuration(c.interval_minutes)}</strong>${Number(c.scoring_sleep_deducted_minutes || 0) > 0 ? ` · aktiv gewertet: ${formatDuration(Number(c.scoring_interval_minutes || 0))}` : ''}${c.alcohol_context ? ' · Alkohol-Kontext' : ''}</p>
-          ${editBlock}
-        </div>
-        <div class="list-actions">
-          <span class="badge ${cls ? '' : 'muted'} ${cls}">${c.points > 0 ? '+' : ''}${c.points} Pkt.</span>
-          ${isEditing ? '' : `<button class="consumption-icon-action" type="button" data-action="edit-smoke" data-id="${c.id}" aria-label="Zigaretten-Eintrag bearbeiten" title="Bearbeiten">${svgIcon('edit', 'ui-icon')}</button>`}
-          <button class="consumption-icon-action consumption-icon-action-delete" type="button" data-action="delete-smoke" data-id="${c.id}" aria-label="Zigaretten-Eintrag löschen" title="Löschen">${svgIcon('trash', 'ui-icon')}</button>
-        </div>
-      </article>`;
-    }).join('')}</div>`;
+    return `<div class="stack-list tall smoke-history-modal-list">${items.map(renderSmokeHistoryItem).join('')}</div>`;
   }
 
 
@@ -11090,14 +11103,13 @@
   function editSmoke(id) {
     if (!state.cigarettes.some(c => c.id === id)) return;
     editingSmokeId = id;
-    renderSmoking();
-    renderHistoryModal();
+    renderSmokeHistoryItemInPlace(id);
   }
 
   function cancelSmokeEdit() {
+    const id = editingSmokeId;
     editingSmokeId = null;
-    renderSmoking();
-    renderHistoryModal();
+    if (id) renderSmokeHistoryItemInPlace(id);
   }
 
   function saveSmokeTime(id) {
@@ -11119,16 +11131,42 @@
       return;
     }
 
-    const nextIso = nextDate.toISOString();
-    cigarette.smoked_at = nextIso;
+    cigarette.smoked_at = nextDate.toISOString();
     cigarette.updated_at = nowIso();
     cigarette.synced = false;
     editingSmokeId = null;
-    recalculateSmokeIntervals({ markUpdated: true });
-    saveState();
-    renderHistoryModal();
+
+    renderTimers();
+    renderSmokeHistoryItemInPlace(id);
+    notifyConsumptionLiveUpdate('smoke-time-updated-optimistic');
     toast('Zigaretten-Zeitpunkt aktualisiert');
-    syncWithSupabase({ silent: true, pullFirst: false });
+
+    let committed = false;
+    let fallbackTimer = 0;
+    const commitAfterPaint = () => {
+      if (committed) return;
+      committed = true;
+      if (fallbackTimer) window.clearTimeout(fallbackTimer);
+
+      recalculateSmokeIntervals({ markUpdated: true });
+      saveState({ skipRender: true, skipSmokeRecalc: true });
+      renderHistoryModal();
+      renderSmokingQuickCapture();
+      notifyConsumptionLiveUpdate('smoke-time-updated-committed');
+      scheduleConsumptionBackgroundRender();
+      window.setTimeout(() => syncWithSupabase({
+        silent: true,
+        pullFirst: false,
+        pullAfter: false
+      }), 0);
+    };
+
+    fallbackTimer = window.setTimeout(commitAfterPaint, 180);
+    if (typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(() => window.setTimeout(commitAfterPaint, 0));
+    } else {
+      window.setTimeout(commitAfterPaint, 0);
+    }
   }
 
   async function deleteSmoke(id) {
