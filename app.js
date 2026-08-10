@@ -10979,22 +10979,40 @@
     recalculateSmokeDailyBonuses(new Set([todayKey]));
     saveState({ skipRender: true, skipSmokeRecalc: true });
     renderSmokingQuickCapture();
+    window.requestAnimationFrame(() => {
+      const triggerCard = document.getElementById('triggerCaptureCard');
+      if (triggerCard && window.matchMedia('(max-width: 760px)').matches) {
+        triggerCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
     notifyConsumptionLiveUpdate('cigarette-recorded');
     toast(points > 0 ? `Zigarette erfasst · +${points} Punkte` : `Zigarette erfasst · ${points} Punkte`);
     scheduleConsumptionBackgroundRender();
     setTimeout(() => syncWithSupabase({ silent: true }), 0);
   }
   function renderTriggerCapture() {
-    if (!els.triggerCaptureCard) return;
+    const triggerCaptureCard = document.getElementById('triggerCaptureCard') || els.triggerCaptureCard;
+    if (!triggerCaptureCard) return;
+    els.triggerCaptureCard = triggerCaptureCard;
+
+    const smokeControlCard = triggerCaptureCard.closest('.smoke-control-card');
+    const actionsRow = smokeControlCard?.querySelector('.hf-smoking-actions');
+    if (actionsRow && triggerCaptureCard.previousElementSibling !== actionsRow) {
+      actionsRow.insertAdjacentElement('afterend', triggerCaptureCard);
+    }
+
     const cigarette = pendingTriggerSmokeId ? state.cigarettes.find(c => c.id === pendingTriggerSmokeId) : null;
     if (!cigarette) {
-      els.triggerCaptureCard.classList.add('hidden');
-      els.triggerCaptureCard.innerHTML = '';
+      smokeControlCard?.classList.remove('hf-trigger-open');
+      triggerCaptureCard.classList.add('hidden');
+      triggerCaptureCard.innerHTML = '';
       return;
     }
+
     const options = ['stress', 'coffee', 'alcohol', 'boredom', 'reward', 'social', 'meal', 'tasks', 'habits'];
-    els.triggerCaptureCard.classList.remove('hidden');
-    els.triggerCaptureCard.innerHTML = `<div><p class="eyebrow">Trigger-Analyse</p><h4>Was war gerade der Auslöser?</h4><p class="subtle">Ein Tap reicht. Das verbessert Muster-Erkennung und Coach-Empfehlungen.</p></div><div class="trigger-chip-grid">${options.map(key => `<button class="trigger-chip" type="button" data-action="save-smoke-trigger" data-id="${cigarette.id}" data-trigger="${key}">${svgIcon(COACH_TRIGGER_META[key].icon, 'ui-icon')}<span>${escapeHtml(COACH_TRIGGER_META[key].label)}</span></button>`).join('')}</div><button class="mini-btn" type="button" data-action="dismiss-smoke-trigger">Später</button>`;
+    smokeControlCard?.classList.add('hf-trigger-open');
+    triggerCaptureCard.classList.remove('hidden');
+    triggerCaptureCard.innerHTML = `<div><p class="eyebrow">Trigger-Analyse</p><h4>Was war gerade der Auslöser?</h4><p class="subtle">Ein Tap reicht. Das verbessert Muster-Erkennung und Coach-Empfehlungen.</p></div><div class="trigger-chip-grid">${options.map(key => `<button class="trigger-chip" type="button" data-action="save-smoke-trigger" data-id="${cigarette.id}" data-trigger="${key}">${svgIcon(COACH_TRIGGER_META[key].icon, 'ui-icon')}<span>${escapeHtml(COACH_TRIGGER_META[key].label)}</span></button>`).join('')}</div><button class="mini-btn" type="button" data-action="dismiss-smoke-trigger">Später</button>`;
   }
 
   function saveSmokeTrigger(id, triggerKey) {
