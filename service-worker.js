@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v263-instant-trigger-commit';
+const CACHE_NAME = 'habitflow-v264-instant-smoke-edit';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
