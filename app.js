@@ -6073,13 +6073,18 @@
     };
   }
 
+  window.HabitFlowConsumptionLive = Object.freeze({
+    snapshot: consumptionLiveSnapshot
+  });
+
   function notifyConsumptionLiveUpdate(reason = 'state') {
     const snapshot = consumptionLiveSnapshot();
-    window.HabitFlowSmokingCircle?.update?.(snapshot);
+    const at = Date.now();
+    window.HabitFlowSmokingCircle?.update?.(snapshot, { reason, at });
     window.dispatchEvent(new CustomEvent('habitflow:consumption-live-update', {
       detail: {
         reason,
-        at: Date.now(),
+        at,
         snapshot
       }
     }));
