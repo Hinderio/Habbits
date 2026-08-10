@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v261-instant-mobile-trigger';
+const CACHE_NAME = 'habitflow-v262-mobile-capture-first-paint';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
