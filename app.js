@@ -11169,22 +11169,62 @@
     }
   }
 
-  async function deleteSmoke(id) {
+  function deleteSmoke(id) {
     const index = state.cigarettes.findIndex(c => c.id === id);
     if (index === -1) return;
-    const removedLedgerIds = state.pointsLedger.filter(p => p.source_type === 'cigarette' && p.source_id === id).map(p => p.id);
+
+    const removedLedgerIds = state.pointsLedger
+      .filter(p => p.source_type === 'cigarette' && p.source_id === id)
+      .map(p => p.id);
+
     state.cigarettes.splice(index, 1);
     state.pointsLedger = state.pointsLedger.filter(p => !(p.source_type === 'cigarette' && p.source_id === id));
-    markRemoteDeleted('cigarette_events', id);
-    markRemoteDeletedMany('points_ledger', removedLedgerIds);
     if (editingSmokeId === id) editingSmokeId = null;
-    recalculateSmokeIntervals({ markUpdated: true });
-    saveState();
-    renderHistoryModal();
-    await deleteRemoteById('cigarette_events', id);
-    await deleteRemoteByIds('points_ledger', removedLedgerIds);
+    if (pendingTriggerSmokeId === id) pendingTriggerSmokeId = null;
+
+    els.historyModalContent
+      ?.querySelector(`[data-smoke-history-id="${cssEscape(id)}"]`)
+      ?.remove();
+    renderTimers();
+    renderTriggerCapture();
+    notifyConsumptionLiveUpdate('smoke-deleted-optimistic');
     toast('Zigaretten-Eintrag entfernt');
-    syncWithSupabase({ silent: true, pullFirst: false });
+
+    let committed = false;
+    let fallbackTimer = 0;
+    const commitAfterPaint = () => {
+      if (committed) return;
+      committed = true;
+      if (fallbackTimer) window.clearTimeout(fallbackTimer);
+
+      markRemoteDeleted('cigarette_events', id);
+      markRemoteDeletedMany('points_ledger', removedLedgerIds);
+      recalculateSmokeIntervals({ markUpdated: true });
+      saveState({ skipRender: true, skipSmokeRecalc: true });
+      renderHistoryModal();
+      renderSmokingQuickCapture();
+      notifyConsumptionLiveUpdate('smoke-deleted-committed');
+      scheduleConsumptionBackgroundRender();
+
+      window.setTimeout(async () => {
+        await Promise.all([
+          deleteRemoteById('cigarette_events', id),
+          deleteRemoteByIds('points_ledger', removedLedgerIds)
+        ]);
+        syncWithSupabase({
+          silent: true,
+          pullFirst: false,
+          pullAfter: false
+        });
+      }, 0);
+    };
+
+    fallbackTimer = window.setTimeout(commitAfterPaint, 180);
+    if (typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(() => window.setTimeout(commitAfterPaint, 0));
+    } else {
+      window.setTimeout(commitAfterPaint, 0);
+    }
   }
 
   function smokeRecoveryRepeatBonus(previousCigarette, scoringContext = {}) {
