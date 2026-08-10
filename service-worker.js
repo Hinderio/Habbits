@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v259-mobile-smoking-circle';
+const CACHE_NAME = 'habitflow-v260-live-consumption-state';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
