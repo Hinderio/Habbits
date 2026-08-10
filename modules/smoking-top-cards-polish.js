@@ -363,11 +363,21 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
     }
   }
 
+  function readAuthoritativeSnapshot(fallback = null) {
+    const storedState = readState();
+    const storedSnapshot = Array.isArray(storedState?.cigarettes)
+      ? cloneLiveSnapshot(storedState)
+      : null;
+    const nextSnapshot = storedSnapshot || cloneLiveSnapshot(fallback) || liveSnapshot;
+    if (nextSnapshot) liveSnapshot = nextSnapshot;
+    return nextSnapshot || {};
+  }
+
   function render(snapshot = null) {
     if (busy) return;
     busy = true;
     try {
-      const data = metrics(snapshot || liveSnapshot || readState());
+      const data = metrics(snapshot || readAuthoritativeSnapshot());
       style();
       ring(data);
       actions();
@@ -382,7 +392,7 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
     window.clearTimeout(timer);
     timer = window.setTimeout(() => {
       timer = null;
-      render(liveSnapshot);
+      render(readAuthoritativeSnapshot());
     }, delay);
   }
 
@@ -391,11 +401,12 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
     timer = null;
     const nextSnapshot = cloneLiveSnapshot(snapshot);
     if (nextSnapshot) liveSnapshot = nextSnapshot;
+    const authoritativeSnapshot = readAuthoritativeSnapshot(nextSnapshot);
     if (busy) {
       schedule(0);
       return Boolean(nextSnapshot);
     }
-    render(liveSnapshot);
+    render(authoritativeSnapshot);
     return Boolean(nextSnapshot);
   }
 
@@ -406,7 +417,7 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
   window.HabitFlowSmokingCircle = Object.freeze({
     update: applyLiveSnapshot,
     refresh() {
-      render(liveSnapshot || readState());
+      render(readAuthoritativeSnapshot());
     }
   });
 
