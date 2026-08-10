@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v258-task-steps-db';
+const CACHE_NAME = 'habitflow-v259-mobile-smoking-circle';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
