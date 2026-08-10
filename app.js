@@ -10973,22 +10973,48 @@
       updated_at: smokedAt,
       synced: false
     };
+
     state.cigarettes.push(entry);
     pendingTriggerSmokeId = entry.id;
-    addPoints('cigarette', entry.id, points, cigarettePointReason(scoringContext.scoringInterval, scoringContext), smokedAt);
-    recalculateSmokeDailyBonuses(new Set([todayKey]));
-    saveState({ skipRender: true, skipSmokeRecalc: true });
-    renderSmokingQuickCapture();
-    window.requestAnimationFrame(() => {
-      const triggerCard = document.getElementById('triggerCaptureCard');
-      if (triggerCard && window.matchMedia('(max-width: 760px)').matches) {
-        triggerCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    });
-    notifyConsumptionLiveUpdate('cigarette-recorded');
+
+    // Paint the two tap-critical surfaces before ledger work, full persistence and sync.
+    renderTimers();
+    renderTriggerCapture();
+    notifyConsumptionLiveUpdate('cigarette-recorded-optimistic');
     toast(points > 0 ? `Zigarette erfasst · +${points} Punkte` : `Zigarette erfasst · ${points} Punkte`);
-    scheduleConsumptionBackgroundRender();
-    setTimeout(() => syncWithSupabase({ silent: true }), 0);
+
+    let committed = false;
+    let fallbackTimer = 0;
+    const commitAfterPaint = () => {
+      if (committed) return;
+      committed = true;
+      if (fallbackTimer) window.clearTimeout(fallbackTimer);
+
+      addPoints('cigarette', entry.id, points, cigarettePointReason(scoringContext.scoringInterval, scoringContext), smokedAt);
+      recalculateSmokeDailyBonuses(new Set([todayKey]));
+      saveState({ skipRender: true, skipSmokeRecalc: true });
+      renderSmokingQuickCapture();
+      notifyConsumptionLiveUpdate('cigarette-recorded-committed');
+      scheduleConsumptionBackgroundRender();
+      window.setTimeout(() => syncWithSupabase({
+        silent: true,
+        pullFirst: false,
+        pullAfter: false
+      }), 0);
+    };
+
+    fallbackTimer = window.setTimeout(commitAfterPaint, 180);
+    if (typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(() => {
+        const triggerCard = document.getElementById('triggerCaptureCard');
+        if (triggerCard && window.matchMedia('(max-width: 760px)').matches) {
+          triggerCard.scrollIntoView({ behavior: 'auto', block: 'start' });
+        }
+        window.setTimeout(commitAfterPaint, 0);
+      });
+    } else {
+      window.setTimeout(commitAfterPaint, 0);
+    }
   }
   function renderTriggerCapture() {
     const triggerCaptureCard = document.getElementById('triggerCaptureCard') || els.triggerCaptureCard;
