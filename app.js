@@ -11045,16 +11045,41 @@
     const cigarette = state.cigarettes.find(c => c.id === id);
     const meta = COACH_TRIGGER_META[triggerKey];
     if (!cigarette || !meta) return;
+
     cigarette.note = `trigger:${triggerKey}`;
     cigarette.updated_at = nowIso();
     cigarette.synced = false;
     pendingTriggerSmokeId = null;
-    saveState({ skipRender: true });
-    renderSmokingQuickCapture();
-    notifyConsumptionLiveUpdate('trigger-saved');
-    scheduleConsumptionBackgroundRender();
+
+    // Confirm the selection before full-state persistence and remote synchronization.
+    renderTriggerCapture();
+    notifyConsumptionLiveUpdate('trigger-saved-optimistic');
     toast(`Trigger gespeichert: ${meta.label}`);
-    syncWithSupabase({ silent: true, pullFirst: false });
+
+    let committed = false;
+    let fallbackTimer = 0;
+    const commitAfterPaint = () => {
+      if (committed) return;
+      committed = true;
+      if (fallbackTimer) window.clearTimeout(fallbackTimer);
+
+      saveState({ skipRender: true, skipSmokeRecalc: true });
+      renderSmokingQuickCapture();
+      notifyConsumptionLiveUpdate('trigger-saved-committed');
+      scheduleConsumptionBackgroundRender();
+      window.setTimeout(() => syncWithSupabase({
+        silent: true,
+        pullFirst: false,
+        pullAfter: false
+      }), 0);
+    };
+
+    fallbackTimer = window.setTimeout(commitAfterPaint, 180);
+    if (typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(() => window.setTimeout(commitAfterPaint, 0));
+    } else {
+      window.setTimeout(commitAfterPaint, 0);
+    }
   }
 
   function dismissSmokeTrigger() {
