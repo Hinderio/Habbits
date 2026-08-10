@@ -14,6 +14,8 @@
   let busy = false;
   let timer = null;
   let liveSnapshot = null;
+  let observer = null;
+  let observedTarget = null;
 
   const $ = (selector, root = document) => root?.querySelector?.(selector);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
@@ -363,21 +365,31 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
     }
   }
 
-  function readAuthoritativeSnapshot(fallback = null) {
-    const storedState = readState();
-    const storedSnapshot = Array.isArray(storedState?.cigarettes)
-      ? cloneLiveSnapshot(storedState)
-      : null;
-    const nextSnapshot = storedSnapshot || cloneLiveSnapshot(fallback) || liveSnapshot;
-    if (nextSnapshot) liveSnapshot = nextSnapshot;
-    return nextSnapshot || {};
+  function readCurrentSnapshot(fallback = null) {
+    let appSnapshot = null;
+    try {
+      appSnapshot = window.HabitFlowConsumptionLive?.snapshot?.() || null;
+    } catch {}
+    const nextSnapshot = cloneLiveSnapshot(appSnapshot)
+      || cloneLiveSnapshot(fallback)
+      || liveSnapshot
+      || cloneLiveSnapshot(readState())
+      || {};
+    if (nextSnapshot && typeof nextSnapshot === 'object') liveSnapshot = nextSnapshot;
+    return nextSnapshot;
+  }
+
+  function observeSmokingScreen() {
+    if (!observer || !observedTarget) return;
+    observer.observe(observedTarget, { childList: true, subtree: true });
   }
 
   function render(snapshot = null) {
     if (busy) return;
+    observer?.disconnect();
     busy = true;
     try {
-      const data = metrics(snapshot || readAuthoritativeSnapshot());
+      const data = metrics(snapshot || readCurrentSnapshot());
       style();
       ring(data);
       actions();
@@ -385,6 +397,7 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
       overview(data);
     } finally {
       busy = false;
+      observeSmokingScreen();
     }
   }
 
@@ -392,7 +405,7 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
     window.clearTimeout(timer);
     timer = window.setTimeout(() => {
       timer = null;
-      render(readAuthoritativeSnapshot());
+      render(readCurrentSnapshot());
     }, delay);
   }
 
@@ -401,12 +414,12 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
     timer = null;
     const nextSnapshot = cloneLiveSnapshot(snapshot);
     if (nextSnapshot) liveSnapshot = nextSnapshot;
-    const authoritativeSnapshot = readAuthoritativeSnapshot(nextSnapshot);
+    const currentSnapshot = readCurrentSnapshot(nextSnapshot);
     if (busy) {
       schedule(0);
       return Boolean(nextSnapshot);
     }
-    render(authoritativeSnapshot);
+    render(currentSnapshot);
     return Boolean(nextSnapshot);
   }
 
@@ -417,7 +430,7 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
   window.HabitFlowSmokingCircle = Object.freeze({
     update: applyLiveSnapshot,
     refresh() {
-      render(readAuthoritativeSnapshot());
+      render(readCurrentSnapshot());
     }
   });
 
@@ -437,11 +450,12 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
       if (action === 'rotate-craving-tip') $('#screen-smoking .craving-coach-card')?.classList.add('hf-show-coach-details');
       if (action === 'rotate-craving-tip' || action.includes('smoke') || action.includes('pause') || action.includes('consumption')) schedule(500);
     }, true);
-    const target = document.getElementById('screen-smoking');
-    if (target && 'MutationObserver' in window) {
-      new MutationObserver(() => {
+    observedTarget = document.getElementById('screen-smoking');
+    if (observedTarget && 'MutationObserver' in window) {
+      observer = new MutationObserver(() => {
         if (!busy) schedule(120);
-      }).observe(target, { childList: true, subtree: true });
+      });
+      observeSmokingScreen();
     }
   }
 
