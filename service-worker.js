@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v265-instant-smoke-delete';
+const CACHE_NAME = 'habitflow-v266-project-timeline-slicer';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -103,9 +103,9 @@ async function withProjectMilestoneEditScript(response) {
     }
   }
   if (!html.includes('modules/project-timeline-view.js')) {
-    html = html.replace('<script src="app.js"></script>', '<script src="app.js"></script>\n  <script src="modules/project-timeline-view.js?v=227"></script>');
+    html = html.replace('<script src="app.js"></script>', '<script src="app.js"></script>\n  <script src="modules/project-timeline-view.js?v=266"></script>');
     if (!html.includes('modules/project-timeline-view.js')) {
-      html = html.replace('</body>', '  <script src="modules/project-timeline-view.js?v=227"></script>\n</body>');
+      html = html.replace('</body>', '  <script src="modules/project-timeline-view.js?v=266"></script>\n</body>');
     }
   }
   return new Response(html, { status: response.status, statusText: response.statusText, headers: patchedHeaders(response) });
