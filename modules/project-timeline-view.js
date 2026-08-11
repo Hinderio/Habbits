@@ -8,9 +8,10 @@
   const DAY_MS = 86400000;
   const TILE_SIZE = 52;
   const MONTH_WIDTH = 150;
-  const MAX_MONTHS = 12;
+  const MAX_MONTHS = 60;
   const CLOSED_STATUSES = new Set(['archived', 'closed']);
   const IDEA_META_RE = /\n?\s*<!--hf-idea-meta:([^>]+)-->/;
+  let ui = null;
   let renderTimer = null;
 
   const STATUS_LABELS = {
@@ -65,6 +66,27 @@
     if (!dateText) return null;
     const date = new Date(`${dateText}T12:00:00`);
     return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  function dayDate(value) {
+    if (value instanceof Date) return new Date(value.getFullYear(), value.getMonth(), value.getDate(), 12);
+    return dateFrom(value);
+  }
+
+  function dateKey(date) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  }
+
+  function addDays(date, days) {
+    const next = new Date(date);
+    next.setDate(next.getDate() + days);
+    return dayDate(next);
+  }
+
+  function startOfWeek(date) {
+    const next = dayDate(date) || dayDate(new Date());
+    next.setDate(next.getDate() - ((next.getDay() + 6) % 7));
+    return next;
   }
 
   function addMonths(date, count) {
@@ -176,41 +198,54 @@
     }
   }
 
+  function defaultUi(weeks = 12) {
+    const start = addDays(startOfWeek(new Date()), -7);
+    return { start, end: addDays(start, weeks * 7 - 1) };
+  }
+
+  function ensureUi() {
+    if (!ui) ui = defaultUi();
+    return ui;
+  }
+
+  function rangeDays() {
+    const current = ensureUi();
+    return Math.max(7, Math.round((current.end - current.start) / DAY_MS) + 1);
+  }
+
+  function isInRange(date, start = ensureUi().start, end = ensureUi().end) {
+    return Boolean(date && date >= start && date <= end);
+  }
+
   function buildModel() {
     const state = readState();
     const projects = activeProjects(state);
     const taskMap = new Map((Array.isArray(state.tasks) ? state.tasks : []).map(task => [String(task.id || ''), task]));
-    const today = new Date();
-    const dates = [today, addMonths(today, 4)];
-    projects.forEach(project => {
-      [project.start_date, project.end_date].forEach(value => {
-        const date = dateFrom(value);
-        if (date) dates.push(date);
-      });
-      projectTasks(state, project.id).forEach(task => {
-        const date = dateFrom(task.due_at || task.completed_at || task.created_at);
-        if (date) dates.push(date);
-      });
-    });
-    const min = startOfMonth(new Date(Math.min(...dates.map(date => date.getTime()))));
-    const maxCandidate = endOfMonth(new Date(Math.max(...dates.map(date => date.getTime()))));
-    const max = addMonths(min, Math.min(MAX_MONTHS, Math.max(4, monthDiff(min, maxCandidate) + 1)));
-    const months = buildMonths(min, max);
-    return { state, projects, taskMap, rangeStart: min, rangeEnd: max, months };
-  }
-
-  function monthDiff(start, end) {
-    return Math.max(0, (end.getFullYear() - start.getFullYear()) * 12 + end.getMonth() - start.getMonth());
+    const current = ensureUi();
+    const rangeStart = dayDate(current.start);
+    const rangeEnd = dayDate(current.end);
+    const months = buildMonths(rangeStart, rangeEnd);
+    const datedTasks = projects.flatMap(project => projectTasks(state, project.id))
+      .map(task => dateFrom(task.due_at))
+      .filter(Boolean);
+    const before = datedTasks.filter(date => date < rangeStart).length;
+    const after = datedTasks.filter(date => date > rangeEnd).length;
+    return { state, projects, taskMap, rangeStart, rangeEnd, months, before, after };
   }
 
   function buildMonths(start, end) {
     const months = [];
     let cursor = startOfMonth(start);
-    while (cursor < end && months.length < MAX_MONTHS) {
+    const finalMonth = startOfMonth(end);
+    while (cursor <= finalMonth && months.length < MAX_MONTHS) {
       months.push(new Date(cursor));
       cursor = addMonths(cursor, 1);
     }
     return months.length ? months : [startOfMonth(new Date())];
+  }
+
+  function modelTimelineWidth(model) {
+    return Math.max(600, model.months.length * MONTH_WIDTH);
   }
 
   function positionForDate(date, rangeStart, rangeEnd) {
@@ -255,9 +290,10 @@
       weekTicks.push(`<i style="left:${positionForDate(cursor, rangeStart, rangeEnd).toFixed(2)}%">${String(cursor.getDate()).padStart(2, '0')}</i>`);
       cursor.setDate(cursor.getDate() + 7);
     }
-    const todayLeft = positionForDate(new Date(), rangeStart, rangeEnd);
+    const todayDate = dayDate(new Date());
+    const todayLeft = isInRange(todayDate, rangeStart, rangeEnd) ? positionForDate(todayDate, rangeStart, rangeEnd) : null;
     const today = todayLeft == null ? '' : `<b class="project-timeline-today" style="left:${todayLeft.toFixed(2)}%">Heute</b>`;
-    return `<div class="project-timeline-axis" style="--timeline-width:${months.length * MONTH_WIDTH}px">
+    return `<div class="project-timeline-axis">
       <div class="project-timeline-months">${monthLabels}</div>
       <div class="project-timeline-weeks">${today}${weekTicks.join('')}</div>
     </div>`;
@@ -292,10 +328,14 @@
 
   function renderProjectRow(project, model) {
     const tasks = projectTasks(model.state, project.id);
+    const timelineTasks = tasks.filter(task => {
+      const dueDate = dateFrom(task.due_at);
+      return !dueDate || isInRange(dueDate, model.rangeStart, model.rangeEnd);
+    });
     const ideas = projectIdeas(model.state, project.id, model.taskMap);
     const totalSp = tasks.reduce((sum, task) => sum + storyPoints(task), 0);
-    const timelineWidth = model.months.length * MONTH_WIDTH;
-    const laneItems = lanesForTasks(tasks, model.rangeStart, model.rangeEnd, timelineWidth);
+    const timelineWidth = modelTimelineWidth(model);
+    const laneItems = lanesForTasks(timelineTasks, model.rangeStart, model.rangeEnd, timelineWidth);
     const laneCount = Math.max(1, ...laneItems.map(item => item.lane + 1));
     const progress = tasks.length ? Math.round((tasks.filter(task => String(task.status || '') === 'done').length / tasks.length) * 100) : 0;
     const color = normalizeColor(project.color);
@@ -312,7 +352,7 @@
       </div>
       <div class="project-timeline-track">
         <div class="project-timeline-track-grid" aria-hidden="true">${model.months.map(month => `<i data-month="${escapeHtml(monthKey(month))}" style="left:${positionForDate(month, model.rangeStart, model.rangeEnd).toFixed(2)}%"></i>`).join('')}</div>
-        ${laneItems.length ? laneItems.map(item => renderTaskTile(item, project)).join('') : `<span class="project-timeline-empty">Noch keine geplanten Tasks</span>`}
+        ${laneItems.length ? laneItems.map(item => renderTaskTile(item, project)).join('') : `<span class="project-timeline-empty">Keine Tasks im Zeitraum</span>`}
       </div>
       <div class="project-timeline-ideas">
         <div class="project-timeline-idea-list">${ideas.length ? ideas.map(idea => renderIdeaTile(idea, project)).join('') : '<span class="project-timeline-empty">Keine Ideen</span>'}</div>
@@ -325,11 +365,30 @@
     </article>`;
   }
 
+  function renderControls() {
+    const current = ensureUi();
+    const currentWeeks = Math.round(rangeDays() / 7);
+    return `<div class="project-timeline-controls">
+      <div class="project-timeline-date-fields">
+        <label>Von<input type="date" data-project-timeline-date="start" value="${dateKey(current.start)}"></label>
+        <label>Bis<input type="date" data-project-timeline-date="end" value="${dateKey(current.end)}"></label>
+      </div>
+      <div class="project-timeline-presets" aria-label="Zeitraum">
+        ${[4, 8, 12, 24].map(weeks => `<button type="button" data-project-timeline-weeks="${weeks}" class="${currentWeeks === weeks ? 'is-active' : ''}">${weeks} Wo.</button>`).join('')}
+      </div>
+      <div class="project-timeline-nav">
+        <button type="button" data-project-timeline-shift="-1" aria-label="Früher">←</button>
+        <button type="button" data-project-timeline-today class="is-primary">Heute</button>
+        <button type="button" data-project-timeline-shift="1" aria-label="Später">→</button>
+      </div>
+    </div>`;
+  }
+
   function render() {
     const mount = ensureMount();
     if (!mount) return;
     const model = buildModel();
-    const timelineWidth = model.months.length * MONTH_WIDTH;
+    const timelineWidth = modelTimelineWidth(model);
     if (!model.projects.length) {
       mount.innerHTML = `<section class="panel glass project-timeline-panel"><div class="panel-head"><div><p class="eyebrow">Planung</p><h3>Projekt-Timeline</h3></div></div><div class="project-empty">Sobald ein Projekt angelegt ist, erscheint hier die Timeline-Ansicht.</div></section>`;
       return;
@@ -339,6 +398,7 @@
         <div><p class="eyebrow">Planung</p><h3>Projekt-Timeline</h3></div>
         <span class="badge muted">SP-basiert · ${model.projects.length} Projekt${model.projects.length === 1 ? '' : 'e'}</span>
       </div>
+      ${renderControls()}
       <div class="project-timeline-scroll">
         <div class="project-timeline-shell">
           <div class="project-timeline-header">
@@ -349,6 +409,7 @@
           <div class="project-timeline-rows">${model.projects.map(project => renderProjectRow(project, model)).join('')}</div>
         </div>
       </div>
+      ${model.before || model.after ? `<div class="project-timeline-range-note">Ausserhalb des Ausschnitts: ${model.before} früher · ${model.after} später. Über den Datenslicer kannst du sie direkt einblenden.</div>` : ''}
       <div class="project-timeline-foot">
         <span><i class="priority-low"></i>Niedrig</span>
         <span><i class="priority-medium"></i>Mittel</span>
@@ -379,6 +440,15 @@
     style.textContent = `
       .project-timeline-panel{overflow:hidden}
       .project-timeline-head{align-items:flex-start}
+      .project-timeline-controls{display:grid;grid-template-columns:auto minmax(270px,1fr) auto;align-items:end;gap:12px;padding:16px 0 18px;margin-bottom:14px;border-bottom:1px solid var(--card-border)}
+      .project-timeline-date-fields{display:grid;grid-template-columns:minmax(132px,1fr) minmax(132px,1fr);gap:10px}
+      .project-timeline-date-fields label{display:grid;gap:6px;color:var(--muted);font-size:.7rem;font-weight:900;text-transform:uppercase}
+      .project-timeline-date-fields input{width:100%;min-height:44px;border:1px solid var(--card-border);border-radius:8px;background:var(--card-strong);color:var(--text);padding:8px 11px;font:inherit;color-scheme:light}
+      body:not(.light) .project-timeline-date-fields input{color-scheme:dark}
+      .project-timeline-presets{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+      .project-timeline-presets button,.project-timeline-nav button{min-height:42px;border:1px solid var(--card-border);border-radius:8px;background:transparent;color:var(--text);padding:8px 11px;font:inherit;font-size:.78rem;font-weight:850;cursor:pointer}
+      .project-timeline-presets button.is-active,.project-timeline-nav button.is-primary{background:var(--primary);border-color:var(--primary);color:#08202c}
+      .project-timeline-nav{display:flex;align-items:center;justify-content:flex-end;gap:6px}
       .project-timeline-scroll{overflow-x:auto;overflow-y:hidden;padding-bottom:6px;-webkit-overflow-scrolling:touch}
       .project-timeline-shell{min-width:calc(250px + var(--timeline-width,600px) + 230px)}
       .project-timeline-header,.project-timeline-row{display:grid;grid-template-columns:250px var(--timeline-width,600px) 230px;gap:14px;align-items:center}
@@ -424,6 +494,7 @@
       .project-timeline-empty{display:inline-flex;align-items:center;height:100%;min-height:48px;color:var(--muted);font-weight:800;font-size:.82rem;padding:0 14px}
       .project-timeline-progress{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(255,255,255,.06);border-radius:999px;overflow:hidden}
       .project-timeline-progress i{display:block;height:100%;background:var(--project-color,#4ad7d1);border-radius:inherit}
+      .project-timeline-range-note{margin:8px 0 0;padding:10px 0;color:var(--muted);font-size:.72rem;font-weight:750;border-top:1px solid var(--card-border)}
       .project-timeline-foot{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:12px;color:var(--muted);font-size:.74rem;font-weight:800}
       .project-timeline-foot span{display:inline-flex;align-items:center;gap:6px}
       .project-timeline-foot i{width:8px;height:8px;border-radius:999px}
@@ -432,8 +503,9 @@
       body.light .project-timeline-track{background:rgba(255,255,255,.58);border-color:rgba(17,36,58,.08)}
       body.light .project-timeline-track-grid i{background:rgba(17,36,58,.06)}
       body.light .project-timeline-progress{background:rgba(17,36,58,.06)}
-      @media(max-width:920px){.project-timeline-shell{min-width:calc(190px + var(--timeline-width,600px) + 170px)}.project-timeline-header,.project-timeline-row{grid-template-columns:190px var(--timeline-width,600px) 170px}.project-timeline-dna{width:48px;height:48px;min-width:48px}.project-timeline-dna span{width:34px;height:34px;font-size:.76rem}.project-timeline-project{gap:9px}.project-timeline-idea-list{gap:6px}}
-      @media(max-width:760px){.project-timeline-panel{border-radius:24px}.project-timeline-scroll{margin-inline:-2px}.project-timeline-shell{min-width:780px}.project-timeline-header,.project-timeline-row{grid-template-columns:170px var(--timeline-width,600px) 170px;gap:10px}.project-timeline-row{min-height:calc(86px + (var(--lane-count,1) - 1) * 54px);padding:12px 0}.project-timeline-track{min-height:calc(62px + (var(--lane-count,1) - 1) * 54px)}.project-timeline-task,.project-timeline-idea{width:46px;height:46px;border-radius:8px}.project-timeline-task{top:calc(10px + var(--lane) * 54px)}.project-timeline-task strong,.project-timeline-idea strong{font-size:.66rem}.project-timeline-project-copy small{font-size:.72rem}.project-timeline-bars{display:none}.project-timeline-add{padding:8px 10px;font-size:.72rem}.project-timeline-foot{font-size:.68rem;gap:10px}}
+      @media(max-width:920px){.project-timeline-controls{grid-template-columns:1fr}.project-timeline-nav{justify-content:flex-start}.project-timeline-presets{order:3}.project-timeline-shell{min-width:calc(190px + var(--timeline-width,600px) + 170px)}.project-timeline-header,.project-timeline-row{grid-template-columns:190px var(--timeline-width,600px) 170px}.project-timeline-dna{width:48px;height:48px;min-width:48px}.project-timeline-dna span{width:34px;height:34px;font-size:.76rem}.project-timeline-project{gap:9px}.project-timeline-idea-list{gap:6px}}
+      @media(max-width:760px){.project-timeline-panel{border-radius:24px}.project-timeline-controls{padding:14px 0}.project-timeline-date-fields{grid-template-columns:1fr 1fr}.project-timeline-presets{display:grid;grid-template-columns:repeat(4,1fr)}.project-timeline-presets button{padding-inline:5px}.project-timeline-nav{display:grid;grid-template-columns:44px 1fr 44px}.project-timeline-nav button{padding-inline:8px}.project-timeline-range-note{padding-inline:0}.project-timeline-scroll{margin-inline:-2px}.project-timeline-shell{min-width:780px}.project-timeline-header,.project-timeline-row{grid-template-columns:170px var(--timeline-width,600px) 170px;gap:10px}.project-timeline-row{min-height:calc(86px + (var(--lane-count,1) - 1) * 54px);padding:12px 0}.project-timeline-track{min-height:calc(62px + (var(--lane-count,1) - 1) * 54px)}.project-timeline-task,.project-timeline-idea{width:46px;height:46px;border-radius:8px}.project-timeline-task{top:calc(10px + var(--lane) * 54px)}.project-timeline-task strong,.project-timeline-idea strong{font-size:.66rem}.project-timeline-project-copy small{font-size:.72rem}.project-timeline-bars{display:none}.project-timeline-add{padding:8px 10px;font-size:.72rem}.project-timeline-foot{font-size:.68rem;gap:10px}}
+      @media(max-width:420px){.project-timeline-date-fields{grid-template-columns:1fr}}
     `;
     document.head.appendChild(style);
   }
@@ -479,7 +551,49 @@
       }
     }, true);
     document.addEventListener('click', event => {
+      const root = event.target?.closest?.('#projectTimelineViewMount');
+      if (root) {
+        const weeksButton = event.target.closest('[data-project-timeline-weeks]');
+        if (weeksButton) {
+          const weeks = Number(weeksButton.dataset.projectTimelineWeeks) || 12;
+          ensureUi().end = addDays(ensureUi().start, weeks * 7 - 1);
+          render();
+          return;
+        }
+        const shiftButton = event.target.closest('[data-project-timeline-shift]');
+        if (shiftButton) {
+          const days = rangeDays();
+          const direction = Number(shiftButton.dataset.projectTimelineShift) || 0;
+          ensureUi().start = addDays(ensureUi().start, direction * days);
+          ensureUi().end = addDays(ensureUi().end, direction * days);
+          render();
+          return;
+        }
+        if (event.target.closest('[data-project-timeline-today]')) {
+          const weeks = Math.max(4, Math.round(rangeDays() / 7));
+          ui = defaultUi(weeks);
+          render();
+          return;
+        }
+      }
       if (event.target?.closest?.('#projectTimelineViewMount [data-action="open-task-idea-detail"], #projectTimelineViewMount [data-action="create-project-task"], #projectTimelineViewMount [data-action="open-project-idea"]')) scheduleRender(600);
+    }, true);
+    document.addEventListener('change', event => {
+      const input = event.target?.closest?.('#projectTimelineViewMount [data-project-timeline-date]');
+      if (!input) return;
+      const date = dayDate(input.value);
+      if (!date) {
+        render();
+        return;
+      }
+      const current = ensureUi();
+      if (input.dataset.projectTimelineDate === 'start') current.start = date;
+      else current.end = date;
+      if (current.end < current.start) {
+        if (input.dataset.projectTimelineDate === 'start') current.end = addDays(current.start, 27);
+        else current.start = addDays(current.end, -27);
+      }
+      render();
     }, true);
   }
 
