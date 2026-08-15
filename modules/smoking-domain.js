@@ -150,6 +150,22 @@
   const STYLE_ID = 'smokeIntervalStrikeStyles';
   const VISUAL_SELECTOR = '#smokeIntervalVisual';
   const BAR_SELECTOR = '.interval-skyline-bar';
+  let strikeObserver = null;
+
+  function fullHistoryStrikeRendererActive(visual = document.querySelector(VISUAL_SELECTOR)) {
+    return Boolean(
+      window.HabitFlowModules?.has?.('smoke-strike-history')
+      || visual?.querySelector('.smoke-strike-grid[data-hf-history-strike="full-history"]')
+    );
+  }
+
+  function stopLegacyStrikeRendererIfSuperseded(visual) {
+    if (!fullHistoryStrikeRendererActive(visual)) return false;
+    window.cancelAnimationFrame(scheduleRender.frame);
+    strikeObserver?.disconnect();
+    strikeObserver = null;
+    return true;
+  }
 
   function injectStrikeStyles() {
     if (document.getElementById(STYLE_ID)) return;
@@ -197,7 +213,7 @@
 
   function renderStrikeCards() {
     const visual = document.querySelector(VISUAL_SELECTOR);
-    if (!visual) return;
+    if (!visual || stopLegacyStrikeRendererIfSuperseded(visual)) return;
     const skyline = visual.querySelector('.interval-skyline');
     if (!skyline) return;
     const bars = Array.from(skyline.querySelectorAll(BAR_SELECTOR));
@@ -222,6 +238,7 @@
   }
 
   function scheduleRender() {
+    if (stopLegacyStrikeRendererIfSuperseded()) return;
     window.cancelAnimationFrame(scheduleRender.frame);
     scheduleRender.frame = window.requestAnimationFrame(() => {
       injectStrikeStyles();
@@ -231,9 +248,10 @@
 
   function init() {
     injectStrikeStyles();
+    if (stopLegacyStrikeRendererIfSuperseded()) return;
     renderStrikeCards();
-    const observer = new MutationObserver(scheduleRender);
-    observer.observe(document.body, { childList: true, subtree: true });
+    strikeObserver = new MutationObserver(scheduleRender);
+    strikeObserver.observe(document.body, { childList: true, subtree: true });
   }
 
   if (document.readyState === 'loading') {
