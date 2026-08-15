@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v266-project-timeline-slicer';
+const CACHE_NAME = 'habitflow-v267-stable-smoke-strike';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
