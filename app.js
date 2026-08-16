@@ -14701,6 +14701,8 @@ async function deleteAlcoholLog(id) {
     heavy: { rank: 4, label: 'Stark', short: 'Starke Beeinträchtigung', description: 'Der Tag endete mit starker Beeinträchtigung.', points: -120 }
   });
   let editingAlcoholDayId = null;
+  let pendingAlcoholDayDeleteId = null;
+  let pendingAlcoholDayDeleteTimer = null;
   let alcoholCoachTipIndex = 0;
   const ALCOHOL_COACH_TIPS = [
     'Jetzt ein grosses Glas Wasser bereitstellen und den heutigen Eintrag ehrlich abschliessen.',
@@ -14891,6 +14893,9 @@ async function deleteAlcoholLog(id) {
       toast('Historische Einzel-Logs bleiben unverändert lesbar.');
       return;
     }
+    pendingAlcoholDayDeleteId = null;
+    if (pendingAlcoholDayDeleteTimer) clearTimeout(pendingAlcoholDayDeleteTimer);
+    pendingAlcoholDayDeleteTimer = null;
     editingAlcoholDayId = id;
     renderHistoryModal();
   }
@@ -14941,7 +14946,22 @@ async function deleteAlcoholLog(id) {
       toast('Historische Einzel-Logs bitte im alten Verlauf verwalten.');
       return;
     }
-    if (!confirm('Alkohol-Tag wirklich löschen?')) return;
+    if (pendingAlcoholDayDeleteId !== id) {
+      pendingAlcoholDayDeleteId = id;
+      if (pendingAlcoholDayDeleteTimer) clearTimeout(pendingAlcoholDayDeleteTimer);
+      pendingAlcoholDayDeleteTimer = setTimeout(() => {
+        if (pendingAlcoholDayDeleteId !== id) return;
+        pendingAlcoholDayDeleteId = null;
+        pendingAlcoholDayDeleteTimer = null;
+        renderHistoryModal();
+      }, 5000);
+      renderHistoryModal();
+      toast('Zum Löschen nochmals bestätigen');
+      return;
+    }
+    pendingAlcoholDayDeleteId = null;
+    if (pendingAlcoholDayDeleteTimer) clearTimeout(pendingAlcoholDayDeleteTimer);
+    pendingAlcoholDayDeleteTimer = null;
     const ledgerIds = state.pointsLedger.filter(entry => isAlcoholPointsEntry(entry) && entry.source_id === id).map(entry => entry.id);
     state.alcoholLogs = state.alcoholLogs.filter(item => item.id !== id);
     state.pointsLedger = state.pointsLedger.filter(entry => !(isAlcoholPointsEntry(entry) && entry.source_id === id));
@@ -14949,9 +14969,12 @@ async function deleteAlcoholLog(id) {
     markRemoteDeletedMany('points_ledger', ledgerIds);
     editingAlcoholDayId = null;
     saveState();
+    renderAlcoholExperience();
     renderHistoryModal();
-    await deleteRemoteByIds('points_ledger', ledgerIds);
-    await deleteRemoteById('alcohol_logs', id);
+    await Promise.all([
+      deleteRemoteByIds('points_ledger', ledgerIds),
+      deleteRemoteById('alcohol_logs', id)
+    ]);
     toast('Alkohol-Tag gelöscht');
     syncWithSupabase({ silent: true, pullFirst: false });
   }
@@ -15040,6 +15063,7 @@ async function deleteAlcoholLog(id) {
       const level = alcoholDayLevel(day.consumption_key);
       const editable = day.source !== 'legacy';
       const isEditing = editingAlcoholDayId === day.id;
+      const isDeletePending = pendingAlcoholDayDeleteId === day.id;
       const options = Object.entries(ALCOHOL_DAY_LEVELS).map(([key, meta]) => `<option value="${key}" ${key === day.consumption_key ? 'selected' : ''}>${escapeHtml(meta.label)} · ${escapeHtml(meta.short)}</option>`).join('');
       const editBlock = isEditing ? `<div class="alcohol-edit-grid alcohol-day-edit-grid">
         <label><span>Stufe</span><select id="alcohol-day-level-${day.id}">${options}</select></label>
@@ -15050,7 +15074,7 @@ async function deleteAlcoholLog(id) {
       return `<article class="list-card compact alcohol-day-history-card ${isEditing ? 'is-editing' : ''}">
         <div class="alcohol-day-history-level is-${escapeHtml(day.consumption_key)}"><span>${String(level.rank).padStart(2, '0')}</span></div>
         <div class="list-card-main"><h4>${escapeHtml(level.label)}</h4><p class="meta">${escapeHtml(formatDate(day.log_date))} · ${escapeHtml(level.short)} · ${formatSignedPoints(alcoholPointsForDay(day))} Pkt.${day.source === 'legacy' ? ` · aus ${day.legacy_count || 1} Alt-Logs` : ''}</p>${day.note ? `<p>${escapeHtml(day.note)}</p>` : ''}${editBlock}</div>
-        <div class="list-actions">${editable && !isEditing ? `<button class="consumption-icon-action" type="button" data-action="edit-alcohol-day" data-id="${day.id}" aria-label="Alkohol-Tag bearbeiten" title="Bearbeiten">${svgIcon('edit', 'ui-icon')}</button>` : ''}${editable ? `<button class="consumption-icon-action consumption-icon-action-delete" type="button" data-action="delete-alcohol-day" data-id="${day.id}" aria-label="Alkohol-Tag löschen" title="Löschen">${svgIcon('trash', 'ui-icon')}</button>` : '<span class="badge muted">Historisch</span>'}</div>
+        <div class="list-actions">${editable && !isEditing ? `<button class="consumption-icon-action" type="button" data-action="edit-alcohol-day" data-id="${day.id}" aria-label="Alkohol-Tag bearbeiten" title="Bearbeiten">${svgIcon('edit', 'ui-icon')}</button>` : ''}${editable ? `<button class="consumption-icon-action consumption-icon-action-delete ${isDeletePending ? 'is-confirming' : ''}" type="button" data-action="delete-alcohol-day" data-id="${day.id}" aria-label="${isDeletePending ? 'Löschen bestätigen' : 'Alkohol-Tag löschen'}" title="${isDeletePending ? 'Löschen bestätigen' : 'Löschen'}">${isDeletePending ? '<span>Bestätigen</span>' : svgIcon('trash', 'ui-icon')}</button>` : '<span class="badge muted">Historisch</span>'}</div>
       </article>`;
     }).join('')}</div>`;
   }
