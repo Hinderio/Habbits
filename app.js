@@ -6072,6 +6072,7 @@
         console.error(`[HabitFlow/alcohol] ${name} render failed`, error);
       }
     });
+    scheduleAlcoholLedgerRepair();
   }
 
   function renderSmoking() {
@@ -14854,6 +14855,81 @@ async function deleteAlcoholLog(id) {
     return changed;
   }
 
+  function alcoholLogRowForRemote(log) {
+    if (!log) return null;
+    return {
+      id: log.id,
+      log_date: log.log_date,
+      consumed: Boolean(log.consumed),
+      note: log.note || null,
+      consumption_level: Number(log.consumption_level || 0) || null,
+      consumption_key: log.consumption_key || null,
+      points: Number(log.points || 0),
+      created_at: log.created_at || nowIso(),
+      updated_at: log.updated_at || nowIso()
+    };
+  }
+
+  function alcoholLedgerRowsForRemote(logId = null) {
+    return state.pointsLedger
+      .filter(entry => isAlcoholPointsEntry(entry) && (!logId || entry.source_id === logId))
+      .map(entry => ({
+        id: entry.id,
+        source_type: entry.source_type,
+        source_id: remoteLedgerSourceId(entry),
+        points: Number(entry.points || 0),
+        reason: entry.reason || null,
+        earned_at: entry.earned_at,
+        created_at: entry.created_at || nowIso()
+      }));
+  }
+
+  async function persistAlcoholDayMutation(logId) {
+    const log = state.alcoholLogs.find(item => item.id === logId);
+    if (!log) return;
+    if (!supabaseClient || !isAuthenticated()) {
+      syncWithSupabase({ silent: true, pullFirst: false, pullAfter: false });
+      return;
+    }
+
+    const logRow = alcoholLogRowForRemote(log);
+    const ledgerRows = alcoholLedgerRowsForRemote(logId);
+    try {
+      const [logSaved, ledgerSaved] = await Promise.all([
+        upsertRows('alcohol_logs', [logRow]),
+        ledgerRows.length ? upsertRows('points_ledger', ledgerRows) : Promise.resolve(false)
+      ]);
+      if (logSaved) markRowsSynced('alcoholLogs', [logRow]);
+      if (ledgerSaved) markRowsSynced('pointsLedger', ledgerRows);
+      suppressRemotePullUntil = Date.now() + SELF_WRITE_ECHO_GRACE_MS;
+      saveState({ skipRender: true });
+    } catch (error) {
+      console.warn('[HabitFlow/alcohol] Direkte Tagesmutation fehlgeschlagen; Generalsync übernimmt.', error);
+      syncWithSupabase({ silent: true, pullFirst: false, pullAfter: false });
+    }
+  }
+
+  function scheduleAlcoholLedgerRepair() {
+    if (scheduleAlcoholLedgerRepair.pending || scheduleAlcoholLedgerRepair.done) return;
+    if (!supabaseClient || !isAuthenticated()) return;
+    scheduleAlcoholLedgerRepair.pending = true;
+    window.setTimeout(async () => {
+      try {
+        recalculateAlcoholScores();
+        const rows = alcoholLedgerRowsForRemote();
+        if (rows.length && await upsertRows('points_ledger', rows)) {
+          markRowsSynced('pointsLedger', rows);
+        }
+        scheduleAlcoholLedgerRepair.done = true;
+        saveState({ skipRender: true });
+      } catch (error) {
+        console.warn('[HabitFlow/alcohol] Ledger-Reparatur wird später erneut versucht.', error);
+      } finally {
+        scheduleAlcoholLedgerRepair.pending = false;
+      }
+    }, 0);
+  }
+
   function recordAlcoholDay(levelKey) {
     const key = alcoholDayKey(levelKey);
     const level = alcoholDayLevel(key);
@@ -14879,11 +14955,11 @@ async function deleteAlcoholLog(id) {
     log.synced = false;
     dedupeAlcoholLogs(state);
     recalculateAlcoholScores();
-    saveState();
+    saveState({ skipRender: true });
     if (noteInput) noteInput.value = '';
     renderAlcoholExperience();
     toast(`${level.label} gespeichert · ${formatSignedPoints(level.points)} Pkt.`);
-    syncWithSupabase({ silent: true, pullFirst: false });
+    window.setTimeout(() => persistAlcoholDayMutation(log.id), 0);
   }
 
   function editableAlcoholDayLog(id) {
@@ -14935,38 +15011,15 @@ async function deleteAlcoholLog(id) {
     log.synced = false;
     editingAlcoholDayId = null;
     dedupeAlcoholLogs(state);
-    recalculateAlcoholScores({ markUpdated: true });
+    recalculateAlcoholScores();
+    saveState({ skipRender: true });
 
     renderAlcoholDayHistoryItemInPlace(id);
-    renderAlcoholDashboard();
-    renderAlcoholMobileOverview();
-    renderAlcoholUnitHistory();
+    renderHistoryModal();
+    renderAlcoholExperience();
+    scheduleConsumptionBackgroundRender();
     toast("Alkohol-Tag aktualisiert.");
-
-    let committed = false;
-    let fallbackTimer = 0;
-    const commitAfterPaint = () => {
-      if (committed) return;
-      committed = true;
-      if (fallbackTimer) window.clearTimeout(fallbackTimer);
-
-      saveState({ skipRender: true });
-      renderHistoryModal();
-      renderAlcoholExperience();
-      scheduleConsumptionBackgroundRender();
-      window.setTimeout(() => syncWithSupabase({
-        silent: true,
-        pullFirst: false,
-        pullAfter: false
-      }), 0);
-    };
-
-    fallbackTimer = window.setTimeout(commitAfterPaint, 180);
-    if (typeof window.requestAnimationFrame === "function") {
-      window.requestAnimationFrame(() => window.setTimeout(commitAfterPaint, 0));
-    } else {
-      window.setTimeout(commitAfterPaint, 0);
-    }
+    window.setTimeout(() => persistAlcoholDayMutation(id), 0);
   }
 
   function deleteAlcoholDay(id) {
@@ -15054,17 +15107,25 @@ async function deleteAlcoholLog(id) {
     renderAlcoholCoachTip();
   }
 
-  function alcoholFreeStreak(days, endKey = toDateKey(new Date())) {
-    const occupied = new Set(days.map(day => day.log_date));
-    let streak = 0;
-    const cursor = new Date(`${endKey}T12:00:00`);
-    for (let i = 0; i < 366; i += 1) {
-      const key = toDateKey(cursor);
-      if (occupied.has(key)) break;
-      streak += 1;
-      cursor.setDate(cursor.getDate() - 1);
+  function alcoholFreeStreakStats(days, endKey = toDateKey(new Date())) {
+    const occupied = [...new Set(
+      days.map(day => day?.log_date).filter(key => isDateKey(key) && key <= endKey)
+    )].sort();
+    if (!occupied.length) return { current: 0, best: 0 };
+
+    const dayDistance = (fromKey, toKey) => Math.max(0, Math.round(
+      (new Date(`${toKey}T12:00:00`).getTime() - new Date(`${fromKey}T12:00:00`).getTime()) / DAY_MS
+    ));
+    let best = 0;
+    for (let index = 1; index < occupied.length; index += 1) {
+      best = Math.max(best, Math.max(0, dayDistance(occupied[index - 1], occupied[index]) - 1));
     }
-    return streak;
+    const current = dayDistance(occupied.at(-1), endKey);
+    return { current, best: Math.max(best, current) };
+  }
+
+  function alcoholFreeStreak(days, endKey = toDateKey(new Date())) {
+    return alcoholFreeStreakStats(days, endKey).current;
   }
 
   function renderAlcoholUnitHistory() {
@@ -15233,7 +15294,7 @@ async function deleteAlcoholLog(id) {
     const alcoholFreeDays = Math.max(0, daysWindow - days.length);
     const freeRate = Math.round((alcoholFreeDays / daysWindow) * 100);
     const average = days.length ? sum(days.map(day => day.consumption_level)) / days.length : 0;
-    const freeStreak = alcoholFreeStreak(allDays);
+    const streaks = alcoholFreeStreakStats(allDays);
     const quality = !days.length ? 'ruhig' : freeRate >= 80 && average <= 2 ? 'stabil' : average >= 3 || days.length >= 12 ? 'erhöht' : 'in Bewegung';
     if (els.alcoholIntervalQuality) els.alcoholIntervalQuality.textContent = quality;
     const distribution = Object.entries(ALCOHOL_DAY_LEVELS).map(([key, level]) => {
@@ -15250,8 +15311,13 @@ async function deleteAlcoholLog(id) {
       <article><small>Alkoholfreie Quote</small><strong>${freeRate}%</strong><p>${alcoholFreeDays} von ${daysWindow} Tagen</p></article>
       <article><small>Konsumtage</small><strong>${days.length}</strong><p>im 30-Tage-Fenster</p></article>
       <article><small>Ø Intensität</small><strong>${days.length ? average.toFixed(1) : '–'}</strong><p>auf einer Skala von 1 bis 4</p></article>
-      <article><small>Aktuelle freie Serie</small><strong>${freeStreak}</strong><p>alkoholfreie Tage</p></article>
-    </div><div class="alcohol-distribution-grid">${distribution}</div>
+      <article><small>Freie Tage</small><strong>${alcoholFreeDays}</strong><p>im 30-Tage-Fenster</p></article>
+    </div>
+    <div class="smoking-visual-summary-grid">
+      <article><small>Bester Strike</small><strong>${streaks.best} Tage</strong><p>Längste Serie ohne Alkohol.</p></article>
+      <article><small>Aktueller Strike</small><strong>${streaks.current} Tage</strong><p>Seit dem letzten Konsumtag.</p></article>
+    </div>
+    <div class="alcohol-distribution-grid">${distribution}</div>
     <div class="smoking-signal-card"><div><p class="eyebrow">Coach-Signal</p><h4>${escapeHtml(signal)}</h4></div><button class="mini-btn primary" type="button" data-action="toggle-alcohol-coach">Coach öffnen</button></div>`;
   }
 
