@@ -14886,9 +14886,12 @@ async function deleteAlcoholLog(id) {
     syncWithSupabase({ silent: true, pullFirst: false });
   }
 
+  function editableAlcoholDayLog(id) {
+    return state.alcoholLogs.find(item => item.id === id) || null;
+  }
+
   function editAlcoholDay(id) {
-    const day = visibleAlcoholDays().find(item => item.id === id);
-    if (!day || day.source === "legacy") {
+    if (!editableAlcoholDayLog(id)) {
       toast("Historische Sammelwerte bleiben unverändert.");
       return;
     }
@@ -14903,29 +14906,35 @@ async function deleteAlcoholLog(id) {
   }
 
   function saveAlcoholDay(id) {
-    const day = visibleAlcoholDays().find(item => item.id === id);
-    if (!day || day.source === "legacy") return;
+    const log = editableAlcoholDayLog(id);
+    if (!log) return;
     const levelInput = document.getElementById(`alcohol-day-level-${id}`);
     const dateInput = document.getElementById(`alcohol-day-date-${id}`);
     const noteInput = document.getElementById(`alcohol-day-note-${id}`);
     const consumptionKey = normalizeAlcoholConsumptionKey(levelInput?.value);
     const logDate = String(dateInput?.value || "").trim();
-    const note = String(noteInput?.value || "").trim();
+    const note = String(noteInput?.value || "").trim().slice(0, 240);
     if (!consumptionKey || !isDateKey(logDate)) {
       toast("Bitte Stufe und Datum prüfen.");
       return;
     }
-    const duplicate = state.alcoholDayLogs.some(item => item.id !== id && item.log_date === logDate && item.source !== "legacy");
+    const duplicate = state.alcoholLogs.some(item => item.id !== id && item.log_date === logDate);
     if (duplicate) {
       toast("Für diesen Tag besteht bereits ein Eintrag.");
       return;
     }
 
-    day.consumption_key = consumptionKey;
-    day.log_date = logDate;
-    day.note = note;
-    day.updated_at = new Date().toISOString();
+    const level = alcoholDayLevel(consumptionKey);
+    log.consumed = true;
+    log.consumption_key = consumptionKey;
+    log.consumption_level = level.rank;
+    log.points = level.points;
+    log.log_date = logDate;
+    log.note = note;
+    log.updated_at = nowIso();
+    log.synced = false;
     editingAlcoholDayId = null;
+    dedupeAlcoholLogs(state);
     recalculateAlcoholScores({ markUpdated: true });
 
     renderAlcoholDayHistoryItemInPlace(id);
@@ -14935,27 +14944,34 @@ async function deleteAlcoholLog(id) {
     toast("Alkohol-Tag aktualisiert.");
 
     let committed = false;
-    const commit = () => {
+    let fallbackTimer = 0;
+    const commitAfterPaint = () => {
       if (committed) return;
       committed = true;
+      if (fallbackTimer) window.clearTimeout(fallbackTimer);
+
       saveState({ skipRender: true });
       renderHistoryModal();
       renderAlcoholExperience();
       scheduleConsumptionBackgroundRender();
-      setTimeout(() => syncWithSupabase({ silent: true, pullFirst: false, pullAfter: false }), 0);
+      window.setTimeout(() => syncWithSupabase({
+        silent: true,
+        pullFirst: false,
+        pullAfter: false
+      }), 0);
     };
-    if (typeof requestAnimationFrame === "function") {
-      requestAnimationFrame(() => requestAnimationFrame(commit));
-      setTimeout(commit, 180);
+
+    fallbackTimer = window.setTimeout(commitAfterPaint, 180);
+    if (typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(() => window.setTimeout(commitAfterPaint, 0));
     } else {
-      setTimeout(commit, 0);
+      window.setTimeout(commitAfterPaint, 0);
     }
   }
 
   function deleteAlcoholDay(id) {
-    const day = visibleAlcoholDays().find(item => item.id === id);
-    if (!day) return;
-    if (day.source === "legacy") {
+    const index = state.alcoholLogs.findIndex(item => item.id === id);
+    if (index === -1) {
       toast("Historische Sammelwerte können nicht einzeln gelöscht werden.");
       return;
     }
@@ -14963,40 +14979,52 @@ async function deleteAlcoholLog(id) {
     const ledgerIds = state.pointsLedger
       .filter(entry => isAlcoholPointsEntry(entry) && entry.source_id === id)
       .map(entry => entry.id);
-    state.alcoholDayLogs = state.alcoholDayLogs.filter(item => item.id !== id);
+
+    state.alcoholLogs.splice(index, 1);
     state.pointsLedger = state.pointsLedger.filter(entry => !ledgerIds.includes(entry.id));
     if (editingAlcoholDayId === id) editingAlcoholDayId = null;
-    recalculateAlcoholScores();
 
-    document.querySelector(`[data-alcohol-day-history-id="${id}"]`)?.remove();
+    els.historyModalContent
+      ?.querySelector(`[data-alcohol-day-history-id="${cssEscape(id)}"]`)
+      ?.remove();
     renderAlcoholDashboard();
     renderAlcoholMobileOverview();
     renderAlcoholUnitHistory();
     toast("Alkohol-Tag gelöscht.");
 
     let committed = false;
-    const commit = () => {
+    let fallbackTimer = 0;
+    const commitAfterPaint = () => {
       if (committed) return;
       committed = true;
-      markRemoteDeleted("alcoholDayLogs", id);
-      markRemoteDeletedMany("pointsLedger", ledgerIds);
+      if (fallbackTimer) window.clearTimeout(fallbackTimer);
+
+      markRemoteDeleted("alcohol_logs", id);
+      markRemoteDeletedMany("points_ledger", ledgerIds);
+      recalculateAlcoholScores();
       saveState({ skipRender: true });
       renderHistoryModal();
       renderAlcoholExperience();
       scheduleConsumptionBackgroundRender();
-      setTimeout(async () => {
-        await Promise.allSettled([
-          deleteRemoteRowsForIds("alcohol_day_logs", [id]),
-          deleteRemoteRowsForIds("points_ledger", ledgerIds),
+
+      window.setTimeout(async () => {
+        await Promise.all([
+          deleteRemoteById("alcohol_logs", id),
+          deleteRemoteByIds("points_ledger", ledgerIds)
         ]);
-        syncWithSupabase({ silent: true, pullFirst: false, pullAfter: false });
+        syncWithSupabase({
+          silent: true,
+          pullFirst: false,
+          pullAfter: false
+        });
       }, 0);
     };
-    if (typeof requestAnimationFrame === "function") {
-      requestAnimationFrame(() => requestAnimationFrame(commit));
-      setTimeout(commit, 180);
+
+    fallbackTimer = window.setTimeout(commitAfterPaint, 180);
+    if (typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(() => window.setTimeout(commitAfterPaint, 0));
     } else {
-      setTimeout(commit, 0);
+      window.setTimeout(commitAfterPaint, 0);
     }
   }
 
@@ -15090,7 +15118,7 @@ async function deleteAlcoholLog(id) {
       <label class="full"><span>Notiz</span><input id="alcohol-day-note-${day.id}" type="text" value="${escapeHtml(day.note || "")}" maxlength="240" placeholder="optional" /></label>
       <div class="alcohol-edit-actions full"><button class="mini-btn primary" type="button" data-action="save-alcohol-day" data-id="${day.id}">Speichern</button><button class="mini-btn" type="button" data-action="cancel-alcohol-day-edit">Abbrechen</button></div>
     </div>` : "";
-    return `<article class="list-card compact alcohol-day-history-card ${isEditing ? "is-editing" : ""}" data-alcohol-day-history-id="${day.id}">
+    return `<article class="list-card compact alcohol-day-history-card ${isEditing ? "is-editing" : ""}" data-alcohol-day-history-id="${escapeHtml(day.id)}">
       <div class="alcohol-day-history-level is-${escapeHtml(day.consumption_key)}"><span>${String(level.rank).padStart(2, "0")}</span></div>
       <div class="list-card-main"><h4>${escapeHtml(level.label)}</h4><p class="meta">${escapeHtml(formatDate(day.log_date))} · ${escapeHtml(level.short)} · ${formatSignedPoints(alcoholPointsForDay(day))} Pkt.${day.source === "legacy" ? ` · aus ${day.legacy_count || 1} Alt-Logs` : ""}</p>${day.note ? `<p>${escapeHtml(day.note)}</p>` : ""}${editBlock}</div>
       <div class="list-actions">${editable && !isEditing ? `<button class="consumption-icon-action" type="button" data-action="edit-alcohol-day" data-id="${day.id}" aria-label="Alkohol-Tag bearbeiten" title="Bearbeiten">${svgIcon("edit", "ui-icon")}</button>` : ""}${editable ? `<button class="consumption-icon-action consumption-icon-action-delete" type="button" data-action="delete-alcohol-day" data-id="${day.id}" aria-label="Alkohol-Tag löschen" title="Löschen">${svgIcon("trash", "ui-icon")}</button>` : '<span class="badge muted">Historisch</span>'}</div>
@@ -15099,7 +15127,8 @@ async function deleteAlcoholLog(id) {
 
   function renderAlcoholDayHistoryItemInPlace(id) {
     const day = visibleAlcoholDays().find(item => item.id === id);
-    const node = document.querySelector(`[data-alcohol-day-history-id="${id}"]`);
+    const node = els.historyModalContent
+      ?.querySelector(`[data-alcohol-day-history-id="${cssEscape(id)}"]`);
     if (!day || !node) {
       renderHistoryModal();
       return;
