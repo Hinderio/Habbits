@@ -479,6 +479,7 @@
   const MONTHLY_MISSION_METRICS = Object.freeze({
     running_sessions: { label: 'Jogging-Sessions', unit: 'Läufe', category: 'fitness', source: 'Fitness Joggen' },
     hiking_days: { label: 'Wandertage', unit: 'Tage', category: 'fitness', source: 'Fitness Wandern' },
+    weight_measurements: { label: 'Gewicht messen', unit: 'Messungen', category: 'fitness', source: 'Habit Gewicht messen' },
     smoke_free_evenings: { label: 'Rauchfreie Abende', unit: 'Abende', category: 'consumption', source: 'Konsum-Logs' },
     alcohol_free_weekend_days: { label: 'Alkoholfreie Wochenendtage', unit: 'Tage', category: 'consumption', source: 'Alkohol-Logs' },
     deep_work_sessions: { label: 'Deep-Work-Sessions', unit: 'Sessions', category: 'focus', source: 'Fokus-Habits & Tasks' },
@@ -489,6 +490,7 @@
   const MONTHLY_MISSION_PRESETS = Object.freeze([
     { id: 'run-12', title: '12 Läufe', target: 12, metric: 'running_sessions', category: 'fitness' },
     { id: 'hike-4', title: '4 Wandertage', target: 4, metric: 'hiking_days', category: 'fitness' },
+    { id: 'weight-4', title: '4 Gewichtsmessungen', target: 4, metric: 'weight_measurements', category: 'fitness' },
     { id: 'smoke-evenings-20', title: '20 rauchfreie Abende', target: 20, metric: 'smoke_free_evenings', category: 'consumption' },
     { id: 'deep-work-8', title: '8 Deep-Work-Sessions', target: 8, metric: 'deep_work_sessions', category: 'focus' },
     { id: 'tasks-25', title: '25 erledigte Aufgaben', target: 25, metric: 'completed_tasks', category: 'focus' },
@@ -4588,6 +4590,12 @@
         return buildFitnessSessions('jogging').filter(session => inMonth(session.entry?.occurred_at || session.date)).length;
       case 'hiking_days':
         return new Set(buildFitnessSessions('hiking').filter(session => inMonth(session.entry?.occurred_at || session.date)).map(session => toDateKey(session.entry?.occurred_at || session.date))).size;
+      case 'weight_measurements': {
+        const weightHabitIds = new Set(state.habits
+          .filter(habit => !habit.is_archived && (habit.type === 'weight' || normalizeIconSearch(habit.name).includes('gewicht')))
+          .map(habit => habit.id));
+        return visibleHabitEntries().filter(entry => weightHabitIds.has(entry.habit_id) && inMonth(entry.occurred_at)).length;
+      }
       case 'smoke_free_evenings': {
         const cigarettes = visibleCigarettes();
         return keys.filter(key => !cigarettes.some(cigarette => {
@@ -10942,30 +10950,34 @@
 
   function buildChartDataset(label, data, options = {}) {
     const toneOptions = { ...options, data };
+    const semanticPoints = (options.toneMode || 'score') === 'score';
     return {
       label,
       data,
-      tension: .42,
-      fill: true,
+      tension: .18,
+      cubicInterpolationMode: 'monotone',
+      fill: false,
       spanGaps: true,
-      pointRadius: 3.2,
+      borderColor: '#2fc5c2',
+      borderWidth: 2.25,
+      pointRadius: ctx => Number.isFinite(Number(ctx.raw)) ? 3 : 0,
       pointHoverRadius: 5,
-      borderWidth: 3,
-      borderColor: ctx => chartSegmentTone(ctx, toneOptions),
-      backgroundColor: ctx => chartFillGradient(ctx, toneOptions),
-      pointBackgroundColor: ctx => chartPointTone(ctx, toneOptions),
-      pointBorderColor: ctx => chartPointTone(ctx, toneOptions),
-      pointBorderWidth: 2,
-      segment: { borderColor: ctx => chartSegmentTone(ctx, toneOptions) }
+      pointHitRadius: 10,
+      pointBackgroundColor: ctx => semanticPoints ? chartPointTone(ctx, toneOptions) : '#ffffff',
+      pointBorderColor: ctx => semanticPoints ? chartPointTone(ctx, toneOptions) : '#2fc5c2',
+      pointBorderWidth: 2
     };
   }
 
   function drawChart(existing, canvas, labels, data, label, options = {}) {
     if (!canvas) return existing;
+    const muted = getComputedStyle(document.documentElement).getPropertyValue('--muted') || '#71849a';
     const dataset = buildChartDataset(label, data, options);
+    const mobileTicks = window.matchMedia('(max-width: 720px)').matches ? 6 : 10;
     if (existing) {
       existing.data.labels = labels;
       Object.assign(existing.data.datasets[0], dataset);
+      existing.options.scales.x.ticks.maxTicksLimit = mobileTicks;
       existing.options.scales.y.beginAtZero = options.beginAtZero !== false;
       existing.update();
       return existing;
@@ -10976,11 +10988,44 @@
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation: { duration: 220 },
         interaction: { intersect: false, mode: 'index' },
-        plugins: { legend: { display: false } },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            displayColors: false,
+            backgroundColor: 'rgba(13,24,39,.94)',
+            titleColor: '#ffffff',
+            bodyColor: '#dce7ef',
+            borderColor: 'rgba(255,255,255,.12)',
+            borderWidth: 1,
+            cornerRadius: 6,
+            padding: 11
+          }
+        },
         scales: {
-          x: { grid: { display: false }, ticks: { color: getComputedStyle(document.documentElement).getPropertyValue('--muted') || '#9db0c3' } },
-          y: { beginAtZero: options.beginAtZero !== false, ticks: { precision: 0, color: getComputedStyle(document.documentElement).getPropertyValue('--muted') || '#9db0c3' }, grid: { color: 'rgba(148,163,184,.16)' } }
+          x: {
+            border: { display: false },
+            grid: { display: false },
+            ticks: {
+              color: muted,
+              autoSkip: true,
+              maxTicksLimit: mobileTicks,
+              maxRotation: 0,
+              minRotation: 0,
+              padding: 9,
+              font: { size: 11, weight: '600' }
+            }
+          },
+          y: {
+            beginAtZero: options.beginAtZero !== false,
+            border: { display: false },
+            ticks: { precision: 0, color: muted, padding: 10, font: { size: 11, weight: '600' } },
+            grid: {
+              color: context => Number(context.tick.value) === 0 ? 'rgba(13,24,39,.20)' : 'rgba(148,163,184,.12)',
+              lineWidth: context => Number(context.tick.value) === 0 ? 1.25 : 1
+            }
+          }
         }
       }
     });
