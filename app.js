@@ -15216,8 +15216,13 @@ async function deleteAlcoholLog(id) {
       <article><small>Aktive Wochen</small><strong>${activeWeeks}</strong><p>von ${weeksCount} Kalenderwochen</p></article>
       <article><small>Häufigster Wochentag</small><strong>${escapeHtml(smokingWeekdayLabel(dominant))}</strong><p>${weekdayCounts.get(dominant) || 0} Konsumtage</p></article>
       <article><small>Punkte</small><strong>${formatSignedPoints(points)}</strong><p>im Kartenfenster</p></article>
-    </div><div class="alcohol-intensity-map"><div class="alcohol-map-header"><b>Tag</b>${header}</div>${rows}</div>
+    </div><div class="smoke-week-grid-wrap alcohol-map-scroll" role="region" aria-label="Alkoholintensität nach Kalenderwoche" tabindex="0"><div class="alcohol-intensity-map"><div class="alcohol-map-header"><b>Tag</b>${header}</div>${rows}</div></div>
     <div class="alcohol-map-legend"><span>Intensität</span>${Object.values(ALCOHOL_DAY_LEVELS).map(level => `<i class="level-${level.rank}">${level.rank}</i><small>${escapeHtml(level.label)}</small>`).join('')}</div>`;
+    requestAnimationFrame(() => {
+      const heatmapScroll = els.alcoholHeatmapVisual?.querySelector('.alcohol-map-scroll');
+      if (!heatmapScroll) return;
+      heatmapScroll.scrollLeft = Math.max(0, heatmapScroll.scrollWidth - heatmapScroll.clientWidth);
+    });
   }
 
   function renderAlcoholIntervalVisual(daysWindow = 30) {
