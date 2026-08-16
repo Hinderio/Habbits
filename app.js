@@ -13057,6 +13057,15 @@ async function deleteAlcoholLog(id) {
     return date.toLocaleString('de-CH', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
   }
 
+  function formatDate(value) {
+    if (!value) return '–';
+    const key = String(value).slice(0, 10);
+    const date = new Date(`${key}T12:00:00`);
+    return Number.isNaN(date.getTime())
+      ? key
+      : date.toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit', year: '2-digit' });
+  }
+
   function formatTime(value) {
     if (!value) return '–';
     const date = new Date(value);
