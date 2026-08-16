@@ -14990,7 +14990,7 @@ async function deleteAlcoholLog(id) {
     const consumptionKey = normalizeAlcoholConsumptionKey(levelInput?.value);
     const logDate = String(dateInput?.value || "").trim();
     const note = String(noteInput?.value || "").trim().slice(0, 240);
-    if (!consumptionKey || !isDateKey(logDate)) {
+    if (!consumptionKey || !/^\d{4}-\d{2}-\d{2}$/.test(logDate)) {
       toast("Bitte Stufe und Datum prüfen.");
       return;
     }
