@@ -14987,7 +14987,7 @@ async function deleteAlcoholLog(id) {
     const levelInput = document.getElementById(`alcohol-day-level-${id}`);
     const dateInput = document.getElementById(`alcohol-day-date-${id}`);
     const noteInput = document.getElementById(`alcohol-day-note-${id}`);
-    const consumptionKey = normalizeAlcoholConsumptionKey(levelInput?.value);
+    const consumptionKey = alcoholDayKey(levelInput?.value);
     const logDate = String(dateInput?.value || "").trim();
     const note = String(noteInput?.value || "").trim().slice(0, 240);
     if (!consumptionKey || !/^\d{4}-\d{2}-\d{2}$/.test(logDate)) {
