@@ -39,6 +39,14 @@
     }[char]));
   }
 
+  function actionIcon(name = 'edit') {
+    const paths = {
+      edit: '<path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path>',
+      trash: '<path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="m19 6-1 14H6L5 6"></path><path d="M10 11v5"></path><path d="M14 11v5"></path>'
+    };
+    return `<svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${paths[name] || paths.edit}</svg>`;
+  }
+
   function normalizeTags(value = '') {
     return (Array.isArray(value) ? value.join(',') : String(value || ''))
       .split(/[#,]/)
@@ -410,8 +418,8 @@
             <p class="learning-vault-body">${escapeHtml(item.body || '')}</p>
             ${renderTags(item.tags)}
             <div class="learning-vault-card-actions">
-              <button class="mini-btn" type="button" data-learning-edit="${escapeHtml(item.id)}">Bearbeiten</button>
-              <button class="learning-vault-delete" type="button" data-learning-delete="${escapeHtml(item.id)}" aria-label="Learning löschen">×</button>
+              <button class="consumption-icon-action" type="button" data-learning-edit="${escapeHtml(item.id)}" aria-label="Learning bearbeiten" title="Bearbeiten">${actionIcon('edit')}</button>
+              <button class="consumption-icon-action consumption-icon-action-delete" type="button" data-learning-delete="${escapeHtml(item.id)}" aria-label="Learning löschen" title="Löschen">${actionIcon('trash')}</button>
             </div>
           `}
         ` : renderTags(item.tags)}
