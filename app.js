@@ -2086,7 +2086,8 @@
   }
 
   function visibleAlcoholUnits() {
-    return state.alcoholUnits.filter(item => !isWithinPauseAt(item.occurred_at || item.created_at, { scope: 'alcohol' }));
+    const units = Array.isArray(state?.alcoholUnits) ? state.alcoholUnits : [];
+    return units.filter(item => !isWithinPauseAt(item?.occurred_at || item?.created_at, { scope: 'alcohol' }));
   }
 
   function visibleHabitEntries(habitId = null) {
@@ -6057,17 +6058,31 @@
     return Boolean(habit && (habit.system_key === 'meditation' || habit.id === DEFAULT_HABIT_IDS.meditation || name === 'meditation'));
   }
 
+  function renderAlcoholExperience() {
+    const sections = [
+      ['dashboard', renderAlcoholDashboard],
+      ['history', renderAlcoholUnitHistory],
+      ['analytics', renderAlcoholAnalytics],
+      ['mobile', renderAlcoholMobileOverview]
+    ];
+    sections.forEach(([name, renderer]) => {
+      try {
+        renderer();
+      } catch (error) {
+        console.error(`[HabitFlow/alcohol] ${name} render failed`, error);
+      }
+    });
+  }
+
   function renderSmoking() {
     const last = getLastCigarette();
     const smokeCount = visibleCigarettes().length;
     if (els.lastSmokePoints) els.lastSmokePoints.textContent = `${smokeCount} Eintrag${smokeCount === 1 ? '' : 'e'}`;
     renderSmokingTip(last);
     renderTriggerCapture();
-    renderAlcoholUnitHistory();
+    renderAlcoholExperience();
     renderSmokingAnalytics();
-    renderAlcoholAnalytics();
-    renderAlcoholDashboard();
-    renderConsumptionMobileOverview(last);
+    renderSmokeMobileOverview(last);
     renderSmokeHistoryLauncher();
     applyConsumptionMode();
   }
@@ -14707,18 +14722,21 @@ async function deleteAlcoholLog(id) {
 
   function visibleAlcoholDays() {
     const byDate = new Map();
-    (state.alcoholLogs || []).forEach(log => {
-      if (!log?.consumed || !log.log_date) return;
-      if (isWithinPauseAt(`${log.log_date}T12:00:00`, { scope: 'alcohol' })) return;
-      const key = log.consumption_key ? alcoholDayKey(log.consumption_key) : null;
-      if (!key) return;
+    const logs = Array.isArray(state?.alcoholLogs) ? state.alcoholLogs : [];
+
+    logs.forEach(log => {
+      const logDate = String(log?.log_date || '').slice(0, 10);
+      const rawLevel = log?.consumption_key || log?.consumption_level;
+      if (!logDate || !rawLevel || (log?.consumed === false && !rawLevel)) return;
+      if (isWithinPauseAt(`${logDate}T12:00:00`, { scope: 'alcohol' })) return;
+      const key = alcoholDayKey(rawLevel);
       const level = alcoholDayLevel(key);
-      byDate.set(log.log_date, {
+      byDate.set(logDate, {
         id: log.id,
-        log_date: log.log_date,
+        log_date: logDate,
         consumption_key: key,
         consumption_level: level.rank,
-        points: level.points,
+        points: Number.isFinite(Number(log.points)) ? Number(log.points) : level.points,
         note: log.note || '',
         source: 'daily',
         created_at: log.created_at,
@@ -14728,7 +14746,7 @@ async function deleteAlcoholLog(id) {
 
     const legacyGroups = new Map();
     visibleAlcoholUnits().forEach(unit => {
-      const key = toDateKey(unit.occurred_at || unit.created_at);
+      const key = toDateKey(unit?.occurred_at || unit?.created_at);
       if (!key || byDate.has(key)) return;
       if (!legacyGroups.has(key)) legacyGroups.set(key, []);
       legacyGroups.get(key).push(unit);
@@ -14747,17 +14765,18 @@ async function deleteAlcoholLog(id) {
         source: 'legacy',
         legacy_count: sorted.length,
         created_at: sorted[0]?.created_at,
-        updated_at: sorted.at(-1)?.updated_at
+        updated_at: sorted[sorted.length - 1]?.updated_at
       });
     });
 
-    (state.alcoholLogs || []).forEach(log => {
-      if (!log?.consumed || !log.log_date || byDate.has(log.log_date)) return;
-      if (isWithinPauseAt(`${log.log_date}T12:00:00`, { scope: 'alcohol' })) return;
+    logs.forEach(log => {
+      const logDate = String(log?.log_date || '').slice(0, 10);
+      if (!logDate || !log?.consumed || byDate.has(logDate)) return;
+      if (isWithinPauseAt(`${logDate}T12:00:00`, { scope: 'alcohol' })) return;
       const level = ALCOHOL_DAY_LEVELS.light;
-      byDate.set(log.log_date, {
+      byDate.set(logDate, {
         id: log.id,
-        log_date: log.log_date,
+        log_date: logDate,
         consumption_key: 'light',
         consumption_level: 1,
         points: level.points,
@@ -14790,11 +14809,13 @@ async function deleteAlcoholLog(id) {
 
   function alcoholPointsForDay(dayOrId) {
     const id = typeof dayOrId === 'object' ? dayOrId?.id : dayOrId;
-    return Number(state.pointsLedger.find(entry => isAlcoholPointsEntry(entry) && entry.source_id === id)?.points || 0);
+    const ledger = Array.isArray(state?.pointsLedger) ? state.pointsLedger : [];
+    return Number(ledger.find(entry => isAlcoholPointsEntry(entry) && entry.source_id === id)?.points || 0);
   }
 
   function alcoholPointsForUnit(unitId) {
-    return Number(state.pointsLedger.find(entry => isAlcoholPointsEntry(entry) && entry.source_id === unitId)?.points || 0);
+    const ledger = Array.isArray(state?.pointsLedger) ? state.pointsLedger : [];
+    return Number(ledger.find(entry => isAlcoholPointsEntry(entry) && entry.source_id === unitId)?.points || 0);
   }
 
   function recalculateAlcoholScores({ markUpdated = false } = {}) {
@@ -14851,6 +14872,7 @@ async function deleteAlcoholLog(id) {
     recalculateAlcoholScores();
     saveState();
     if (noteInput) noteInput.value = '';
+    renderAlcoholExperience();
     toast(`${level.label} gespeichert · ${formatSignedPoints(level.points)} Pkt.`);
     syncWithSupabase({ silent: true, pullFirst: false });
   }
@@ -15030,9 +15052,9 @@ async function deleteAlcoholLog(id) {
     const days = visibleAlcoholDays();
     const recent = days.filter(day => daysBack(30).includes(day.log_date));
     const dateInput = $('#alcoholDayDate');
-    if (dateInput && !dateInput.value) {
-      dateInput.value = todayKey;
+    if (dateInput) {
       dateInput.max = todayKey;
+      if (!dateInput.value) dateInput.value = todayKey;
     }
     if (els.alcoholTodayUnits) els.alcoholTodayUnits.textContent = today ? String(today.consumption_level) : '–';
     if (els.alcoholTodayHint) els.alcoholTodayHint.textContent = today
