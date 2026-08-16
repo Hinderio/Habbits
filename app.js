@@ -450,7 +450,7 @@
   const BUILT_IN_DEFAULT_HABIT_NAMES = new Set(['gewicht', 'wasser', 'sport', 'meditation']);
   const PAUSE_SCOPE_META = {
     smoke: { label: 'Rauchen', eyebrow: 'Konsum-Pause', helper: 'Rauch-Logs im Zeitraum bleiben gespeichert, werden in Auswertungen aber pausiert betrachtet.' },
-    alcohol: { label: 'Alkohol', eyebrow: 'Konsum-Pause', helper: 'Alkohol-Einheiten im Zeitraum bleiben gespeichert, werden in Auswertungen aber pausiert betrachtet.' },
+    alcohol: { label: 'Alkohol', eyebrow: 'Konsum-Pause', helper: 'Alkohol-Konsumtage im Zeitraum bleiben gespeichert, werden in Auswertungen aber pausiert betrachtet.' },
     habit: { label: 'Habit', eyebrow: 'Habit-Pause', helper: 'Habit-Logs im Zeitraum bleiben gespeichert, werden fuer Ziele und Rhythmus pausiert betrachtet.' }
   };
 
@@ -539,7 +539,7 @@
     { id: 'full-reset-24h', title: '24h Reset', icon: '24', target: 1440, unit: 'Min.', description: '24 Stunden Abstand als persoenlicher Highscore.', value: stats => stats.bestPause },
     { id: 'aware-tracker', title: 'Konsum bewusst', icon: '⌁', target: 10, unit: 'Logs', description: 'Zehn Konsum-Momente bewusst erfasst.', value: stats => stats.consumptionLogs },
     { id: 'smoke-analyst', title: 'Rauch-Analyst', icon: '⌬', target: 20, unit: 'Logs', description: '20 Rauch-Momente sichtbar gemacht.', value: stats => stats.cigaretteLogs },
-    { id: 'alcohol-aware', title: 'Alkohol-Aware', icon: '◒', target: 10, unit: 'Logs', description: 'Zehn Alkohol-Einheiten bewusst erfasst.', value: stats => stats.alcoholLogs },
+    { id: 'alcohol-aware', title: 'Alkohol-Aware', icon: '◒', target: 10, unit: 'Logs', description: 'Zehn Konsumtage bewusst eingeordnet.', value: stats => stats.alcoholLogs },
     { id: 'smoke-free-seven', title: 'Ruhige 7', icon: '7', target: 7, unit: 'Tage', description: 'Sieben aktive Tage ohne Rauch-Log.', value: stats => stats.smokeFreeActiveDays },
     { id: 'clear-evenings', title: 'Klare Abende', icon: '☾', target: 5, unit: 'Tage', description: 'Fuenf aktive Tage ohne Konsum-Log.', value: stats => stats.noConsumptionActiveDays },
     { id: 'coach-visitor', title: 'Coach Kontakt', icon: '☏', target: 3, unit: 'Events', description: 'Drei Coach-Momente genutzt.', value: stats => stats.coachEvents },
@@ -1519,6 +1519,13 @@
       if (action === 'cancel-smoke-edit') cancelSmokeEdit();
       if (action === 'delete-smoke') deleteSmoke(id);
       if (action === 'delete-alcohol') deleteAlcoholLog(id);
+      if (action === 'log-alcohol-day') recordAlcoholDay(actionEl.dataset.level);
+      if (action === 'edit-alcohol-day') editAlcoholDay(id);
+      if (action === 'save-alcohol-day') saveAlcoholDay(id);
+      if (action === 'cancel-alcohol-day-edit') cancelAlcoholDayEdit();
+      if (action === 'delete-alcohol-day') deleteAlcoholDay(id);
+      if (action === 'toggle-alcohol-coach') toggleAlcoholCoach();
+      if (action === 'next-alcohol-coach-tip') nextAlcoholCoachTip();
       if (action === 'edit-alcohol-unit') editAlcoholUnit(id);
       if (action === 'save-alcohol-unit') saveAlcoholUnit(id);
       if (action === 'cancel-alcohol-unit-edit') cancelAlcoholUnitEdit();
@@ -2093,8 +2100,9 @@
       return source ? isWithinPauseAt(source.smoked_at, { scope: 'smoke' }) : false;
     }
     if (isAlcoholPointsEntry(point)) {
-      const source = state.alcoholUnits.find(item => item.id === point.source_id);
-      return source ? isWithinPauseAt(source.occurred_at || source.created_at, { scope: 'alcohol' }) : false;
+      const source = state.alcoholLogs.find(item => item.id === point.source_id) || state.alcoholUnits.find(item => item.id === point.source_id);
+      const occurredAt = source?.log_date ? `${source.log_date}T12:00:00` : (source?.occurred_at || source?.created_at);
+      return occurredAt ? isWithinPauseAt(occurredAt, { scope: 'alcohol' }) : false;
     }
     if (point.source_type === 'habit') {
       const source = state.habitEntries.find(item => item.id === point.source_id);
@@ -3915,7 +3923,7 @@
       <article><strong>Rauchen · Pausen</strong><span>2–4 Std. +20 · 4–8 Std. +60 · 8+ Std. +100. Zwei 2h+ Pausen direkt nacheinander geben zusätzlich +10 Pkt.</span></article>
       <article><strong>Rauchen · Tagesziel</strong><span>Bei 1–10 Zigaretten pro Tag: +50 Pkt. bei 10; jede Zigarette weniger gibt +10 Pkt. extra. Beispiel: 7 Zigaretten = +80 Pkt.</span></article>
       <article><strong>Aufgaben</strong><span>Aufwand ×20 plus Prioritätsbonus und +10 Pkt. bei rechtzeitigem Abschluss.</span></article>
-      <article><strong>Alkohol</strong><span>Alkohol-Einheiten geben Minuspunkte nach Typ, 7-Tage-Dichte und Streak.</span></article>
+      <article><strong>Alkohol</strong><span>Alkohol-Konsumtage geben abgestufte Minuspunkte nach Tagesintensität.</span></article>
     </div>
     <ul class="points-rules-list">
       <li><strong>Pluspunkte:</strong> Habit-Logs, erledigte Aufgaben, Morgenroutine, Fitness-Leistung sowie bewusste Rauchpausen.</li>
@@ -4128,9 +4136,9 @@
     const activeHabits = state.habits.filter(habit => !habit.is_archived).length;
     const habitLogDays = new Set(visibleHabitEntries().map(entry => toDateKey(entry.occurred_at)).filter(Boolean)).size;
     const cigaretteLogs = visibleCigarettes().length;
-    const alcoholLogs = visibleAlcoholUnits().length;
+    const alcoholLogs = visibleAlcoholDays().length;
     const smokeFreeActiveDays = keys14.filter(key => dayHasTrackedActivity(key) && !visibleCigarettes().some(cigarette => toDateKey(cigarette.smoked_at) === key)).length;
-    const noConsumptionActiveDays = keys14.filter(key => dayHasTrackedActivity(key) && !visibleCigarettes().some(cigarette => toDateKey(cigarette.smoked_at) === key) && !visibleAlcoholUnits().some(unit => toDateKey(unit.occurred_at || unit.created_at) === key)).length;
+    const noConsumptionActiveDays = keys14.filter(key => dayHasTrackedActivity(key) && !visibleCigarettes().some(cigarette => toDateKey(cigarette.smoked_at) === key) && !visibleAlcoholDays().some(day => day.log_date === key)).length;
     const appointments = state.appointments.length;
     const appointments7 = state.appointments.filter(appointment => keys7.includes(toDateKey(appointment.starts_at))).length;
     const experimentsTotal = (state.experiments || []).length;
@@ -4170,7 +4178,7 @@
       habitLogs: visibleHabitEntries().length,
       habitLogDays,
       activeHabits,
-      consumptionLogs: visibleCigarettes().length + visibleAlcoholUnits().length,
+      consumptionLogs: visibleCigarettes().length + visibleAlcoholDays().length,
       cigaretteLogs,
       alcoholLogs,
       smokeFreeActiveDays,
@@ -4196,7 +4204,7 @@
       state.tasks.some(task => task.status === 'done' && toDateKey(task.completed_at || task.updated_at || task.created_at) === key) ||
       visibleLedgerPoints().some(point => toDateKey(point.earned_at || point.created_at) === key) ||
       visibleCigarettes().some(cigarette => toDateKey(cigarette.smoked_at) === key) ||
-      visibleAlcoholUnits().some(unit => toDateKey(unit.occurred_at || unit.created_at) === key) ||
+      visibleAlcoholDays().some(day => day.log_date === key) ||
       Boolean(morningRoutineCompletedLog(key));
   }
 
@@ -4482,7 +4490,7 @@
   function renderInsights() {
     const last7 = daysBack(7);
     const cigarettes7 = visibleCigarettes().filter(c => last7.includes(toDateKey(c.smoked_at))).length;
-    const alcoholUnits7 = visibleAlcoholUnits().filter(unit => last7.includes(toDateKey(unit.occurred_at))).length;
+    const alcoholUnits7 = visibleAlcoholDays().filter(day => last7.includes(day.log_date)).length;
     const completed7 = state.tasks.filter(t => t.status === 'done' && last7.includes(toDateKey(t.completed_at || t.updated_at || t.created_at))).length;
     const activeTasks7 = state.tasks.filter(isActiveTask).length;
     const bestPause = bestPauseMinutes();
@@ -4495,7 +4503,7 @@
       { title: 'Muster-Erkennung', body: pattern.body },
       { title: 'Trigger-Analyse', body: trigger ? `${trigger.label} ist dein häufigster geloggter Trigger in den letzten 14 Tagen (${trigger.count}×).` : 'Noch keine Trigger nach Zigaretten geloggt. Nach dem nächsten Eintrag fragt die App kurz und ruhig nach dem Auslöser.' },
       { title: 'Task-Momentum', body: `${completed7} Aufgabe(n) diese Woche abgeschlossen, ${activeTasks7} aktiv. Priorität und Kanban-Status helfen beim Fokus.` },
-      { title: 'Alkohol-Kontext', body: alcoholUnits7 ? `${alcoholUnits7} Alkohol-Einheit(en) in 7 Tagen. Vergleiche diese Zeitpunkte bewusst mit Rauch-Peaks.` : 'Keine Alkohol-Einheiten in den letzten 7 Tagen getrackt.' },
+      { title: 'Alkohol-Kontext', body: alcoholUnits7 ? `${alcoholUnits7} Alkohol-Konsumtag(e) in 7 Tagen. Vergleiche diese Tage bewusst mit Rauch-Peaks.` : 'Keine Alkohol-Konsumtage in den letzten 7 Tagen erfasst.' },
       { title: 'Beste Pause', body: bestPause ? `Längste Pause bisher: ${formatDuration(bestPause)}. Das ist dein aktueller Highscore.` : 'Noch keine Intervall-Daten vorhanden.' },
       { title: 'Beste Tagespause', body: bestDaytimePause ? `Längste Pause innerhalb eines Tages: ${formatDuration(bestDaytimePause)}. Übernacht-Pausen zählen hier bewusst nicht.` : 'Noch keine Tagespause zwischen zwei Zigaretten vorhanden.' }
     ];
@@ -4588,14 +4596,12 @@
         })).length;
       }
       case 'alcohol_free_weekend_days': {
-        const units = visibleAlcoholUnits();
+        const alcoholDays = visibleAlcoholDays();
         return keys.filter(key => {
           const date = new Date(`${key}T12:00:00`);
-          const day = date.getDay();
-          if (![0, 6].includes(day)) return false;
-          const hasUnit = units.some(unit => toDateKey(unit.occurred_at || unit.created_at) === key);
-          const consumedLog = state.alcoholLogs.some(log => log.log_date === key && log.consumed);
-          return !hasUnit && !consumedLog;
+          const weekday = date.getDay();
+          if (![0, 6].includes(weekday)) return false;
+          return !alcoholDays.some(day => day.log_date === key);
         }).length;
       }
       case 'deep_work_sessions': {
@@ -4833,7 +4839,7 @@
     const missionSummary = monthlyMissionSummary(missions);
     const allSessions = source.sessions || buildFitnessSessions('all');
     const allCigarettes = source.cigarettes || visibleCigarettes();
-    const allAlcoholUnits = source.alcoholUnits || visibleAlcoholUnits();
+    const allAlcoholUnits = source.alcoholUnits || alcoholDaysAsEvents();
     const allTasks = source.tasks || state.tasks.map(normalizeTask);
     const allHabitEntries = source.habitEntries || visibleHabitEntries();
     const sessions = allSessions.filter(session => inMonth(session.entry?.occurred_at || session.date));
@@ -4905,7 +4911,7 @@
       stats: [
         { label: 'Missionen', value: missionSummary.count ? `${missionSummary.completed}/${missionSummary.count}` : '0', detail: `${missionSummary.average}% Fortschritt` },
         { label: 'Fitness', value: `${sessions.length}×`, detail: `${formatKmValue(runKm + hikeKm)} · ${formatMetersValue(ascent)}` },
-        { label: 'Konsum', value: `${cigarettes.length}×`, detail: `${smokeFreeEvenings} rauchfreie Abende · ${alcoholUnits.length} Alkohol-Einheiten` },
+        { label: 'Konsum', value: `${cigarettes.length}×`, detail: `${smokeFreeEvenings} rauchfreie Abende · ${alcoholUnits.length} Alkohol-Konsumtage` },
         { label: 'Fokus', value: `${tasksDone.length}`, detail: `Tasks · ${routines} Routinen` }
       ],
       achievements: achievements.length ? achievements : [{ icon: 'reward', label: 'Ausgabe startet', value: 'Live', detail: 'Logge diesen Monat erste Signale, dann füllt sich das Magazine automatisch.' }],
@@ -4946,7 +4952,7 @@
       if (match && match[1] <= current) observed.add(match[1]);
     };
     (source.cigarettes || visibleCigarettes()).forEach(item => addValue(item.smoked_at));
-    (source.alcoholUnits || visibleAlcoholUnits()).forEach(item => addValue(item.occurred_at || item.created_at));
+    (source.alcoholUnits || alcoholDaysAsEvents()).forEach(item => addValue(item.occurred_at || item.created_at));
     (source.habitEntries || visibleHabitEntries()).forEach(item => addValue(item.occurred_at || item.created_at));
     (source.ledger || visibleLedgerPoints()).forEach(item => addValue(item.earned_at));
     (source.tasks || state.tasks.map(normalizeTask)).forEach(item => {
@@ -5116,7 +5122,7 @@
     const source = {
       sessions: buildFitnessSessions('all'),
       cigarettes: visibleCigarettes(),
-      alcoholUnits: visibleAlcoholUnits(),
+      alcoholUnits: alcoholDaysAsEvents(),
       tasks: state.tasks.map(normalizeTask),
       habitEntries: visibleHabitEntries(),
       ledger: visibleLedgerPoints()
@@ -5325,7 +5331,7 @@
 
   function detectPrimaryPattern() {
     const keys = daysBack(14);
-    const alcoholDays = new Set(visibleAlcoholUnits().filter(u => keys.includes(toDateKey(u.occurred_at))).map(u => toDateKey(u.occurred_at)));
+    const alcoholDays = new Set(visibleAlcoholDays().filter(day => keys.includes(day.log_date)).map(day => day.log_date));
     const byHour = new Map();
     visibleCigarettes().filter(c => keys.includes(toDateKey(c.smoked_at))).forEach(c => {
       const h = new Date(c.smoked_at).getHours();
@@ -5360,7 +5366,7 @@
     const keys = weekKeysFromStart(start, { untilToday: isCurrentWeek });
     const allWeekKeys = weekKeysFromStart(start);
     const cigarettes = visibleCigarettes().filter(c => dateValueInKeys(c.smoked_at, allWeekKeys));
-    const alcoholUnits = visibleAlcoholUnits().filter(unit => dateValueInKeys(unit.occurred_at || unit.created_at, allWeekKeys));
+    const alcoholUnits = alcoholDaysAsEvents().filter(day => dateValueInKeys(day.occurred_at, allWeekKeys));
     const tasksDone = state.tasks.filter(task => task.status === 'done' && dateValueInKeys(task.completed_at || task.updated_at || task.created_at, allWeekKeys));
     const habitEntries = visibleHabitEntries().filter(entry => dateValueInKeys(entry.occurred_at, allWeekKeys));
     const habitDays = new Set(habitEntries.map(entry => toDateKey(entry.occurred_at)).filter(Boolean)).size;
@@ -5471,7 +5477,7 @@
     const delta = (key, options = {}) => p ? formatWeeklyDelta(Number(m[key] || 0) - Number(p[key] || 0), options) : '';
     return [
       { label: 'Score', value: `${review.score}%`, text: 'Durchschnitt der Tages-Scores dieser Woche.', delta: previous ? formatWeeklyDelta(review.score - previous.score, { suffix: ' Pkt.' }) : '', tone: review.score >= 70 ? 'is-good' : '' },
-      { label: 'Konsum', value: `${m.cigarettes}× / ${m.alcoholUnits}`, text: 'Zigaretten / Alkohol-Einheiten.', delta: delta('cigarettes', { invert: true }), tone: m.cigarettes ? 'is-watch' : 'is-good' },
+      { label: 'Konsum', value: `${m.cigarettes}× / ${m.alcoholUnits}`, text: 'Zigaretten / Alkohol-Konsumtage.', delta: delta('cigarettes', { invert: true }), tone: m.cigarettes ? 'is-watch' : 'is-good' },
       { label: 'Fitness', value: `${formatKmValue((m.runKm || 0) + (m.hikeKm || 0))}`, text: `${formatKmValue(m.runKm || 0)} Run · ${formatKmValue(m.hikeKm || 0)} Hike · ${formatMetersValue(m.ascentM || 0)}.`, delta: delta('runKm', { suffix: ' km' }), tone: (m.runKm || m.hikeKm) ? 'is-good' : '' },
       { label: 'Habits', value: `${m.habitLogs} Logs`, text: `${m.habitDays} aktive Habit-Tage · ${m.routineDays} Routinen.`, delta: delta('habitLogs'), tone: m.habitLogs ? 'is-good' : '' },
       { label: 'Tasks', value: `${m.tasksDone} erledigt`, text: 'Abgeschlossene Aufgaben in dieser Woche.', delta: delta('tasksDone'), tone: m.tasksDone ? 'is-good' : '' },
@@ -5732,12 +5738,12 @@
       return;
     }
     if (historyModalMode === 'alcohol') {
-      const count = visibleAlcoholUnits().length;
+      const count = visibleAlcoholDays().length;
       els.historyModalContent.innerHTML = `<div class="history-modal-head">
         <p class="eyebrow">Konsum</p>
         <h2 id="historyModalTitle">Alkoholverlauf</h2>
-        <p class="subtle">Auch Alkohol-Logs bleiben im Alltag ausgeblendet und werden nur bei Bedarf geöffnet.</p>
-        <span class="badge muted">${count} Einheit${count === 1 ? '' : 'en'}</span>
+        <p class="subtle">Ein Eintrag pro Tag. Alte Einzel-Logs werden automatisch als Tagesstufe zusammengefasst.</p>
+        <span class="badge muted">${count} Tag${count === 1 ? '' : 'e'}</span>
       </div>
       ${renderAlcoholUnitHistoryList()}`;
       return;
@@ -5889,7 +5895,7 @@
     return [
       { value: 'points', label: 'Punkte' },
       { value: 'cigarettes', label: 'Zigaretten' },
-      { value: 'alcohol', label: 'Alkohol-Einheiten' },
+      { value: 'alcohol', label: 'Alkohol-Konsumtage' },
       ...activeHabits.map(habit => ({ value: `habit:${habit.id}`, label: habit.name }))
     ];
   }
@@ -5907,8 +5913,8 @@
     }
     if (selectedTrendMetric === 'alcohol') {
       return {
-        title: 'Alkohol-Einheiten',
-        label: 'Einheiten',
+        title: 'Alkohol-Konsumtage',
+        label: 'Tage',
         data: keys.map(k => alcoholUnitsOnDate(k).length),
         beginAtZero: true,
         toneMode: 'lowerBetter',
@@ -6477,7 +6483,7 @@
     const relevant = visibleAlcoholUnits().filter(unit => weekKeys.has(isoWeekInfo(unit.occurred_at || unit.created_at).key));
 
     if (!relevant.length) {
-      els.alcoholHeatmapVisual.innerHTML = '<div class="empty-state">Noch keine Alkohol-Einheiten im Kalenderwochen-Fenster. Sobald Verlauf vorhanden ist, zeigt diese Matrix, an welchen Tagen die Einheiten liegen.</div>';
+      els.alcoholHeatmapVisual.innerHTML = '<div class="empty-state">Noch keine Alkohol-Konsumtage im Kalenderwochen-Fenster. Sobald Verlauf vorhanden ist, zeigt diese Matrix, an welchen Tagen die Einheiten liegen.</div>';
       return;
     }
 
@@ -6551,7 +6557,7 @@
         </div>
       </div>
       <div class="smoke-hour-legend"><span>wenig</span>${[1, 2, 3, 4, 5].map(level => `<i class="level-${level}"></i>`).join('')}<span>hoch</span></div>
-      <p class="meta">Pattern Readout: Die Matrix verdichtet Alkohol-Einheiten zu Kalenderwochen-Clustern. Aktuell ist <strong>${dominantWeek.week?.label || 'eine KW'}</strong> am auffälligsten; der stärkste Wochentag ist <strong>${smokingWeekdayLabel(dominantDay.day)}</strong>.</p>
+      <p class="meta">Pattern Readout: Die Matrix verdichtet Alkohol-Konsumtage zu Kalenderwochen-Clustern. Aktuell ist <strong>${dominantWeek.week?.label || 'eine KW'}</strong> am auffälligsten; der stärkste Wochentag ist <strong>${smokingWeekdayLabel(dominantDay.day)}</strong>.</p>
     `;
   }
 
@@ -6583,7 +6589,7 @@
 
     if (!snapshots.length) {
       if (els.alcoholIntervalQuality) els.alcoholIntervalQuality.textContent = 'lernt noch';
-      els.alcoholIntervalVisual.innerHTML = '<div class="empty-state">Für die Sequenz-Analyse braucht es mindestens zwei Alkohol-Einheiten. Danach zeigt die App Abstände, Verteilung und Konsumdichte.</div>';
+      els.alcoholIntervalVisual.innerHTML = '<div class="empty-state">Für die Sequenz-Analyse braucht es mindestens zwei Alkohol-Konsumtage. Danach zeigt die App Abstände, Verteilung und Konsumdichte.</div>';
       return;
     }
 
@@ -11382,7 +11388,7 @@
   }
 
   function alcoholUnitsOnDate(key) {
-    return visibleAlcoholUnits().filter(unit => toDateKey(unit.occurred_at) === key);
+    return alcoholDaysAsEvents().filter(day => day.log_date === key);
   }
 
   function smokeDailyBonusSourceId(key) {
@@ -12163,10 +12169,8 @@ async function deleteAlcoholLog(id) {
       priority: 'high'
     });
 
-    const alcoholLast7 = visibleAlcoholUnits().filter(unit => {
-      const time = new Date(unit.occurred_at || unit.created_at || 0).getTime();
-      return Number.isFinite(time) && Date.now() - time <= 7 * DAY_MS;
-    }).length;
+    const recentAlcoholKeys = new Set(daysBack(7));
+    const alcoholLast7 = visibleAlcoholDays().filter(day => recentAlcoholKeys.has(day.log_date)).length;
     if (alcoholLast7 > 0) add({
       source_key: `alcohol-window:${todayKey}`,
       title: 'Alkoholfreies Abendfenster festlegen',
@@ -13677,7 +13681,8 @@ async function deleteAlcoholLog(id) {
 
         const alcoholLogRows = rowsPendingSync('alcohol_logs', state.alcoholLogs, { forceAll: forcePushAll }).map(a => ({
           id: a.id, log_date: a.log_date, consumed: Boolean(a.consumed), note: a.note || null,
-          created_at: a.created_at, updated_at: a.updated_at || nowIso()
+          consumption_level: Number(a.consumption_level || 0) || null, consumption_key: a.consumption_key || null,
+          points: Number(a.points || 0), created_at: a.created_at, updated_at: a.updated_at || nowIso()
         }));
         if (await upsertRows('alcohol_logs', alcoholLogRows)) {
           wroteRemote = true;
@@ -14210,17 +14215,18 @@ async function deleteAlcoholLog(id) {
     touchedKeys.forEach(key => {
       if (alcoholUnitsOnDate(key).length) return;
       const dayLog = alcoholForDate(key);
-      if (!dayLog || !dayLog.consumed) return;
+      if (!dayLog || !dayLog.consumed || dayLog.consumption_key) return;
       dayLog.consumed = false;
       dayLog.updated_at = nowIso();
       dayLog.synced = false;
     });
   }
 
-  function filterRemoteLedgerRows(remoteLedgerRows, { habitEntryRows = [], cigaretteRows = [], alcoholEventRows = [] } = {}) {
+  function filterRemoteLedgerRows(remoteLedgerRows, { habitEntryRows = [], cigaretteRows = [], alcoholEventRows = [], alcoholLogRows = [] } = {}) {
     const habitEntryIds = new Set(habitEntryRows.map(row => row.id).filter(Boolean));
     const cigaretteIds = new Set(cigaretteRows.map(row => row.id).filter(Boolean));
     const alcoholEventIds = new Set(alcoholEventRows.map(row => row.id).filter(Boolean));
+    const alcoholLogIds = new Set(alcoholLogRows.map(row => row.id).filter(Boolean));
     const orphanLedgerIds = [];
     const filtered = remoteLedgerRows.filter(row => {
       if (row.source_type === 'habit') {
@@ -14234,7 +14240,9 @@ async function deleteAlcoholLog(id) {
         return keep;
       }
       if (isAlcoholPointsEntry(row)) {
-        const keep = row.source_id && alcoholEventIds.has(row.source_id) && !isRemoteDeleted('alcohol_events', row.source_id);
+        const fromDayLog = row.source_id && alcoholLogIds.has(row.source_id) && !isRemoteDeleted('alcohol_logs', row.source_id);
+        const fromLegacyEvent = row.source_id && alcoholEventIds.has(row.source_id) && !isRemoteDeleted('alcohol_events', row.source_id);
+        const keep = fromDayLog || fromLegacyEvent;
         if (!keep && row.id) orphanLedgerIds.push(row.id);
         return keep;
       }
@@ -14324,7 +14332,7 @@ async function deleteAlcoholLog(id) {
       ledgerMatcher: (point, removedSet) => isAlcoholPointsEntry(point) && removedSet.has(point.source_id)
     });
     if (removedAlcoholUnits.length) clearAlcoholLogsWithoutUnits(removedAlcoholUnits);
-    remoteLedgerRows = filterRemoteLedgerRows(remoteLedgerRows, { habitEntryRows: remoteEntryRows, cigaretteRows: remoteCigaretteRows, alcoholEventRows: remoteAlcoholEventRows });
+    remoteLedgerRows = filterRemoteLedgerRows(remoteLedgerRows, { habitEntryRows: remoteEntryRows, cigaretteRows: remoteCigaretteRows, alcoholEventRows: remoteAlcoholEventRows, alcoholLogRows: remoteAlcoholRows });
     const remoteHasData = [remoteHabitRows, remoteEntryRows, remoteCigaretteRows, remoteAlcoholRows, remoteAlcoholEventRows, remoteTaskRows, remoteTaskIdeaRows, remoteAppointmentRows, remoteLedgerRows, remotePauseRows, remoteWeeklyReviewRows, remoteMonthlyMissionRows].some(rows => rows.length > 0);
 
     applyRemoteHabitAuthority(remoteHabitRows);
@@ -14536,7 +14544,7 @@ async function deleteAlcoholLog(id) {
   const mapRemoteHabit = h => normalizeHabit({ id: h.id, name: h.name, type: h.type, unit: h.unit, direction: h.direction, target: h.target, target_period: h.target_period || 'day', icon: h.icon, color: h.color, is_archived: h.is_archived, created_at: h.created_at, updated_at: h.updated_at, synced: true });
   const mapRemoteEntry = e => ({ id: e.id, habit_id: e.habit_id, value_num: e.value_num, value_bool: e.value_bool, note: e.note, occurred_at: e.occurred_at, created_at: e.created_at, updated_at: e.updated_at, synced: true });
   const mapRemoteCigarette = c => ({ id: c.id, smoked_at: c.smoked_at, interval_minutes: c.interval_minutes, alcohol_context: c.alcohol_context, points: c.points, note: c.note, created_at: c.created_at, updated_at: c.updated_at, synced: true });
-  const mapRemoteAlcohol = a => ({ id: a.id, log_date: a.log_date, consumed: a.consumed, note: a.note, created_at: a.created_at, updated_at: a.updated_at, synced: true });
+  const mapRemoteAlcohol = a => ({ id: a.id, log_date: a.log_date, consumed: a.consumed, note: a.note, consumption_level: Number(a.consumption_level || 0) || null, consumption_key: a.consumption_key || null, points: Number(a.points || 0), created_at: a.created_at, updated_at: a.updated_at, synced: true });
   const mapRemoteAlcoholEvent = a => ({ id: a.id, occurred_at: a.occurred_at, drink_type: a.drink_type || 'other', note: a.note, created_at: a.created_at, updated_at: a.updated_at, synced: true });
   const mapRemoteTask = t => {
     const storedSteps = normalizeTaskSteps(t.steps);
@@ -14658,4 +14666,470 @@ async function deleteAlcoholLog(id) {
       toast('Kopieren nicht möglich. Markiere den SQL-Block manuell.');
     }
   }
+
+
+  // Daily alcohol domain v2: one honest intensity record per calendar day.
+
+  const ALCOHOL_DAY_LEVELS = Object.freeze({
+    light: { rank: 1, label: 'Leicht', short: 'Ein Getränk', description: 'Ein einzelnes alkoholisches Getränk.', points: -10 },
+    moderate: { rank: 2, label: 'Moderat', short: 'Zwei bis drei Getränke', description: 'Ein klar begrenzter Konsumabend.', points: -30 },
+    elevated: { rank: 3, label: 'Erhöht', short: 'Deutlich spürbar', description: 'Der Konsum war deutlich spürbar.', points: -70 },
+    heavy: { rank: 4, label: 'Stark', short: 'Starke Beeinträchtigung', description: 'Der Tag endete mit starker Beeinträchtigung.', points: -120 }
+  });
+  let editingAlcoholDayId = null;
+  let alcoholCoachTipIndex = 0;
+  const ALCOHOL_COACH_TIPS = [
+    'Jetzt ein grosses Glas Wasser bereitstellen und den heutigen Eintrag ehrlich abschliessen.',
+    'Den nächsten alkoholfreien Tag konkret im Kalender schützen.',
+    'Anlass und Stimmung kurz notieren. Muster werden klarer, wenn der Kontext sichtbar bleibt.',
+    'Vor dem nächsten Konsumfenster eine feste Endzeit und eine alkoholfreie Alternative bestimmen.',
+    'Bei starker Beeinträchtigung heute nicht fahren und für einen sicheren Heimweg sorgen.'
+  ];
+
+  function alcoholDayLevel(value) {
+    if (typeof value === 'string' && ALCOHOL_DAY_LEVELS[value]) return ALCOHOL_DAY_LEVELS[value];
+    const rank = Math.max(1, Math.min(4, Number(value || 1)));
+    return Object.values(ALCOHOL_DAY_LEVELS).find(level => level.rank === rank) || ALCOHOL_DAY_LEVELS.light;
+  }
+
+  function alcoholDayKey(value) {
+    if (ALCOHOL_DAY_LEVELS[value]) return value;
+    const rank = Math.max(1, Math.min(4, Number(value || 1)));
+    return Object.keys(ALCOHOL_DAY_LEVELS).find(key => ALCOHOL_DAY_LEVELS[key].rank === rank) || 'light';
+  }
+
+  function inferLegacyAlcoholDayLevel(count) {
+    if (count >= 6) return 'heavy';
+    if (count >= 4) return 'elevated';
+    if (count >= 2) return 'moderate';
+    return 'light';
+  }
+
+  function visibleAlcoholDays() {
+    const byDate = new Map();
+    (state.alcoholLogs || []).forEach(log => {
+      if (!log?.consumed || !log.log_date) return;
+      if (isWithinPauseAt(`${log.log_date}T12:00:00`, { scope: 'alcohol' })) return;
+      const key = log.consumption_key ? alcoholDayKey(log.consumption_key) : null;
+      if (!key) return;
+      const level = alcoholDayLevel(key);
+      byDate.set(log.log_date, {
+        id: log.id,
+        log_date: log.log_date,
+        consumption_key: key,
+        consumption_level: level.rank,
+        points: level.points,
+        note: log.note || '',
+        source: 'daily',
+        created_at: log.created_at,
+        updated_at: log.updated_at
+      });
+    });
+
+    const legacyGroups = new Map();
+    visibleAlcoholUnits().forEach(unit => {
+      const key = toDateKey(unit.occurred_at || unit.created_at);
+      if (!key || byDate.has(key)) return;
+      if (!legacyGroups.has(key)) legacyGroups.set(key, []);
+      legacyGroups.get(key).push(unit);
+    });
+    legacyGroups.forEach((units, logDate) => {
+      const sorted = [...units].sort((a, b) => sortDate(a.occurred_at || a.created_at) - sortDate(b.occurred_at || b.created_at));
+      const key = inferLegacyAlcoholDayLevel(sorted.length);
+      const level = alcoholDayLevel(key);
+      byDate.set(logDate, {
+        id: sorted[0]?.id || `legacy-alcohol-${logDate}`,
+        log_date: logDate,
+        consumption_key: key,
+        consumption_level: level.rank,
+        points: level.points,
+        note: sorted.map(unit => unit.note).find(Boolean) || '',
+        source: 'legacy',
+        legacy_count: sorted.length,
+        created_at: sorted[0]?.created_at,
+        updated_at: sorted.at(-1)?.updated_at
+      });
+    });
+
+    (state.alcoholLogs || []).forEach(log => {
+      if (!log?.consumed || !log.log_date || byDate.has(log.log_date)) return;
+      if (isWithinPauseAt(`${log.log_date}T12:00:00`, { scope: 'alcohol' })) return;
+      const level = ALCOHOL_DAY_LEVELS.light;
+      byDate.set(log.log_date, {
+        id: log.id,
+        log_date: log.log_date,
+        consumption_key: 'light',
+        consumption_level: 1,
+        points: level.points,
+        note: log.note || '',
+        source: 'legacy-day',
+        created_at: log.created_at,
+        updated_at: log.updated_at
+      });
+    });
+    return [...byDate.values()].sort((a, b) => String(a.log_date).localeCompare(String(b.log_date)));
+  }
+
+  function alcoholDaysAsEvents() {
+    return visibleAlcoholDays().map(day => ({
+      ...day,
+      occurred_at: `${day.log_date}T12:00:00`,
+      created_at: day.created_at || `${day.log_date}T12:00:00`,
+      units: 1
+    }));
+  }
+
+  function alcoholDayForDate(key) {
+    return visibleAlcoholDays().find(day => day.log_date === key) || null;
+  }
+
+  function isAlcoholPointsEntry(entry) {
+    const reason = String(entry?.reason || '');
+    return entry?.source_type === 'bonus' && (reason.startsWith('Alkohol:') || reason.startsWith('Alkohol-Tag:'));
+  }
+
+  function alcoholPointsForDay(dayOrId) {
+    const id = typeof dayOrId === 'object' ? dayOrId?.id : dayOrId;
+    return Number(state.pointsLedger.find(entry => isAlcoholPointsEntry(entry) && entry.source_id === id)?.points || 0);
+  }
+
+  function alcoholPointsForUnit(unitId) {
+    return Number(state.pointsLedger.find(entry => isAlcoholPointsEntry(entry) && entry.source_id === unitId)?.points || 0);
+  }
+
+  function recalculateAlcoholScores({ markUpdated = false } = {}) {
+    const days = visibleAlcoholDays().filter(day => day?.id);
+    const activeIds = new Set(days.map(day => day.id));
+    const removedIds = state.pointsLedger
+      .filter(entry => isAlcoholPointsEntry(entry) && !activeIds.has(entry.source_id))
+      .map(entry => entry.id);
+    let changed = false;
+    if (removedIds.length) {
+      state.pointsLedger = state.pointsLedger.filter(entry => !(isAlcoholPointsEntry(entry) && !activeIds.has(entry.source_id)));
+      markRemoteDeletedMany('points_ledger', removedIds);
+      changed = true;
+    }
+    days.forEach(day => {
+      const level = alcoholDayLevel(day.consumption_key || day.consumption_level);
+      const reason = `Alkohol-Tag: ${level.label} · ${level.short} · ${formatSignedPoints(level.points)} Pkt.`;
+      if (addPoints('bonus', day.id, level.points, reason, `${day.log_date}T12:00:00.000Z`)) changed = true;
+      if (markUpdated && day.source === 'daily') {
+        const log = state.alcoholLogs.find(item => item.id === day.id);
+        if (log) {
+          log.updated_at = nowIso();
+          log.synced = false;
+        }
+      }
+    });
+    return changed;
+  }
+
+  function recordAlcoholDay(levelKey) {
+    const key = alcoholDayKey(levelKey);
+    const level = alcoholDayLevel(key);
+    const dateInput = $('#alcoholDayDate');
+    const noteInput = $('#alcoholDayNote');
+    const logDate = dateInput?.value || toDateKey(new Date());
+    if (!logDate || logDate > toDateKey(new Date())) {
+      toast('Der Konsumtag darf nicht in der Zukunft liegen.');
+      return;
+    }
+    let log = state.alcoholLogs.find(item => item.log_date === logDate);
+    const createdAt = nowIso();
+    if (!log) {
+      log = { id: uid(), log_date: logDate, created_at: createdAt };
+      state.alcoholLogs.push(log);
+    }
+    log.consumed = true;
+    log.consumption_key = key;
+    log.consumption_level = level.rank;
+    log.points = level.points;
+    log.note = String(noteInput?.value || '').trim().slice(0, 240);
+    log.updated_at = createdAt;
+    log.synced = false;
+    dedupeAlcoholLogs(state);
+    recalculateAlcoholScores();
+    saveState();
+    if (noteInput) noteInput.value = '';
+    toast(`${level.label} gespeichert · ${formatSignedPoints(level.points)} Pkt.`);
+    syncWithSupabase({ silent: true, pullFirst: false });
+  }
+
+  function editAlcoholDay(id) {
+    if (!visibleAlcoholDays().some(day => day.id === id && day.source !== 'legacy')) {
+      toast('Historische Einzel-Logs bleiben unverändert lesbar.');
+      return;
+    }
+    editingAlcoholDayId = id;
+    renderHistoryModal();
+  }
+
+  function cancelAlcoholDayEdit() {
+    editingAlcoholDayId = null;
+    renderHistoryModal();
+  }
+
+  function saveAlcoholDay(id) {
+    const log = state.alcoholLogs.find(item => item.id === id);
+    const levelInput = $(`#alcohol-day-level-${cssEscape(id)}`);
+    const dateInput = $(`#alcohol-day-date-${cssEscape(id)}`);
+    const noteInput = $(`#alcohol-day-note-${cssEscape(id)}`);
+    if (!log || !levelInput || !dateInput || !noteInput) return;
+    const nextDate = dateInput.value;
+    if (!nextDate || nextDate > toDateKey(new Date())) {
+      toast('Der Konsumtag darf nicht in der Zukunft liegen.');
+      return;
+    }
+    const duplicate = state.alcoholLogs.find(item => item.id !== id && item.log_date === nextDate);
+    if (duplicate) {
+      toast('Für diesen Tag besteht bereits ein Eintrag.');
+      return;
+    }
+    const key = alcoholDayKey(levelInput.value);
+    const level = alcoholDayLevel(key);
+    log.log_date = nextDate;
+    log.consumed = true;
+    log.consumption_key = key;
+    log.consumption_level = level.rank;
+    log.points = level.points;
+    log.note = noteInput.value.trim().slice(0, 240);
+    log.updated_at = nowIso();
+    log.synced = false;
+    editingAlcoholDayId = null;
+    recalculateAlcoholScores();
+    saveState();
+    renderHistoryModal();
+    toast('Alkohol-Tag aktualisiert');
+    syncWithSupabase({ silent: true, pullFirst: false });
+  }
+
+  async function deleteAlcoholDay(id) {
+    const day = visibleAlcoholDays().find(item => item.id === id);
+    if (!day) return;
+    if (day.source === 'legacy') {
+      toast('Historische Einzel-Logs bitte im alten Verlauf verwalten.');
+      return;
+    }
+    if (!confirm('Alkohol-Tag wirklich löschen?')) return;
+    const ledgerIds = state.pointsLedger.filter(entry => isAlcoholPointsEntry(entry) && entry.source_id === id).map(entry => entry.id);
+    state.alcoholLogs = state.alcoholLogs.filter(item => item.id !== id);
+    state.pointsLedger = state.pointsLedger.filter(entry => !(isAlcoholPointsEntry(entry) && entry.source_id === id));
+    markRemoteDeleted('alcohol_logs', id);
+    markRemoteDeletedMany('points_ledger', ledgerIds);
+    editingAlcoholDayId = null;
+    saveState();
+    renderHistoryModal();
+    await deleteRemoteByIds('points_ledger', ledgerIds);
+    await deleteRemoteById('alcohol_logs', id);
+    toast('Alkohol-Tag gelöscht');
+    syncWithSupabase({ silent: true, pullFirst: false });
+  }
+
+  async function deleteAlcoholLog(id) {
+    return deleteAlcoholDay(id);
+  }
+
+  function toggleAlcoholCoach() {
+    const panel = $('#alcoholCoachPanel');
+    if (!panel) return;
+    panel.hidden = !panel.hidden;
+    if (!panel.hidden) renderAlcoholCoachTip();
+  }
+
+  function renderAlcoholCoachTip() {
+    const target = $('#alcoholCoachTip');
+    if (!target) return;
+    const latest = visibleAlcoholDays().at(-1);
+    const adaptive = latest?.consumption_level >= 3
+      ? 'Plane jetzt bewusst mindestens einen alkoholfreien Folgetag und sichere Heimweg sowie Schlaf.'
+      : ALCOHOL_COACH_TIPS[alcoholCoachTipIndex % ALCOHOL_COACH_TIPS.length];
+    target.textContent = adaptive;
+  }
+
+  function nextAlcoholCoachTip() {
+    alcoholCoachTipIndex = (alcoholCoachTipIndex + 1) % ALCOHOL_COACH_TIPS.length;
+    renderAlcoholCoachTip();
+  }
+
+  function alcoholFreeStreak(days, endKey = toDateKey(new Date())) {
+    const occupied = new Set(days.map(day => day.log_date));
+    let streak = 0;
+    const cursor = new Date(`${endKey}T12:00:00`);
+    for (let i = 0; i < 366; i += 1) {
+      const key = toDateKey(cursor);
+      if (occupied.has(key)) break;
+      streak += 1;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    return streak;
+  }
+
+  function renderAlcoholUnitHistory() {
+    if (!els.alcoholUnitHistory) return;
+    const days = [...visibleAlcoholDays()].sort((a, b) => String(b.log_date).localeCompare(String(a.log_date)));
+    const today = alcoholDayForDate(toDateKey(new Date()));
+    const keys30 = new Set(daysBack(30));
+    const recent = days.filter(day => keys30.has(day.log_date));
+    const points30 = sum(recent.map(day => alcoholPointsForDay(day)));
+    const freeStreak = alcoholFreeStreak(days);
+    const latest = days[0] || null;
+    const recentMarkup = days.length
+      ? days.slice(0, 3).map(day => {
+          const level = alcoholDayLevel(day.consumption_key);
+          return `<li><span>${escapeHtml(formatDate(day.log_date))}</span><strong>${escapeHtml(level.label)}</strong></li>`;
+        }).join('')
+      : '<li><span>Noch keine Tages-Logs</span><strong>bereit</strong></li>';
+    els.alcoholUnitHistory.innerHTML = `<div class="history-launch-grid consumption-history-actions">
+      <button class="history-open-card" type="button" data-action="open-alcohol-history">
+        <span class="history-open-icon">${svgIcon('alcohol', 'ui-icon')}</span>
+        <span class="history-open-copy"><strong>Tagesverlauf öffnen</strong><small>${days.length ? `${days.length} Konsumtag${days.length === 1 ? '' : 'e'} dokumentiert` : 'Noch keine Konsumtage'}</small></span>
+        <span class="history-open-arrow">›</span>
+      </button>
+    </div>
+    <div class="consumption-side-dashboard">
+      <article class="consumption-focus-card is-warm">
+        <small>Nächste klare Aktion</small>
+        <strong>${today ? 'Wasser, Schlaf und einen alkoholfreien Folgetag schützen.' : 'Heute bewusst entscheiden und nur einmal einordnen.'}</strong>
+        <span>${recent.length ? `${recent.length} Konsumtage in 30 Tagen · ${freeStreak} alkoholfreie Tage in Folge.` : 'Keine Schätzung pro Glas nötig. Eine ehrliche Tagesstufe reicht.'}</span>
+      </article>
+      <div class="consumption-side-metrics">
+        <article><small>Heute</small><strong>${today ? escapeHtml(alcoholDayLevel(today.consumption_key).label) : 'Frei'}</strong><span>${today ? `${formatSignedPoints(alcoholPointsForDay(today))} Pkt.` : 'kein Log'}</span></article>
+        <article><small>30 Tage</small><strong>${recent.length}</strong><span>Konsumtage</span></article>
+        <article><small>Aktuelle Serie</small><strong>${freeStreak}</strong><span>alkoholfreie Tage</span></article>
+        <article><small>Bilanz</small><strong>${formatSignedPoints(points30)}</strong><span>Punkte · 30 Tage</span></article>
+      </div>
+      <div class="consumption-recent-card"><div><small>Letzte Tage</small><strong>kurzer Check</strong></div><ul>${recentMarkup}</ul></div>
+    </div>`;
+  }
+
+  function renderAlcoholUnitHistoryList() {
+    const days = [...visibleAlcoholDays()].sort((a, b) => String(b.log_date).localeCompare(String(a.log_date)));
+    if (!days.length) return '<div class="empty-state">Noch kein Konsumtag erfasst. Eine ehrliche Tagesstufe genügt.</div>';
+    return `<div class="stack-list tall alcohol-history-modal-list">${days.map(day => {
+      const level = alcoholDayLevel(day.consumption_key);
+      const editable = day.source !== 'legacy';
+      const isEditing = editingAlcoholDayId === day.id;
+      const options = Object.entries(ALCOHOL_DAY_LEVELS).map(([key, meta]) => `<option value="${key}" ${key === day.consumption_key ? 'selected' : ''}>${escapeHtml(meta.label)} · ${escapeHtml(meta.short)}</option>`).join('');
+      const editBlock = isEditing ? `<div class="alcohol-edit-grid alcohol-day-edit-grid">
+        <label><span>Stufe</span><select id="alcohol-day-level-${day.id}">${options}</select></label>
+        <label><span>Datum</span><input id="alcohol-day-date-${day.id}" type="date" value="${day.log_date}" max="${toDateKey(new Date())}" /></label>
+        <label class="full"><span>Notiz</span><input id="alcohol-day-note-${day.id}" type="text" value="${escapeHtml(day.note || '')}" maxlength="240" placeholder="optional" /></label>
+        <div class="alcohol-edit-actions full"><button class="mini-btn primary" type="button" data-action="save-alcohol-day" data-id="${day.id}">Speichern</button><button class="mini-btn" type="button" data-action="cancel-alcohol-day-edit">Abbrechen</button></div>
+      </div>` : '';
+      return `<article class="list-card compact alcohol-day-history-card ${isEditing ? 'is-editing' : ''}">
+        <div class="alcohol-day-history-level is-${escapeHtml(day.consumption_key)}"><span>${String(level.rank).padStart(2, '0')}</span></div>
+        <div class="list-card-main"><h4>${escapeHtml(level.label)}</h4><p class="meta">${escapeHtml(formatDate(day.log_date))} · ${escapeHtml(level.short)} · ${formatSignedPoints(alcoholPointsForDay(day))} Pkt.${day.source === 'legacy' ? ` · aus ${day.legacy_count || 1} Alt-Logs` : ''}</p>${day.note ? `<p>${escapeHtml(day.note)}</p>` : ''}${editBlock}</div>
+        <div class="list-actions">${editable && !isEditing ? `<button class="consumption-icon-action" type="button" data-action="edit-alcohol-day" data-id="${day.id}" aria-label="Alkohol-Tag bearbeiten" title="Bearbeiten">${svgIcon('edit', 'ui-icon')}</button>` : ''}${editable ? `<button class="consumption-icon-action consumption-icon-action-delete" type="button" data-action="delete-alcohol-day" data-id="${day.id}" aria-label="Alkohol-Tag löschen" title="Löschen">${svgIcon('trash', 'ui-icon')}</button>` : '<span class="badge muted">Historisch</span>'}</div>
+      </article>`;
+    }).join('')}</div>`;
+  }
+
+  function renderAlcoholDashboard() {
+    const todayKey = toDateKey(new Date());
+    const today = alcoholDayForDate(todayKey);
+    const days = visibleAlcoholDays();
+    const recent = days.filter(day => daysBack(30).includes(day.log_date));
+    const dateInput = $('#alcoholDayDate');
+    if (dateInput && !dateInput.value) {
+      dateInput.value = todayKey;
+      dateInput.max = todayKey;
+    }
+    if (els.alcoholTodayUnits) els.alcoholTodayUnits.textContent = today ? String(today.consumption_level) : '–';
+    if (els.alcoholTodayHint) els.alcoholTodayHint.textContent = today
+      ? `${alcoholDayLevel(today.consumption_key).label} · ${formatSignedPoints(alcoholPointsForDay(today))} Pkt.`
+      : 'Noch kein Tageskonsum erfasst';
+    if (els.lastAlcoholPoints) els.lastAlcoholPoints.textContent = `${days.length} Tag${days.length === 1 ? '' : 'e'}`;
+    $$('.alcohol-level-option').forEach(button => button.classList.toggle('is-selected', today?.consumption_key === button.dataset.level && (dateInput?.value || todayKey) === todayKey));
+  }
+
+  function renderAlcoholMobileOverview() {
+    const days = visibleAlcoholDays();
+    const today = alcoholDayForDate(toDateKey(new Date()));
+    const recentKeys = new Set(daysBack(30));
+    const recent = days.filter(day => recentKeys.has(day.log_date));
+    const freeStreak = alcoholFreeStreak(days);
+    const average = recent.length ? sum(recent.map(day => day.consumption_level)) / recent.length : 0;
+    if (els.alcoholMobileInsight) {
+      els.alcoholMobileInsight.innerHTML = `<strong>${today ? `${escapeHtml(alcoholDayLevel(today.consumption_key).label)} heute` : 'Heute ohne Alkohol-Log'}</strong><span>${recent.length ? `${recent.length} Konsumtage in 30 Tagen. Durchschnittliche Stufe ${average.toFixed(1)} von 4.` : 'Ein ehrlicher Tageswert ist hilfreicher als unvollständige Einzelzählungen.'}</span>`;
+    }
+    if (els.alcoholMobileKpis) {
+      const cards = [
+        { label: 'Heute', value: today ? alcoholDayLevel(today.consumption_key).label : 'Frei', detail: today ? `${formatSignedPoints(alcoholPointsForDay(today))} Pkt.` : 'kein Eintrag' },
+        { label: '30 Tage', value: `${recent.length}`, detail: 'Konsumtage' },
+        { label: 'Freie Serie', value: `${freeStreak}`, detail: 'Tage' },
+        { label: 'Ø Intensität', value: recent.length ? average.toFixed(1) : '–', detail: 'von 4' }
+      ];
+      els.alcoholMobileKpis.innerHTML = cards.map(card => `<article><small>${escapeHtml(card.label)}</small><strong>${escapeHtml(card.value)}</strong><span>${escapeHtml(card.detail)}</span></article>`).join('');
+    }
+  }
+
+  function renderAlcoholWeekHeatmap(weeksCount = 12) {
+    if (!els.alcoholHeatmapVisual) return;
+    if (els.alcoholHeatmapBadge) els.alcoholHeatmapBadge.textContent = `${weeksCount} KW`;
+    const weeks = calendarWeeksBack(weeksCount);
+    const weekKeys = new Set(weeks.map(week => week.key));
+    const days = visibleAlcoholDays().filter(day => weekKeys.has(isoWeekInfo(new Date(`${day.log_date}T12:00:00`)).key));
+    if (!days.length) {
+      els.alcoholHeatmapVisual.innerHTML = '<div class="empty-state">Noch keine Konsumtage im Analysefenster. Die Karte füllt sich mit jeder Tagesstufe.</div>';
+      return;
+    }
+    const cells = new Map();
+    days.forEach(day => {
+      const date = new Date(`${day.log_date}T12:00:00`);
+      cells.set(`${isoWeekInfo(date).key}-${date.getDay()}`, day);
+    });
+    const strongest = [...days].sort((a, b) => b.consumption_level - a.consumption_level)[0];
+    const points = sum(days.map(day => alcoholPointsForDay(day)));
+    const activeWeeks = new Set(days.map(day => isoWeekInfo(new Date(`${day.log_date}T12:00:00`)).key)).size;
+    const weekdayCounts = new Map();
+    days.forEach(day => {
+      const weekday = new Date(`${day.log_date}T12:00:00`).getDay();
+      weekdayCounts.set(weekday, (weekdayCounts.get(weekday) || 0) + 1);
+    });
+    const dominant = [...weekdayCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 1;
+    const header = weeks.map(week => `<span title="${escapeHtml(week.label || week.key)}">${escapeHtml(String(week.label || week.key).replace('KW ', ''))}</span>`).join('');
+    const rows = [1,2,3,4,5,6,0].map(weekday => `<div class="alcohol-map-row"><strong>${escapeHtml(smokingWeekdayLabel(weekday, { short: true }))}</strong>${weeks.map(week => {
+      const day = cells.get(`${week.key}-${weekday}`);
+      const level = day ? alcoholDayLevel(day.consumption_key) : null;
+      return `<i class="${day ? `has-value level-${day.consumption_level}` : ''}" title="${day ? escapeHtml(`${formatDate(day.log_date)} · ${level.label}`) : 'Kein Konsumtag'}">${day ? day.consumption_level : ''}</i>`;
+    }).join('')}</div>`).join('');
+    els.alcoholHeatmapVisual.innerHTML = `<div class="smoking-visual-summary-grid alcohol-map-summary">
+      <article><small>Stärkster Tag</small><strong>${escapeHtml(alcoholDayLevel(strongest.consumption_key).label)}</strong><p>${escapeHtml(formatDate(strongest.log_date))}</p></article>
+      <article><small>Aktive Wochen</small><strong>${activeWeeks}</strong><p>von ${weeksCount} Kalenderwochen</p></article>
+      <article><small>Häufigster Wochentag</small><strong>${escapeHtml(smokingWeekdayLabel(dominant))}</strong><p>${weekdayCounts.get(dominant) || 0} Konsumtage</p></article>
+      <article><small>Punkte</small><strong>${formatSignedPoints(points)}</strong><p>im Kartenfenster</p></article>
+    </div><div class="alcohol-intensity-map"><div class="alcohol-map-header"><b>Tag</b>${header}</div>${rows}</div>
+    <div class="alcohol-map-legend"><span>Intensität</span>${Object.values(ALCOHOL_DAY_LEVELS).map(level => `<i class="level-${level.rank}">${level.rank}</i><small>${escapeHtml(level.label)}</small>`).join('')}</div>`;
+  }
+
+  function renderAlcoholIntervalVisual(daysWindow = 30) {
+    if (!els.alcoholIntervalVisual) return;
+    const allDays = visibleAlcoholDays();
+    const keys = new Set(daysBack(daysWindow));
+    const days = allDays.filter(day => keys.has(day.log_date));
+    const alcoholFreeDays = Math.max(0, daysWindow - days.length);
+    const freeRate = Math.round((alcoholFreeDays / daysWindow) * 100);
+    const average = days.length ? sum(days.map(day => day.consumption_level)) / days.length : 0;
+    const freeStreak = alcoholFreeStreak(allDays);
+    const quality = !days.length ? 'ruhig' : freeRate >= 80 && average <= 2 ? 'stabil' : average >= 3 || days.length >= 12 ? 'erhöht' : 'in Bewegung';
+    if (els.alcoholIntervalQuality) els.alcoholIntervalQuality.textContent = quality;
+    const distribution = Object.entries(ALCOHOL_DAY_LEVELS).map(([key, level]) => {
+      const count = days.filter(day => day.consumption_key === key).length;
+      const share = days.length ? Math.round((count / days.length) * 100) : 0;
+      return `<article class="alcohol-distribution-card is-${key}"><div><small>${String(level.rank).padStart(2, '0')} · ${escapeHtml(level.label)}</small><strong>${count} Tag${count === 1 ? '' : 'e'}</strong><p>${escapeHtml(level.short)}</p></div><span>${share}%</span><i><b style="width:${share}%"></b></i></article>`;
+    }).join('');
+    const signal = average >= 3
+      ? 'Die Intensität ist aktuell das stärkste Signal. Priorisiere einen klaren alkoholfreien Block und nutze den Coach vor dem nächsten Anlass.'
+      : days.length >= 10
+        ? 'Die Frequenz ist höher als die Intensität. Mehr zusammenhängende alkoholfreie Tage bringen den grössten Hebel.'
+        : 'Die Konsumtage bleiben klar getrennt. Halte die alkoholfreien Serien sichtbar und dokumentiere Ausnahmen ehrlich.';
+    els.alcoholIntervalVisual.innerHTML = `<div class="smoking-visual-summary-grid">
+      <article><small>Alkoholfreie Quote</small><strong>${freeRate}%</strong><p>${alcoholFreeDays} von ${daysWindow} Tagen</p></article>
+      <article><small>Konsumtage</small><strong>${days.length}</strong><p>im 30-Tage-Fenster</p></article>
+      <article><small>Ø Intensität</small><strong>${days.length ? average.toFixed(1) : '–'}</strong><p>auf einer Skala von 1 bis 4</p></article>
+      <article><small>Aktuelle freie Serie</small><strong>${freeStreak}</strong><p>alkoholfreie Tage</p></article>
+    </div><div class="alcohol-distribution-grid">${distribution}</div>
+    <div class="smoking-signal-card"><div><p class="eyebrow">Coach-Signal</p><h4>${escapeHtml(signal)}</h4></div><button class="mini-btn primary" type="button" data-action="toggle-alcohol-coach">Coach öffnen</button></div>`;
+  }
+
 })();

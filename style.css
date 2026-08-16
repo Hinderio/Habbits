@@ -4310,3 +4310,417 @@ body.monthly-magazine-reader-open{overflow:hidden}
   .task-step-editor-row { grid-template-columns: 22px minmax(0, 1fr) 42px; gap: 8px; }
   .task-detail-steps { padding: 18px; }
 }
+
+
+/* Alcohol daily intensity model */
+.alcohol-daily-layout {
+  align-items: stretch;
+}
+
+.alcohol-day-control {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.alcohol-day-hero {
+  min-height: 190px;
+  display: grid;
+  place-content: center;
+  gap: 6px;
+  text-align: center;
+  border: 1px solid rgba(25, 68, 78, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.alcohol-day-hero small,
+.alcohol-day-meta label > span {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.alcohol-day-hero strong {
+  color: var(--ink);
+  font-size: clamp(3.1rem, 6vw, 5.8rem);
+  line-height: 0.92;
+  font-weight: 760;
+}
+
+.alcohol-day-hero span {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.alcohol-day-meta {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.7fr) minmax(0, 1.3fr);
+  gap: 12px;
+}
+
+.alcohol-day-meta label,
+.alcohol-day-edit-grid label {
+  display: grid;
+  gap: 7px;
+}
+
+.alcohol-day-meta input,
+.alcohol-day-edit-grid input,
+.alcohol-day-edit-grid select {
+  width: 100%;
+}
+
+.alcohol-level-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.alcohol-level-option {
+  --level-color: #95d9b4;
+  width: 100%;
+  min-height: 112px;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  grid-template-areas:
+    "index title points"
+    "index copy points";
+  align-items: center;
+  gap: 3px 12px;
+  padding: 15px;
+  color: var(--ink);
+  text-align: left;
+  border: 1px solid color-mix(in srgb, var(--level-color) 56%, white);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--level-color) 16%, white);
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.alcohol-level-option:hover,
+.alcohol-level-option:focus-visible,
+.alcohol-level-option.is-selected {
+  border-color: var(--level-color);
+  background: color-mix(in srgb, var(--level-color) 27%, white);
+}
+
+.alcohol-level-option.is-selected {
+  box-shadow: inset 4px 0 0 var(--level-color);
+}
+
+.alcohol-level-option.is-light { --level-color: #79d39f; }
+.alcohol-level-option.is-moderate { --level-color: #f6b33f; }
+.alcohol-level-option.is-elevated { --level-color: #ef8a5c; }
+.alcohol-level-option.is-heavy { --level-color: #dd5966; }
+
+.alcohol-level-index {
+  grid-area: index;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--level-color) 55%, white);
+  font-weight: 850;
+}
+
+.alcohol-level-option strong {
+  grid-area: title;
+  font-size: 1.05rem;
+}
+
+.alcohol-level-option small {
+  grid-area: copy;
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.alcohol-level-option em {
+  grid-area: points;
+  color: color-mix(in srgb, var(--level-color) 72%, #7c2430);
+  font-style: normal;
+  font-weight: 850;
+}
+
+.alcohol-coach-strip {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(42, 196, 193, 0.2);
+  border-radius: 8px;
+  background: rgba(221, 248, 247, 0.72);
+}
+
+.alcohol-coach-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(42, 196, 193, 0.18);
+}
+
+.alcohol-coach-icon::before {
+  content: "+";
+  color: var(--accent);
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.alcohol-coach-strip div {
+  display: grid;
+  gap: 3px;
+}
+
+.alcohol-coach-strip small {
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.alcohol-coach-panel {
+  padding: 18px;
+  border: 1px solid rgba(42, 196, 193, 0.2);
+  border-radius: 8px;
+  background: rgba(247, 253, 253, 0.92);
+}
+
+.alcohol-coach-panel[hidden] {
+  display: none;
+}
+
+.alcohol-coach-panel h4 {
+  max-width: 720px;
+  margin: 7px 0 15px;
+  font-size: 1.15rem;
+  line-height: 1.45;
+}
+
+.alcohol-coach-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.alcohol-intensity-map {
+  min-width: 680px;
+  overflow: hidden;
+  border: 1px solid rgba(25, 68, 78, 0.1);
+  border-radius: 8px;
+}
+
+.alcohol-map-header,
+.alcohol-map-row {
+  display: grid;
+  grid-template-columns: 64px repeat(12, minmax(32px, 1fr));
+  align-items: center;
+}
+
+.alcohol-map-header > *,
+.alcohol-map-row > * {
+  min-height: 42px;
+  display: grid;
+  place-items: center;
+  border-right: 1px solid rgba(25, 68, 78, 0.07);
+  border-bottom: 1px solid rgba(25, 68, 78, 0.07);
+}
+
+.alcohol-map-row i {
+  color: var(--ink);
+  font-style: normal;
+  font-weight: 850;
+  background: rgba(224, 231, 236, 0.42);
+}
+
+.alcohol-map-row i.has-value.level-1 { background: #b8e8ca; }
+.alcohol-map-row i.has-value.level-2 { background: #f8d58d; }
+.alcohol-map-row i.has-value.level-3 { background: #f3ae8d; }
+.alcohol-map-row i.has-value.level-4 { color: white; background: #dd5966; }
+
+.alcohol-map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  color: var(--muted);
+}
+
+.alcohol-map-legend i {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--ink);
+  font-style: normal;
+  font-weight: 850;
+}
+
+.alcohol-map-legend .level-1 { background: #b8e8ca; }
+.alcohol-map-legend .level-2 { background: #f8d58d; }
+.alcohol-map-legend .level-3 { background: #f3ae8d; }
+.alcohol-map-legend .level-4 { color: white; background: #dd5966; }
+
+.alcohol-distribution-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.alcohol-distribution-card {
+  --level-color: #79d39f;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--level-color) 34%, white);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.66);
+}
+
+.alcohol-distribution-card.is-moderate { --level-color: #f6b33f; }
+.alcohol-distribution-card.is-elevated { --level-color: #ef8a5c; }
+.alcohol-distribution-card.is-heavy { --level-color: #dd5966; }
+
+.alcohol-distribution-card div {
+  display: grid;
+  gap: 4px;
+}
+
+.alcohol-distribution-card div > small,
+.alcohol-distribution-card p {
+  color: var(--muted);
+}
+
+.alcohol-distribution-card > span {
+  color: var(--level-color);
+  font-size: 1.3rem;
+  font-weight: 850;
+}
+
+.alcohol-distribution-card > i {
+  grid-column: 1 / -1;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(20, 45, 58, 0.08);
+}
+
+.alcohol-distribution-card > i > b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--level-color);
+}
+
+.alcohol-day-history-card {
+  align-items: flex-start;
+}
+
+.alcohol-day-history-level {
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #b8e8ca;
+  font-weight: 850;
+}
+
+.alcohol-day-history-level.is-moderate { background: #f8d58d; }
+.alcohol-day-history-level.is-elevated { background: #f3ae8d; }
+.alcohol-day-history-level.is-heavy { color: white; background: #dd5966; }
+
+.alcohol-day-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.alcohol-day-edit-grid .full {
+  grid-column: 1 / -1;
+}
+
+.alcohol-edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 760px) {
+  .alcohol-day-control {
+    gap: 14px;
+  }
+
+  .alcohol-day-hero {
+    min-height: 150px;
+  }
+
+  .alcohol-day-hero strong {
+    font-size: 3.6rem;
+  }
+
+  .alcohol-day-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .alcohol-level-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .alcohol-level-option {
+    min-height: 132px;
+    grid-template-columns: 34px minmax(0, 1fr);
+    grid-template-areas:
+      "index points"
+      "title title"
+      "copy copy";
+    align-content: center;
+  }
+
+  .alcohol-level-option em {
+    justify-self: end;
+  }
+
+  .alcohol-coach-strip {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  .alcohol-coach-strip button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .alcohol-distribution-grid,
+  .alcohol-day-edit-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .alcohol-day-edit-grid .full {
+    grid-column: auto;
+  }
+
+  .alcohol-intensity-map {
+    min-width: 620px;
+  }
+}
+
+@media (max-width: 390px) {
+  .alcohol-level-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .alcohol-level-option {
+    min-height: 96px;
+  }
+}

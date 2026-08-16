@@ -57,10 +57,17 @@ create table if not exists public.alcohol_logs (
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   log_date date not null,
   consumed boolean not null default false,
+  consumption_level smallint check (consumption_level between 1 and 4),
+  consumption_key text check (consumption_key in ('light', 'moderate', 'elevated', 'heavy')),
+  points integer not null default 0,
   note text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+create unique index if not exists idx_alcohol_logs_user_daily_intensity
+  on public.alcohol_logs(user_id, log_date)
+  where consumption_key is not null;
 
 create table if not exists public.alcohol_events (
   id uuid primary key default gen_random_uuid(),

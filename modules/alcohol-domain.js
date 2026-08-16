@@ -60,6 +60,54 @@
     }, 0);
   }
 
+
+  const DAILY_LEVELS = Object.freeze({
+    light: Object.freeze({ key: 'light', rank: 1, points: -10 }),
+    moderate: Object.freeze({ key: 'moderate', rank: 2, points: -30 }),
+    elevated: Object.freeze({ key: 'elevated', rank: 3, points: -70 }),
+    heavy: Object.freeze({ key: 'heavy', rank: 4, points: -120 })
+  });
+
+  function dailyLevel(value) {
+    const key = typeof value === 'string'
+      ? value
+      : Object.values(DAILY_LEVELS).find(level => level.rank === Number(value))?.key;
+    return DAILY_LEVELS[key] || DAILY_LEVELS.light;
+  }
+
+  function normalizeDailyLog(log) {
+    if (!log || !log.log_date || !log.consumed) return null;
+    const level = dailyLevel(log.consumption_key || log.consumption_level);
+    return {
+      ...log,
+      consumption_key: level.key,
+      consumption_level: level.rank,
+      points: Number.isFinite(Number(log.points)) ? Number(log.points) : level.points
+    };
+  }
+
+  function dailyLogs(logs, lookbackDays = 30) {
+    const since = new Date();
+    since.setHours(0, 0, 0, 0);
+    since.setDate(since.getDate() - Math.max(0, Number(lookbackDays) - 1));
+    const byDate = new Map();
+    safeArray(logs).forEach(log => {
+      const normalized = normalizeDailyLog(log);
+      if (!normalized) return;
+      const date = toDate(normalized.log_date + 'T12:00:00');
+      if (!date || date < since) return;
+      const current = byDate.get(normalized.log_date);
+      if (!current || toDate(normalized.updated_at || normalized.created_at) >= toDate(current.updated_at || current.created_at)) {
+        byDate.set(normalized.log_date, normalized);
+      }
+    });
+    return [...byDate.values()].sort((a, b) => a.log_date.localeCompare(b.log_date));
+  }
+
+  function intensityLoad(logs, lookbackDays = 30) {
+    return dailyLogs(logs, lookbackDays).reduce((total, log) => total + dailyLevel(log.consumption_key).rank, 0);
+  }
+
   const api = Object.freeze({
     eventDate,
     isSameLocalDay,
@@ -67,15 +115,19 @@
     countUnitsForDay,
     sortEvents,
     activeDrinkingDays,
-    totalUnits
+    totalUnits,
+    dailyLevel,
+    normalizeDailyLog,
+    dailyLogs,
+    intensityLoad
   });
 
   window.HabitFlowDomains = window.HabitFlowDomains || {};
   window.HabitFlowDomains.alcohol = api;
 
   modules.register('alcohol-domain', {
-    description: 'Pure alcohol event helpers for counts, daily context and analytics. No UI or sync side effects.',
-    exports: Object.freeze(['countUnitsForDay', 'sortEvents', 'activeDrinkingDays', 'totalUnits'])
+    description: 'Pure alcohol helpers for daily intensity plus compatible historical event analytics. No UI or sync side effects.',
+    exports: Object.freeze(['countUnitsForDay', 'sortEvents', 'activeDrinkingDays', 'totalUnits', 'dailyLevel', 'dailyLogs', 'intensityLoad'])
   });
 })(window);
 

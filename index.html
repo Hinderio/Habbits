@@ -298,33 +298,60 @@
         </div>
 
         <div class="consumption-pane" data-consumption-pane="alcohol">
-          <div class="grid two-columns smoking-layout">
-            <section class="panel glass alcohol-control-card">
-              <div class="panel-head compact"><div><p class="eyebrow">Alkohol</p><h3>Einheit per Tap speichern</h3></div></div>
-              <div class="alcohol-ring" aria-live="polite">
+          <div class="grid two-columns smoking-layout alcohol-daily-layout">
+            <section class="panel glass alcohol-control-card alcohol-day-control">
+              <div class="panel-head compact">
+                <div><p class="eyebrow">Alkohol & Kontext</p><h3>Tageskonsum erfassen</h3></div>
+                <span class="badge muted">1 Eintrag pro Tag</span>
+              </div>
+              <div class="alcohol-day-hero" aria-live="polite">
                 <small>Heute</small>
-                <strong id="alcoholTodayUnits">0</strong>
-                <span id="alcoholTodayHint">Noch keine Einheit erfasst</span>
+                <strong id="alcoholTodayUnits">–</strong>
+                <span id="alcoholTodayHint">Noch kein Tageskonsum erfasst</span>
+              </div>
+              <div class="alcohol-day-meta">
+                <label><span>Tag</span><input id="alcoholDayDate" type="date" /></label>
+                <label><span>Notiz</span><input id="alcoholDayNote" type="text" maxlength="240" placeholder="optional · Anlass oder Kontext" /></label>
+              </div>
+              <div class="alcohol-level-grid" aria-label="Alkoholkonsum des Tages">
+                <button class="alcohol-level-option is-light" type="button" data-action="log-alcohol-day" data-level="light">
+                  <span class="alcohol-level-index">01</span><strong>Leicht</strong><small>Ein Getränk</small><em>-10 Pkt.</em>
+                </button>
+                <button class="alcohol-level-option is-moderate" type="button" data-action="log-alcohol-day" data-level="moderate">
+                  <span class="alcohol-level-index">02</span><strong>Moderat</strong><small>Zwei bis drei Getränke</small><em>-30 Pkt.</em>
+                </button>
+                <button class="alcohol-level-option is-elevated" type="button" data-action="log-alcohol-day" data-level="elevated">
+                  <span class="alcohol-level-index">03</span><strong>Erhöht</strong><small>Deutlich spürbarer Konsum</small><em>-70 Pkt.</em>
+                </button>
+                <button class="alcohol-level-option is-heavy" type="button" data-action="log-alcohol-day" data-level="heavy">
+                  <span class="alcohol-level-index">04</span><strong>Stark</strong><small>Starke Beeinträchtigung</small><em>-120 Pkt.</em>
+                </button>
               </div>
               <div class="pause-status-row">
                 <div id="alcoholPauseStatus" class="pause-status-pill" aria-live="polite"></div>
                 <button class="mini-btn" type="button" data-action="open-pause-modal" data-scope="alcohol">Alkohol pausieren</button>
               </div>
+              <div class="alcohol-coach-strip">
+                <span class="alcohol-coach-icon"><!-- alcohol coach icon injected by app styling --></span>
+                <div><strong>Alkohol-Coach</strong><small>Ruhig einordnen, nächsten klaren Schritt wählen.</small></div>
+                <button class="mini-btn" type="button" data-action="toggle-alcohol-coach">Coach öffnen</button>
+              </div>
+              <div id="alcoholCoachPanel" class="alcohol-coach-panel" hidden>
+                <p class="eyebrow">Nächster klarer Schritt</p>
+                <h4 id="alcoholCoachTip">Wasser bereitstellen und den heutigen Eintrag ehrlich abschliessen.</h4>
+                <div class="alcohol-coach-actions">
+                  <button class="mini-btn primary" type="button" data-action="next-alcohol-coach-tip">Nächster Impuls</button>
+                  <button class="mini-btn" type="button" data-action="toggle-alcohol-coach">Schliessen</button>
+                </div>
+              </div>
               <div id="alcoholMobileInsight" class="consumption-command-insight" aria-live="polite"></div>
               <div id="alcoholMobileKpis" class="mobile-consumption-kpis" aria-label="Alkohol-Kennzahlen"></div>
-              <div class="alcohol-unit-grid" aria-label="Alkohol-Einheit speichern">
-                <button class="alcohol-unit-btn" type="button" data-action="log-alcohol-unit" data-drink-type="beer"><span data-icon="beer"></span><strong>Bier</strong><small>-20</small></button>
-                <button class="alcohol-unit-btn" type="button" data-action="log-alcohol-unit" data-drink-type="wine"><span data-icon="wine"></span><strong>Wein</strong><small>-20</small></button>
-                <button class="alcohol-unit-btn" type="button" data-action="log-alcohol-unit" data-drink-type="cocktail"><span data-icon="cocktail"></span><strong>Cocktail</strong><small>-30</small></button>
-                <button class="alcohol-unit-btn" type="button" data-action="log-alcohol-unit" data-drink-type="shot"><span data-icon="shot"></span><strong>Shot</strong><small>-25</small></button>
-                <button class="alcohol-unit-btn" type="button" data-action="log-alcohol-unit" data-drink-type="other"><span data-icon="alcohol"></span><strong>Anderes</strong><small>-25</small></button>
-              </div>
             </section>
 
             <details class="mobile-consumption-section" data-mobile-open="true">
-              <summary><span>Einheiten-Logs</span><small>bei Bedarf öffnen</small></summary>
-              <section class="panel glass consumption-history-panel">
-                <div class="panel-head"><div><p class="eyebrow">Alkohol</p><h3>Einheiten-Logs</h3></div><span id="lastAlcoholPoints" class="badge muted">0 Einheiten</span></div>
+              <summary><span>Tages-Logs</span><small>bei Bedarf öffnen</small></summary>
+              <section class="panel glass consumption-history-panel alcohol-day-overview">
+                <div class="panel-head"><div><p class="eyebrow">Alkohol</p><h3>Heute im Überblick</h3></div><span id="lastAlcoholPoints" class="badge muted">0 Tage</span></div>
                 <div id="alcoholUnitHistory" class="stack-list alcohol-history-list"></div>
               </section>
             </details>
@@ -332,10 +359,10 @@
 
           <div class="grid two-columns smoking-intelligence-grid">
             <details class="mobile-consumption-section" data-mobile-open="true">
-              <summary><span>Deep Alcohol Map</span><small>Wochen & Tage</small></summary>
+              <summary><span>Deep Alcohol Map</span><small>Intensität nach Tag</small></summary>
               <section class="panel glass smoking-visual-panel">
                 <div class="panel-head">
-                  <div><p class="eyebrow">Deep Alcohol Map</p><h3>Einheiten nach Kalenderwoche & Tag</h3></div>
+                  <div><p class="eyebrow">Deep Alcohol Map</p><h3>Tagesintensität nach Kalenderwoche</h3></div>
                   <span id="alcoholHeatmapBadge" class="subtle">12 KW</span>
                 </div>
                 <div id="alcoholHeatmapVisual" class="smoking-visual-body"></div>
@@ -343,10 +370,10 @@
             </details>
 
             <details class="mobile-consumption-section">
-              <summary><span>Alcohol Intelligence</span><small>Konsumfolge</small></summary>
+              <summary><span>Alcohol Intelligence</span><small>30-Tage-Muster</small></summary>
               <section class="panel glass smoking-visual-panel">
                 <div class="panel-head">
-                  <div><p class="eyebrow">Alcohol Intelligence</p><h3>Qualität der Konsumfolge</h3></div>
+                  <div><p class="eyebrow">Alcohol Intelligence</p><h3>Frequenz, Intensität & Erholung</h3></div>
                   <span id="alcoholIntervalQuality" class="badge muted">lernt</span>
                 </div>
                 <div id="alcoholIntervalVisual" class="smoking-visual-body"></div>
@@ -385,18 +412,16 @@
               </div>
             </div>
             <div class="rules-block alcohol-rules-panel">
-              <div class="rules-subhead"><strong>Alkohol</strong><small>automatische Minus-Punkte pro Einheit</small></div>
+              <div class="rules-subhead"><strong>Alkohol</strong><small>ein ehrlicher Tageswert statt unvollständiger Einzelzählung</small></div>
               <div class="score-rules-grid alcohol-score-grid">
-                <article><strong>Bier</strong><span>-20</span><small>pro Einheit</small></article>
-                <article><strong>Shot</strong><span>-25</span><small>pro Einheit</small></article>
-                <article><strong>Cocktail</strong><span>-30</span><small>pro Einheit</small></article>
-                <article><strong>Wein</strong><span>-20</span><small>pro Einheit</small></article>
-                <article><strong>Anderes</strong><span>-25</span><small>pro Einheit</small></article>
-                <article><strong>Mehrere Tage</strong><span>-5 / -10</span><small>bei 3+ bzw. 5+ Tagen in Folge</small></article>
+                <article><strong>Leicht</strong><span>-10</span><small>ein Getränk</small></article>
+                <article><strong>Moderat</strong><span>-30</span><small>zwei bis drei Getränke</small></article>
+                <article><strong>Erhöht</strong><span>-70</span><small>deutlich spürbarer Konsum</small></article>
+                <article><strong>Stark</strong><span>-120</span><small>starke Beeinträchtigung</small></article>
               </div>
               <div class="alcohol-rules-note">
-                <strong>Zusatzabzug bei laufend viel Konsum:</strong>
-                <span>ab 5 Einheiten in 7 Tagen −5, ab 8 Einheiten −10, ab 12 Einheiten −15 Punkte pro weiterem Log.</span>
+                <strong>Bewusst einfach:</strong>
+                <span>Pro Kalendertag gilt genau eine Stufe. Eine spätere Korrektur ersetzt den Wert und berechnet die Punkte neu.</span>
               </div>
             </div>
           </div>
