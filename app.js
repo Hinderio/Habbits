@@ -15109,7 +15109,7 @@ async function deleteAlcoholLog(id) {
 
   function alcoholFreeStreakStats(days, endKey = toDateKey(new Date())) {
     const occupied = [...new Set(
-      days.map(day => day?.log_date).filter(key => isDateKey(key) && key <= endKey)
+      days.map(day => day?.log_date).filter(key => /^\d{4}-\d{2}-\d{2}$/.test(String(key || '')) && key <= endKey)
     )].sort();
     if (!occupied.length) return { current: 0, best: 0 };
 
