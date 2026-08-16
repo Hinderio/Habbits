@@ -4518,7 +4518,7 @@ body.monthly-magazine-reader-open{overflow:hidden}
 .alcohol-map-header,
 .alcohol-map-row {
   display: grid;
-  grid-template-columns: 64px repeat(12, minmax(32px, 1fr));
+  grid-template-columns: 64px repeat(11, minmax(32px, 1fr));
   align-items: center;
 }
 
@@ -4722,5 +4722,81 @@ body.monthly-magazine-reader-open{overflow:hidden}
 
   .alcohol-level-option {
     min-height: 96px;
+  }
+}
+
+
+/* Alcohol daily logs: cigarette-style actions, stable mobile sizing, and an 11-week map. */
+.alcohol-day-history-card {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 16px;
+  width: 100%;
+}
+
+.alcohol-day-history-card .list-card-main {
+  min-width: 0;
+  width: 100%;
+  text-align: left;
+  justify-self: stretch;
+}
+
+.alcohol-day-history-card .list-card-main h4,
+.alcohol-day-history-card .list-card-main p {
+  text-align: left;
+}
+
+.alcohol-day-history-card .list-actions {
+  align-self: start;
+  justify-self: end;
+}
+
+@media (max-width: 760px) {
+  #screen-smoking .alcohol-daily-layout {
+    align-items: start;
+    grid-auto-rows: auto;
+  }
+
+  #screen-smoking .alcohol-daily-layout > * {
+    min-width: 0;
+    min-height: 0;
+    height: auto;
+    align-self: start;
+  }
+
+  #screen-smoking .alcohol-history-list,
+  #screen-smoking .consumption-history-panel {
+    flex: 0 0 auto;
+    min-height: 0 !important;
+    height: auto !important;
+  }
+
+  #screen-smoking .alcohol-history-list .consumption-history-actions,
+  #screen-smoking .alcohol-history-list .history-launch-grid {
+    min-height: 0;
+    margin: 0;
+  }
+
+  #screen-smoking .alcohol-day-history-card {
+    grid-template-columns: 42px minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  #screen-smoking .alcohol-day-history-card .list-actions {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  #screen-smoking .alcohol-day-history-level {
+    width: 42px;
+    height: 42px;
+    flex-basis: 42px;
+  }
+
+  #screen-smoking .alcohol-intensity-map {
+    min-width: 0;
+    width: 100%;
+    overflow: hidden;
   }
 }
