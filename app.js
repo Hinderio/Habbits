@@ -479,7 +479,7 @@
   const MONTHLY_MISSION_METRICS = Object.freeze({
     running_sessions: { label: 'Jogging-Sessions', unit: 'Läufe', category: 'fitness', source: 'Fitness Joggen' },
     hiking_days: { label: 'Wandertage', unit: 'Tage', category: 'fitness', source: 'Fitness Wandern' },
-    weight_measurements: { label: 'Gewicht messen', unit: 'Messungen', category: 'fitness', source: 'Habit Gewicht messen' },
+    weight_measurements: { label: 'Aktuelles Gewicht', unit: 'kg', category: 'fitness', source: 'Habit Gewicht messen' },
     smoke_free_evenings: { label: 'Rauchfreie Abende', unit: 'Abende', category: 'consumption', source: 'Konsum-Logs' },
     alcohol_free_weekend_days: { label: 'Alkoholfreie Wochenendtage', unit: 'Tage', category: 'consumption', source: 'Alkohol-Logs' },
     deep_work_sessions: { label: 'Deep-Work-Sessions', unit: 'Sessions', category: 'focus', source: 'Fokus-Habits & Tasks' },
@@ -490,7 +490,7 @@
   const MONTHLY_MISSION_PRESETS = Object.freeze([
     { id: 'run-12', title: '12 Läufe', target: 12, metric: 'running_sessions', category: 'fitness' },
     { id: 'hike-4', title: '4 Wandertage', target: 4, metric: 'hiking_days', category: 'fitness' },
-    { id: 'weight-4', title: '4 Gewichtsmessungen', target: 4, metric: 'weight_measurements', category: 'fitness' },
+    { id: 'weight-target-85', title: '85 kg Zielgewicht', target: 85, metric: 'weight_measurements', category: 'fitness' },
     { id: 'smoke-evenings-20', title: '20 rauchfreie Abende', target: 20, metric: 'smoke_free_evenings', category: 'consumption' },
     { id: 'deep-work-8', title: '8 Deep-Work-Sessions', target: 8, metric: 'deep_work_sessions', category: 'focus' },
     { id: 'tasks-25', title: '25 erledigte Aufgaben', target: 25, metric: 'completed_tasks', category: 'focus' },
@@ -1714,7 +1714,10 @@
     const metric = normalizeMonthlyMissionMetric(mission.metric);
     const createdAt = validIsoOrFallback(mission.created_at || mission.createdAt || nowIso());
     const rawTarget = Number(mission.target ?? 1);
-    const target = Math.max(1, Math.round(Number.isFinite(rawTarget) ? rawTarget : 1));
+    const finiteTarget = Number.isFinite(rawTarget) ? rawTarget : 1;
+    const target = metric === 'weight_measurements'
+      ? Math.max(1, Math.round(finiteTarget * 10) / 10)
+      : Math.max(1, Math.round(finiteTarget));
     return {
       id: mission.id || uid(),
       month_key: mission.month_key || mission.monthKey || currentMonthKey(mission.created_at || new Date()),
@@ -4594,7 +4597,10 @@
         const weightHabitIds = new Set(state.habits
           .filter(habit => !habit.is_archived && (habit.type === 'weight' || normalizeIconSearch(habit.name).includes('gewicht')))
           .map(habit => habit.id));
-        return visibleHabitEntries().filter(entry => weightHabitIds.has(entry.habit_id) && inMonth(entry.occurred_at)).length;
+        const latestWeight = visibleHabitEntries()
+          .filter(entry => weightHabitIds.has(entry.habit_id) && Number(entry.value_num) > 0)
+          .sort((left, right) => new Date(right.occurred_at) - new Date(left.occurred_at))[0];
+        return latestWeight ? Math.round(Number(latestWeight.value_num) * 10) / 10 : 0;
       }
       case 'smoke_free_evenings': {
         const cigarettes = visibleCigarettes();
@@ -4633,18 +4639,31 @@
     const normalized = normalizeMonthlyMission(mission);
     const progress = countMonthlyMissionProgress(normalized);
     const target = Math.max(1, Number(normalized.target || 1));
-    const ratio = clampNumber((progress / target) * 100, 0, 100);
+    const isWeightGoal = normalized.metric === 'weight_measurements';
+    const hasWeight = isWeightGoal && progress > 0;
+    const ratio = isWeightGoal
+      ? (hasWeight ? clampNumber((target / progress) * 100, 0, 100) : 0)
+      : clampNumber((progress / target) * 100, 0, 100);
     const elapsed = monthMissionKeys(normalized.month_key).length;
     const totalDays = monthMissionTotalDays(normalized.month_key);
-    const expected = target * (elapsed / Math.max(1, totalDays));
-    const completed = progress >= target;
-    const tone = completed ? 'complete' : (progress + 0.01 >= expected * 0.9 ? 'track' : 'behind');
+    const expected = isWeightGoal ? target : target * (elapsed / Math.max(1, totalDays));
+    const completed = isWeightGoal ? hasWeight && progress <= target : progress >= target;
+    const tone = completed
+      ? 'complete'
+      : (isWeightGoal ? (hasWeight && ratio >= 95 ? 'track' : 'behind') : (progress + 0.01 >= expected * 0.9 ? 'track' : 'behind'));
     const label = completed ? 'geschafft' : (tone === 'track' ? 'auf Kurs' : 'knapp');
-    const remaining = Math.max(0, Math.ceil(target - progress));
+    const remaining = isWeightGoal
+      ? (hasWeight ? Math.max(0, Math.round((progress - target) * 10) / 10) : null)
+      : Math.max(0, Math.ceil(target - progress));
     return { mission: normalized, progress, target, ratio, elapsed, totalDays, expected, completed, tone, label, remaining };
   }
 
   function monthlyMissionStatusText(stateValue) {
+    if (stateValue.mission.metric === 'weight_measurements') {
+      if (!stateValue.progress) return 'Noch kein Gewichtswert vorhanden.';
+      if (stateValue.completed) return 'Zielgewicht erreicht. Starkes Monats-Momentum.';
+      return `Noch ${stateValue.remaining} kg bis zum Zielgewicht.`;
+    }
     if (stateValue.completed) return 'Mission abgeschlossen. Starkes Monats-Momentum.';
     const unit = monthlyMissionMetricMeta(stateValue.mission.metric).unit || 'Schritte';
     if (stateValue.tone === 'track') return `Noch ${stateValue.remaining} ${unit}. Du bist auf Kurs.`;
@@ -4678,6 +4697,10 @@
     const manualControls = value.mission.metric === 'manual_count'
       ? `<div class="monthly-mission-counter"><button class="mini-btn" type="button" data-action="decrement-monthly-mission" data-id="${escapeHtml(value.mission.id)}" aria-label="Manuellen Fortschritt reduzieren">−</button><button class="mini-btn primary" type="button" data-action="increment-monthly-mission" data-id="${escapeHtml(value.mission.id)}" aria-label="Manuellen Fortschritt erhöhen">+ Schritt</button></div>`
       : '';
+    const displayNumber = number => Number.isInteger(Number(number)) ? String(Number(number)) : Number(number).toFixed(1);
+    const progressLabel = value.mission.metric === 'weight_measurements'
+      ? `${value.progress ? displayNumber(value.progress) : '–'} → ${displayNumber(value.target)} kg`
+      : `${value.progress}/${value.target} ${meta.unit}`;
     return `<article class="monthly-mission-card is-${escapeHtml(value.tone)}" style="--mission-tone:${category.tone};--mission-tone-rgb:${category.rgb};">
       <div class="monthly-mission-card-head">
         <span class="monthly-mission-icon">${svgIcon(category.icon, 'ui-icon')}</span>
@@ -4685,7 +4708,7 @@
         <em>${Math.round(value.ratio)}%</em>
       </div>
       <div class="monthly-mission-progress"><i style="width:${value.ratio}%"></i></div>
-      <div class="monthly-mission-meta"><span>${value.progress}/${value.target} ${escapeHtml(meta.unit)}</span><b>${escapeHtml(value.label)}</b></div>
+      <div class="monthly-mission-meta"><span>${escapeHtml(progressLabel)}</span><b>${escapeHtml(value.label)}</b></div>
       <p>${escapeHtml(monthlyMissionStatusText(value))}</p>
       <div class="monthly-mission-actions">
         ${manualControls}
@@ -4731,7 +4754,7 @@
       ${editingMission ? '' : `<div class="monthly-preset-grid">${presetButtons}</div>`}
       <div class="monthly-custom-row">
         <label><span>Eigene Mission</span><input id="monthlyMissionTitle" type="text" maxlength="80" value="${escapeHtml(editingMission?.title || '')}" placeholder="z. B. 3 soziale Abende" /></label>
-        <label><span>Ziel</span><input id="monthlyMissionTarget" type="number" min="1" max="999" value="${editingMission?.target || 4}" inputmode="numeric" /></label>
+        <label><span>Ziel</span><input id="monthlyMissionTarget" type="number" min="1" max="999" step="0.1" value="${editingMission?.target || 4}" inputmode="decimal" /></label>
         <label><span>Quelle</span><select id="monthlyMissionMetric">${metricOptions}</select></label>
         <div class="monthly-mission-form-actions">
           ${editingMission
@@ -5201,7 +5224,10 @@
     const metricInput = $('#monthlyMissionMetric');
     const metric = normalizeMonthlyMissionMetric(metricInput?.value || 'manual_count');
     const title = String(titleInput?.value || '').trim() || monthlyMissionMetricMeta(metric).label;
-    const target = Math.max(1, Math.min(999, Math.round(Number(targetInput?.value || 1) || 1)));
+    const rawTarget = Number(targetInput?.value || 1) || 1;
+    const target = metric === 'weight_measurements'
+      ? Math.max(1, Math.min(999, Math.round(rawTarget * 10) / 10))
+      : Math.max(1, Math.min(999, Math.round(rawTarget)));
     const missionId = editingMonthlyMissionId;
     editingMonthlyMissionId = null;
     monthlyMissionFormOpen = false;
@@ -5252,7 +5278,10 @@
     const metricInput = $('#monthlyMissionMetric');
     const metric = normalizeMonthlyMissionMetric(metricInput?.value || 'manual_count');
     const title = String(titleInput?.value || '').trim() || monthlyMissionMetricMeta(metric).label;
-    const target = Math.max(1, Math.min(999, Math.round(Number(targetInput?.value || 1) || 1)));
+    const rawTarget = Number(targetInput?.value || 1) || 1;
+    const target = metric === 'weight_measurements'
+      ? Math.max(1, Math.min(999, Math.round(rawTarget * 10) / 10))
+      : Math.max(1, Math.min(999, Math.round(rawTarget)));
     createMonthlyMission({ title, target, metric, category: monthlyMissionMetricMeta(metric).category });
     if (titleInput) titleInput.value = '';
   }
