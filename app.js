@@ -6484,7 +6484,7 @@
     renderAlcoholIntervalVisual();
   }
 
-  function renderAlcoholWeekHeatmap(weeksCount = 12) {
+  function renderAlcoholWeekHeatmap(weeksCount = 11) {
     if (!els.alcoholHeatmapVisual) return;
     if (els.alcoholHeatmapBadge) els.alcoholHeatmapBadge.textContent = `${weeksCount} KW`;
 
@@ -14701,8 +14701,6 @@ async function deleteAlcoholLog(id) {
     heavy: { rank: 4, label: 'Stark', short: 'Starke Beeinträchtigung', description: 'Der Tag endete mit starker Beeinträchtigung.', points: -120 }
   });
   let editingAlcoholDayId = null;
-  let pendingAlcoholDayDeleteId = null;
-  let pendingAlcoholDayDeleteTimer = null;
   let alcoholCoachTipIndex = 0;
   const ALCOHOL_COACH_TIPS = [
     'Jetzt ein grosses Glas Wasser bereitstellen und den heutigen Eintrag ehrlich abschliessen.',
@@ -14889,94 +14887,117 @@ async function deleteAlcoholLog(id) {
   }
 
   function editAlcoholDay(id) {
-    if (!visibleAlcoholDays().some(day => day.id === id && day.source !== 'legacy')) {
-      toast('Historische Einzel-Logs bleiben unverändert lesbar.');
+    const day = visibleAlcoholDays().find(item => item.id === id);
+    if (!day || day.source === "legacy") {
+      toast("Historische Sammelwerte bleiben unverändert.");
       return;
     }
-    pendingAlcoholDayDeleteId = null;
-    if (pendingAlcoholDayDeleteTimer) clearTimeout(pendingAlcoholDayDeleteTimer);
-    pendingAlcoholDayDeleteTimer = null;
     editingAlcoholDayId = id;
-    renderHistoryModal();
+    renderAlcoholDayHistoryItemInPlace(id);
   }
 
   function cancelAlcoholDayEdit() {
+    const id = editingAlcoholDayId;
     editingAlcoholDayId = null;
-    renderHistoryModal();
+    if (id) renderAlcoholDayHistoryItemInPlace(id);
   }
 
   function saveAlcoholDay(id) {
-    const log = state.alcoholLogs.find(item => item.id === id);
-    const levelInput = $(`#alcohol-day-level-${cssEscape(id)}`);
-    const dateInput = $(`#alcohol-day-date-${cssEscape(id)}`);
-    const noteInput = $(`#alcohol-day-note-${cssEscape(id)}`);
-    if (!log || !levelInput || !dateInput || !noteInput) return;
-    const nextDate = dateInput.value;
-    if (!nextDate || nextDate > toDateKey(new Date())) {
-      toast('Der Konsumtag darf nicht in der Zukunft liegen.');
+    const day = visibleAlcoholDays().find(item => item.id === id);
+    if (!day || day.source === "legacy") return;
+    const levelInput = document.getElementById(`alcohol-day-level-${id}`);
+    const dateInput = document.getElementById(`alcohol-day-date-${id}`);
+    const noteInput = document.getElementById(`alcohol-day-note-${id}`);
+    const consumptionKey = normalizeAlcoholConsumptionKey(levelInput?.value);
+    const logDate = String(dateInput?.value || "").trim();
+    const note = String(noteInput?.value || "").trim();
+    if (!consumptionKey || !isDateKey(logDate)) {
+      toast("Bitte Stufe und Datum prüfen.");
       return;
     }
-    const duplicate = state.alcoholLogs.find(item => item.id !== id && item.log_date === nextDate);
+    const duplicate = state.alcoholDayLogs.some(item => item.id !== id && item.log_date === logDate && item.source !== "legacy");
     if (duplicate) {
-      toast('Für diesen Tag besteht bereits ein Eintrag.');
+      toast("Für diesen Tag besteht bereits ein Eintrag.");
       return;
     }
-    const key = alcoholDayKey(levelInput.value);
-    const level = alcoholDayLevel(key);
-    log.log_date = nextDate;
-    log.consumed = true;
-    log.consumption_key = key;
-    log.consumption_level = level.rank;
-    log.points = level.points;
-    log.note = noteInput.value.trim().slice(0, 240);
-    log.updated_at = nowIso();
-    log.synced = false;
+
+    day.consumption_key = consumptionKey;
+    day.log_date = logDate;
+    day.note = note;
+    day.updated_at = new Date().toISOString();
     editingAlcoholDayId = null;
-    recalculateAlcoholScores();
-    saveState();
-    renderHistoryModal();
-    toast('Alkohol-Tag aktualisiert');
-    syncWithSupabase({ silent: true, pullFirst: false });
+    recalculateAlcoholScores({ markUpdated: true });
+
+    renderAlcoholDayHistoryItemInPlace(id);
+    renderAlcoholDashboard();
+    renderAlcoholMobileOverview();
+    renderAlcoholUnitHistory();
+    toast("Alkohol-Tag aktualisiert.");
+
+    let committed = false;
+    const commit = () => {
+      if (committed) return;
+      committed = true;
+      saveState({ skipRender: true });
+      renderHistoryModal();
+      renderAlcoholExperience();
+      scheduleConsumptionBackgroundRender();
+      setTimeout(() => syncWithSupabase({ silent: true, pullFirst: false, pullAfter: false }), 0);
+    };
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(() => requestAnimationFrame(commit));
+      setTimeout(commit, 180);
+    } else {
+      setTimeout(commit, 0);
+    }
   }
 
-  async function deleteAlcoholDay(id) {
+  function deleteAlcoholDay(id) {
     const day = visibleAlcoholDays().find(item => item.id === id);
     if (!day) return;
-    if (day.source === 'legacy') {
-      toast('Historische Einzel-Logs bitte im alten Verlauf verwalten.');
+    if (day.source === "legacy") {
+      toast("Historische Sammelwerte können nicht einzeln gelöscht werden.");
       return;
     }
-    if (pendingAlcoholDayDeleteId !== id) {
-      pendingAlcoholDayDeleteId = id;
-      if (pendingAlcoholDayDeleteTimer) clearTimeout(pendingAlcoholDayDeleteTimer);
-      pendingAlcoholDayDeleteTimer = setTimeout(() => {
-        if (pendingAlcoholDayDeleteId !== id) return;
-        pendingAlcoholDayDeleteId = null;
-        pendingAlcoholDayDeleteTimer = null;
-        renderHistoryModal();
-      }, 5000);
+
+    const ledgerIds = state.pointsLedger
+      .filter(entry => isAlcoholPointsEntry(entry) && entry.source_id === id)
+      .map(entry => entry.id);
+    state.alcoholDayLogs = state.alcoholDayLogs.filter(item => item.id !== id);
+    state.pointsLedger = state.pointsLedger.filter(entry => !ledgerIds.includes(entry.id));
+    if (editingAlcoholDayId === id) editingAlcoholDayId = null;
+    recalculateAlcoholScores();
+
+    document.querySelector(`[data-alcohol-day-history-id="${id}"]`)?.remove();
+    renderAlcoholDashboard();
+    renderAlcoholMobileOverview();
+    renderAlcoholUnitHistory();
+    toast("Alkohol-Tag gelöscht.");
+
+    let committed = false;
+    const commit = () => {
+      if (committed) return;
+      committed = true;
+      markRemoteDeleted("alcoholDayLogs", id);
+      markRemoteDeletedMany("pointsLedger", ledgerIds);
+      saveState({ skipRender: true });
       renderHistoryModal();
-      toast('Zum Löschen nochmals bestätigen');
-      return;
+      renderAlcoholExperience();
+      scheduleConsumptionBackgroundRender();
+      setTimeout(async () => {
+        await Promise.allSettled([
+          deleteRemoteRowsForIds("alcohol_day_logs", [id]),
+          deleteRemoteRowsForIds("points_ledger", ledgerIds),
+        ]);
+        syncWithSupabase({ silent: true, pullFirst: false, pullAfter: false });
+      }, 0);
+    };
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(() => requestAnimationFrame(commit));
+      setTimeout(commit, 180);
+    } else {
+      setTimeout(commit, 0);
     }
-    pendingAlcoholDayDeleteId = null;
-    if (pendingAlcoholDayDeleteTimer) clearTimeout(pendingAlcoholDayDeleteTimer);
-    pendingAlcoholDayDeleteTimer = null;
-    const ledgerIds = state.pointsLedger.filter(entry => isAlcoholPointsEntry(entry) && entry.source_id === id).map(entry => entry.id);
-    state.alcoholLogs = state.alcoholLogs.filter(item => item.id !== id);
-    state.pointsLedger = state.pointsLedger.filter(entry => !(isAlcoholPointsEntry(entry) && entry.source_id === id));
-    markRemoteDeleted('alcohol_logs', id);
-    markRemoteDeletedMany('points_ledger', ledgerIds);
-    editingAlcoholDayId = null;
-    saveState();
-    renderAlcoholExperience();
-    renderHistoryModal();
-    await Promise.all([
-      deleteRemoteByIds('points_ledger', ledgerIds),
-      deleteRemoteById('alcohol_logs', id)
-    ]);
-    toast('Alkohol-Tag gelöscht');
-    syncWithSupabase({ silent: true, pullFirst: false });
   }
 
   async function deleteAlcoholLog(id) {
@@ -15056,27 +15077,40 @@ async function deleteAlcoholLog(id) {
     </div>`;
   }
 
+  function renderAlcoholDayHistoryItem(day) {
+    const level = alcoholDayLevel(day.consumption_key);
+    const editable = day.source !== "legacy";
+    const isEditing = editingAlcoholDayId === day.id;
+    const options = Object.entries(ALCOHOL_DAY_LEVELS)
+      .map(([key, meta]) => `<option value="${key}" ${key === day.consumption_key ? "selected" : ""}>${escapeHtml(meta.label)} · ${escapeHtml(meta.short)}</option>`)
+      .join("");
+    const editBlock = isEditing ? `<div class="alcohol-edit-grid alcohol-day-edit-grid">
+      <label><span>Stufe</span><select id="alcohol-day-level-${day.id}">${options}</select></label>
+      <label><span>Datum</span><input id="alcohol-day-date-${day.id}" type="date" value="${day.log_date}" max="${toDateKey(new Date())}" /></label>
+      <label class="full"><span>Notiz</span><input id="alcohol-day-note-${day.id}" type="text" value="${escapeHtml(day.note || "")}" maxlength="240" placeholder="optional" /></label>
+      <div class="alcohol-edit-actions full"><button class="mini-btn primary" type="button" data-action="save-alcohol-day" data-id="${day.id}">Speichern</button><button class="mini-btn" type="button" data-action="cancel-alcohol-day-edit">Abbrechen</button></div>
+    </div>` : "";
+    return `<article class="list-card compact alcohol-day-history-card ${isEditing ? "is-editing" : ""}" data-alcohol-day-history-id="${day.id}">
+      <div class="alcohol-day-history-level is-${escapeHtml(day.consumption_key)}"><span>${String(level.rank).padStart(2, "0")}</span></div>
+      <div class="list-card-main"><h4>${escapeHtml(level.label)}</h4><p class="meta">${escapeHtml(formatDate(day.log_date))} · ${escapeHtml(level.short)} · ${formatSignedPoints(alcoholPointsForDay(day))} Pkt.${day.source === "legacy" ? ` · aus ${day.legacy_count || 1} Alt-Logs` : ""}</p>${day.note ? `<p>${escapeHtml(day.note)}</p>` : ""}${editBlock}</div>
+      <div class="list-actions">${editable && !isEditing ? `<button class="consumption-icon-action" type="button" data-action="edit-alcohol-day" data-id="${day.id}" aria-label="Alkohol-Tag bearbeiten" title="Bearbeiten">${svgIcon("edit", "ui-icon")}</button>` : ""}${editable ? `<button class="consumption-icon-action consumption-icon-action-delete" type="button" data-action="delete-alcohol-day" data-id="${day.id}" aria-label="Alkohol-Tag löschen" title="Löschen">${svgIcon("trash", "ui-icon")}</button>` : '<span class="badge muted">Historisch</span>'}</div>
+    </article>`;
+  }
+
+  function renderAlcoholDayHistoryItemInPlace(id) {
+    const day = visibleAlcoholDays().find(item => item.id === id);
+    const node = document.querySelector(`[data-alcohol-day-history-id="${id}"]`);
+    if (!day || !node) {
+      renderHistoryModal();
+      return;
+    }
+    node.outerHTML = renderAlcoholDayHistoryItem(day);
+  }
+
   function renderAlcoholUnitHistoryList() {
     const days = [...visibleAlcoholDays()].sort((a, b) => String(b.log_date).localeCompare(String(a.log_date)));
     if (!days.length) return '<div class="empty-state">Noch kein Konsumtag erfasst. Eine ehrliche Tagesstufe genügt.</div>';
-    return `<div class="stack-list tall alcohol-history-modal-list">${days.map(day => {
-      const level = alcoholDayLevel(day.consumption_key);
-      const editable = day.source !== 'legacy';
-      const isEditing = editingAlcoholDayId === day.id;
-      const isDeletePending = pendingAlcoholDayDeleteId === day.id;
-      const options = Object.entries(ALCOHOL_DAY_LEVELS).map(([key, meta]) => `<option value="${key}" ${key === day.consumption_key ? 'selected' : ''}>${escapeHtml(meta.label)} · ${escapeHtml(meta.short)}</option>`).join('');
-      const editBlock = isEditing ? `<div class="alcohol-edit-grid alcohol-day-edit-grid">
-        <label><span>Stufe</span><select id="alcohol-day-level-${day.id}">${options}</select></label>
-        <label><span>Datum</span><input id="alcohol-day-date-${day.id}" type="date" value="${day.log_date}" max="${toDateKey(new Date())}" /></label>
-        <label class="full"><span>Notiz</span><input id="alcohol-day-note-${day.id}" type="text" value="${escapeHtml(day.note || '')}" maxlength="240" placeholder="optional" /></label>
-        <div class="alcohol-edit-actions full"><button class="mini-btn primary" type="button" data-action="save-alcohol-day" data-id="${day.id}">Speichern</button><button class="mini-btn" type="button" data-action="cancel-alcohol-day-edit">Abbrechen</button></div>
-      </div>` : '';
-      return `<article class="list-card compact alcohol-day-history-card ${isEditing ? 'is-editing' : ''}">
-        <div class="alcohol-day-history-level is-${escapeHtml(day.consumption_key)}"><span>${String(level.rank).padStart(2, '0')}</span></div>
-        <div class="list-card-main"><h4>${escapeHtml(level.label)}</h4><p class="meta">${escapeHtml(formatDate(day.log_date))} · ${escapeHtml(level.short)} · ${formatSignedPoints(alcoholPointsForDay(day))} Pkt.${day.source === 'legacy' ? ` · aus ${day.legacy_count || 1} Alt-Logs` : ''}</p>${day.note ? `<p>${escapeHtml(day.note)}</p>` : ''}${editBlock}</div>
-        <div class="list-actions">${editable && !isEditing ? `<button class="consumption-icon-action" type="button" data-action="edit-alcohol-day" data-id="${day.id}" aria-label="Alkohol-Tag bearbeiten" title="Bearbeiten">${svgIcon('edit', 'ui-icon')}</button>` : ''}${editable ? `<button class="consumption-icon-action consumption-icon-action-delete ${isDeletePending ? 'is-confirming' : ''}" type="button" data-action="delete-alcohol-day" data-id="${day.id}" aria-label="${isDeletePending ? 'Löschen bestätigen' : 'Alkohol-Tag löschen'}" title="${isDeletePending ? 'Löschen bestätigen' : 'Löschen'}">${isDeletePending ? '<span>Bestätigen</span>' : svgIcon('trash', 'ui-icon')}</button>` : '<span class="badge muted">Historisch</span>'}</div>
-      </article>`;
-    }).join('')}</div>`;
+    return `<div class="stack-list tall alcohol-history-modal-list">${days.map(renderAlcoholDayHistoryItem).join("")}</div>`;
   }
 
   function renderAlcoholDashboard() {
@@ -15118,7 +15152,7 @@ async function deleteAlcoholLog(id) {
     }
   }
 
-  function renderAlcoholWeekHeatmap(weeksCount = 12) {
+  function renderAlcoholWeekHeatmap(weeksCount = 11) {
     if (!els.alcoholHeatmapVisual) return;
     if (els.alcoholHeatmapBadge) els.alcoholHeatmapBadge.textContent = `${weeksCount} KW`;
     const weeks = calendarWeeksBack(weeksCount);
