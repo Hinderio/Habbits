@@ -4216,3 +4216,140 @@ body.monthly-magazine-reader-open{overflow:hidden}
 .monthly-mission-form-actions{display:flex;gap:8px;align-items:center;justify-content:flex-end}
 @media (max-width:980px){.monthly-mission-form-actions{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.monthly-mission-form-actions .pill{width:100%;justify-content:center}}
 @media (max-width:760px){.monthly-mission-form-actions{grid-template-columns:1fr}}
+
+
+/* Alcohol history and 12-week intensity map */
+.alcohol-history-modal-list .alcohol-day-history-card{
+  display:grid;
+  grid-template-columns:46px minmax(0,1fr) auto;
+  align-items:center;
+  gap:16px;
+  width:100%;
+  text-align:left;
+}
+.alcohol-history-modal-list .alcohol-day-history-level{
+  display:grid;
+  place-items:center;
+  width:44px;
+  height:44px;
+  min-width:44px;
+  border-radius:50%;
+  justify-self:start;
+  color:#0d1827;
+  font-weight:950;
+  font-variant-numeric:tabular-nums;
+}
+.alcohol-history-modal-list .alcohol-day-history-level.is-light{background:#b6ebca}
+.alcohol-history-modal-list .alcohol-day-history-level.is-moderate{background:#ffda8c}
+.alcohol-history-modal-list .alcohol-day-history-level.is-elevated{background:#ffad83}
+.alcohol-history-modal-list .alcohol-day-history-level.is-heavy{background:#ed5868;color:#fff}
+.alcohol-history-modal-list .list-card-main{
+  min-width:0;
+  width:100%;
+  justify-self:stretch;
+  text-align:left;
+}
+.alcohol-history-modal-list .list-card-main h4,
+.alcohol-history-modal-list .list-card-main p{
+  margin-left:0;
+  text-align:left;
+}
+.alcohol-history-modal-list .list-card-main h4{margin-bottom:4px}
+.alcohol-history-modal-list .list-actions{
+  align-self:center;
+  justify-self:end;
+  flex-wrap:nowrap;
+}
+.alcohol-history-modal-list .consumption-icon-action-delete.is-confirming{
+  width:auto;
+  min-width:108px;
+  padding:0 13px;
+  border-radius:999px;
+  font-size:.78rem;
+  font-weight:900;
+}
+.alcohol-intensity-map{
+  width:100%;
+  overflow-x:auto;
+  box-sizing:border-box;
+  padding:0 16px 6px 0;
+  overscroll-behavior-x:contain;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:thin;
+}
+.alcohol-map-header,
+.alcohol-map-row{
+  display:grid;
+  grid-template-columns:72px repeat(12,minmax(52px,1fr));
+  align-items:stretch;
+  width:100%;
+  min-width:760px;
+}
+.alcohol-map-header > *,
+.alcohol-map-row > *{
+  min-width:0;
+  box-sizing:border-box;
+}
+.alcohol-map-header b,
+.alcohol-map-header span,
+.alcohol-map-row strong,
+.alcohol-map-row i{
+  display:grid;
+  place-items:center;
+  min-height:44px;
+  border-right:1px solid rgba(96,122,151,.14);
+  border-bottom:1px solid rgba(96,122,151,.14);
+  text-align:center;
+}
+.alcohol-map-header b,
+.alcohol-map-row strong{
+  justify-items:start;
+  padding-left:12px;
+  background:rgba(247,250,251,.82);
+  font-style:normal;
+}
+.alcohol-map-header span{font-weight:850}
+.alcohol-map-row i{
+  font-style:normal;
+  font-weight:900;
+  background:rgba(142,160,180,.08);
+}
+.alcohol-map-row i.level-1{background:#b6ebca}
+.alcohol-map-row i.level-2{background:#ffda8c}
+.alcohol-map-row i.level-3{background:#ffad83}
+.alcohol-map-row i.level-4{background:#ed5868;color:#fff}
+.alcohol-map-legend{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-top:14px;
+}
+.alcohol-map-legend > i{
+  display:grid;
+  place-items:center;
+  width:28px;
+  height:28px;
+  border-radius:50%;
+  font-style:normal;
+  font-weight:900;
+  color:#0d1827;
+}
+.alcohol-map-legend > i.level-1{background:#b6ebca}
+.alcohol-map-legend > i.level-2{background:#ffda8c}
+.alcohol-map-legend > i.level-3{background:#ffad83}
+.alcohol-map-legend > i.level-4{background:#ed5868;color:#fff}
+@media (max-width:760px){
+  .alcohol-history-modal-list .alcohol-day-history-card{
+    grid-template-columns:44px minmax(0,1fr);
+    gap:12px;
+  }
+  .alcohol-history-modal-list .list-actions{
+    grid-column:2;
+    justify-self:start;
+  }
+  .alcohol-intensity-map{
+    margin-right:0;
+    padding-right:12px;
+  }
+}
