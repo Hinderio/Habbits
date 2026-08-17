@@ -116,8 +116,8 @@ create table if not exists public.monthly_missions (
   month_key text not null,
   title text not null,
   category text not null default 'manual' check (category in ('fitness','consumption','focus','routine','manual')),
-  metric text not null default 'manual_count' check (metric in ('running_sessions','hiking_days','smoke_free_evenings','alcohol_free_weekend_days','deep_work_sessions','completed_tasks','morning_routines','manual_count')),
-  target integer not null default 1 check (target between 1 and 999),
+  metric text not null default 'manual_count' check (metric in ('running_sessions','hiking_days','smoke_free_evenings','alcohol_free_weekend_days','deep_work_sessions','completed_tasks','morning_routines','weight_measurements','manual_count')),
+  target numeric(6,1) not null default 1 check (target between 1 and 999),
   manual_count integer not null default 0 check (manual_count >= 0),
   is_archived boolean not null default false,
   completed_at timestamptz,
@@ -257,7 +257,7 @@ alter table public.monthly_missions add column if not exists month_key text not 
 alter table public.monthly_missions add column if not exists title text not null default 'Monats-Mission';
 alter table public.monthly_missions add column if not exists category text not null default 'manual';
 alter table public.monthly_missions add column if not exists metric text not null default 'manual_count';
-alter table public.monthly_missions add column if not exists target integer not null default 1;
+alter table public.monthly_missions add column if not exists target numeric(6,1) not null default 1;
 alter table public.monthly_missions add column if not exists manual_count integer not null default 0;
 alter table public.monthly_missions add column if not exists is_archived boolean not null default false;
 alter table public.monthly_missions add column if not exists completed_at timestamptz;
@@ -266,8 +266,9 @@ alter table public.monthly_missions add column if not exists updated_at timestam
 alter table public.monthly_missions drop constraint if exists monthly_missions_category_check;
 alter table public.monthly_missions add constraint monthly_missions_category_check check (category in ('fitness','consumption','focus','routine','manual'));
 alter table public.monthly_missions drop constraint if exists monthly_missions_metric_check;
-alter table public.monthly_missions add constraint monthly_missions_metric_check check (metric in ('running_sessions','hiking_days','smoke_free_evenings','alcohol_free_weekend_days','deep_work_sessions','completed_tasks','morning_routines','manual_count'));
+alter table public.monthly_missions add constraint monthly_missions_metric_check check (metric in ('running_sessions','hiking_days','smoke_free_evenings','alcohol_free_weekend_days','deep_work_sessions','completed_tasks','morning_routines','weight_measurements','manual_count'));
 alter table public.monthly_missions drop constraint if exists monthly_missions_target_check;
+alter table public.monthly_missions alter column target type numeric(6,1) using target::numeric(6,1);
 alter table public.monthly_missions add constraint monthly_missions_target_check check (target between 1 and 999);
 alter table public.monthly_missions drop constraint if exists monthly_missions_manual_count_check;
 alter table public.monthly_missions add constraint monthly_missions_manual_count_check check (manual_count >= 0);
