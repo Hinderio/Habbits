@@ -1362,9 +1362,9 @@
     if (els.activityCatalogForm) els.activityCatalogForm.addEventListener('submit', saveLeisureActivityFromForm);
     if (els.pauseForm) els.pauseForm.addEventListener('submit', savePausePeriod);
     if (els.appointmentForm) els.appointmentForm.addEventListener('submit', createAppointment);
-    if (els.appointmentForm?.elements?.event_kind) {
-      els.appointmentForm.elements.event_kind.addEventListener('change', () => {
-        if (els.appointmentForm.elements.event_kind.value === 'birthday' && els.appointmentForm.elements.recurrence) {
+    if (els.appointmentForm) {
+      els.appointmentForm.addEventListener('change', event => {
+        if (event.target?.name === 'is_birthday' && event.target.checked && els.appointmentForm.elements.recurrence) {
           els.appointmentForm.elements.recurrence.value = 'yearly';
         }
       });
@@ -12865,8 +12865,9 @@ async function deleteAlcoholLog(id) {
     const data = new FormData(els.appointmentForm);
     const startsAt = validIsoOrNull(data.get('starts_at'));
     const endsAt = validIsoOrNull(data.get('ends_at'));
-    const eventKind = normalizeAppointmentEventKind(data.get('event_kind'));
-    const recurrence = eventKind === 'birthday'
+    const isBirthday = data.get('is_birthday') === '1' || data.get('is_birthday') === 'on';
+    const eventKind = normalizeAppointmentEventKind(data.get('event_kind'), isBirthday);
+    const recurrence = isBirthday
       ? 'yearly'
       : normalizeAppointmentRecurrence(data.get('recurrence'));
     const values = {
@@ -12880,7 +12881,7 @@ async function deleteAlcoholLog(id) {
       series_id: null,
       series_index: null,
       event_kind: eventKind,
-      is_birthday: eventKind === 'birthday',
+      is_birthday: isBirthday,
       updated_at: nowIso(),
       synced: false
     };
@@ -12960,7 +12961,8 @@ async function deleteAlcoholLog(id) {
         ? 'yearly'
         : normalizeAppointmentRecurrence(appointment.recurrence) || 'once';
     }
-    if (fields.event_kind) fields.event_kind.value = eventKind;
+    if (fields.event_kind) fields.event_kind.value = eventKind === 'holiday' ? 'holiday' : 'standard';
+    if (fields.is_birthday) fields.is_birthday.checked = eventKind === 'birthday';
     els.appointmentFormTitle.textContent = 'Termin bearbeiten';
     els.appointmentSubmitBtn.textContent = 'Änderungen speichern';
     els.cancelAppointmentEditBtn.classList.remove('hidden');
@@ -12981,6 +12983,7 @@ async function deleteAlcoholLog(id) {
       els.appointmentForm.elements.appointment_type.value = 'personal';
       if (els.appointmentForm.elements.recurrence) els.appointmentForm.elements.recurrence.value = 'once';
       if (els.appointmentForm.elements.event_kind) els.appointmentForm.elements.event_kind.value = 'standard';
+      if (els.appointmentForm.elements.is_birthday) els.appointmentForm.elements.is_birthday.checked = false;
     }
     if (els.appointmentFormTitle) els.appointmentFormTitle.textContent = 'Termin erfassen';
     if (els.appointmentSubmitBtn) els.appointmentSubmitBtn.textContent = 'Termin speichern';
