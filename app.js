@@ -1362,6 +1362,13 @@
     if (els.activityCatalogForm) els.activityCatalogForm.addEventListener('submit', saveLeisureActivityFromForm);
     if (els.pauseForm) els.pauseForm.addEventListener('submit', savePausePeriod);
     if (els.appointmentForm) els.appointmentForm.addEventListener('submit', createAppointment);
+    if (els.appointmentForm?.elements?.event_kind) {
+      els.appointmentForm.elements.event_kind.addEventListener('change', () => {
+        if (els.appointmentForm.elements.event_kind.value === 'birthday' && els.appointmentForm.elements.recurrence) {
+          els.appointmentForm.elements.recurrence.value = 'yearly';
+        }
+      });
+    }
     els.taskForm.elements.effort.addEventListener('change', updateTaskPreview);
     els.taskForm.elements.priority.addEventListener('change', updateTaskPreview);
     if (els.taskForm.elements.due_at) els.taskForm.elements.due_at.addEventListener('change', updateTaskRecurrenceHint);
@@ -2622,6 +2629,43 @@
     };
   }
 
+  const APPOINTMENT_EVENT_KIND_META_RE = /(?:\r?\n)?<!--hf:event-kind=(birthday|holiday)-->/gi;
+
+  function normalizeAppointmentEventKind(value, isBirthday = false) {
+    const key = String(value || '').trim().toLowerCase();
+    if (isBirthday || key === 'birthday') return 'birthday';
+    if (key === 'holiday') return 'holiday';
+    return 'standard';
+  }
+
+  function appointmentDescriptionMeta(value, isBirthday = false) {
+    let markerKind = '';
+    const description = String(value || '').replace(APPOINTMENT_EVENT_KIND_META_RE, (_match, kind) => {
+      markerKind = kind;
+      return '';
+    }).trim();
+    return { description, eventKind: normalizeAppointmentEventKind(markerKind, isBirthday) };
+  }
+
+  function appointmentEventKind(appointment = {}) {
+    const parsed = appointmentDescriptionMeta(appointment.description, appointment.is_birthday);
+    return normalizeAppointmentEventKind(appointment.event_kind || parsed.eventKind, appointment.is_birthday);
+  }
+
+  function appointmentDescriptionForSync(appointment = {}) {
+    const parsed = appointmentDescriptionMeta(appointment.description, appointment.is_birthday);
+    const eventKind = normalizeAppointmentEventKind(appointment.event_kind || parsed.eventKind, appointment.is_birthday);
+    if (eventKind !== 'holiday') return parsed.description;
+    return `${parsed.description}${parsed.description ? '\n' : ''}<!--hf:event-kind=holiday-->`;
+  }
+
+  function appointmentInitials(title, fallback = 'FT') {
+    const words = String(title || '').trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return fallback;
+    const raw = words.length === 1 ? words[0].slice(0, 2) : `${words[0][0]}${words[words.length - 1][0]}`;
+    return raw.toLocaleUpperCase('de-CH');
+  }
+
   function normalizeAppointment(appointment = {}) {
     const created = appointment.created_at || nowIso();
     const startsAt = validIsoOrFallback(appointment.starts_at || appointment.start_at || appointment.date || created, created);
@@ -2631,10 +2675,12 @@
     const seriesIndex = Number.isInteger(appointment.series_index)
       ? appointment.series_index
       : Number.isInteger(Number(appointment.series_index)) ? Number(appointment.series_index) : null;
+    const descriptionMeta = appointmentDescriptionMeta(appointment.description || appointment.note || '', appointment.is_birthday);
+    const eventKind = normalizeAppointmentEventKind(appointment.event_kind || descriptionMeta.eventKind, appointment.is_birthday);
     return {
       ...appointment,
       title: String(appointment.title || '').trim() || 'Termin',
-      description: String(appointment.description || appointment.note || '').trim(),
+      description: descriptionMeta.description,
       location: String(appointment.location || '').trim(),
       appointment_type: normalizeAppointmentType(appointment.appointment_type || appointment.type || 'other'),
       starts_at: startsAt,
@@ -2642,7 +2688,8 @@
       recurrence,
       series_id: recurrence ? (appointment.series_id || null) : null,
       series_index: recurrence ? (seriesIndex ?? 0) : null,
-      is_birthday: Boolean(appointment.is_birthday),
+      event_kind: eventKind,
+      is_birthday: eventKind === 'birthday',
       created_at: created,
       updated_at: appointment.updated_at || created
     };
@@ -10766,13 +10813,19 @@
     const visibleAppointments = appointments.slice(0, 2);
     const chips = visibleAppointments.map(appointment => {
       const type = appointmentTypeMeta(appointment.appointment_type);
-      const isBirthday = Boolean(appointment.is_birthday);
+      const eventKind = appointmentEventKind(appointment);
+      if (eventKind !== 'standard') {
+        const specialLabel = eventKind === 'birthday' ? 'Geburtstag' : 'Ferientag';
+        const initials = appointmentInitials(appointment.title, eventKind === 'birthday' ? 'GB' : 'FT');
+        const accessibleLabel = `${appointment.title || specialLabel}, ${specialLabel}`;
+        return `<span class="day-chip appointment calendar-event-chip is-special-event is-${eventKind}" title="${escapeHtml(accessibleLabel)}" aria-label="${escapeHtml(accessibleLabel)}"><strong>${escapeHtml(initials)}</strong></span>`;
+      }
       const startsAt = appointment?.starts_at ? new Date(appointment.starts_at) : null;
       const time = startsAt && !Number.isNaN(startsAt.getTime())
         ? startsAt.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' })
         : 'Zeit offen';
-      return `<span class="day-chip appointment calendar-event-chip type-${normalizeAppointmentType(appointment.appointment_type)}${isBirthday ? ' is-birthday' : ''}">
-        <b>${escapeHtml(time)} · ${escapeHtml(isBirthday ? 'Geburtstag' : type.short || type.label)}</b>
+      return `<span class="day-chip appointment calendar-event-chip type-${normalizeAppointmentType(appointment.appointment_type)}">
+        <b>${escapeHtml(time)} · ${escapeHtml(type.short || type.label)}</b>
         <em>${escapeHtml(appointment.title || type.label || 'Termin')}</em>
       </span>`;
     });
@@ -10857,10 +10910,12 @@
     const location = appointment.location ? ` · ${escapeHtml(appointment.location)}` : '';
     const description = appointment.description ? `<br>${escapeHtml(appointment.description)}` : '';
     const recurrence = appointment.recurrence ? ` · ${escapeHtml(appointmentRecurrenceLabel(appointment.recurrence))}` : '';
-    const birthday = appointment.is_birthday ? '<span class="appointment-birthday-badge">Geburtstag</span>' : '';
+    const eventKind = appointmentEventKind(appointment);
+    const eventLabel = eventKind === 'birthday' ? 'Geburtstag' : eventKind === 'holiday' ? 'Ferientag' : '';
+    const eventBadge = eventLabel ? `<span class="appointment-event-badge is-${eventKind}">${eventLabel}</span>` : '';
     return `<article class="list-card appointment-card ${editingAppointmentId === appointment.id ? 'is-editing' : ''}">
       <div class="list-card-main">
-        <h4>${escapeHtml(appointment.title)}${birthday}</h4>
+        <h4>${escapeHtml(appointment.title)}${eventBadge}</h4>
         <p class="meta">${escapeHtml(formatAppointmentRange(appointment))} · ${escapeHtml(type.label)}${recurrence}${location}${description}</p>
       </div>
       <div class="list-actions">
@@ -12723,7 +12778,7 @@ async function deleteAlcoholLog(id) {
     return {
       id: appointment.id,
       title: appointment.title,
-      description: appointment.description || null,
+      description: appointmentDescriptionForSync(appointment) || null,
       location: appointment.location || null,
       appointment_type: normalizeAppointmentType(appointment.appointment_type),
       starts_at: appointment.starts_at,
@@ -12733,7 +12788,7 @@ async function deleteAlcoholLog(id) {
       series_index: Number.isInteger(appointment.series_index)
         ? appointment.series_index
         : Number.isInteger(Number(appointment.series_index)) ? Number(appointment.series_index) : null,
-      is_birthday: Boolean(appointment.is_birthday),
+      is_birthday: appointmentEventKind(appointment) === 'birthday',
       created_at: appointment.created_at,
       updated_at: appointment.updated_at || nowIso()
     };
@@ -12810,7 +12865,10 @@ async function deleteAlcoholLog(id) {
     const data = new FormData(els.appointmentForm);
     const startsAt = validIsoOrNull(data.get('starts_at'));
     const endsAt = validIsoOrNull(data.get('ends_at'));
-    const recurrence = normalizeAppointmentRecurrence(data.get('recurrence'));
+    const eventKind = normalizeAppointmentEventKind(data.get('event_kind'));
+    const recurrence = eventKind === 'birthday'
+      ? 'yearly'
+      : normalizeAppointmentRecurrence(data.get('recurrence'));
     const values = {
       title: String(data.get('title') || '').trim(),
       description: String(data.get('description') || '').trim(),
@@ -12821,7 +12879,8 @@ async function deleteAlcoholLog(id) {
       recurrence,
       series_id: null,
       series_index: null,
-      is_birthday: Boolean(data.get('is_birthday')),
+      event_kind: eventKind,
+      is_birthday: eventKind === 'birthday',
       updated_at: nowIso(),
       synced: false
     };
@@ -12895,8 +12954,13 @@ async function deleteAlcoholLog(id) {
     fields.appointment_type.value = normalizeAppointmentType(appointment.appointment_type);
     fields.location.value = appointment.location || '';
     fields.description.value = appointment.description || '';
-    if (fields.recurrence) fields.recurrence.value = normalizeAppointmentRecurrence(appointment.recurrence) || 'once';
-    if (fields.is_birthday) fields.is_birthday.checked = Boolean(appointment.is_birthday);
+    const eventKind = appointmentEventKind(appointment);
+    if (fields.recurrence) {
+      fields.recurrence.value = eventKind === 'birthday'
+        ? 'yearly'
+        : normalizeAppointmentRecurrence(appointment.recurrence) || 'once';
+    }
+    if (fields.event_kind) fields.event_kind.value = eventKind;
     els.appointmentFormTitle.textContent = 'Termin bearbeiten';
     els.appointmentSubmitBtn.textContent = 'Änderungen speichern';
     els.cancelAppointmentEditBtn.classList.remove('hidden');
@@ -12916,7 +12980,7 @@ async function deleteAlcoholLog(id) {
       els.appointmentForm.elements.ends_at.value = defaults.end;
       els.appointmentForm.elements.appointment_type.value = 'personal';
       if (els.appointmentForm.elements.recurrence) els.appointmentForm.elements.recurrence.value = 'once';
-      if (els.appointmentForm.elements.is_birthday) els.appointmentForm.elements.is_birthday.checked = false;
+      if (els.appointmentForm.elements.event_kind) els.appointmentForm.elements.event_kind.value = 'standard';
     }
     if (els.appointmentFormTitle) els.appointmentFormTitle.textContent = 'Termin erfassen';
     if (els.appointmentSubmitBtn) els.appointmentSubmitBtn.textContent = 'Termin speichern';

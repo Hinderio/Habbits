@@ -2980,46 +2980,50 @@ body.light .pause-card-log-row{
   color:var(--primary)!important;
 }
 
-.appointment-checkbox-row{
-  display:flex;
+.day-chip.calendar-event-chip.is-special-event{
+  display:inline-flex;
   align-items:center;
-  gap:10px;
-  min-height:44px;
-  padding:0 16px;
-  border:1px solid var(--line);
-  border-radius:18px;
-  background:rgba(255,255,255,.62);
-  color:var(--text);
+  justify-content:center;
+  justify-self:start;
+  width:42px;
+  height:42px;
+  min-width:42px;
+  padding:0!important;
+  border:0!important;
+  border-radius:999px!important;
+  box-shadow:none!important;
+  color:#0d1827!important;
 }
 
-.appointment-checkbox-row input{
-  width:18px;
-  height:18px;
-  accent-color:#f6b33f;
+.day-chip.calendar-event-chip.is-special-event strong{
+  display:block;
+  font-size:.76rem;
+  font-weight:950;
+  line-height:1;
+  letter-spacing:0;
 }
 
-.appointment-checkbox-row strong{
-  font-size:.9rem;
-  font-weight:850;
-}
+.day-chip.calendar-event-chip.is-special-event.is-birthday{background:#f6b33f!important}
+.day-chip.calendar-event-chip.is-special-event.is-holiday{background:#efb3bd!important}
 
-.calendar-event-chip.is-birthday{
-  box-shadow:inset 3px 0 0 rgba(246,179,63,.72);
-  border-color:rgba(246,179,63,.22);
-  background:rgba(246,179,63,.08);
-}
-
-.appointment-birthday-badge{
+.appointment-event-badge{
   display:inline-flex;
   align-items:center;
   margin-left:8px;
-  padding:3px 8px;
+  padding:2px 9px;
   border-radius:999px;
-  background:rgba(246,179,63,.14);
-  color:#9a6400;
   font-size:.68rem;
-  font-weight:950;
+  font-weight:900;
+  line-height:1.25;
   vertical-align:middle;
+}
+
+.appointment-event-badge.is-birthday{background:rgba(246,179,63,.14);color:#9a6400}
+.appointment-event-badge.is-holiday{background:rgba(239,179,189,.3);color:#9a4051}
+
+@media (max-width:760px){
+  .day-chip.calendar-event-chip.is-special-event{width:30px;height:30px;min-width:30px}
+  .day-chip.calendar-event-chip.is-special-event strong{font-size:.62rem}
 }
 body.light .task-cycle-hint{
   background:rgba(255,255,255,.72);
