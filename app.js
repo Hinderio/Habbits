@@ -12719,7 +12719,92 @@ async function deleteAlcoholLog(id) {
     els.taskPointsPreview.textContent = bonus ? `+${taskPoints(previewTask)} Pkt. · Prio +${bonus}` : `+${taskPoints(previewTask)} Pkt.`;
   }
 
-  function createAppointment(event) {
+  function appointmentRowForSync(appointment) {
+    return {
+      id: appointment.id,
+      title: appointment.title,
+      description: appointment.description || null,
+      location: appointment.location || null,
+      appointment_type: normalizeAppointmentType(appointment.appointment_type),
+      starts_at: appointment.starts_at,
+      ends_at: appointment.ends_at || null,
+      recurrence: normalizeAppointmentRecurrence(appointment.recurrence),
+      series_id: appointment.series_id || null,
+      series_index: Number.isInteger(appointment.series_index)
+        ? appointment.series_index
+        : Number.isInteger(Number(appointment.series_index)) ? Number(appointment.series_index) : null,
+      is_birthday: Boolean(appointment.is_birthday),
+      created_at: appointment.created_at,
+      updated_at: appointment.updated_at || nowIso()
+    };
+  }
+
+  function markRemoteDeletesSynced(table, ids = []) {
+    const syncedAt = nowIso();
+    let changed = false;
+    ids.filter(Boolean).forEach(id => {
+      if (!state.deletedRemoteIds?.[table]?.[id]) return;
+      state.deletedRemoteIds[table][id].synced_at = syncedAt;
+      changed = true;
+    });
+    if (changed) writeRemoteDeleteArchive(state.deletedRemoteIds);
+  }
+
+  async function persistAppointmentEdit(rows, deleteIds = []) {
+    if (!supabaseClient || !isAuthenticated()) return false;
+    const payloadRows = rows.map(appointmentRowForSync);
+    const confirmedIds = new Set();
+    suppressRemotePullUntil = Date.now() + SELF_WRITE_ECHO_GRACE_MS;
+
+    const upsertAndConfirm = async scopedRows => {
+      const { data, error } = await supabaseClient
+        .from('appointments')
+        .upsert(scopedRows, { onConflict: 'id' })
+        .select('id, starts_at, ends_at, updated_at');
+      if (error) throw error;
+      (data || []).forEach(remoteRow => {
+        const expected = payloadRows.find(row => row.id === remoteRow.id);
+        if (!expected) return;
+        const sameStart = validIsoOrNull(remoteRow.starts_at) === validIsoOrNull(expected.starts_at);
+        const sameEnd = validIsoOrNull(remoteRow.ends_at) === validIsoOrNull(expected.ends_at);
+        if (sameStart && sameEnd) confirmedIds.add(remoteRow.id);
+      });
+    };
+
+    try {
+      const scopedRows = rowsForCurrentUser(payloadRows);
+      try {
+        await upsertAndConfirm(scopedRows);
+      } catch (batchError) {
+        console.warn('Kalender-Edit: Serien-Upsert wird pro Termin wiederholt.', batchError);
+        for (const row of scopedRows) {
+          try {
+            await upsertAndConfirm([row]);
+          } catch (rowError) {
+            console.warn('Kalender-Edit: Termin konnte nicht bestätigt gespeichert werden.', { id: row.id, error: rowError });
+          }
+        }
+      }
+
+      const confirmedRows = payloadRows.filter(row => confirmedIds.has(row.id));
+      markRowsSynced('appointments', confirmedRows);
+
+      let deletesConfirmed = true;
+      if (deleteIds.length) {
+        deletesConfirmed = await deleteRemoteByIds('appointments', deleteIds);
+        if (deletesConfirmed) markRemoteDeletesSynced('appointments', deleteIds);
+      }
+
+      suppressRemotePullUntil = Date.now() + SELF_WRITE_ECHO_GRACE_MS;
+      saveState({ skipRender: true });
+      return confirmedIds.size === payloadRows.length && deletesConfirmed;
+    } catch (error) {
+      console.warn('Kalender-Edit konnte nicht vollständig in Supabase bestätigt werden.', error);
+      return false;
+    }
+  }
+
+  async function createAppointment(event) {
     event.preventDefault();
     if (!els.appointmentForm) return;
     const data = new FormData(els.appointmentForm);
@@ -12777,7 +12862,11 @@ async function deleteAlcoholLog(id) {
       calendarCursor = new Date(`${selectedCalendarDate}T12:00:00`);
       saveState();
       toast('Termin aktualisiert');
-      syncWithSupabase({ silent: true, pullFirst: false, pullAfter: true });
+      const persisted = await persistAppointmentEdit(rows, deleteIds);
+      if (!persisted) {
+        toast('Termin lokal gespeichert; Supabase-Sync wird erneut versucht.');
+        syncWithSupabase({ silent: true, pullFirst: false, pullAfter: false });
+      }
       return;
     }
 
@@ -13803,14 +13892,7 @@ async function deleteAlcoholLog(id) {
 
         wroteRemote = await upsertTaskIdeaRows({ forceAll: forcePushAll }) || wroteRemote;
 
-        const appointmentRows = rowsPendingSync('appointments', state.appointments, { forceAll: forcePushAll }).map(a => ({
-          id: a.id, title: a.title, description: a.description || null, location: a.location || null,
-          appointment_type: normalizeAppointmentType(a.appointment_type), starts_at: a.starts_at, ends_at: a.ends_at || null,
-          recurrence: normalizeAppointmentRecurrence(a.recurrence), series_id: a.series_id || null,
-          series_index: Number.isInteger(a.series_index) ? a.series_index : Number.isInteger(Number(a.series_index)) ? Number(a.series_index) : null,
-          is_birthday: Boolean(a.is_birthday),
-          created_at: a.created_at, updated_at: a.updated_at || nowIso()
-        }));
+        const appointmentRows = rowsPendingSync('appointments', state.appointments, { forceAll: forcePushAll }).map(appointmentRowForSync);
         if (await upsertRows('appointments', appointmentRows)) {
           wroteRemote = true;
           markRowsSynced('appointments', appointmentRows);
@@ -14555,11 +14637,16 @@ async function deleteAlcoholLog(id) {
     remoteAppointments.forEach(remoteAppointment => {
       const localAppointment = localById.get(remoteAppointment.id);
       // A background pull can finish while an edited appointment is still
-      // waiting for its upsert. Keep that pending edit instead of restoring
-      // the older remote row with the same id.
+      // waiting for its upsert, or can carry a stale snapshot captured before
+      // the confirmed write. Keep the pending/newer edit in both cases.
+      const localUpdatedAt = Date.parse(localAppointment?.updated_at || localAppointment?.created_at || '') || 0;
+      const remoteUpdatedAt = Date.parse(remoteAppointment.updated_at || remoteAppointment.created_at || '') || 0;
+      const keepLocal = Boolean(localAppointment) && (
+        localAppointment.synced !== true || localUpdatedAt > remoteUpdatedAt
+      );
       merged.set(
         remoteAppointment.id,
-        localAppointment?.synced !== true ? localAppointment : remoteAppointment
+        keepLocal ? localAppointment : remoteAppointment
       );
     });
 
