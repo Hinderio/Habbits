@@ -4846,3 +4846,28 @@ body.monthly-magazine-reader-open{overflow:hidden}
     grid-template-columns: 58px repeat(11, minmax(76px, 1fr));
   }
 }
+
+/* Appointment type: birthday remains a dedicated marker beside Event-Typ. */
+.appointment-birthday-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 49px;
+  padding: 0 2px;
+}
+
+.appointment-birthday-toggle input[type="checkbox"] {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  margin: 0;
+  padding: 0;
+  accent-color: #f6b33f;
+}
+
+.form-grid label .appointment-birthday-toggle strong {
+  color: var(--muted);
+  font-size: .96rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
