@@ -10864,8 +10864,8 @@
         <p class="meta">${escapeHtml(formatAppointmentRange(appointment))} · ${escapeHtml(type.label)}${recurrence}${location}${description}</p>
       </div>
       <div class="list-actions">
-        <button class="mini-btn" type="button" data-action="edit-appointment" data-id="${appointment.id}">Bearbeiten</button>
-        <button class="mini-btn danger" type="button" data-action="delete-appointment" data-id="${appointment.id}">Löschen</button>
+        <button class="consumption-icon-action" type="button" data-action="edit-appointment" data-id="${appointment.id}" aria-label="Termin bearbeiten" title="Bearbeiten">${svgIcon('edit', 'ui-icon')}</button>
+        <button class="consumption-icon-action consumption-icon-action-delete" type="button" data-action="delete-appointment" data-id="${appointment.id}" aria-label="Termin löschen" title="Löschen">${svgIcon('trash', 'ui-icon')}</button>
       </div>
     </article>`;
   }
