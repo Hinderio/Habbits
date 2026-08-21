@@ -14546,11 +14546,30 @@ async function deleteAlcoholLog(id) {
 
   function mergeAppointmentsByRemoteAuthority(localRows, remoteRows, mapper) {
     const remoteAppointments = remoteRows.map(mapper).map(normalizeAppointment);
-    const remoteIds = new Set(remoteAppointments.map(item => item.id));
-    const localUnsynced = (localRows || [])
+    const localById = new Map((localRows || [])
       .map(normalizeAppointment)
-      .filter(item => item.id && item.synced !== true && !remoteIds.has(item.id) && !isRemoteDeleted('appointments', item.id));
-    return [...remoteAppointments, ...localUnsynced].sort(compareAppointments);
+      .filter(item => item.id && !isRemoteDeleted('appointments', item.id))
+      .map(item => [item.id, item]));
+    const merged = new Map();
+
+    remoteAppointments.forEach(remoteAppointment => {
+      const localAppointment = localById.get(remoteAppointment.id);
+      // A background pull can finish while an edited appointment is still
+      // waiting for its upsert. Keep that pending edit instead of restoring
+      // the older remote row with the same id.
+      merged.set(
+        remoteAppointment.id,
+        localAppointment?.synced !== true ? localAppointment : remoteAppointment
+      );
+    });
+
+    localById.forEach(localAppointment => {
+      if (localAppointment.synced !== true && !merged.has(localAppointment.id)) {
+        merged.set(localAppointment.id, localAppointment);
+      }
+    });
+
+    return Array.from(merged.values()).sort(compareAppointments);
   }
 
   function isLocalPristine() {
