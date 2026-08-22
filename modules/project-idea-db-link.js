@@ -114,17 +114,17 @@
     return true;
   }
 
-  function hasStoredSupabaseSession() {
+  function readStoredSupabaseAccessToken() {
     try {
       for (let index = 0; index < window.localStorage.length; index += 1) {
         const key = window.localStorage.key(index);
         if (!/^sb-.*-auth-token$/.test(String(key || ''))) continue;
         const stored = JSON.parse(window.localStorage.getItem(key) || 'null');
         const accessToken = stored?.access_token || stored?.currentSession?.access_token || stored?.session?.access_token;
-        if (accessToken) return true;
+        if (accessToken) return String(accessToken);
       }
     } catch {}
-    return false;
+    return '';
   }
 
   function isAuthError(error) {
@@ -140,30 +140,26 @@
 
   function getSupabaseClient() {
     if (supabaseClient) return supabaseClient;
-    if (Date.now() < authBlockedUntil || !hasStoredSupabaseSession()) return null;
+    if (Date.now() < authBlockedUntil) return null;
+    const accessToken = readStoredSupabaseAccessToken();
+    if (!accessToken) return null;
     const config = window.HABITFLOW_SUPABASE_CONFIG;
     const createClient = window.supabase?.createClient;
     if (!config?.url || !config?.anonKey || typeof createClient !== 'function') return null;
     supabaseClient = createClient(config.url, config.anonKey, {
-      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
+      global: { headers: { Authorization: `Bearer ${accessToken}` } },
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+        storageKey: 'habitflow-project-idea-link-rest-only'
+      }
     });
     return supabaseClient;
   }
 
-  async function getAuthenticatedClient() {
-    const client = getSupabaseClient();
-    if (!client) return null;
-    try {
-      const { data, error } = await client.auth.getSession();
-      if (error || !data?.session?.access_token) {
-        markAuthUnavailable();
-        return null;
-      }
-      return client;
-    } catch {
-      markAuthUnavailable();
-      return null;
-    }
+  function getAuthenticatedClient() {
+    return getSupabaseClient();
   }
 
   function isMissingProjectColumn(error) {
@@ -282,9 +278,10 @@
         } catch {}
       }
       const result = original.call(this, key, nextValue);
-      if (this === window.localStorage && /^sb-.*-auth-token$/.test(String(key || '')) && String(nextValue || '')) {
+      if (this === window.localStorage && /^sb-.*-auth-token$/.test(String(key || ''))) {
+        supabaseClient = null;
         authBlockedUntil = 0;
-        window.setTimeout(() => queueReconcile(500), 0);
+        if (String(nextValue || '')) window.setTimeout(() => queueReconcile(500), 0);
       }
       return result;
     };
@@ -296,6 +293,12 @@
     window.addEventListener('habitflow:projects-changed', () => queueReconcile(300));
     window.addEventListener('habitflow:project-task-link-updated', () => queueReconcile(300));
     window.addEventListener('storage', event => {
+      if (/^sb-.*-auth-token$/.test(String(event.key || ''))) {
+        supabaseClient = null;
+        authBlockedUntil = 0;
+        if (event.newValue) queueReconcile(500);
+        return;
+      }
       if (event.key === STATE_KEY || event.key === BRIDGE_LINKS_KEY || event.key === DB_LINKS_KEY) queueReconcile(300);
     });
     document.addEventListener('submit', event => {
