@@ -983,8 +983,41 @@
   let leisurePullTimer = null;
 
   const els = {};
+  let appInitPromise = null;
+  let appInitialized = false;
 
-  document.addEventListener('DOMContentLoaded', init);
+  function startApp() {
+    if (appInitialized) return Promise.resolve();
+    if (appInitPromise) return appInitPromise;
+
+    appInitPromise = init()
+      .then(() => {
+        appInitialized = true;
+      })
+      .catch((error) => {
+        console.error('HabitFlow Initialisierung fehlgeschlagen', error);
+        throw error;
+      })
+      .finally(() => {
+        if (!appInitialized) appInitPromise = null;
+      });
+
+    return appInitPromise;
+  }
+
+  function requestAppStart() {
+    startApp().catch((error) => {
+      console.warn('HabitFlow Start wird beim nächsten Aktivieren erneut versucht', error);
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', requestAppStart, { once: true });
+  } else {
+    requestAppStart();
+  }
+
+  window.addEventListener('pageshow', requestAppStart);
 
   async function init() {
     cacheEls();
