@@ -10521,10 +10521,10 @@
       <div class="list-actions compact-actions backlog-actions">
         <button class="mini-btn primary" type="button" data-action="move-backlog-task" data-status="open" data-id="${task.id}">In Offen</button>
         <button class="mini-btn" type="button" data-action="open-task-detail" data-id="${task.id}">Details</button>
-        <button class="mini-btn" type="button" data-action="edit-task" data-id="${task.id}">Bearbeiten</button>
+        <button class="consumption-icon-action" type="button" data-action="edit-task" data-id="${task.id}" aria-label="Task bearbeiten" title="Bearbeiten">${svgIcon('edit', 'ui-icon')}</button>
         <button class="mini-btn" type="button" data-action="backlog-rank-up" data-id="${task.id}" ${index === 0 ? 'disabled' : ''}>↑</button>
         <button class="mini-btn" type="button" data-action="backlog-rank-down" data-id="${task.id}" ${index === total - 1 ? 'disabled' : ''}>↓</button>
-        <button class="mini-btn danger" type="button" data-action="delete-task" data-id="${task.id}">Löschen</button>
+        <button class="consumption-icon-action consumption-icon-action-delete" type="button" data-action="delete-task" data-id="${task.id}" aria-label="Task löschen" title="Löschen">${svgIcon('trash', 'ui-icon')}</button>
       </div>
     </article>`;
   }
@@ -10563,10 +10563,10 @@
       <div class="list-actions compact-actions backlog-actions">
         <button class="mini-btn primary" type="button" data-action="restore-archived-task" data-id="${task.id}">Zurück zu Erledigt</button>
         <button class="mini-btn" type="button" data-action="open-task-detail" data-id="${task.id}">Details</button>
-        <button class="mini-btn" type="button" data-action="edit-task" data-id="${task.id}">Bearbeiten</button>
+        <button class="consumption-icon-action" type="button" data-action="edit-task" data-id="${task.id}" aria-label="Task bearbeiten" title="Bearbeiten">${svgIcon('edit', 'ui-icon')}</button>
         <button class="mini-btn" type="button" data-action="done-archive-rank-up" data-id="${task.id}" ${index === 0 ? 'disabled' : ''}>↑</button>
         <button class="mini-btn" type="button" data-action="done-archive-rank-down" data-id="${task.id}" ${index === total - 1 ? 'disabled' : ''}>↓</button>
-        <button class="mini-btn danger" type="button" data-action="delete-task" data-id="${task.id}">Löschen</button>
+        <button class="consumption-icon-action consumption-icon-action-delete" type="button" data-action="delete-task" data-id="${task.id}" aria-label="Task löschen" title="Löschen">${svgIcon('trash', 'ui-icon')}</button>
       </div>
     </article>`;
   }
@@ -10637,9 +10637,9 @@
       <div class="list-actions compact-actions">
         ${primaryAction}
         <button class="mini-btn" type="button" data-action="open-task-detail" data-id="${task.id}">Details</button>
-        <button class="mini-btn" type="button" data-action="edit-task" data-id="${task.id}">Bearbeiten</button>
+        <button class="consumption-icon-action" type="button" data-action="edit-task" data-id="${task.id}" aria-label="Task bearbeiten" title="Bearbeiten">${svgIcon('edit', 'ui-icon')}</button>
         ${archiveAction}
-        <button class="mini-btn danger" type="button" data-action="delete-task" data-id="${task.id}">Löschen</button>
+        <button class="consumption-icon-action consumption-icon-action-delete" type="button" data-action="delete-task" data-id="${task.id}" aria-label="Task löschen" title="Löschen">${svgIcon('trash', 'ui-icon')}</button>
       </div>
     </article>`;
   }
@@ -10704,7 +10704,7 @@
     ${renderTaskImageGallery(normalized)}
     <div class="task-detail-actions">
       ${primaryAction}
-      <button class="pill secondary" type="button" data-action="edit-task" data-id="${normalized.id}">Bearbeiten</button>
+      <button class="consumption-icon-action" type="button" data-action="edit-task" data-id="${normalized.id}" aria-label="Task bearbeiten" title="Bearbeiten">${svgIcon('edit', 'ui-icon')}</button>
       <button class="pill secondary" type="button" data-action="close-task-detail">Schliessen</button>
     </div>`;
   }
