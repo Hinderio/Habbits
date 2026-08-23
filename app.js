@@ -13156,9 +13156,74 @@ async function deleteAlcoholLog(id) {
     return `Pause ${formatDuration(minutes)}${repeat}`;
   }
 
+  const SMOKE_PAUSE_POINTS_PER_DAY = -25;
+  const SMOKE_PAUSE_POINTS_REASON_PREFIX = 'Rauchpause · 25 Pkt. pro Pausentag';
+
+  function smokePauseCalendarDays(period, referenceDate = new Date()) {
+    const pause = normalizePausePeriod(period);
+    const startsAt = new Date(pause.starts_at);
+    const reference = referenceDate instanceof Date ? referenceDate : new Date(referenceDate);
+    if (!Number.isFinite(startsAt.getTime()) || !Number.isFinite(reference.getTime()) || startsAt > reference) return 0;
+
+    const configuredEnd = pause.ends_at ? new Date(pause.ends_at) : reference;
+    if (!Number.isFinite(configuredEnd.getTime()) || configuredEnd < startsAt) return 0;
+    const effectiveEnd = configuredEnd > reference ? reference : configuredEnd;
+    const localDayNumber = date => Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / DAY_MS);
+    return Math.max(0, localDayNumber(effectiveEnd) - localDayNumber(startsAt) + 1);
+  }
+
+  function isSmokePauseLedgerEntry(entry = {}) {
+    return entry.source_type === 'manual'
+      && String(entry.reason || '').startsWith(SMOKE_PAUSE_POINTS_REASON_PREFIX);
+  }
+
+  function reconcileSmokePausePoints(referenceDate = new Date()) {
+    const expectedPauseIds = new Set();
+    let changed = false;
+
+    (state.pausePeriods || [])
+      .map(normalizePausePeriod)
+      .filter(period => period.id && period.scope === 'smoke' && !period.is_archived)
+      .forEach(period => {
+        const days = smokePauseCalendarDays(period, referenceDate);
+        if (days <= 0) return;
+
+        expectedPauseIds.add(period.id);
+        const existingEntries = state.pointsLedger.filter(entry =>
+          entry.source_type === 'manual' && entry.source_id === period.id
+        );
+        const duplicateIds = existingEntries.slice(1).map(entry => entry.id).filter(Boolean);
+        const dayLabel = days === 1 ? 'Tag' : 'Tage';
+        const reason = `${SMOKE_PAUSE_POINTS_REASON_PREFIX} · ${days} ${dayLabel}`;
+
+        if (addPoints('manual', period.id, SMOKE_PAUSE_POINTS_PER_DAY * days, reason, period.starts_at)) {
+          changed = true;
+        }
+        if (duplicateIds.length) {
+          markRemoteDeletedMany('points_ledger', duplicateIds);
+        }
+      });
+
+    const staleEntries = state.pointsLedger.filter(entry =>
+      isSmokePauseLedgerEntry(entry) && !expectedPauseIds.has(entry.source_id)
+    );
+    if (staleEntries.length) {
+      const staleIds = staleEntries.map(entry => entry.id).filter(Boolean);
+      const staleIdSet = new Set(staleIds);
+      state.pointsLedger = state.pointsLedger.filter(entry => !staleIdSet.has(entry.id));
+      markRemoteDeletedMany('points_ledger', staleIds);
+      changed = true;
+    }
+
+    return changed;
+  }
+
   function migrateCigaretteScoring() {
-    if (!visibleCigarettes().length) return false;
-    const changed = recalculateSmokeIntervals({ markUpdated: true });
+    const pausePointsChanged = reconcileSmokePausePoints();
+    const cigarettePointsChanged = visibleCigarettes().length
+      ? recalculateSmokeIntervals({ markUpdated: true })
+      : false;
+    const changed = pausePointsChanged || cigarettePointsChanged;
     if (changed) saveState({ skipRender: true });
     return changed;
   }
