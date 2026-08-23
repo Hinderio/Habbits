@@ -10521,10 +10521,12 @@
       <div class="list-actions compact-actions backlog-actions">
         <button class="mini-btn primary" type="button" data-action="move-backlog-task" data-status="open" data-id="${task.id}">In Offen</button>
         <button class="mini-btn" type="button" data-action="open-task-detail" data-id="${task.id}">Details</button>
-        <button class="consumption-icon-action" type="button" data-action="edit-task" data-id="${task.id}" aria-label="Task bearbeiten" title="Bearbeiten">${svgIcon('edit', 'ui-icon')}</button>
         <button class="mini-btn" type="button" data-action="backlog-rank-up" data-id="${task.id}" ${index === 0 ? 'disabled' : ''}>↑</button>
         <button class="mini-btn" type="button" data-action="backlog-rank-down" data-id="${task.id}" ${index === total - 1 ? 'disabled' : ''}>↓</button>
-        <button class="consumption-icon-action consumption-icon-action-delete" type="button" data-action="delete-task" data-id="${task.id}" aria-label="Task löschen" title="Löschen">${svgIcon('trash', 'ui-icon')}</button>
+        <span class="task-card-icon-actions">
+          <button class="consumption-icon-action" type="button" data-action="edit-task" data-id="${task.id}" aria-label="Task bearbeiten" title="Bearbeiten">${svgIcon('edit', 'ui-icon')}</button>
+          <button class="consumption-icon-action consumption-icon-action-delete" type="button" data-action="delete-task" data-id="${task.id}" aria-label="Task löschen" title="Löschen">${svgIcon('trash', 'ui-icon')}</button>
+        </span>
       </div>
     </article>`;
   }
@@ -10563,10 +10565,12 @@
       <div class="list-actions compact-actions backlog-actions">
         <button class="mini-btn primary" type="button" data-action="restore-archived-task" data-id="${task.id}">Zurück zu Erledigt</button>
         <button class="mini-btn" type="button" data-action="open-task-detail" data-id="${task.id}">Details</button>
-        <button class="consumption-icon-action" type="button" data-action="edit-task" data-id="${task.id}" aria-label="Task bearbeiten" title="Bearbeiten">${svgIcon('edit', 'ui-icon')}</button>
         <button class="mini-btn" type="button" data-action="done-archive-rank-up" data-id="${task.id}" ${index === 0 ? 'disabled' : ''}>↑</button>
         <button class="mini-btn" type="button" data-action="done-archive-rank-down" data-id="${task.id}" ${index === total - 1 ? 'disabled' : ''}>↓</button>
-        <button class="consumption-icon-action consumption-icon-action-delete" type="button" data-action="delete-task" data-id="${task.id}" aria-label="Task löschen" title="Löschen">${svgIcon('trash', 'ui-icon')}</button>
+        <span class="task-card-icon-actions">
+          <button class="consumption-icon-action" type="button" data-action="edit-task" data-id="${task.id}" aria-label="Task bearbeiten" title="Bearbeiten">${svgIcon('edit', 'ui-icon')}</button>
+          <button class="consumption-icon-action consumption-icon-action-delete" type="button" data-action="delete-task" data-id="${task.id}" aria-label="Task löschen" title="Löschen">${svgIcon('trash', 'ui-icon')}</button>
+        </span>
       </div>
     </article>`;
   }
@@ -10637,9 +10641,11 @@
       <div class="list-actions compact-actions">
         ${primaryAction}
         <button class="mini-btn" type="button" data-action="open-task-detail" data-id="${task.id}">Details</button>
-        <button class="consumption-icon-action" type="button" data-action="edit-task" data-id="${task.id}" aria-label="Task bearbeiten" title="Bearbeiten">${svgIcon('edit', 'ui-icon')}</button>
         ${archiveAction}
-        <button class="consumption-icon-action consumption-icon-action-delete" type="button" data-action="delete-task" data-id="${task.id}" aria-label="Task löschen" title="Löschen">${svgIcon('trash', 'ui-icon')}</button>
+        <span class="task-card-icon-actions">
+          <button class="consumption-icon-action" type="button" data-action="edit-task" data-id="${task.id}" aria-label="Task bearbeiten" title="Bearbeiten">${svgIcon('edit', 'ui-icon')}</button>
+          <button class="consumption-icon-action consumption-icon-action-delete" type="button" data-action="delete-task" data-id="${task.id}" aria-label="Task löschen" title="Löschen">${svgIcon('trash', 'ui-icon')}</button>
+        </span>
       </div>
     </article>`;
   }
