@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v268-alcohol-daily-intensity';
+const CACHE_NAME = 'habitflow-v269-calendar-bootstrap-fix';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -117,7 +117,7 @@ function nativeAppointmentPatch(script) {
   if (!next.includes('function syncAppointmentBirthdayRecurrence()')) {
     next = next.replace(
       "if (els.appointmentForm?.elements?.starts_at) els.appointmentForm.elements.starts_at.addEventListener('change', syncAppointmentEndDefault);",
-      "if (els.appointmentForm?.elements?.starts_at) els.appointmentForm.elements.starts_at.addEventListener('change', syncAppointmentEndDefault);\n    if (els.appointmentForm?.elements?.is_birthday) els.appointmentForm.elements.is_birthday.addEventListener('change', syncAppointmentBirthdayRecurrence);\n    if (els.appointmentForm?.elements?.recurrence) els.appointmentForm.elements.recurrence.addEventListener('change', syncAppointmentBirthdayRecurrence);"
+      "if (els.appointmentForm?.elements?.starts_at) els.appointmentForm.elements.starts_at.addEventListener('change', syncAppointmentEndDefault);\n    if (els.appointmentForm?.elements?.recurrence) els.appointmentForm.elements.recurrence.addEventListener('change', syncAppointmentBirthdayRecurrence);"
     );
     next = next.replace(
       "if (!els.appointmentForm) return;\n    const data = new FormData(els.appointmentForm);",
