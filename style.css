@@ -2984,10 +2984,16 @@ body.light .pause-card-log-row{
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  justify-self:start;
-  width:42px;
-  height:42px;
-  min-width:42px;
+  place-self:start;
+  flex:none!important;
+  box-sizing:border-box!important;
+  width:42px!important;
+  min-width:42px!important;
+  max-width:42px!important;
+  height:42px!important;
+  min-height:42px!important;
+  max-height:42px!important;
+  aspect-ratio:1;
   padding:0!important;
   border:0!important;
   border-radius:999px!important;
@@ -3005,7 +3011,7 @@ body.light .pause-card-log-row{
 
 .day-chip.calendar-event-chip.is-special-event.is-birthday{background:#f6b33f!important}
 .day-chip.calendar-event-chip.is-special-event.is-holiday{background:#efb3bd!important}
-.day-chip.calendar-event-chip.is-special-event.is-public_holiday{background:#61b0e7!important}
+.day-chip.calendar-event-chip.is-special-event.is-public_holiday{background:#9bd3ef!important}
 
 .appointment-event-badge{
   display:inline-flex;
@@ -3021,10 +3027,10 @@ body.light .pause-card-log-row{
 
 .appointment-event-badge.is-birthday{background:rgba(246,179,63,.14);color:#9a6400}
 .appointment-event-badge.is-holiday{background:rgba(239,179,189,.30);color:#9a4051}
-.appointment-event-badge.is-public_holiday{background:rgba(97,176,231,.22);color:#1f5f89}
+.appointment-event-badge.is-public_holiday{background:rgba(155,211,239,.30);color:#1f5f89}
 
 @media (max-width:760px){
-  .day-chip.calendar-event-chip.is-special-event{width:30px;height:30px;min-width:30px}
+  .day-chip.calendar-event-chip.is-special-event{width:30px!important;min-width:30px!important;max-width:30px!important;height:30px!important;min-height:30px!important;max-height:30px!important}
   .day-chip.calendar-event-chip.is-special-event strong{font-size:.62rem}
 }
 body.light .task-cycle-hint{
