@@ -2662,12 +2662,13 @@
     };
   }
 
-  const APPOINTMENT_EVENT_KIND_META_RE = /(?:\r?\n)?<!--hf:event-kind=(birthday|holiday)-->/gi;
+  const APPOINTMENT_EVENT_KIND_META_RE = /(?:\r?\n)?<!--hf:event-kind=(birthday|holiday|public_holiday)-->/gi;
 
   function normalizeAppointmentEventKind(value, isBirthday = false) {
     const key = String(value || '').trim().toLowerCase();
     if (isBirthday || key === 'birthday') return 'birthday';
     if (key === 'holiday') return 'holiday';
+    if (key === 'public_holiday') return 'public_holiday';
     return 'standard';
   }
 
@@ -2688,8 +2689,8 @@
   function appointmentDescriptionForSync(appointment = {}) {
     const parsed = appointmentDescriptionMeta(appointment.description, appointment.is_birthday);
     const eventKind = normalizeAppointmentEventKind(appointment.event_kind || parsed.eventKind, appointment.is_birthday);
-    if (eventKind !== 'holiday') return parsed.description;
-    return `${parsed.description}${parsed.description ? '\n' : ''}<!--hf:event-kind=holiday-->`;
+    if (!['holiday', 'public_holiday'].includes(eventKind)) return parsed.description;
+    return `${parsed.description}${parsed.description ? '\n' : ''}<!--hf:event-kind=${eventKind}-->`;
   }
 
   function appointmentInitials(title, fallback = 'FT') {
@@ -10854,8 +10855,8 @@
       const type = appointmentTypeMeta(appointment.appointment_type);
       const eventKind = appointmentEventKind(appointment);
       if (eventKind !== 'standard') {
-        const specialLabel = eventKind === 'birthday' ? 'Geburtstag' : 'Feiertag';
-        const initials = appointmentInitials(appointment.title, eventKind === 'birthday' ? 'GB' : 'FT');
+        const specialLabel = eventKind === 'birthday' ? 'Geburtstag' : eventKind === 'holiday' ? 'Ferientag' : 'Feiertag';
+        const initials = appointmentInitials(appointment.title, eventKind === 'birthday' ? 'GB' : eventKind === 'holiday' ? 'FT' : 'FE');
         const accessibleLabel = `${appointment.title || specialLabel}, ${specialLabel}`;
         return `<span class="day-chip appointment calendar-event-chip is-special-event is-${eventKind}" title="${escapeHtml(accessibleLabel)}" aria-label="${escapeHtml(accessibleLabel)}"><strong>${escapeHtml(initials)}</strong></span>`;
       }
@@ -10950,7 +10951,7 @@
     const description = appointment.description ? `<br>${escapeHtml(appointment.description)}` : '';
     const recurrence = appointment.recurrence ? ` · ${escapeHtml(appointmentRecurrenceLabel(appointment.recurrence))}` : '';
     const eventKind = appointmentEventKind(appointment);
-    const eventLabel = eventKind === 'birthday' ? 'Geburtstag' : eventKind === 'holiday' ? 'Feiertag' : '';
+    const eventLabel = eventKind === 'birthday' ? 'Geburtstag' : eventKind === 'holiday' ? 'Ferientag' : eventKind === 'public_holiday' ? 'Feiertag' : '';
     const eventBadge = eventLabel ? `<span class="appointment-event-badge is-${eventKind}">${eventLabel}</span>` : '';
     return `<article class="list-card appointment-card ${editingAppointmentId === appointment.id ? 'is-editing' : ''}">
       <div class="list-card-main">
@@ -13000,7 +13001,7 @@ async function deleteAlcoholLog(id) {
         ? 'yearly'
         : normalizeAppointmentRecurrence(appointment.recurrence) || 'once';
     }
-    if (fields.event_kind) fields.event_kind.value = eventKind === 'holiday' ? 'holiday' : 'standard';
+    if (fields.event_kind) fields.event_kind.value = ['holiday', 'public_holiday'].includes(eventKind) ? eventKind : 'standard';
     if (fields.is_birthday) fields.is_birthday.checked = eventKind === 'birthday';
     els.appointmentFormTitle.textContent = 'Termin bearbeiten';
     els.appointmentSubmitBtn.textContent = 'Änderungen speichern';
