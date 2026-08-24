@@ -10854,7 +10854,7 @@
       const type = appointmentTypeMeta(appointment.appointment_type);
       const eventKind = appointmentEventKind(appointment);
       if (eventKind !== 'standard') {
-        const specialLabel = eventKind === 'birthday' ? 'Geburtstag' : 'Ferientag';
+        const specialLabel = eventKind === 'birthday' ? 'Geburtstag' : 'Feiertag';
         const initials = appointmentInitials(appointment.title, eventKind === 'birthday' ? 'GB' : 'FT');
         const accessibleLabel = `${appointment.title || specialLabel}, ${specialLabel}`;
         return `<span class="day-chip appointment calendar-event-chip is-special-event is-${eventKind}" title="${escapeHtml(accessibleLabel)}" aria-label="${escapeHtml(accessibleLabel)}"><strong>${escapeHtml(initials)}</strong></span>`;
@@ -10950,7 +10950,7 @@
     const description = appointment.description ? `<br>${escapeHtml(appointment.description)}` : '';
     const recurrence = appointment.recurrence ? ` · ${escapeHtml(appointmentRecurrenceLabel(appointment.recurrence))}` : '';
     const eventKind = appointmentEventKind(appointment);
-    const eventLabel = eventKind === 'birthday' ? 'Geburtstag' : eventKind === 'holiday' ? 'Ferientag' : '';
+    const eventLabel = eventKind === 'birthday' ? 'Geburtstag' : eventKind === 'holiday' ? 'Feiertag' : '';
     const eventBadge = eventLabel ? `<span class="appointment-event-badge is-${eventKind}">${eventLabel}</span>` : '';
     return `<article class="list-card appointment-card ${editingAppointmentId === appointment.id ? 'is-editing' : ''}">
       <div class="list-card-main">
