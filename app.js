@@ -1022,7 +1022,8 @@
   window.addEventListener('pageshow', requestAppStart);
 
   async function init() {
-    cacheEls();
+      registerServiceWorker();
+cacheEls();
     applyRulesVisibility();
     applyPausesVisibility();
     applyConsumptionMode();
@@ -1037,7 +1038,7 @@
     migrateAlcoholScoring();
     await initSupabase();
     initOngoingSync();
-    registerServiceWorker();
+    
     render();
     setInterval(() => {
       renderTimers();
@@ -1046,8 +1047,18 @@
   }
 
 
-  function registerServiceWorker() {
-    if (!('serviceWorker' in navigator)) return;
+  let serviceWorkerControllerReloadPending = false;
+
+function registerServiceWorker() {
+      if (!('serviceWorker' in navigator)) return;
+  if (!registerServiceWorker.controllerChangeBound) {
+    registerServiceWorker.controllerChangeBound = true;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (serviceWorkerControllerReloadPending) return;
+      serviceWorkerControllerReloadPending = true;
+      window.location.reload();
+    });
+  }
     navigator.serviceWorker
       .register('./service-worker.js', { updateViaCache: 'none' })
       .then(registration => registration.update())
@@ -13732,8 +13743,11 @@ async function deleteAlcoholLog(id) {
     }
   }
 
-  function initOngoingSync() {
-    if (!isSupabaseConfigured()) return;
+  let ongoingSyncInitialized = false;
+
+function initOngoingSync() {
+      if (ongoingSyncInitialized || !isSupabaseConfigured()) return;
+  ongoingSyncInitialized = true;
     setInterval(runIdleSyncCheck, IDLE_SYNC_CHECK_MS);
     setInterval(pullMobileConsumptionSnapshot, MOBILE_CONSUMPTION_PULL_MS);
     document.addEventListener('visibilitychange', () => {
