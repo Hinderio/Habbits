@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v269-calendar-bootstrap-fix';
+const CACHE_NAME = 'habitflow-v270-mobile-state-consistency';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -338,7 +338,11 @@ async function withInlineMilestoneEditing(response) {
 }
 
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(cache =>
+      Promise.allSettled(ASSETS.map(asset => cache.add(asset)))
+    )
+  );
   self.skipWaiting();
 });
 
@@ -361,11 +365,14 @@ self.addEventListener('fetch', event => {
     event.respondWith(
       fetch(event.request, { cache: 'no-store' })
         .then(async response => {
+          if (!response || !response.ok) return response;
+          await caches.open(CACHE_NAME)
+            .then(cache => cache.put(event.request, response.clone()))
+            .catch(() => {});
           let clientResponse = shouldInjectProjectPatch ? await withProjectMilestoneEditScript(response.clone()) : response.clone();
           if (shouldPatchAppScript) clientResponse = await withNativeAppointmentSeries(clientResponse.clone());
           if (shouldPatchProjectsScript) clientResponse = await withInlineMilestoneEditing(clientResponse.clone());
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clientResponse.clone())).catch(() => {});
-          return clientResponse;
+              return clientResponse;
         })
         .catch(() => caches.match(event.request).then(async cached => {
           if (!cached) return caches.match('./index.html').then(fallback => fallback && shouldInjectProjectPatch ? withProjectMilestoneEditScript(fallback.clone()) : fallback);
