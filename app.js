@@ -886,6 +886,8 @@
     renderFitnessHub();
   }
 
+  const APPOINTMENT_EVENT_KIND_META_RE = /(?:\r?\n)?<!--hf:event-kind=(birthday|holiday|public_holiday)-->/gi;
+
   var state = loadState();
   runLocalCacheRepair();
   let settings = loadSettings();
@@ -2661,8 +2663,6 @@
       updated_at: idea.updated_at || created
     };
   }
-
-  const APPOINTMENT_EVENT_KIND_META_RE = /(?:\r?\n)?<!--hf:event-kind=(birthday|holiday|public_holiday)-->/gi;
 
   function normalizeAppointmentEventKind(value, isBirthday = false) {
     const key = String(value || '').trim().toLowerCase();
