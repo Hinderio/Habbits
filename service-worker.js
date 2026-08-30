@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v275-fitness-tab-inset';
+const CACHE_NAME = 'habitflow-v276-smoke-ring-premium';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -38,6 +38,7 @@ const MODULE_ASSETS = [
   './modules/line-calendar.css',
   './modules/calendar-bubbles-native.css',
   './modules/fitness-detail-mobile.css',
+  './modules/smoke-ring-premium.css',
   './modules/projects-milestone-edit.js',
   './modules/projects.js',
   './modules/projects.css',
