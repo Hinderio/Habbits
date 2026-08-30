@@ -10,7 +10,7 @@ const indexSource = read('index.html');
 const workerSource = read('service-worker.js');
 const mobileCss = read('modules/fitness-detail-mobile.css');
 
-assert.match(indexSource, /modules\/fitness-detail-mobile\.css\?v=274/);
+assert.match(indexSource, /modules\/fitness-detail-mobile\.css\?v=275/);
 assert.match(workerSource, /\.\/modules\/fitness-detail-mobile\.css/);
 assert.match(mobileCss, /@media \(max-width: 760px\) and \(orientation: portrait\)/);
 assert.doesNotMatch(mobileCss, /@media[^\n]*orientation: landscape/);
@@ -19,7 +19,8 @@ assert.match(mobileCss, /display: flex !important/);
 assert.match(mobileCss, /flex-flow: row nowrap !important/);
 assert.match(mobileCss, /flex: 1 1 0 !important/);
 assert.match(mobileCss, /width: 0 !important/);
-assert.match(mobileCss, /width: calc\(100vw - 64px\)/);
+assert.match(mobileCss, /width: calc\(100vw - 96px\)/);
+assert.doesNotMatch(mobileCss, /width: calc\(100vw - 64px\)/);
 assert.doesNotMatch(mobileCss, /grid-template-columns: repeat\(3/);
 assert.match(mobileCss, /min-height: 44px/);
 assert.match(mobileCss, /touch-action: manipulation/);
