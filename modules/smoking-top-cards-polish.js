@@ -284,6 +284,13 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
     const bonusMask = $('.hf-smoke-progress-bonus-mask', svg);
     if (progress) progress.style.strokeDashoffset = String(C * (1 - data.progress));
     if (bonusMask) bonusMask.style.strokeDashoffset = String(BONUS_C * (1 - data.bonusProgress));
+    let sector = $('.hf-smoke-sector', box);
+    if (!sector) {
+      sector = document.createElement('span');
+      sector.className = 'hf-smoke-sector';
+      sector.setAttribute('aria-hidden', 'true');
+      box.prepend(sector);
+    }
     let bonusMeta = $('.hf-smoke-bonus-meta', box);
     if (!bonusMeta) {
       bonusMeta = document.createElement('span');
@@ -292,16 +299,26 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
     }
     const hasPause = data.pause != null;
     const hasMedian = Number.isFinite(data.median) && data.median > 0;
-    const isBonus = hasPause && hasMedian && data.bonusMinutes > 0;
+    const hasReachedMedian = hasPause && hasMedian && data.pause >= data.median;
+    const isBonus = hasReachedMedian && data.bonusMinutes > 0;
+    const sectorProgress = hasReachedMedian
+      ? Math.min(1, Math.max(0, data.bonusMinutes / data.median))
+      : data.progress;
     const current = hasPause ? duration(data.pause) : '–';
     if (live && live.textContent !== current) live.textContent = current;
+    sector.style.setProperty('--hf-smoke-sector-progress', `${(sectorProgress * 100).toFixed(3)}%`);
+    sector.classList.toggle('is-median-phase', hasReachedMedian);
+    box.classList.toggle('hf-is-median-reached', hasReachedMedian);
     box.classList.toggle('hf-is-bonus', isBonus);
-    if (isBonus) {
-      if (label && label.textContent !== 'Median übertroffen') label.textContent = 'Median übertroffen';
+    if (hasReachedMedian) {
+      const status = isBonus ? 'Median übertroffen' : 'Median erreicht';
+      if (label && label.textContent !== status) label.textContent = status;
       if (hint && hint.textContent !== `Median ${duration(data.median)}`) hint.textContent = `Median ${duration(data.median)}`;
-      const meta = `+${duration(data.bonusMinutes)} über deinem Median`;
+      const meta = isBonus ? `+${duration(data.bonusMinutes)} über deinem Median` : 'Bonusphase gestartet';
       if (bonusMeta && bonusMeta.textContent !== meta) bonusMeta.textContent = meta;
-      box.setAttribute('aria-label', `${current} aktuelle Pause. Median um ${duration(data.bonusMinutes)} übertroffen.`);
+      box.setAttribute('aria-label', isBonus
+        ? `${current} aktuelle Pause. Median um ${duration(data.bonusMinutes)} übertroffen.`
+        : `${current} aktuelle Pause. Median erreicht. Bonusphase gestartet.`);
     } else {
       if (label && label.textContent !== 'Aktuelle Pause') label.textContent = 'Aktuelle Pause';
       if (hasMedian) {

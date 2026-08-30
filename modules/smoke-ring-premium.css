@@ -15,68 +15,49 @@
   margin: clamp(30px, 4vw, 54px) auto !important;
   padding: clamp(52px, 6vw, 68px) clamp(38px, 5vw, 56px) !important;
   overflow: visible;
-  border: 1px solid rgba(255, 255, 255, .1) !important;
+  border: 1px solid #dce6ea !important;
   border-radius: 50% !important;
-  background: rgba(255, 255, 255, .055) !important;
+  background: #f7fafb !important;
   box-shadow:
-    0 24px 56px rgba(2, 18, 27, .18),
-    inset 0 1px 0 rgba(255, 255, 255, .1) !important;
+    0 22px 52px rgba(16, 36, 56, .13),
+    inset 0 0 0 9px rgba(255, 255, 255, .84) !important;
 }
 
-/* Reuse the existing data-driven SVG as the single progress halo. */
+/* The previous stroke ring stays in the DOM for compatibility, but the timer sector is now the visual progress. */
 #screen-smoking .smoke-control-card .smoke-ring > .hf-smoke-progress-svg {
-  position: absolute !important;
+  display: none !important;
+  visibility: hidden !important;
+}
+
+#screen-smoking .smoke-control-card .smoke-ring > .hf-smoke-sector {
+  --hf-smoke-sector-color: #f9ad00;
+  --hf-smoke-sector-progress: 0%;
+  position: absolute;
   z-index: 0;
-  inset: -22px !important;
-  display: block !important;
-  width: calc(100% + 44px) !important;
-  height: calc(100% + 44px) !important;
-  overflow: visible;
-  visibility: visible !important;
+  inset: 10px;
+  display: block;
+  overflow: hidden;
+  border-radius: 50%;
+  background: conic-gradient(
+    from -90deg,
+    var(--hf-smoke-sector-color) 0 var(--hf-smoke-sector-progress),
+    transparent var(--hf-smoke-sector-progress) 100%
+  );
   pointer-events: none;
 }
 
-#screen-smoking .smoke-control-card .smoke-ring .hf-smoke-progress-bg,
-#screen-smoking .smoke-control-card .smoke-ring .hf-smoke-progress-value,
-#screen-smoking .smoke-control-card .smoke-ring .hf-smoke-progress-bonus {
-  fill: none !important;
-}
-
-#screen-smoking .smoke-control-card .smoke-ring .hf-smoke-progress-bg {
-  stroke: rgba(157, 176, 195, .2) !important;
-  stroke-width: 6 !important;
-}
-
-#screen-smoking .smoke-control-card .smoke-ring .hf-smoke-progress-value {
-  stroke: #31c7c4 !important;
-  stroke-width: 6 !important;
-  stroke-linecap: round !important;
-  filter: none !important;
-}
-
-#screen-smoking .smoke-control-card .smoke-ring .hf-smoke-progress-bonus {
-  stroke: #5ccf94 !important;
-  stroke-width: 3.5 !important;
-  stroke-linecap: round !important;
-  stroke-dasharray: none !important;
-  opacity: 1 !important;
-  filter: none !important;
+#screen-smoking .smoke-control-card .smoke-ring > .hf-smoke-sector.is-median-phase {
+  --hf-smoke-sector-color: #60c1c0;
 }
 
 #screen-smoking .smoke-control-card .smoke-ring::after {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  inset: 13px;
-  border: 1px solid rgba(255, 255, 255, .075);
-  border-radius: inherit;
-  box-shadow: none;
-  pointer-events: none;
+  content: none;
+  display: none;
 }
 
 #screen-smoking .smoke-control-card .smoke-ring > small,
 #screen-smoking .smoke-control-card .smoke-ring > strong,
-#screen-smoking .smoke-control-card .smoke-ring > span {
+#screen-smoking .smoke-control-card .smoke-ring > span:not(.hf-smoke-sector) {
   position: relative;
   z-index: 1;
   min-width: 0;
@@ -89,10 +70,10 @@
   gap: 8px;
   margin: 0;
   padding: 8px 12px;
-  border: 1px solid rgba(74, 215, 209, .2);
+  border: 1px solid rgba(166, 101, 0, .16);
   border-radius: 999px;
-  background: rgba(74, 215, 209, .08);
-  color: var(--primary);
+  background: rgba(255, 255, 255, .88);
+  color: #13283a !important;
   font-size: .72rem !important;
   font-weight: 900 !important;
   letter-spacing: .14em !important;
@@ -106,19 +87,19 @@
   height: 7px;
   flex: 0 0 7px;
   border-radius: 50%;
-  background: #48d5cf;
-  box-shadow: 0 0 0 4px rgba(74, 215, 209, .11);
+  background: #f9ad00;
+  box-shadow: 0 0 0 4px rgba(249, 173, 0, .14);
 }
 
 #screen-smoking .smoke-control-card .smoke-ring > strong {
   display: block;
   margin: 0;
-  color: var(--text);
-  font-size: clamp(3.6rem, 6.6vw, 5.2rem) !important;
+  color: #13283a !important;
+  font-size: clamp(3.45rem, 6.2vw, 4.85rem) !important;
   font-variant-numeric: tabular-nums;
-  font-weight: 950 !important;
-  letter-spacing: -.075em !important;
-  line-height: .9 !important;
+  font-weight: 650 !important;
+  letter-spacing: -.05em !important;
+  line-height: .95 !important;
   text-shadow: none;
   white-space: nowrap !important;
 }
@@ -129,10 +110,10 @@
   max-width: 29ch;
   margin-top: 3px;
   padding: 9px 13px;
-  border: 1px solid rgba(255, 255, 255, .08);
+  border: 1px solid rgba(19, 40, 58, .08);
   border-radius: 999px;
-  background: rgba(255, 255, 255, .055);
-  color: var(--muted) !important;
+  background: rgba(255, 255, 255, .88);
+  color: #40566b !important;
   font-size: .82rem !important;
   font-weight: 800 !important;
   line-height: 1.3 !important;
@@ -148,7 +129,7 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: var(--muted) !important;
+  color: #13283a !important;
   font-size: .75rem !important;
   font-weight: 850 !important;
   line-height: 1.3 !important;
@@ -158,28 +139,28 @@
   display: none !important;
 }
 
-#screen-smoking .smoke-control-card .smoke-ring.hf-is-bonus > small {
-  border-color: rgba(92, 207, 148, .25);
-  background: rgba(92, 207, 148, .1);
-  color: #5ccf94 !important;
+#screen-smoking .smoke-control-card .smoke-ring.hf-is-median-reached > small {
+  border-color: rgba(18, 106, 110, .18);
+  background: rgba(255, 255, 255, .88);
+  color: #126a6e !important;
 }
 
-#screen-smoking .smoke-control-card .smoke-ring.hf-is-bonus > small::before {
-  background: #5ccf94;
-  box-shadow: 0 0 0 4px rgba(92, 207, 148, .12);
+#screen-smoking .smoke-control-card .smoke-ring.hf-is-median-reached > small::before {
+  background: #60c1c0;
+  box-shadow: 0 0 0 4px rgba(96, 193, 192, .15);
 }
 
-#screen-smoking .smoke-control-card .smoke-ring.hf-is-bonus > strong {
-  color: #5ccf94 !important;
+#screen-smoking .smoke-control-card .smoke-ring.hf-is-median-reached > strong {
+  color: #123e47 !important;
 }
 
-#screen-smoking .smoke-control-card .smoke-ring.hf-is-bonus > .hf-smoke-bonus-meta {
-  color: #5ccf94 !important;
+#screen-smoking .smoke-control-card .smoke-ring.hf-is-median-reached > .hf-smoke-bonus-meta {
+  color: #0b4549 !important;
 }
 
 body.light #screen-smoking .smoke-control-card .smoke-ring {
   border-color: rgba(17, 36, 58, .075) !important;
-  background: rgba(255, 255, 255, .92) !important;
+  background: #f7fafb !important;
   box-shadow:
     0 24px 56px rgba(42, 89, 107, .11),
     inset 0 1px 0 rgba(255, 255, 255, .96) !important;
@@ -189,20 +170,46 @@ body.light #screen-smoking .smoke-control-card .smoke-ring::after {
   border-color: rgba(13, 151, 149, .09);
 }
 
-body.light #screen-smoking .smoke-control-card .smoke-ring .hf-smoke-progress-bg {
-  stroke: rgba(17, 36, 58, .075) !important;
-}
-
 body.light #screen-smoking .smoke-control-card .smoke-ring > small {
-  border-color: rgba(13, 151, 149, .14);
-  background: rgba(74, 215, 209, .1);
-  color: #148f8d;
+  border-color: rgba(166, 101, 0, .16);
+  background: rgba(255, 255, 255, .88);
+  color: #895d00 !important;
 }
 
 body.light #screen-smoking .smoke-control-card .smoke-ring > #smokePauseHint {
   border-color: rgba(17, 36, 58, .07);
   background: rgba(17, 36, 58, .035);
   box-shadow: none;
+}
+
+body.light #screen-smoking .smoke-control-card .smoke-ring.hf-is-median-reached > small {
+  border-color: rgba(18, 106, 110, .18);
+  color: #126a6e !important;
+}
+
+body:not(.light) #screen-smoking .smoke-control-card .smoke-ring > small {
+  color: #895d00 !important;
+}
+
+body:not(.light) #screen-smoking .smoke-control-card .smoke-ring > strong {
+  color: #13283a !important;
+}
+
+body:not(.light) #screen-smoking .smoke-control-card .smoke-ring > #smokePauseHint {
+  color: #40566b !important;
+}
+
+body:not(.light) #screen-smoking .smoke-control-card .smoke-ring > .hf-smoke-bonus-meta {
+  color: #13283a !important;
+}
+
+body:not(.light) #screen-smoking .smoke-control-card .smoke-ring.hf-is-median-reached > small,
+body:not(.light) #screen-smoking .smoke-control-card .smoke-ring.hf-is-median-reached > .hf-smoke-bonus-meta {
+  color: #0b4549 !important;
+}
+
+body:not(.light) #screen-smoking .smoke-control-card .smoke-ring.hf-is-median-reached > strong {
+  color: #123e47 !important;
 }
 
 @media (max-width: 760px) {
@@ -217,15 +224,6 @@ body.light #screen-smoking .smoke-control-card .smoke-ring > #smokePauseHint {
     inset: -15px !important;
     width: calc(100% + 30px) !important;
     height: calc(100% + 30px) !important;
-  }
-
-  #screen-smoking .smoke-control-card .smoke-ring .hf-smoke-progress-bg,
-  #screen-smoking .smoke-control-card .smoke-ring .hf-smoke-progress-value {
-    stroke-width: 5.5 !important;
-  }
-
-  #screen-smoking .smoke-control-card .smoke-ring .hf-smoke-progress-bonus {
-    stroke-width: 3 !important;
   }
 
   #screen-smoking .smoke-control-card .smoke-ring::after {
