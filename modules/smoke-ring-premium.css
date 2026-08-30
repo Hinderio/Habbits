@@ -28,32 +28,44 @@
     inset 0 -20px 50px rgba(2, 18, 27, .08) !important;
 }
 
-/* The legacy SVG keeps receiving timer updates, but its old solid and dotted rings stay visual-only hidden. */
+/* Reuse the existing data-driven SVG as the single progress halo. */
 #screen-smoking .smoke-control-card .smoke-ring > .hf-smoke-progress-svg {
-  display: none !important;
-  visibility: hidden !important;
+  position: absolute !important;
+  z-index: 0;
+  inset: -22px !important;
+  display: block !important;
+  width: calc(100% + 44px) !important;
+  height: calc(100% + 44px) !important;
+  overflow: visible;
+  visibility: visible !important;
+  pointer-events: none;
 }
 
-#screen-smoking .smoke-control-card .smoke-ring::before {
-  content: "";
-  position: absolute;
-  z-index: -2;
-  inset: -13px;
-  border-radius: inherit;
-  background: conic-gradient(
-    from -34deg,
-    #73ebe4 0deg 78deg,
-    rgba(74, 215, 209, .24) 78deg 94deg,
-    #31c7c4 94deg 202deg,
-    rgba(74, 215, 209, .24) 202deg 218deg,
-    #ffad67 218deg 231deg,
-    rgba(74, 215, 209, .24) 231deg 247deg,
-    #48d5cf 247deg 360deg
-  );
-  box-shadow: 0 12px 42px rgba(74, 215, 209, .2);
-  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 7px), #000 calc(100% - 6px));
-  mask: radial-gradient(farthest-side, transparent calc(100% - 7px), #000 calc(100% - 6px));
-  pointer-events: none;
+#screen-smoking .smoke-control-card .smoke-ring .hf-smoke-progress-bg,
+#screen-smoking .smoke-control-card .smoke-ring .hf-smoke-progress-value,
+#screen-smoking .smoke-control-card .smoke-ring .hf-smoke-progress-bonus {
+  fill: none !important;
+}
+
+#screen-smoking .smoke-control-card .smoke-ring .hf-smoke-progress-bg {
+  stroke: rgba(74, 215, 209, .14) !important;
+  stroke-width: 6 !important;
+}
+
+#screen-smoking .smoke-control-card .smoke-ring .hf-smoke-progress-value {
+  stroke: #31c7c4 !important;
+  stroke-width: 6 !important;
+  stroke-linecap: round !important;
+  filter: drop-shadow(0 3px 7px rgba(49, 199, 196, .25));
+}
+
+#screen-smoking .smoke-control-card .smoke-ring .hf-smoke-progress-bonus {
+  stroke: #ff9d58 !important;
+  stroke-width: 3.5 !important;
+  stroke-linecap: round !important;
+  stroke-dasharray: none !important;
+  opacity: 1 !important;
+  filter: drop-shadow(0 2px 5px rgba(255, 157, 88, .24));
 }
 
 #screen-smoking .smoke-control-card .smoke-ring::after {
@@ -148,6 +160,10 @@ body.light #screen-smoking .smoke-control-card .smoke-ring::after {
   border-color: rgba(13, 151, 149, .09);
 }
 
+body.light #screen-smoking .smoke-control-card .smoke-ring .hf-smoke-progress-bg {
+  stroke: rgba(17, 36, 58, .075) !important;
+}
+
 body.light #screen-smoking .smoke-control-card .smoke-ring > small {
   border-color: rgba(13, 151, 149, .14);
   background: rgba(74, 215, 209, .1);
@@ -168,10 +184,19 @@ body.light #screen-smoking .smoke-control-card .smoke-ring > span {
     padding: 42px 30px !important;
   }
 
-  #screen-smoking .smoke-control-card .smoke-ring::before {
-    inset: -9px;
-    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 5px));
-    mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 5px));
+  #screen-smoking .smoke-control-card .smoke-ring > .hf-smoke-progress-svg {
+    inset: -15px !important;
+    width: calc(100% + 30px) !important;
+    height: calc(100% + 30px) !important;
+  }
+
+  #screen-smoking .smoke-control-card .smoke-ring .hf-smoke-progress-bg,
+  #screen-smoking .smoke-control-card .smoke-ring .hf-smoke-progress-value {
+    stroke-width: 5.5 !important;
+  }
+
+  #screen-smoking .smoke-control-card .smoke-ring .hf-smoke-progress-bonus {
+    stroke-width: 3 !important;
   }
 
   #screen-smoking .smoke-control-card .smoke-ring::after {
@@ -195,8 +220,7 @@ body.light #screen-smoking .smoke-control-card .smoke-ring > span {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #screen-smoking .smoke-control-card .smoke-ring,
-  #screen-smoking .smoke-control-card .smoke-ring::before {
+  #screen-smoking .smoke-control-card .smoke-ring {
     transition: none;
   }
 }
