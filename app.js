@@ -440,6 +440,9 @@
   const MOBILE_CONSUMPTION_PULL_MS = 8_000;
   const SAFETY_REMOTE_PULL_MS = 10 * 60_000;
   const REMOTE_PULL_DEBOUNCE_MS = 1_500;
+  const REMOTE_PULL_BATCH_SIZE = 4;
+  const REMOTE_PULL_RETRY_DELAYS_MS = Object.freeze([0, 350, 1_000]);
+  const REMOTE_SYNC_RETRY_DELAYS_MS = Object.freeze([3_000, 10_000, 30_000, 60_000]);
   const SELF_WRITE_ECHO_GRACE_MS = 4_000;
   const FOREGROUND_SYNC_DEBOUNCE_MS = 1_200;
   const REALTIME_RESTART_AFTER_HIDDEN_MS = 10_000;
@@ -907,6 +910,8 @@
   let lastForegroundSyncAt = 0;
   let lastRealtimeRestartAt = 0;
   let realtimeReconnectTimer = null;
+  let remoteSyncRetryTimer = null;
+  let remoteSyncRetryAttempt = 0;
   let mobileConsumptionPullInFlight = false;
   let lastMobileConsumptionFingerprint = '';
   let selectedCalendarDate = toDateKey(new Date());
@@ -1047,18 +1052,8 @@ cacheEls();
   }
 
 
-  let serviceWorkerControllerReloadPending = false;
-
-function registerServiceWorker() {
-      if (!('serviceWorker' in navigator)) return;
-  if (!registerServiceWorker.controllerChangeBound) {
-    registerServiceWorker.controllerChangeBound = true;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (serviceWorkerControllerReloadPending) return;
-      serviceWorkerControllerReloadPending = true;
-      window.location.reload();
-    });
-  }
+  function registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
     navigator.serviceWorker
       .register('./service-worker.js', { updateViaCache: 'none' })
       .then(registration => registration.update())
@@ -13982,6 +13977,7 @@ function initOngoingSync() {
     if (!supabaseClient) return;
     try {
       if (hasPendingSyncWork()) await syncWithSupabase({ silent: false, pullFirst: false });
+      resetRemoteSyncRetry();
       clearRemoteSubscription();
       const { error } = await supabaseClient.auth.signOut();
       if (error) throw error;
@@ -14172,6 +14168,7 @@ function initOngoingSync() {
       }
       saveState({ skipRender: true });
       lastSyncAt = new Date();
+      resetRemoteSyncRetry();
       safeRender();
       notifyConsumptionLiveUpdate('supabase-sync');
       if (!silent) toast('Sync abgeschlossen');
@@ -14179,6 +14176,7 @@ function initOngoingSync() {
       console.error(error);
       if (!silent) toast(`Sync Fehler: ${error.message || error}`);
       renderSyncStatus('error');
+      scheduleRemoteSyncRetry();
     } finally {
       syncInFlight = false;
       const queuedRequest = pendingSyncRequest;
@@ -14188,6 +14186,29 @@ function initOngoingSync() {
         setTimeout(() => syncWithSupabase(queuedRequest), 120);
       }
     }
+  }
+
+  function resetRemoteSyncRetry() {
+    clearTimeout(remoteSyncRetryTimer);
+    remoteSyncRetryTimer = null;
+    remoteSyncRetryAttempt = 0;
+  }
+
+  function scheduleRemoteSyncRetry() {
+    if (remoteSyncRetryTimer || !isAuthenticated()) return;
+    const delay = REMOTE_SYNC_RETRY_DELAYS_MS[Math.min(remoteSyncRetryAttempt, REMOTE_SYNC_RETRY_DELAYS_MS.length - 1)];
+    remoteSyncRetryAttempt += 1;
+    remoteSyncRetryTimer = setTimeout(() => {
+      remoteSyncRetryTimer = null;
+      if (!isAuthenticated()) return;
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        scheduleRemoteSyncRetry();
+        return;
+      }
+      syncWithSupabase(hasPendingSyncWork()
+        ? { silent: true, pullFirst: true, pullAfter: true }
+        : { silent: true, pullOnly: true });
+    }, delay);
   }
 
   async function upsertRows(table, rows) {
@@ -14660,85 +14681,125 @@ function initOngoingSync() {
 
   async function pullSupabaseData() {
     if (!supabaseClient) return;
-    const [habits, entries, cigarettes, alcohol, alcoholEvents, tasks, taskIdeasRemote, appointments, ledger, pausePeriods, weeklyReviewsRemote, monthlyMissionsRemote] = await Promise.all([
-      fetchRemoteTable('habit_definitions'),
-      fetchRemoteTable('habit_entries'),
-      fetchRemoteTable('cigarette_events'),
-      fetchRemoteTable('alcohol_logs'),
-      fetchRemoteTable('alcohol_events'),
-      fetchRemoteTable('tasks'),
-      fetchRemoteTable('task_ideas'),
-      fetchRemoteTable('appointments'),
-      fetchRemoteTable('points_ledger'),
-      fetchRemoteTable('pause_periods'),
-      fetchRemoteTable('weekly_reviews'),
-      fetchRemoteTable('monthly_missions')
-    ]);
+    const tableNames = [
+      'habit_definitions', 'habit_entries', 'tasks',
+      'cigarette_events', 'alcohol_logs', 'alcohol_events', 'task_ideas',
+      'appointments', 'points_ledger', 'pause_periods', 'weekly_reviews', 'monthly_missions'
+    ];
+    const snapshots = await fetchRemoteTableSnapshots(tableNames);
+    const resultFor = table => snapshots.get(table)?.result || null;
+    const failedTables = tableNames.filter(table => snapshots.get(table)?.error);
+    const rowsFor = table => {
+      const result = resultFor(table);
+      return result ? remoteRows(table, result) : null;
+    };
 
-    const remoteHabitRows = remoteRows('habit_definitions', habits);
-    const remoteEntryRows = remoteRows('habit_entries', entries);
-    const remoteCigaretteRows = remoteRows('cigarette_events', cigarettes);
-    const remoteAlcoholRows = remoteRows('alcohol_logs', alcohol);
-    const remoteAlcoholEventRows = remoteRows('alcohol_events', alcoholEvents);
-    const remoteTaskRows = remoteRows('tasks', tasks);
-    const remoteTaskIdeaRows = remoteRows('task_ideas', taskIdeasRemote);
-    const remoteAppointmentRows = remoteRows('appointments', appointments);
-    let remoteLedgerRows = remoteRows('points_ledger', ledger);
-    const remotePauseRows = remoteRows('pause_periods', pausePeriods);
-    const remoteWeeklyReviewRows = remoteRows('weekly_reviews', weeklyReviewsRemote);
-    const remoteMonthlyMissionRows = remoteRows('monthly_missions', monthlyMissionsRemote);
+    const remoteHabitRows = rowsFor('habit_definitions');
+    const remoteEntryRows = rowsFor('habit_entries');
+    const remoteTaskRows = rowsFor('tasks');
+    const remoteCigaretteRows = rowsFor('cigarette_events');
+    const remoteAlcoholRows = rowsFor('alcohol_logs');
+    const remoteAlcoholEventRows = rowsFor('alcohol_events');
+    const remoteTaskIdeaRows = rowsFor('task_ideas');
+    const remoteAppointmentRows = rowsFor('appointments');
+    let remoteLedgerRows = rowsFor('points_ledger');
+    const remotePauseRows = rowsFor('pause_periods');
+    const remoteWeeklyReviewRows = rowsFor('weekly_reviews');
+    const remoteMonthlyMissionRows = rowsFor('monthly_missions');
+    const localWasPristine = isLocalPristine();
 
-    applyRemoteCollectionAuthority('habit_entries', 'habitEntries', remoteEntryRows, { ledgerSourceType: 'habit' });
-    applyRemoteCollectionAuthority('cigarette_events', 'cigarettes', remoteCigaretteRows, { ledgerSourceType: 'cigarette' });
-    applyRemoteCollectionAuthority('appointments', 'appointments', remoteAppointmentRows);
-    if (remotePausePeriodsSupported) applyRemoteCollectionAuthority('pause_periods', 'pausePeriods', remotePauseRows);
-    if (remoteWeeklyReviewsSupported) applyRemoteCollectionAuthority('weekly_reviews', 'weeklyReviews', remoteWeeklyReviewRows);
-    if (remoteMonthlyMissionsSupported) applyRemoteCollectionAuthority('monthly_missions', 'monthlyMissions', remoteMonthlyMissionRows);
-    if (remoteTaskIdeasSupported) applyRemoteCollectionAuthority('task_ideas', 'taskIdeas', remoteTaskIdeaRows);
-    const removedAlcoholUnits = applyRemoteCollectionAuthority('alcohol_events', 'alcoholUnits', remoteAlcoholEventRows, {
-      ledgerMatcher: (point, removedSet) => isAlcoholPointsEntry(point) && removedSet.has(point.source_id)
-    });
-    if (removedAlcoholUnits.length) clearAlcoholLogsWithoutUnits(removedAlcoholUnits);
-    remoteLedgerRows = filterRemoteLedgerRows(remoteLedgerRows, { habitEntryRows: remoteEntryRows, cigaretteRows: remoteCigaretteRows, alcoholEventRows: remoteAlcoholEventRows, alcoholLogRows: remoteAlcoholRows });
-    const remoteHasData = [remoteHabitRows, remoteEntryRows, remoteCigaretteRows, remoteAlcoholRows, remoteAlcoholEventRows, remoteTaskRows, remoteTaskIdeaRows, remoteAppointmentRows, remoteLedgerRows, remotePauseRows, remoteWeeklyReviewRows, remoteMonthlyMissionRows].some(rows => rows.length > 0);
-
-    applyRemoteHabitAuthority(remoteHabitRows);
-
-    if (remoteHasData && isLocalPristine()) {
-      state.habits = remoteHabitRows.map(mapRemoteHabit);
-      state.habitEntries = remoteEntryRows.map(mapRemoteEntry);
-      state.cigarettes = remoteCigaretteRows.map(mapRemoteCigarette);
-      state.alcoholLogs = remoteAlcoholRows.map(mapRemoteAlcohol);
-      state.alcoholUnits = remoteAlcoholEventRows.map(mapRemoteAlcoholEvent);
-      state.tasks = remoteTaskRows.map(mapRemoteTask).map(normalizeTask);
-      state.taskIdeas = remoteTaskIdeaRows.map(mapRemoteTaskIdea).map(normalizeTaskIdea);
-      state.appointments = remoteAppointmentRows.map(mapRemoteAppointment).map(normalizeAppointment);
-      state.pointsLedger = remoteLedgerRows.map(mapRemoteLedger);
-      state.pausePeriods = remotePauseRows.map(mapRemotePausePeriod).map(normalizePausePeriod);
-      state.weeklyReviews = remoteWeeklyReviewRows.map(mapRemoteWeeklyReview).map(normalizeWeeklyReview);
-      state.monthlyMissions = remoteMonthlyMissionRows.map(mapRemoteMonthlyMission).map(normalizeMonthlyMission);
-      dedupeStateCollections(state);
-      migrateCigaretteScoring();
-      return;
+    if (remoteEntryRows) applyRemoteCollectionAuthority('habit_entries', 'habitEntries', remoteEntryRows, { ledgerSourceType: 'habit' });
+    if (remoteCigaretteRows) applyRemoteCollectionAuthority('cigarette_events', 'cigarettes', remoteCigaretteRows, { ledgerSourceType: 'cigarette' });
+    if (remoteAppointmentRows) applyRemoteCollectionAuthority('appointments', 'appointments', remoteAppointmentRows);
+    if (remotePausePeriodsSupported && remotePauseRows) applyRemoteCollectionAuthority('pause_periods', 'pausePeriods', remotePauseRows);
+    if (remoteWeeklyReviewsSupported && remoteWeeklyReviewRows) applyRemoteCollectionAuthority('weekly_reviews', 'weeklyReviews', remoteWeeklyReviewRows);
+    if (remoteMonthlyMissionsSupported && remoteMonthlyMissionRows) applyRemoteCollectionAuthority('monthly_missions', 'monthlyMissions', remoteMonthlyMissionRows);
+    if (remoteTaskIdeasSupported && remoteTaskIdeaRows) applyRemoteCollectionAuthority('task_ideas', 'taskIdeas', remoteTaskIdeaRows);
+    if (remoteAlcoholEventRows) {
+      const removedAlcoholUnits = applyRemoteCollectionAuthority('alcohol_events', 'alcoholUnits', remoteAlcoholEventRows, {
+        ledgerMatcher: (point, removedSet) => isAlcoholPointsEntry(point) && removedSet.has(point.source_id)
+      });
+      if (removedAlcoholUnits.length) clearAlcoholLogsWithoutUnits(removedAlcoholUnits);
+    }
+    const canFilterLedger = remoteLedgerRows && remoteEntryRows && remoteCigaretteRows && remoteAlcoholEventRows && remoteAlcoholRows;
+    if (canFilterLedger) {
+      remoteLedgerRows = filterRemoteLedgerRows(remoteLedgerRows, { habitEntryRows: remoteEntryRows, cigaretteRows: remoteCigaretteRows, alcoholEventRows: remoteAlcoholEventRows, alcoholLogRows: remoteAlcoholRows });
+    } else {
+      remoteLedgerRows = null;
     }
 
+    if (remoteHabitRows) applyRemoteHabitAuthority(remoteHabitRows);
+    const successfulRowSets = [remoteHabitRows, remoteEntryRows, remoteTaskRows, remoteCigaretteRows, remoteAlcoholRows, remoteAlcoholEventRows, remoteTaskIdeaRows, remoteAppointmentRows, remoteLedgerRows, remotePauseRows, remoteWeeklyReviewRows, remoteMonthlyMissionRows].filter(Boolean);
+    const remoteHasData = successfulRowSets.some(rows => rows.length > 0);
     const localTasksBeforePull = new Map(state.tasks.map(task => [task.id, normalizeTask(task)]));
     const localTaskIdeasBeforePull = new Map((state.taskIdeas || []).map(idea => [idea.id, normalizeTaskIdea(idea)]));
     const localHabitsBeforePull = new Map(state.habits.map(habit => [habit.id, normalizeHabit(habit)]));
-    state.habits = mergeById(state.habits, remoteHabitRows, mapRemoteHabit).map(habit => preserveLocalHabitFallbacks(normalizeHabit(habit), localHabitsBeforePull.get(habit.id)));
-    state.habitEntries = mergeById(state.habitEntries, remoteEntryRows, mapRemoteEntry);
-    state.cigarettes = mergeById(state.cigarettes, remoteCigaretteRows, mapRemoteCigarette);
-    state.alcoholLogs = mergeById(state.alcoholLogs, remoteAlcoholRows, mapRemoteAlcohol);
-    state.alcoholUnits = mergeById(state.alcoholUnits, remoteAlcoholEventRows, mapRemoteAlcoholEvent);
-    state.tasks = mergeById(state.tasks, remoteTaskRows, mapRemoteTask).map(task => preserveLocalTaskFallbacks(normalizeTask(task), localTasksBeforePull.get(task.id)));
-    state.taskIdeas = mergeById(state.taskIdeas || [], remoteTaskIdeaRows, mapRemoteTaskIdea).map(idea => preserveLocalTaskIdeaFallbacks(normalizeTaskIdea(idea), localTaskIdeasBeforePull.get(idea.id)));
-    state.appointments = mergeAppointmentsByRemoteAuthority(state.appointments, remoteAppointmentRows, mapRemoteAppointment);
-    state.pointsLedger = mergeById(state.pointsLedger, remoteLedgerRows, mapRemoteLedger);
-    state.pausePeriods = mergeById(state.pausePeriods || [], remotePauseRows, mapRemotePausePeriod).map(normalizePausePeriod);
-    state.weeklyReviews = mergeById(state.weeklyReviews || [], remoteWeeklyReviewRows, mapRemoteWeeklyReview).map(normalizeWeeklyReview);
-    state.monthlyMissions = mergeById(state.monthlyMissions || [], remoteMonthlyMissionRows, mapRemoteMonthlyMission).map(normalizeMonthlyMission);
+
+    if (remoteHasData && localWasPristine) {
+      if (remoteHabitRows) state.habits = remoteHabitRows.map(mapRemoteHabit);
+      if (remoteEntryRows) state.habitEntries = remoteEntryRows.map(mapRemoteEntry);
+      if (remoteCigaretteRows) state.cigarettes = remoteCigaretteRows.map(mapRemoteCigarette);
+      if (remoteAlcoholRows) state.alcoholLogs = remoteAlcoholRows.map(mapRemoteAlcohol);
+      if (remoteAlcoholEventRows) state.alcoholUnits = remoteAlcoholEventRows.map(mapRemoteAlcoholEvent);
+      if (remoteTaskRows) state.tasks = remoteTaskRows.map(mapRemoteTask).map(normalizeTask);
+      if (remoteTaskIdeaRows) state.taskIdeas = remoteTaskIdeaRows.map(mapRemoteTaskIdea).map(normalizeTaskIdea);
+      if (remoteAppointmentRows) state.appointments = remoteAppointmentRows.map(mapRemoteAppointment).map(normalizeAppointment);
+      if (remoteLedgerRows) state.pointsLedger = remoteLedgerRows.map(mapRemoteLedger);
+      if (remotePauseRows) state.pausePeriods = remotePauseRows.map(mapRemotePausePeriod).map(normalizePausePeriod);
+      if (remoteWeeklyReviewRows) state.weeklyReviews = remoteWeeklyReviewRows.map(mapRemoteWeeklyReview).map(normalizeWeeklyReview);
+      if (remoteMonthlyMissionRows) state.monthlyMissions = remoteMonthlyMissionRows.map(mapRemoteMonthlyMission).map(normalizeMonthlyMission);
+    } else {
+      if (remoteHabitRows) state.habits = mergeById(state.habits, remoteHabitRows, mapRemoteHabit).map(habit => preserveLocalHabitFallbacks(normalizeHabit(habit), localHabitsBeforePull.get(habit.id)));
+      if (remoteEntryRows) state.habitEntries = mergeById(state.habitEntries, remoteEntryRows, mapRemoteEntry);
+      if (remoteCigaretteRows) state.cigarettes = mergeById(state.cigarettes, remoteCigaretteRows, mapRemoteCigarette);
+      if (remoteAlcoholRows) state.alcoholLogs = mergeById(state.alcoholLogs, remoteAlcoholRows, mapRemoteAlcohol);
+      if (remoteAlcoholEventRows) state.alcoholUnits = mergeById(state.alcoholUnits, remoteAlcoholEventRows, mapRemoteAlcoholEvent);
+      if (remoteTaskRows) state.tasks = mergeById(state.tasks, remoteTaskRows, mapRemoteTask).map(task => preserveLocalTaskFallbacks(normalizeTask(task), localTasksBeforePull.get(task.id)));
+      if (remoteTaskIdeaRows) state.taskIdeas = mergeById(state.taskIdeas || [], remoteTaskIdeaRows, mapRemoteTaskIdea).map(idea => preserveLocalTaskIdeaFallbacks(normalizeTaskIdea(idea), localTaskIdeasBeforePull.get(idea.id)));
+      if (remoteAppointmentRows) state.appointments = mergeAppointmentsByRemoteAuthority(state.appointments, remoteAppointmentRows, mapRemoteAppointment);
+      if (remoteLedgerRows) state.pointsLedger = mergeById(state.pointsLedger, remoteLedgerRows, mapRemoteLedger);
+      if (remotePauseRows) state.pausePeriods = mergeById(state.pausePeriods || [], remotePauseRows, mapRemotePausePeriod).map(normalizePausePeriod);
+      if (remoteWeeklyReviewRows) state.weeklyReviews = mergeById(state.weeklyReviews || [], remoteWeeklyReviewRows, mapRemoteWeeklyReview).map(normalizeWeeklyReview);
+      if (remoteMonthlyMissionRows) state.monthlyMissions = mergeById(state.monthlyMissions || [], remoteMonthlyMissionRows, mapRemoteMonthlyMission).map(normalizeMonthlyMission);
+    }
     dedupeStateCollections(state);
     migrateCigaretteScoring();
+
+    if (failedTables.length) {
+      saveState({ skipRender: true });
+      safeRender();
+      const details = failedTables.map(table => `${table}: ${snapshots.get(table)?.error?.message || snapshots.get(table)?.error || 'unbekannter Fehler'}`);
+      console.warn('Supabase Pull teilweise fehlgeschlagen; erfolgreiche Tabellen wurden lokal übernommen.', details);
+      throw new Error(`Remote-Daten teilweise nicht erreichbar (${failedTables.join(', ')})`);
+    }
+  }
+
+  async function fetchRemoteTableSnapshots(tableNames) {
+    const snapshots = new Map();
+    for (let offset = 0; offset < tableNames.length; offset += REMOTE_PULL_BATCH_SIZE) {
+      const batch = tableNames.slice(offset, offset + REMOTE_PULL_BATCH_SIZE);
+      const settled = await Promise.allSettled(batch.map(table => fetchRemoteTableWithRetry(table)));
+      settled.forEach((entry, index) => {
+        const table = batch[index];
+        snapshots.set(table, entry.status === 'fulfilled'
+          ? { result: entry.value, error: null }
+          : { result: null, error: entry.reason });
+      });
+    }
+    return snapshots;
+  }
+
+  async function fetchRemoteTableWithRetry(table) {
+    let lastError = null;
+    for (const delay of REMOTE_PULL_RETRY_DELAYS_MS) {
+      if (delay) await new Promise(resolve => setTimeout(resolve, delay));
+      try {
+        return await fetchRemoteTable(table);
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError || new Error(`${table} konnte nicht geladen werden.`);
   }
 
   async function fetchRemoteTable(table) {

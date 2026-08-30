@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v270-mobile-state-consistency';
+const CACHE_NAME = 'habitflow-v271-resilient-mobile-sync';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
