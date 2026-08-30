@@ -19,17 +19,18 @@
   #screen-fitness .fitness-detail-tabs {
     position: relative;
     z-index: 2;
-    display: grid !important;
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    display: flex !important;
+    flex-flow: row nowrap !important;
     align-items: stretch;
     gap: 6px;
-    width: 100%;
+    width: calc(100vw - 64px);
     min-width: 0;
     max-width: 100%;
     margin: 0;
     padding: 0;
-    overflow: visible;
+    overflow: hidden;
     box-sizing: border-box;
+    contain: layout;
   }
 
   #screen-fitness .fitness-detail-tabs > .fitness-detail-tab {
@@ -37,10 +38,11 @@
     z-index: 3;
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    width: 100% !important;
+    justify-content: center !important;
+    flex: 1 1 0 !important;
+    width: 0 !important;
     min-width: 0 !important;
-    max-width: 100%;
+    max-width: none;
     min-height: 44px;
     margin: 0;
     padding: 10px 8px !important;
@@ -56,6 +58,8 @@
   }
 
   #screen-fitness .fitness-detail-body {
+    width: calc(100vw - 64px);
+    max-width: 100%;
     overflow: visible;
   }
 

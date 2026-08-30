@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v273-fitness-portrait-tabs';
+const CACHE_NAME = 'habitflow-v274-fitness-flex-tabs';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
