@@ -10897,8 +10897,8 @@ cacheEls();
       const time = startsAt && !Number.isNaN(startsAt.getTime())
         ? startsAt.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' })
         : 'Zeit offen';
-      const appointmentInitials = calendarBubbleInitials(appointment.title || type.label || 'Termin', type.short || type.label || 'TE');
-      return `<span class="day-chip appointment calendar-event-chip type-${normalizeAppointmentType(appointment.appointment_type)}" data-initials="${escapeHtml(appointmentInitials)}">
+      const calendarAppointmentInitials = calendarBubbleInitials(appointment.title || type.label || 'Termin', type.short || type.label || 'TE');
+      return `<span class="day-chip appointment calendar-event-chip type-${normalizeAppointmentType(appointment.appointment_type)}" data-initials="${escapeHtml(calendarAppointmentInitials)}">
         <b>${escapeHtml(time)} · ${escapeHtml(type.short || type.label)}</b>
         <em>${escapeHtml(appointment.title || type.label || 'Termin')}</em>
       </span>`;
