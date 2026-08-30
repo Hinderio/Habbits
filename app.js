@@ -1426,6 +1426,7 @@ cacheEls();
       els.taskStepsEditorList.addEventListener('change', updateTaskStepDraftFromEditor);
     }
     if (els.appointmentForm?.elements?.starts_at) els.appointmentForm.elements.starts_at.addEventListener('change', syncAppointmentEndDefault);
+    if (els.appointmentForm?.elements?.recurrence) els.appointmentForm.elements.recurrence.addEventListener('change', syncAppointmentBirthdayRecurrence);
     if (els.cancelHabitEditBtn) els.cancelHabitEditBtn.addEventListener('click', () => closeHabitForm({ clearForm: true }));
     if (els.cancelTaskEditBtn) els.cancelTaskEditBtn.addEventListener('click', () => closeTaskForm({ clearForm: true }));
     if (els.cancelAppointmentEditBtn) els.cancelAppointmentEditBtn.addEventListener('click', () => closeAppointmentForm({ clearForm: true }));
@@ -2459,11 +2460,20 @@ cacheEls();
     return parseTaskIdeaMetaFromDescription(idea.description || '').description;
   }
 
+  function taskIdeaProjectId(idea = {}) {
+    const parsed = parseTaskIdeaMetaFromDescription(idea.description || '');
+    return String(idea.project_id || idea.projectId || parsed.meta.project_id || '').trim();
+  }
+
   function taskIdeaDescriptionForStorage(idea = {}) {
-    const clean = taskIdeaDescriptionForDisplay(idea).trim();
-    const rating = normalizeTaskIdeaRating(idea.rating);
-    if (!rating) return clean || null;
-    const meta = { rating };
+    const parsed = parseTaskIdeaMetaFromDescription(idea.description || '');
+    const clean = parsed.description.trim();
+    const rating = normalizeTaskIdeaRating(idea.rating ?? parsed.meta.rating);
+    const projectId = taskIdeaProjectId(idea);
+    const meta = {};
+    if (rating) meta.rating = rating;
+    if (projectId) meta.project_id = projectId;
+    if (!Object.keys(meta).length) return clean || null;
     return `${clean ? `${clean}\n\n` : ''}<!--hf-idea-meta:${encodeURIComponent(JSON.stringify(meta))}-->`;
   }
 
@@ -2657,6 +2667,8 @@ cacheEls();
       title: String(idea.title || '').trim(),
       description: parsedDescription.description,
       rating,
+      project_id: idea.project_id || idea.projectId || parsedDescription.meta.project_id || null,
+      projectId: idea.project_id || idea.projectId || parsedDescription.meta.project_id || null,
       category,
       story_points: [1, 2, 3, 5, 8].includes(story) ? story : 2,
       priority: normalizeTaskPriority(idea.priority),
@@ -3377,6 +3389,7 @@ cacheEls();
   }
 
   function closeTaskForm({ clearForm = false } = {}) {
+    if (clearForm && !editingTaskId) clearPendingProjectTaskContext();
     if (clearForm || editingTaskId) resetTaskFormMode({ clearForm });
     taskFormOpen = false;
     syncTaskFormPanel();
@@ -10855,8 +10868,22 @@ cacheEls();
     </article>`;
   }
 
+  // Native CSS replaces the former service-worker injections:
+  // habitflow-birthday-initials-style, habitflow-birthday-bubble-flow-style,
+  // habitflow-mobile-calendar-bubbles-style.
+  function calendarBubbleInitials(value, fallback = 'HF') {
+    const words = String(value || '').trim().split(/\s+/).filter(Boolean);
+    const raw = words.length > 1
+      ? words.slice(0, 2).map(part => part[0] || '').join('')
+      : (words[0] || fallback).slice(0, 2);
+    return raw.toUpperCase() || fallback;
+  }
+
   function renderCalendarAppointmentChips(appointments) {
-    const visibleAppointments = appointments.slice(0, 2);
+    const visibleBirthdayAppointments = appointments.filter(appointment => appointmentEventKind(appointment) === 'birthday');
+    const visibleAppointments = visibleBirthdayAppointments.length > 1
+      ? appointments.filter((appointment, index) => index < 2 || appointmentEventKind(appointment) === 'birthday').slice(0, 5)
+      : appointments.slice(0, 2);
     const chips = visibleAppointments.map(appointment => {
       const type = appointmentTypeMeta(appointment.appointment_type);
       const eventKind = appointmentEventKind(appointment);
@@ -10864,13 +10891,14 @@ cacheEls();
         const specialLabel = eventKind === 'birthday' ? 'Geburtstag' : eventKind === 'holiday' ? 'Ferientag' : 'Feiertag';
         const initials = appointmentInitials(appointment.title, eventKind === 'birthday' ? 'GB' : eventKind === 'holiday' ? 'FT' : 'FE');
         const accessibleLabel = `${appointment.title || specialLabel}, ${specialLabel}`;
-        return `<span class="day-chip appointment calendar-event-chip is-special-event is-${eventKind}" title="${escapeHtml(accessibleLabel)}" aria-label="${escapeHtml(accessibleLabel)}"><strong>${escapeHtml(initials)}</strong></span>`;
+        return `<span class="day-chip appointment calendar-event-chip is-special-event is-${eventKind}" data-initials="${escapeHtml(initials)}" title="${escapeHtml(accessibleLabel)}" aria-label="${escapeHtml(accessibleLabel)}"><strong>${escapeHtml(initials)}</strong></span>`;
       }
       const startsAt = appointment?.starts_at ? new Date(appointment.starts_at) : null;
       const time = startsAt && !Number.isNaN(startsAt.getTime())
         ? startsAt.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' })
         : 'Zeit offen';
-      return `<span class="day-chip appointment calendar-event-chip type-${normalizeAppointmentType(appointment.appointment_type)}">
+      const appointmentInitials = calendarBubbleInitials(appointment.title || type.label || 'Termin', type.short || type.label || 'TE');
+      return `<span class="day-chip appointment calendar-event-chip type-${normalizeAppointmentType(appointment.appointment_type)}" data-initials="${escapeHtml(appointmentInitials)}">
         <b>${escapeHtml(time)} · ${escapeHtml(type.short || type.label)}</b>
         <em>${escapeHtml(appointment.title || type.label || 'Termin')}</em>
       </span>`;
@@ -10895,7 +10923,8 @@ cacheEls();
       const priority = normalizeTaskPriority(task.priority);
       const label = taskPriorityMeta(task).label;
       const title = `${label}: ${task.title || 'Aufgabe'}`;
-      return `<span class="calendar-task-dot priority-${priority}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"></span>`;
+      const taskInitials = calendarBubbleInitials(task.title || 'Aufgabe', 'AU');
+      return `<span class="calendar-task-dot priority-${priority}" data-initials="${escapeHtml(taskInitials)}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"></span>`;
     }).join('');
     const more = tasks.length > visible.length ? `<span class="calendar-task-dot-more" aria-label="${tasks.length - visible.length} weitere Aufgaben">+${tasks.length - visible.length}</span>` : '';
     return `<span class="calendar-task-dots" aria-label="${tasks.length} Aufgabe(n) an diesem Tag">${dots}${more}</span>`;
@@ -12226,9 +12255,37 @@ async function deleteAlcoholLog(id) {
     syncWithSupabase({ silent: true, pullFirst: false });
   }
 
+  function readPendingProjectTaskContext() {
+    let raw = null;
+    try {
+      raw = sessionStorage.getItem('habitflow-task-project-context-v1');
+    } catch {
+      raw = null;
+    }
+    const context = raw ? (() => {
+      try { return JSON.parse(raw); } catch { return null; }
+    })() : window.__habitFlowTaskProjectContext;
+    if (!context?.project_id) return null;
+    if (context.created_at && Date.now() - Number(context.created_at) > 30 * 60 * 1000) {
+      clearPendingProjectTaskContext();
+      return null;
+    }
+    return { ...context, project_id: String(context.project_id) };
+  }
+
+  function clearPendingProjectTaskContext() {
+    try {
+      sessionStorage.removeItem('habitflow-task-project-context-v1');
+    } catch {}
+    if (window.__habitFlowTaskProjectContext) delete window.__habitFlowTaskProjectContext;
+  }
+
   async function createTask(event) {
     event.preventDefault();
     const data = new FormData(els.taskForm);
+    const selectedProjectId = String(data.get('project_id') || '').trim();
+    const projectTaskContext = editingTaskId ? null : readPendingProjectTaskContext();
+    const normalizedProjectId = selectedProjectId || projectTaskContext?.project_id || null;
     const wantsMonthly = String(data.get('recurrence') || 'none') === 'monthly';
     const dueAt = data.get('due_at') ? new Date(data.get('due_at')).toISOString() : null;
     if (wantsMonthly && !dueAt) {
@@ -12244,6 +12301,9 @@ async function deleteAlcoholLog(id) {
       effort: Number(data.get('effort') || 3),
       priority: normalizeTaskPriority(data.get('priority')),
       due_at: dueAt,
+      project_id: normalizedProjectId,
+      projectId: normalizedProjectId,
+      project_link_cleared_at: normalizedProjectId ? null : nowIso(),
       updated_at: nowIso(),
       synced: false
     };
@@ -12292,6 +12352,8 @@ async function deleteAlcoholLog(id) {
       done_archived_at: null,
       done_archive_rank: null,
       points: 0,
+      project_id: normalizedProjectId,
+      projectId: normalizedProjectId,
       recurrence: wantsMonthly ? buildMonthlyTaskRecurrence(values.due_at, { id: taskId }) : null,
       images: uploadedImages,
       created_at: created,
@@ -12302,6 +12364,7 @@ async function deleteAlcoholLog(id) {
     taskFormOpen = false;
     syncTaskFormPanel();
     saveState();
+    if (projectTaskContext?.project_id) clearPendingProjectTaskContext();
     toast(wantsMonthly ? 'Aufgabe gespeichert · wird monatlich fortgeführt' : 'Aufgabe gespeichert');
     syncWithSupabase({ silent: true });
   }
@@ -12424,6 +12487,7 @@ async function deleteAlcoholLog(id) {
     const title = String(data.get('title') || '').trim();
     if (!title) return;
     const created = nowIso();
+    const projectId = String(data.get('project_id') || '').trim() || null;
     state.taskIdeas.push(normalizeTaskIdea({
       id: uid(),
       title,
@@ -12431,6 +12495,8 @@ async function deleteAlcoholLog(id) {
       category: data.get('category'),
       story_points: Number(data.get('story_points') || 2),
       priority: normalizeTaskPriority(data.get('priority')),
+      project_id: projectId,
+      projectId,
       idea_status: 'open',
       source_key: null,
       generated_task_id: null,
@@ -12464,6 +12530,7 @@ async function deleteAlcoholLog(id) {
     if (!idea || idea.idea_status !== 'open') return;
     const created = nowIso();
     const nextStatus = targetStatus === TASK_BACKLOG_STATUS ? TASK_BACKLOG_STATUS : 'open';
+    const ideaProjectId = taskIdeaProjectId(idea) || null;
     const task = {
       id: uid(),
       title: idea.title,
@@ -12472,6 +12539,9 @@ async function deleteAlcoholLog(id) {
       priority: normalizeTaskPriority(idea.priority),
       due_at: dueAt || null,
       status: nextStatus,
+      project_id: ideaProjectId,
+      projectId: ideaProjectId,
+      project_link_cleared_at: ideaProjectId ? null : undefined,
       backlog_rank: nextStatus === TASK_BACKLOG_STATUS ? nextBacklogRank() : null,
       completed_at: null,
       done_archived_at: null,
@@ -12908,6 +12978,7 @@ async function deleteAlcoholLog(id) {
   async function createAppointment(event) {
     event.preventDefault();
     if (!els.appointmentForm) return;
+    syncAppointmentBirthdayRecurrence();
     const data = new FormData(els.appointmentForm);
     const startsAt = validIsoOrNull(data.get('starts_at'));
     const endsAt = validIsoOrNull(data.get('ends_at'));
@@ -13009,6 +13080,7 @@ async function deleteAlcoholLog(id) {
     }
     if (fields.event_kind) fields.event_kind.value = ['holiday', 'public_holiday'].includes(eventKind) ? eventKind : 'standard';
     if (fields.is_birthday) fields.is_birthday.checked = eventKind === 'birthday';
+    syncAppointmentBirthdayRecurrence();
     els.appointmentFormTitle.textContent = 'Termin bearbeiten';
     els.appointmentSubmitBtn.textContent = 'Änderungen speichern';
     els.cancelAppointmentEditBtn.classList.remove('hidden');
@@ -13085,6 +13157,12 @@ async function deleteAlcoholLog(id) {
     if (Number.isNaN(end.getTime()) || end.getTime() <= start.getTime()) {
       fields.ends_at.value = toDateTimeLocalValue(new Date(start.getTime() + 60 * 60 * 1000).toISOString());
     }
+  }
+
+  function syncAppointmentBirthdayRecurrence() {
+    const fields = els.appointmentForm?.elements;
+    if (!fields?.is_birthday?.checked || !fields?.recurrence) return;
+    fields.recurrence.value = 'yearly';
   }
 
   function moveMonth(delta) {
@@ -14374,6 +14452,7 @@ function initOngoingSync() {
         due_at: t.due_at,
         completed_at: t.completed_at,
         points: Number(t.points || 0),
+        project_id: t.project_id || null,
         created_at: t.created_at,
         updated_at: t.updated_at || nowIso()
       };
@@ -14838,6 +14917,11 @@ function initOngoingSync() {
     if (!localIdea) return remoteIdea;
     const next = { ...remoteIdea };
     if (!normalizeTaskIdeaRating(next.rating) && normalizeTaskIdeaRating(localIdea.rating)) next.rating = normalizeTaskIdeaRating(localIdea.rating);
+    const localProjectId = taskIdeaProjectId(localIdea);
+    if (!taskIdeaProjectId(next) && localProjectId) {
+      next.project_id = localProjectId;
+      next.projectId = localProjectId;
+    }
     return next;
   }
 
@@ -15015,6 +15099,7 @@ function initOngoingSync() {
       due_at: t.due_at,
       completed_at: t.completed_at,
       points: t.points,
+      project_id: t.project_id || null,
       backlog_rank: t.backlog_rank,
       done_archived_at: t.done_archived_at,
       done_archive_rank: t.done_archive_rank,

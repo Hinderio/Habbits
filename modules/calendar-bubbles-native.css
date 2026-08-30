@@ -1,0 +1,172 @@
+.calendar-event-chip.is-birthday {
+  display: inline-grid !important;
+  place-items: center !important;
+  width: 44px !important;
+  height: 44px !important;
+  min-width: 44px !important;
+  max-width: 44px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 50% !important;
+  background: #f6b33f !important;
+  box-shadow: none !important;
+  color: #111827 !important;
+  justify-self: start !important;
+}
+
+.calendar-event-chip.is-birthday b,
+.calendar-event-chip.is-birthday strong {
+  color: #111827 !important;
+  font-size: .82rem !important;
+  font-weight: 950 !important;
+  letter-spacing: .03em !important;
+  line-height: 1 !important;
+  text-transform: uppercase !important;
+}
+
+.calendar-event-chip.is-birthday em {
+  display: none !important;
+}
+
+.line-calendar-event.is-birthday {
+  background: #f6b33f !important;
+}
+
+.day-chips:has(.calendar-event-chip.is-birthday) {
+  display: flex !important;
+  align-items: flex-start !important;
+  flex-wrap: wrap !important;
+  gap: 6px !important;
+}
+
+.day-chips:has(.calendar-event-chip.is-birthday) .calendar-event-chip:not(.is-birthday) {
+  flex: 0 0 100% !important;
+}
+
+.calendar-event-chip.is-birthday {
+  flex: 0 0 44px !important;
+}
+
+.day-chips:has(.calendar-event-chip.is-birthday) .day-chip.appointment-more {
+  align-self: center !important;
+}
+
+@media (max-width: 760px) {
+  .calendar-event-chip.is-birthday {
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    max-width: 34px !important;
+    flex-basis: 34px !important;
+  }
+
+  .calendar-event-chip.is-birthday b,
+  .calendar-event-chip.is-birthday strong {
+    font-size: .68rem !important;
+  }
+}
+
+@media (max-width: 760px) and (orientation: portrait) {
+  #screen-calendar .calendar-day-head {
+    justify-content: flex-start !important;
+    align-items: baseline !important;
+    gap: 3px !important;
+  }
+
+  #screen-calendar .day-appointment-count {
+    display: inline !important;
+    min-width: 0 !important;
+    height: auto !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    color: rgba(17, 24, 39, .48) !important;
+    font-size: .5rem !important;
+    font-style: normal !important;
+    font-weight: 900 !important;
+    line-height: 1 !important;
+    transform: translateY(-.18em) !important;
+  }
+
+  #screen-calendar .day-chips {
+    display: flex !important;
+    align-items: flex-start !important;
+    align-content: flex-start !important;
+    flex-wrap: wrap !important;
+    gap: 4px !important;
+    min-height: 0 !important;
+  }
+
+  #screen-calendar .day-chip.calendar-event-chip,
+  #screen-calendar .calendar-task-dot {
+    display: inline-grid !important;
+    place-items: center !important;
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 24px !important;
+    max-width: 24px !important;
+    flex: 0 0 24px !important;
+    padding: 0 !important;
+    border: 1px solid rgba(17, 36, 58, .08) !important;
+    border-radius: 999px !important;
+    background: #acdacf !important;
+    box-shadow: none !important;
+    color: #111827 !important;
+    overflow: hidden !important;
+  }
+
+  #screen-calendar .day-chip.calendar-event-chip.is-birthday {
+    background: #f6b33f !important;
+    border-color: rgba(17, 24, 39, .08) !important;
+  }
+
+  #screen-calendar .calendar-event-chip b,
+  #screen-calendar .calendar-event-chip em,
+  #screen-calendar .calendar-event-chip strong {
+    display: none !important;
+  }
+
+  #screen-calendar .calendar-event-chip::before,
+  #screen-calendar .calendar-task-dot::before {
+    content: attr(data-initials);
+    color: #111827 !important;
+    font-size: .54rem !important;
+    font-weight: 950 !important;
+    letter-spacing: 0 !important;
+    line-height: 1 !important;
+    text-transform: uppercase !important;
+  }
+
+  #screen-calendar .calendar-task-dots {
+    display: flex !important;
+    align-items: flex-start !important;
+    flex-wrap: wrap !important;
+    gap: 4px !important;
+    min-height: 0 !important;
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+
+  #screen-calendar .calendar-task-dot-more,
+  #screen-calendar .day-chip.appointment-more {
+    height: 16px !important;
+    min-width: 16px !important;
+    padding: 0 4px !important;
+    border-radius: 999px !important;
+    background: rgba(17, 24, 39, .055) !important;
+    color: rgba(17, 24, 39, .55) !important;
+    font-size: .48rem !important;
+    font-weight: 950 !important;
+    line-height: 16px !important;
+  }
+
+  body:not(.light) #screen-calendar .day-appointment-count {
+    color: rgba(255, 255, 255, .5) !important;
+  }
+
+  body:not(.light) #screen-calendar .calendar-task-dot-more,
+  body:not(.light) #screen-calendar .day-chip.appointment-more {
+    background: rgba(255, 255, 255, .08) !important;
+    color: rgba(255, 255, 255, .62) !important;
+  }
+}
