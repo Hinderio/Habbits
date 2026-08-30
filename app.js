@@ -9168,14 +9168,14 @@ cacheEls();
         </div>
       </section>
       <section class="fitness-detail-card">
-        <div class="fitness-detail-tabs">
+        <div class="fitness-detail-tabs" role="tablist" aria-label="Fitness-Details">
           ${[
             { key: 'summary', label: 'Summary' },
             { key: 'stats', label: 'Stats' },
             { key: 'peaks', label: 'Berge' }
-          ].map(tab => `<button class="fitness-detail-tab ${selectedFitnessDetailTab === tab.key ? 'is-active' : ''}" type="button" data-action="set-fitness-detail-tab" data-tab="${tab.key}">${tab.label}</button>`).join('')}
+          ].map(tab => `<button id="fitnessDetailTab-${tab.key}" class="fitness-detail-tab ${selectedFitnessDetailTab === tab.key ? 'is-active' : ''}" type="button" data-action="set-fitness-detail-tab" data-tab="${tab.key}" role="tab" aria-controls="fitnessDetailPanel" aria-selected="${selectedFitnessDetailTab === tab.key ? 'true' : 'false'}">${tab.label}</button>`).join('')}
         </div>
-        <div class="fitness-detail-body">
+        <div id="fitnessDetailPanel" class="fitness-detail-body" role="tabpanel" aria-labelledby="fitnessDetailTab-${selectedFitnessDetailTab}">
           ${renderFitnessDetailContent(selectedSession, visibleSessions.length ? visibleSessions : allSessions, allSessions)}
         </div>
       </section>

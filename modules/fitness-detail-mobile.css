@@ -1,0 +1,75 @@
+/* Fitness detail tabs: portrait-only containment and reliable touch targets. */
+@media (max-width: 760px) and (orientation: portrait) {
+  #screen-fitness .fitness-summary-section,
+  #screen-fitness .fitness-summary-section > .fitness-detail-card,
+  #screen-fitness .fitness-detail-body,
+  #screen-fitness .fitness-stats-grid,
+  #screen-fitness .fitness-peaks-panel,
+  #screen-fitness .fitness-peak-grid {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  #screen-fitness .fitness-summary-section {
+    overflow: hidden;
+  }
+
+  #screen-fitness .fitness-detail-tabs {
+    position: relative;
+    z-index: 2;
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    align-items: stretch;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: visible;
+    box-sizing: border-box;
+  }
+
+  #screen-fitness .fitness-detail-tabs > .fitness-detail-tab {
+    position: relative;
+    z-index: 3;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100%;
+    min-height: 44px;
+    margin: 0;
+    padding: 10px 8px !important;
+    overflow: hidden;
+    box-sizing: border-box;
+    font-size: .88rem;
+    line-height: 1.1;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #screen-fitness .fitness-detail-body {
+    overflow: visible;
+  }
+
+  #screen-fitness .fitness-stats-grid,
+  #screen-fitness .fitness-peak-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  #screen-fitness .fitness-stat-card,
+  #screen-fitness .fitness-peak-card {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-wrap: anywhere;
+  }
+}

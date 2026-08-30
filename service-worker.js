@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v272-native-source-cache';
+const CACHE_NAME = 'habitflow-v273-fitness-portrait-tabs';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -37,6 +37,7 @@ const MODULE_ASSETS = [
   './modules/line-calendar.js',
   './modules/line-calendar.css',
   './modules/calendar-bubbles-native.css',
+  './modules/fitness-detail-mobile.css',
   './modules/projects-milestone-edit.js',
   './modules/projects.js',
   './modules/projects.css',
