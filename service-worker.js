@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v276-smoke-ring-premium';
+const CACHE_NAME = 'habitflow-v277-smoke-ring-cleanup';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',

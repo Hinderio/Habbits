@@ -7,7 +7,7 @@ const root = path.resolve(__dirname, '..');
 const appSource = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
 const workerSource = fs.readFileSync(path.join(root, 'service-worker.js'), 'utf8');
 
-assert.match(workerSource, /habitflow-v276-smoke-ring-premium/);
+assert.match(workerSource, /habitflow-v277-smoke-ring-cleanup/);
 assert.doesNotMatch(appSource, /controllerchange[\s\S]{0,300}location\.reload/);
 
 const pullBlock = appSource.match(/  async function pullSupabaseData\(\) \{[\s\S]*?(?=\n  async function fetchRemoteTableSnapshots)/)?.[0];
