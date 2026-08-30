@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v280-smoke-sector-timer';
+const CACHE_NAME = 'habitflow-v281-smoking-action-pills';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',

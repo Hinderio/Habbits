@@ -212,6 +212,81 @@ body:not(.light) #screen-smoking .smoke-control-card .smoke-ring.hf-is-median-re
   color: #123e47 !important;
 }
 
+/* Smoking actions: same calm pill language as the Craving Coach. */
+#screen-smoking .smoke-control-card .hf-smoking-actions {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 12px !important;
+  width: 100%;
+}
+
+#screen-smoking .smoke-control-card .hf-pause-start-btn,
+#screen-smoking .smoke-control-card #recordSmokeBtn.smoke-button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 10px !important;
+  height: 58px !important;
+  min-height: 58px !important;
+  margin: 0 !important;
+  padding: 0 20px !important;
+  border-radius: 999px !important;
+  color: #12283a !important;
+  font-size: 1rem !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  box-shadow: none !important;
+  transition: transform .18s ease, box-shadow .18s ease, background-color .18s ease !important;
+}
+
+#screen-smoking .smoke-control-card .hf-pause-start-btn {
+  border: 1px solid rgba(96, 193, 192, .42) !important;
+  background: rgba(96, 193, 192, .14) !important;
+}
+
+#screen-smoking .smoke-control-card .hf-pause-start-btn::before {
+  content: "Ⅱ";
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  border-radius: 50%;
+  background: rgba(96, 193, 192, .22);
+  color: #126a6e;
+  font-size: .78rem;
+  font-weight: 950;
+  letter-spacing: -.16em;
+  text-indent: -.16em;
+}
+
+#screen-smoking .smoke-control-card #recordSmokeBtn.smoke-button {
+  border: 1px solid #60c1c0 !important;
+  background: #60c1c0 !important;
+}
+
+#screen-smoking .smoke-control-card #recordSmokeBtn.smoke-button > span {
+  width: 30px !important;
+  height: 30px !important;
+  flex: 0 0 30px;
+  background: rgba(255, 255, 255, .34) !important;
+  color: #12283a !important;
+}
+
+#screen-smoking .smoke-control-card .hf-pause-start-btn:focus-visible,
+#screen-smoking .smoke-control-card #recordSmokeBtn.smoke-button:focus-visible {
+  outline: 3px solid rgba(96, 193, 192, .3);
+  outline-offset: 3px;
+}
+
+@media (hover: hover) {
+  #screen-smoking .smoke-control-card .hf-pause-start-btn:hover,
+  #screen-smoking .smoke-control-card #recordSmokeBtn.smoke-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 24px rgba(31, 113, 119, .13) !important;
+  }
+}
+
 @media (max-width: 760px) {
   #screen-smoking .smoke-control-card .smoke-ring {
     --smoke-dial-size: min(100%, 296px);
@@ -248,6 +323,20 @@ body:not(.light) #screen-smoking .smoke-control-card .smoke-ring.hf-is-median-re
   #screen-smoking .smoke-control-card .smoke-ring > .hf-smoke-bonus-meta {
     max-width: 26ch;
     font-size: .7rem !important;
+  }
+
+  #screen-smoking .smoke-control-card .hf-pause-start-btn,
+  #screen-smoking .smoke-control-card #recordSmokeBtn.smoke-button {
+    height: 52px !important;
+    min-height: 52px !important;
+    padding: 0 14px !important;
+    font-size: .92rem !important;
+  }
+}
+
+@media (max-width: 380px) {
+  #screen-smoking .smoke-control-card .hf-smoking-actions {
+    grid-template-columns: 1fr !important;
   }
 }
 
