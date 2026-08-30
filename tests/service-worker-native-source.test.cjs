@@ -11,7 +11,7 @@ const projectSource = read('modules/projects.js');
 const calendarCss = read('modules/calendar-bubbles-native.css');
 const workerSource = read('service-worker.js');
 
-assert.match(workerSource, /habitflow-v278-smoke-ring-progress/);
+assert.match(workerSource, /habitflow-v279-smoke-ring-experience/);
 assert.match(workerSource, /fetch\(event\.request, \{ cache: 'no-store' \}\)/);
 assert.doesNotMatch(workerSource, /response\.text\(\)/);
 assert.doesNotMatch(workerSource, /nativeAppointmentPatch|nativeTaskIdeaProjectPatch|withProjectMilestoneEditScript|withInlineMilestoneEditing/);

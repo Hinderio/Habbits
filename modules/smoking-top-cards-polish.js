@@ -203,9 +203,9 @@ ${pane}>.smoking-layout{align-items:stretch!important;gap:24px!important}
 #screen-smoking .smoke-ring small{color:#63748a!important;font-size:.66rem!important;font-weight:900!important;letter-spacing:.16em!important;text-transform:uppercase!important}
 #screen-smoking .smoke-ring strong{color:#111827!important;font-family:inherit!important;font-size:clamp(3.45rem,5.35vw,4.75rem)!important;font-weight:950!important;font-variant-numeric:tabular-nums;letter-spacing:-.035em!important;line-height:.92!important}
 #screen-smoking .smoke-ring span{color:#65758a!important;font-size:.92rem!important;font-weight:760!important;line-height:1.35!important}
-#screen-smoking .smoke-ring .hf-smoke-bonus-meta{display:none;color:#34a9a5!important;font-size:.73rem!important;font-weight:850!important;line-height:1.3!important}
-#screen-smoking .smoke-ring.hf-is-bonus strong{color:#34c9c3!important}
-#screen-smoking .smoke-ring.hf-is-bonus #smokePauseHint{display:none!important}
+#screen-smoking .smoke-ring .hf-smoke-bonus-meta{display:block;color:#34a9a5!important;font-size:.73rem!important;font-weight:850!important;line-height:1.3!important}
+#screen-smoking .smoke-ring .hf-smoke-bonus-meta:empty{display:none!important}
+#screen-smoking .smoke-ring.hf-is-bonus strong{color:#159c68!important}
 #screen-smoking .smoke-ring.hf-is-bonus .hf-smoke-bonus-meta{display:block!important}
 #screen-smoking .pause-status-row,#screen-smoking .smoke-control-card .consumption-command-insight,#screen-smoking .smoke-control-card .mobile-consumption-kpis{display:none!important}
 #screen-smoking .hf-smoking-actions{display:grid;grid-template-columns:minmax(150px,.72fr) minmax(220px,1.28fr);gap:12px}
@@ -251,7 +251,7 @@ ${pane} .consumption-history-panel{display:flex!important;flex-direction:column!
 #screen-smoking .hf-overview-footer{width:100%;min-height:44px;border:0;border-radius:16px;background:rgba(52,201,195,.08);color:#17aaa4;font-weight:950}
 body:not(.light) #screen-smoking .smoke-control-card,body:not(.light) ${pane} .consumption-history-panel{background:rgba(18,30,44,.9)!important;border-color:rgba(255,255,255,.08)!important}
 body:not(.light) #screen-smoking .smoke-ring strong,body:not(.light) #screen-smoking .hf-overview-row,body:not(.light) #screen-smoking .hf-overview-copy strong,body:not(.light) #screen-smoking .hf-overview-metrics strong,body:not(.light) #screen-smoking .hf-recent-row strong,body:not(.light) #screen-smoking .craving-coach-head h4{color:#f4f9ff!important}
-body:not(.light) #screen-smoking .smoke-ring.hf-is-bonus strong{color:#34c9c3!important}
+body:not(.light) #screen-smoking .smoke-ring.hf-is-bonus strong{color:#5ccf94!important}
 body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoking .smoke-ring small,body:not(.light) #screen-smoking .hf-overview-copy span,body:not(.light) #screen-smoking .hf-overview-metrics span,body:not(.light) #screen-smoking .hf-recent-row,body:not(.light) #screen-smoking .craving-coach-card p:not(.eyebrow){color:rgba(210,227,244,.68)!important}
 @media(max-width:980px){#screen-smoking .smoking-intelligence-grid{grid-template-columns:1fr!important}}
 @media(max-width:760px){${pane}>.smoking-layout{grid-template-columns:1fr!important;gap:14px!important}${pane}>.smoking-layout>.mobile-consumption-section{display:block!important}${pane}>.smoking-layout>.mobile-consumption-section>summary{display:none!important}${pane}>.smoking-layout>.mobile-consumption-section>.consumption-history-panel,${pane}>.smoking-layout>.mobile-consumption-section:not([open])>.consumption-history-panel{display:flex!important}#screen-smoking .smoke-control-card,${pane} .consumption-history-panel{height:auto!important;width:100%!important;padding:17px!important;border-radius:26px!important}#screen-smoking .smoke-control-card{grid-template-rows:auto auto auto;gap:15px!important}#screen-smoking .smoke-ring{width:min(100%,238px)!important;padding:25px!important}#screen-smoking .smoke-ring strong{font-size:clamp(3.05rem,15vw,4.2rem)!important;letter-spacing:-.025em!important}#screen-smoking .hf-smoke-progress-bg,#screen-smoking .hf-smoke-progress-value{stroke-width:8}#screen-smoking .hf-smoking-actions{grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr);gap:10px}#screen-smoking .hf-pause-start-btn,#screen-smoking #recordSmokeBtn.smoke-button{height:52px!important;min-height:52px!important;border-radius:17px!important}#screen-smoking .craving-coach-card{grid-template-columns:42px minmax(0,1fr);padding:14px!important}#screen-smoking .craving-actions{grid-column:1/-1;grid-row:auto;display:grid!important;grid-template-columns:1fr 1fr}#screen-smoking .craving-actions .mini-btn{min-width:0!important}#screen-smoking .hf-overview-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}#screen-smoking .smoking-intelligence-grid .smoking-visual-panel{height:auto!important}}
@@ -290,18 +290,31 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
       bonusMeta.className = 'hf-smoke-bonus-meta';
       hint?.insertAdjacentElement('afterend', bonusMeta);
     }
-    const isBonus = data.bonusMinutes > 0;
+    const hasPause = data.pause != null;
+    const hasMedian = Number.isFinite(data.median) && data.median > 0;
+    const isBonus = hasPause && hasMedian && data.bonusMinutes > 0;
+    const current = hasPause ? duration(data.pause) : '–';
+    if (live && live.textContent !== current) live.textContent = current;
     box.classList.toggle('hf-is-bonus', isBonus);
     if (isBonus) {
-      if (live && live.textContent !== `+${duration(data.bonusMinutes)}`) live.textContent = `+${duration(data.bonusMinutes)}`;
-      const meta = `${duration(data.pause)} gesamt · Median ${duration(data.median)}`;
+      if (label && label.textContent !== 'Median übertroffen') label.textContent = 'Median übertroffen';
+      if (hint && hint.textContent !== `Median ${duration(data.median)}`) hint.textContent = `Median ${duration(data.median)}`;
+      const meta = `+${duration(data.bonusMinutes)} über deinem Median`;
       if (bonusMeta && bonusMeta.textContent !== meta) bonusMeta.textContent = meta;
-      box.setAttribute('aria-label', `${duration(data.bonusMinutes)} über deiner Median-Pause. ${duration(data.pause)} aktuelle Pause insgesamt.`);
+      box.setAttribute('aria-label', `${current} aktuelle Pause. Median um ${duration(data.bonusMinutes)} übertroffen.`);
     } else {
-      const current = data.pause == null ? '–' : duration(data.pause);
-      if (live && live.textContent !== current) live.textContent = current;
-      if (bonusMeta?.textContent) bonusMeta.textContent = '';
-      box.removeAttribute('aria-label');
+      if (label && label.textContent !== 'Aktuelle Pause') label.textContent = 'Aktuelle Pause';
+      if (hasMedian) {
+        const remaining = Math.max(0, Math.ceil(data.median - data.pause));
+        if (hint && hint.textContent !== `Median ${duration(data.median)}`) hint.textContent = `Median ${duration(data.median)}`;
+        const meta = `noch ${duration(remaining)} bis zu deinem Median`;
+        if (bonusMeta && bonusMeta.textContent !== meta) bonusMeta.textContent = meta;
+        box.setAttribute('aria-label', `${current} aktuelle Pause. Noch ${duration(remaining)} bis zu deinem Median von ${duration(data.median)}.`);
+      } else {
+        if (hint && hint.textContent !== 'Median wird aus deinen Pausen gelernt') hint.textContent = 'Median wird aus deinen Pausen gelernt';
+        if (bonusMeta?.textContent) bonusMeta.textContent = '';
+        box.setAttribute('aria-label', `${current} aktuelle Pause. Der Median wird aus deinen Pausen gelernt.`);
+      }
     }
   }
 
