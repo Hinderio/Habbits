@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v286-ghost-arena';
+const CACHE_NAME = 'habitflow-v287-ghost-arena-rolling-weeks';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',

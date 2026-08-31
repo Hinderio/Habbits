@@ -40,24 +40,19 @@
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   }
 
-  function startOfWeek(value = new Date()) {
-    const date = new Date(value);
-    date.setHours(0, 0, 0, 0);
-    const weekday = date.getDay() || 7;
-    date.setDate(date.getDate() - weekday + 1);
-    return date;
-  }
-
   function comparisonWindows(now = new Date()) {
-    const currentStart = startOfWeek(now);
-    const elapsed = Math.max(1, now.getTime() - currentStart.getTime());
-    const previousStart = new Date(currentStart.getTime() - 7 * DAY_MS);
-    const previousEnd = new Date(previousStart.getTime() + elapsed);
+    const currentStart = new Date(now);
+    currentStart.setHours(0, 0, 0, 0);
+    currentStart.setDate(currentStart.getDate() - 6);
+    const previousStart = new Date(currentStart);
+    previousStart.setDate(previousStart.getDate() - 7);
+    const previousEnd = new Date(now);
+    previousEnd.setDate(previousEnd.getDate() - 7);
     return {
       now,
       current: { start: currentStart.getTime(), end: now.getTime() },
       previous: { start: previousStart.getTime(), end: previousEnd.getTime() },
-      elapsedDays: Math.max(1, Math.ceil(elapsed / DAY_MS))
+      elapsedDays: 7
     };
   }
 
@@ -342,7 +337,7 @@
         <div>
           <p class="eyebrow">Ghost Arena</p>
           <h3 id="hfGhostArenaTitle">Du gegen dein wiederkehrendes Muster</h3>
-          <span>Fairer Vergleich: laufende Woche gegen denselben Zeitraum der Vorwoche.</span>
+          <span>Rollierender Vergleich: letzte 7 Tage gegen die 7 Tage davor.</span>
         </div>
         <div class="hf-ghost-live"><i></i><span>Lokal berechnet</span></div>
       </header>
@@ -383,7 +378,7 @@
       </div>
 
       <footer class="hf-ghost-arena-footer">
-        <span><b>Fairness:</b> identische Wochendauer</span>
+        <span><b>Fairness:</b> zwei gleich lange 7-Tage-Fenster</span>
         <span><b>Datengrundlage:</b> Habits, Tasks, Fitness und Konsum</span>
         <span><b>Performance:</b> ereignisbasiert, ohne Daueranimation</span>
       </footer>
