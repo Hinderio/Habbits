@@ -201,12 +201,15 @@
 
   function chartUnit(habit = {}) {
     const key = iconKey(habit);
+    if (['hiking', 'jogging', 'walking'].includes(key)) return 'km';
     if (habit.type === 'boolean' || key === 'bread') return 'Check-ins';
     if (habit.type === 'duration' || key === 'swimming') return 'Min.';
     return unitFor(habit);
   }
 
   function buildChartPoints(habit = {}, entries = []) {
+    const key = iconKey(habit);
+    const isDistanceHabit = ['hiking', 'jogging', 'walking'].includes(key);
     const grouped = new Map();
     const sortedEntries = entries
       .filter(entry => entry && entry.habit_id === habit.id && entry.occurred_at)
@@ -217,7 +220,11 @@
       const dateKey = toDateKey(entry.occurred_at);
       if (!dateKey) return;
       const current = grouped.get(dateKey) || 0;
-      const value = habit.type === 'boolean' ? (entry.value_bool ? 1 : 0) : Number(entry.value_num || 0);
+      const value = isDistanceHabit
+        ? Number(entry.value_num || 0)
+        : habit.type === 'boolean'
+          ? (entry.value_bool ? 1 : 0)
+          : Number(entry.value_num || 0);
       grouped.set(dateKey, habit.type === 'weight' ? value : current + value);
     });
 

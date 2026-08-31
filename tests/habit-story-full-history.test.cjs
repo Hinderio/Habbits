@@ -13,8 +13,11 @@ assert.doesNotMatch(buildPointsBlock, /\.slice\(-14\)/);
 assert.match(buildPointsBlock, /return \[\.\.\.grouped\.entries\(\)\]/);
 assert.match(moduleSource, /const dotRadius = points\.length <= 14 \? 5 : Math\.max\(1\.35,/);
 assert.match(moduleSource, /r="\$\{dotRadius\.toFixed\(2\)\}"/);
-assert.match(indexSource, /modules\/habit-story-coverage\.js\?v=284/);
+assert.match(moduleSource, /if \(\['hiking', 'jogging', 'walking'\]\.includes\(key\)\) return 'km'/);
+assert.match(moduleSource, /const isDistanceHabit = \['hiking', 'jogging', 'walking'\]\.includes\(key\)/);
+assert.match(moduleSource, /const value = isDistanceHabit[\s\S]*?Number\(entry\.value_num \|\| 0\)[\s\S]*?habit\.type === 'boolean'/);
+assert.match(indexSource, /modules\/habit-story-coverage\.js\?v=285/);
 assert.match(workerSource, /\.\/modules\/habit-story-coverage\.js/);
-assert.match(workerSource, /habitflow-v284-habit-story-full-history/);
+assert.match(workerSource, /habitflow-v285-hiking-story-kilometers/);
 
 console.log('habit story full-history checks passed');

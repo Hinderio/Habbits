@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v284-habit-story-full-history';
+const CACHE_NAME = 'habitflow-v285-hiking-story-kilometers';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
