@@ -10,9 +10,13 @@
   const C = 2 * Math.PI * R;
   const BONUS_R = 104;
   const BONUS_C = 2 * Math.PI * BONUS_R;
+  const RING_REFRESH_MS = 5_000;
   const pane = '#screen-smoking .consumption-pane[data-consumption-pane="smoke"]';
   let busy = false;
   let timer = null;
+  let ringRefreshTimer = null;
+  let lastRingPaintAt = 0;
+  let queuedRingData = null;
   let liveSnapshot = null;
   let observer = null;
   let observedTarget = null;
@@ -335,6 +339,35 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
     }
   }
 
+  function paintRing(data, { force = false } = {}) {
+    queuedRingData = data;
+    const elapsed = Date.now() - lastRingPaintAt;
+    const remaining = Math.max(0, RING_REFRESH_MS - elapsed);
+    if (!force && lastRingPaintAt && remaining > 0) {
+      if (!ringRefreshTimer) {
+        ringRefreshTimer = window.setTimeout(() => {
+          ringRefreshTimer = null;
+          const nextData = queuedRingData;
+          queuedRingData = null;
+          if (!nextData) return;
+          ring(nextData);
+          lastRingPaintAt = Date.now();
+        }, remaining);
+      }
+      return;
+    }
+    window.clearTimeout(ringRefreshTimer);
+    ringRefreshTimer = null;
+    queuedRingData = null;
+    ring(data);
+    lastRingPaintAt = Date.now();
+  }
+
+  function refreshRing() {
+    if (document.hidden || !$('#screen-smoking .smoke-ring')) return;
+    paintRing(metrics(readCurrentSnapshot()));
+  }
+
   function actions() {
     const card = $('#screen-smoking .smoke-control-card');
     if (!card) return;
@@ -423,7 +456,7 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
     try {
       const data = metrics(snapshot || readCurrentSnapshot());
       style();
-      ring(data);
+      paintRing(data);
       actions();
       coach();
       overview(data);
@@ -451,6 +484,7 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
       schedule(0);
       return Boolean(nextSnapshot);
     }
+    paintRing(metrics(currentSnapshot), { force: true });
     render(currentSnapshot);
     return Boolean(nextSnapshot);
   }
@@ -469,6 +503,7 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
   function init() {
     render();
     [150, 450, 1000, 2200].forEach(delay => window.setTimeout(render, delay));
+    window.setInterval(refreshRing, RING_REFRESH_MS);
     window.setInterval(render, 30000);
     window.addEventListener('storage', event => {
       if (!event.key || event.key === STATE_KEY) {

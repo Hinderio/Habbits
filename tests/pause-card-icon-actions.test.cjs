@@ -16,6 +16,6 @@ assert.match(pauseCardSource, /aria-label="Pause bearbeiten"[^>]*>\$\{svgIcon\('
 assert.match(pauseCardSource, /class="consumption-icon-action consumption-icon-action-delete"[^>]+data-action="delete-pause"/);
 assert.match(pauseCardSource, /aria-label="Pause löschen"[^>]*>\$\{svgIcon\('trash', 'ui-icon'\)\}/);
 assert.doesNotMatch(pauseCardSource, /class="mini-btn danger"[^>]+data-action="delete-pause"/);
-assert.match(workerSource, /habitflow-v282-pause-card-icon-actions/);
+assert.match(workerSource, /habitflow-v283-smoking-ring-five-second-refresh/);
 
 console.log('pause card icon actions tests passed');

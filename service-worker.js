@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v282-pause-card-icon-actions';
+const CACHE_NAME = 'habitflow-v283-smoking-ring-five-second-refresh';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',

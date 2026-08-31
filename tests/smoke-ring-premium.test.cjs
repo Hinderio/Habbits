@@ -9,8 +9,8 @@ const ringCss = fs.readFileSync(path.join(root, 'modules/smoke-ring-premium.css'
 const ringModule = fs.readFileSync(path.join(root, 'modules/smoking-top-cards-polish.js'), 'utf8');
 
 assert.match(indexSource, /modules\/smoke-ring-premium\.css\?v=281/);
-assert.match(indexSource, /modules\/smoking-top-cards-polish\.js\?v=280/);
-assert.match(workerSource, /habitflow-v282-pause-card-icon-actions/);
+assert.match(indexSource, /modules\/smoking-top-cards-polish\.js\?v=283/);
+assert.match(workerSource, /habitflow-v283-smoking-ring-five-second-refresh/);
 assert.match(workerSource, /\.\/modules\/smoke-ring-premium\.css/);
 
 assert.match(ringCss, /#screen-smoking \.smoke-control-card \.smoke-ring/);
@@ -42,6 +42,9 @@ assert.match(ringModule, /\+\$\{duration\(data\.bonusMinutes\)\} über deinem Me
 assert.match(ringModule, /data\.bonusMinutes \/ data\.median/);
 assert.match(ringModule, /--hf-smoke-sector-progress/);
 assert.match(ringModule, /is-median-phase/);
+assert.match(ringModule, /const RING_REFRESH_MS = 5_000/);
+assert.match(ringModule, /window\.setInterval\(refreshRing, RING_REFRESH_MS\)/);
+assert.match(ringModule, /if \(!force && lastRingPaintAt && remaining > 0\)/);
 assert.doesNotMatch(ringModule, /live\.textContent !== `\+\$\{duration\(data\.bonusMinutes\)\}`/);
 assert.match(ringCss, /body\.light #screen-smoking/);
 assert.match(ringCss, /@media \(max-width: 760px\)/);
