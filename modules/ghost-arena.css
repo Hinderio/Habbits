@@ -45,7 +45,7 @@
 .hf-ghost-metric > div span { color: var(--hf-arena-muted); font-size: .78rem; font-weight: 950; }
 .hf-ghost-metric.is-win > div span { color: #168768; }
 .hf-ghost-metric.is-watch > div span { color: #c16c2c; }
-.hf-ghost-metric > strong { display: block; margin-top: 12px; overflow: hidden; color: var(--hf-arena-ink); font-size: 1.2rem; font-weight: 850; line-height: 1; text-overflow: ellipsis; white-space: nowrap; }
+.hf-ghost-metric > strong { display: block; margin-top: 12px; overflow: hidden; color: var(--hf-arena-ink); font-size: clamp(1rem, 1.25vw, 1.2rem); font-weight: 850; line-height: 1; text-overflow: ellipsis; white-space: nowrap; }
 .hf-ghost-metric p { margin: 6px 0 0; color: var(--hf-arena-muted); font-size: .7rem; font-weight: 750; }
 .hf-ghost-metric p b { color: var(--hf-arena-ghost); }
 

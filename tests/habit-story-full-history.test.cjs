@@ -18,6 +18,6 @@ assert.match(moduleSource, /const isDistanceHabit = \['hiking', 'jogging', 'walk
 assert.match(moduleSource, /const value = isDistanceHabit[\s\S]*?Number\(entry\.value_num \|\| 0\)[\s\S]*?habit\.type === 'boolean'/);
 assert.match(indexSource, /modules\/habit-story-coverage\.js\?v=285/);
 assert.match(workerSource, /\.\/modules\/habit-story-coverage\.js/);
-assert.match(workerSource, /habitflow-v287-ghost-arena-rolling-weeks/);
+assert.match(workerSource, /habitflow-v288-ghost-arena-production/);
 
 console.log('habit story full-history checks passed');

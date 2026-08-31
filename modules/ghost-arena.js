@@ -77,11 +77,13 @@
 
   function habitKind(habit = {}) {
     const name = String(habit.name || '').toLowerCase();
-    const icon = String(habit.icon || habit.system_key || '').toLowerCase();
-    if (name.includes('wander') || icon.includes('hiking')) return 'hiking';
-    if (name.includes('jogg') || name.includes('lauf') || icon.includes('jogging')) return 'jogging';
-    if (name.includes('spazier') || icon.includes('walking')) return 'walking';
-    return icon;
+    const signal = `${habit.icon || ''} ${habit.system_key || ''}`.toLowerCase();
+    if (name.includes('wander') || signal.includes('hiking')) return 'hiking';
+    if (name.includes('jogg') || name.includes('lauf') || signal.includes('jogging')) return 'jogging';
+    if (name.includes('spazier') || signal.includes('walking')) return 'walking';
+    if (name.includes('liegest') || name.includes('pushup') || name.includes('push-up') || signal.includes('pushups')) return 'pushups';
+    if (name.includes('meditation') || name.includes('atem') || signal.includes('meditation')) return 'meditation';
+    return signal.trim();
   }
 
   function activeHabits(state) {
@@ -142,7 +144,12 @@
     const habitIds = new Set(habits.map(habit => String(habit.id)));
     const entries = activeHabitEntries(state).filter(entry => habitIds.has(String(entry.habit_id)) && inWindow(entry.occurred_at, range));
     const habitDays = new Set(entries.map(entry => `${entry.habit_id}:${dateKey(entry.occurred_at)}`).filter(Boolean));
-    const fitnessIds = new Set(habits.filter(habit => ['hiking', 'jogging', 'walking'].includes(habitKind(habit))).map(habit => String(habit.id)));
+    const idsForKind = kind => new Set(habits.filter(habit => habitKind(habit) === kind).map(habit => String(habit.id)));
+    const hikingIds = idsForKind('hiking');
+    const joggingIds = idsForKind('jogging');
+    const pushupIds = idsForKind('pushups');
+    const meditationIds = idsForKind('meditation');
+    const valueForIds = ids => sum(entries.filter(entry => ids.has(String(entry.habit_id))).map(entry => entry.value_num));
     const tasks = (Array.isArray(state.tasks) ? state.tasks : []).filter(task => {
       const time = completedTaskTime(task);
       return time >= range.start && time <= range.end;
@@ -157,12 +164,15 @@
       habitLogs: entries.length,
       habitCoverage: clamp(habitDays.size / coverageTarget),
       tasks: tasks.length,
-      distance: sum(entries.filter(entry => fitnessIds.has(String(entry.habit_id))).map(entry => entry.value_num)),
+      hikingDistance: valueForIds(hikingIds),
+      joggingDistance: valueForIds(joggingIds),
+      pushups: valueForIds(pushupIds),
+      meditationMinutes: valueForIds(meditationIds),
       cigarettes: rangeCigarettes.length,
       smokeMedian: median(intervals),
       smokeIntervals: intervals,
       alcoholDays: alcoholKeys.length,
-      actionCount: habitDays.size + tasks.length * 2 + Math.ceil(sum(entries.filter(entry => fitnessIds.has(String(entry.habit_id))).map(entry => entry.value_num)))
+      actionCount: habitDays.size + tasks.length * 2 + Math.ceil(valueForIds(hikingIds) + valueForIds(joggingIds))
     };
   }
 
@@ -175,10 +185,14 @@
 
   function ghostScore(current, previous) {
     const strengths = [
-      { value: pairStrength(current.habitDays, previous.habitDays, true), weight: .3 },
-      { value: pairStrength(current.tasks, previous.tasks, true), weight: .25 },
-      { value: pairStrength(current.distance, previous.distance, true), weight: .2 },
-      { value: pairStrength(current.cigarettes, previous.cigarettes, false), weight: .25 }
+      { value: pairStrength(current.habitDays, previous.habitDays, true), weight: .15 },
+      { value: pairStrength(current.tasks, previous.tasks, true), weight: .15 },
+      { value: pairStrength(current.hikingDistance, previous.hikingDistance, true), weight: .1 },
+      { value: pairStrength(current.joggingDistance, previous.joggingDistance, true), weight: .1 },
+      { value: pairStrength(current.cigarettes, previous.cigarettes, false), weight: .15 },
+      { value: pairStrength(current.alcoholDays, previous.alcoholDays, false), weight: .15 },
+      { value: pairStrength(current.pushups, previous.pushups, true), weight: .1 },
+      { value: pairStrength(current.meditationMinutes, previous.meditationMinutes, true), weight: .1 }
     ];
     const currentScore = Math.round(sum(strengths.map(item => item.value * item.weight)));
     return { current: currentScore, ghost: 100 - currentScore };
@@ -356,8 +370,12 @@
           <div class="hf-ghost-metrics">
             ${metricCard('Habit-Tage', current.habitDays, previous.habitDays)}
             ${metricCard('Tasks erledigt', current.tasks, previous.tasks)}
-            ${metricCard('Bewegung', current.distance, previous.distance, { format: value => `${formatNumber(value, 1)} km` })}
+            ${metricCard('Wandern', current.hikingDistance, previous.hikingDistance, { format: value => `${formatNumber(value, 1)} km` })}
+            ${metricCard('Joggen', current.joggingDistance, previous.joggingDistance, { format: value => `${formatNumber(value, 1)} km` })}
             ${metricCard('Zigaretten', current.cigarettes, previous.cigarettes, { higher: false })}
+            ${metricCard('Alkohol-Tage', current.alcoholDays, previous.alcoholDays, { higher: false, format: value => `${formatNumber(value)} Tg.` })}
+            ${metricCard('Liegestütze', current.pushups, previous.pushups, { format: value => `${formatNumber(value)} Stk.` })}
+            ${metricCard('Meditation', current.meditationMinutes, previous.meditationMinutes, { format: value => `${formatNumber(value)} Min.` })}
           </div>
         </article>
 
