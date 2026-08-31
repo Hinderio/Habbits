@@ -10,7 +10,7 @@ const ringModule = fs.readFileSync(path.join(root, 'modules/smoking-top-cards-po
 
 assert.match(indexSource, /modules\/smoke-ring-premium\.css\?v=281/);
 assert.match(indexSource, /modules\/smoking-top-cards-polish\.js\?v=280/);
-assert.match(workerSource, /habitflow-v281-smoking-action-pills/);
+assert.match(workerSource, /habitflow-v282-pause-card-icon-actions/);
 assert.match(workerSource, /\.\/modules\/smoke-ring-premium\.css/);
 
 assert.match(ringCss, /#screen-smoking \.smoke-control-card \.smoke-ring/);

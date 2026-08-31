@@ -11968,7 +11968,8 @@ async function deleteAlcoholLog(id) {
       ${['smoke', 'alcohol'].includes(period.scope) ? renderPauseConsumptionLogList(period) : ''}
       <div class="pause-card-actions">
         ${isActive ? `<button class="mini-btn" type="button" data-action="end-pause-now" data-id="${period.id}">Jetzt beenden</button>` : ''}
-        <button class="mini-btn danger" type="button" data-action="delete-pause" data-id="${period.id}">Löschen</button>
+        <button class="consumption-icon-action" type="button" data-action="edit-pause" data-id="${period.id}" aria-label="Pause bearbeiten" title="Bearbeiten">${svgIcon('edit', 'ui-icon')}</button>
+        <button class="consumption-icon-action consumption-icon-action-delete" type="button" data-action="delete-pause" data-id="${period.id}" aria-label="Pause löschen" title="Löschen">${svgIcon('trash', 'ui-icon')}</button>
       </div>
     </article>`;
   }
