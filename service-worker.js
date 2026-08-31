@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v285-hiking-story-kilometers';
+const CACHE_NAME = 'habitflow-v286-ghost-arena';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -22,6 +22,8 @@ const MODULE_ASSETS = [
   './modules/habit-defaults-extension.js',
   './modules/habits.js',
   './modules/habit-story-coverage.js',
+  './modules/ghost-arena.js',
+  './modules/ghost-arena.css',
   './modules/tasks.js',
   './modules/task-swimlane-view.js',
   './modules/task-swimlane-view.css',
