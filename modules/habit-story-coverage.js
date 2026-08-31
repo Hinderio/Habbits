@@ -222,8 +222,7 @@
     });
 
     return [...grouped.entries()]
-      .map(([date, value]) => ({ date, value }))
-      .slice(-14);
+      .map(([date, value]) => ({ date, value }));
   }
 
   function chartIcon() {
@@ -253,11 +252,12 @@
     const yFor = value => top + ((maximum + range * .08 - value) / (range * 1.16)) * plotHeight;
     const coordinates = points.map((point, index) => ({ ...point, x: xFor(index), y: yFor(point.value) }));
     const linePath = coordinates.map((point, index) => `${index ? 'L' : 'M'} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(' ');
+    const dotRadius = points.length <= 14 ? 5 : Math.max(1.35, 5 * Math.pow(14 / points.length, .35));
     const grid = [0, .5, 1].map(position => {
       const y = top + position * plotHeight;
       return `<line x1="${left}" y1="${y}" x2="${width - right}" y2="${y}" class="habit-story-chart-grid"/>`;
     }).join('');
-    const dots = coordinates.map(point => `<circle cx="${point.x.toFixed(2)}" cy="${point.y.toFixed(2)}" r="5" class="habit-story-chart-dot"><title>${escapeHtml(new Date(`${point.date}T12:00:00`).toLocaleDateString('de-CH'))}: ${escapeHtml(formatChartValue(point.value, unit))}</title></circle>`).join('');
+    const dots = coordinates.map(point => `<circle cx="${point.x.toFixed(2)}" cy="${point.y.toFixed(2)}" r="${dotRadius.toFixed(2)}" class="habit-story-chart-dot"><title>${escapeHtml(new Date(`${point.date}T12:00:00`).toLocaleDateString('de-CH'))}: ${escapeHtml(formatChartValue(point.value, unit))}</title></circle>`).join('');
     const firstDate = new Date(`${points[0].date}T12:00:00`).toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' });
     const lastDate = new Date(`${points.at(-1).date}T12:00:00`).toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' });
 

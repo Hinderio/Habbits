@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v283-smoking-ring-five-second-refresh';
+const CACHE_NAME = 'habitflow-v284-habit-story-full-history';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',
@@ -21,6 +21,7 @@ const MODULE_ASSETS = [
   './modules/dashboard.js',
   './modules/habit-defaults-extension.js',
   './modules/habits.js',
+  './modules/habit-story-coverage.js',
   './modules/tasks.js',
   './modules/task-swimlane-view.js',
   './modules/task-swimlane-view.css',
