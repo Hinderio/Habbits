@@ -5363,7 +5363,7 @@ cacheEls();
     state.monthlyMissions.push(mission);
     saveState();
     toast(`${mission.title} als Monats-Mission aktiviert.`);
-    syncWithSupabase({ silent: true, pullFirst: false });
+    queueMonthlyMissionSync([mission.id]);
   }
 
   function createMonthlyMissionFromPreset(presetId) {
@@ -5396,7 +5396,7 @@ cacheEls();
     if (!status.completed) next.completed_at = null;
     state.monthlyMissions[index] = next;
     saveState();
-    syncWithSupabase({ silent: true, pullFirst: false });
+    queueMonthlyMissionSync([next.id]);
     return next;
   }
 
@@ -13618,6 +13618,7 @@ async function deleteAlcoholLog(id) {
         return;
       }
       renderSyncStatus('syncing');
+      await syncMonthlyMissionsDirect();
       await syncWithSupabase({ silent: true, pullFirst: true, pullAfter: true });
       await syncLeisureCatalogWithSupabase({ silent: true });
       subscribeToRemoteChanges();
@@ -13651,7 +13652,9 @@ async function deleteAlcoholLog(id) {
       if (!currentUser) clearRemoteSubscription();
       if (currentUser && (wasSignedOut || event === 'SIGNED_IN')) {
         subscribeToRemoteChanges();
-        syncWithSupabase({ silent: true, pullFirst: true, pullAfter: true }).then(() => syncLeisureCatalogWithSupabase({ silent: true }));
+        syncMonthlyMissionsDirect()
+          .then(() => syncWithSupabase({ silent: true, pullFirst: true, pullAfter: true }))
+          .then(() => syncLeisureCatalogWithSupabase({ silent: true }));
       }
     });
     authSubscription = data?.subscription || null;
@@ -13803,6 +13806,7 @@ async function deleteAlcoholLog(id) {
       if (window.history?.replaceState) window.history.replaceState(null, document.title, window.location.href.split('#')[0]);
       renderAuthUi();
       renderSyncStatus('syncing');
+      await syncMonthlyMissionsDirect();
       await syncWithSupabase({ silent: true, pullFirst: true, pullAfter: true });
       await syncLeisureCatalogWithSupabase({ silent: true });
       subscribeToRemoteChanges();
@@ -14205,22 +14209,7 @@ function initOngoingSync() {
         }
 
         if (remoteMonthlyMissionsSupported) {
-          const monthlyMissionRows = rowsPendingSync('monthly_missions', state.monthlyMissions || [], { forceAll: forcePushAll }).map(mission => {
-            const normalized = normalizeMonthlyMission(mission);
-            return {
-              id: normalized.id,
-              month_key: normalized.month_key,
-              title: normalized.title,
-              category: normalizeMonthlyMissionCategory(normalized.category, normalized.metric),
-              metric: normalizeMonthlyMissionMetric(normalized.metric),
-              target: normalized.target,
-              manual_count: normalized.manual_count,
-              is_archived: Boolean(normalized.is_archived),
-              completed_at: normalized.completed_at || null,
-              created_at: normalized.created_at,
-              updated_at: normalized.updated_at || nowIso()
-            };
-          });
+          const monthlyMissionRows = monthlyMissionRowsForSync({ forceAll: forcePushAll });
           if (await upsertRows('monthly_missions', monthlyMissionRows)) {
             wroteRemote = true;
             markRowsSynced('monthlyMissions', monthlyMissionRows);
@@ -14265,6 +14254,70 @@ function initOngoingSync() {
         setTimeout(() => syncWithSupabase(queuedRequest), 120);
       }
     }
+  }
+
+
+  function monthlyMissionRowsForSync({ forceAll = false, missionIds = null } = {}) {
+    const allowedIds = Array.isArray(missionIds) && missionIds.length
+      ? new Set(missionIds.filter(Boolean))
+      : null;
+    return rowsPendingSync('monthly_missions', state.monthlyMissions || [], { forceAll })
+      .filter(mission => !allowedIds || allowedIds.has(mission.id))
+      .map(mission => {
+        const normalized = normalizeMonthlyMission(mission);
+        return {
+          id: normalized.id,
+          month_key: normalized.month_key,
+          title: normalized.title,
+          category: normalizeMonthlyMissionCategory(normalized.category, normalized.metric),
+          metric: normalizeMonthlyMissionMetric(normalized.metric),
+          target: normalized.target,
+          manual_count: normalized.manual_count,
+          is_archived: Boolean(normalized.is_archived),
+          completed_at: normalized.completed_at || null,
+          created_at: normalized.created_at,
+          updated_at: normalized.updated_at || nowIso()
+        };
+      });
+  }
+
+  async function syncMonthlyMissionsDirect({ forceAll = false, missionIds = null } = {}) {
+    if (!remoteMonthlyMissionsSupported || !supabaseClient || !isAuthenticated()) return false;
+    const rows = monthlyMissionRowsForSync({ forceAll, missionIds });
+    if (!rows.length) return false;
+
+    try {
+      const { data, error } = await supabaseClient
+        .from('monthly_missions')
+        .upsert(rowsForCurrentUser(rows), { onConflict: 'id' })
+        .select('id');
+      if (error && isMissingRemoteRelationError(error)) {
+        remoteMonthlyMissionsSupported = false;
+        console.warn('Remote Monats-Missionen-Tabelle fehlt. Missionen bleiben lokal, bis supabase.sql angewendet ist.', error);
+        return false;
+      }
+      if (error) throw error;
+
+      const confirmedIds = new Set((data || []).map(row => row?.id).filter(Boolean));
+      const confirmedRows = rows.filter(row => confirmedIds.has(row.id));
+      if (confirmedRows.length !== rows.length) {
+        throw new Error(`Monats-Missionen-Sync unvollständig: ${confirmedRows.length} von ${rows.length} bestätigt.`);
+      }
+
+      suppressRemotePullUntil = Date.now() + SELF_WRITE_ECHO_GRACE_MS;
+      markRowsSynced('monthlyMissions', confirmedRows);
+      saveState({ skipRender: true });
+      return true;
+    } catch (error) {
+      console.warn('Monats-Missionen konnten nicht direkt synchronisiert werden.', error);
+      scheduleRemoteSyncRetry();
+      return false;
+    }
+  }
+
+  function queueMonthlyMissionSync(missionIds = []) {
+    syncMonthlyMissionsDirect({ missionIds })
+      .finally(() => syncWithSupabase({ silent: true, pullFirst: false }));
   }
 
   function resetRemoteSyncRetry() {
