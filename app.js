@@ -450,6 +450,9 @@
   const REALTIME_RECONNECT_DELAY_MS = 2_500;
   const REMOTE_DELETE_TOMBSTONE_TTL_DAYS = 3650;
   const OPTIONAL_SYNC_TABLES = new Set(['alcohol_events', 'appointments', 'task_ideas', 'pause_periods', 'weekly_reviews', 'monthly_missions']);
+  const MONTHLY_MISSION_BACKUP_META_KEY = 'habitflow_monthly_missions_v1';
+  const MONTHLY_MISSION_BACKUP_MAX_ROWS = 24;
+  const MONTHLY_MISSION_BACKUP_MAX_DELETIONS = 48;
   const BUILT_IN_DEFAULT_HABIT_NAMES = new Set(['gewicht', 'wasser', 'sport', 'meditation']);
   const PAUSE_SCOPE_META = {
     smoke: { label: 'Rauchen', eyebrow: 'Konsum-Pause', helper: 'Rauch-Logs im Zeitraum bleiben gespeichert, werden in Auswertungen aber pausiert betrachtet.' },
@@ -5421,7 +5424,7 @@ cacheEls();
     markRemoteDeleted('monthly_missions', id);
     saveState();
     toast('Monats-Mission gelöscht.');
-    syncWithSupabase({ silent: true, pullFirst: false });
+    queueMonthlyMissionSync();
   }
 
   function weeklyReviewRangeLabel(startDate = startOfWeekDate(new Date())) {
@@ -13618,6 +13621,7 @@ async function deleteAlcoholLog(id) {
         return;
       }
       renderSyncStatus('syncing');
+      await syncMonthlyMissionBackup();
       await syncMonthlyMissionsDirect();
       await syncWithSupabase({ silent: true, pullFirst: true, pullAfter: true });
       await syncLeisureCatalogWithSupabase({ silent: true });
@@ -13652,7 +13656,8 @@ async function deleteAlcoholLog(id) {
       if (!currentUser) clearRemoteSubscription();
       if (currentUser && (wasSignedOut || event === 'SIGNED_IN')) {
         subscribeToRemoteChanges();
-        syncMonthlyMissionsDirect()
+        syncMonthlyMissionBackup()
+          .then(() => syncMonthlyMissionsDirect())
           .then(() => syncWithSupabase({ silent: true, pullFirst: true, pullAfter: true }))
           .then(() => syncLeisureCatalogWithSupabase({ silent: true }));
       }
@@ -13806,6 +13811,7 @@ async function deleteAlcoholLog(id) {
       if (window.history?.replaceState) window.history.replaceState(null, document.title, window.location.href.split('#')[0]);
       renderAuthUi();
       renderSyncStatus('syncing');
+      await syncMonthlyMissionBackup();
       await syncMonthlyMissionsDirect();
       await syncWithSupabase({ silent: true, pullFirst: true, pullAfter: true });
       await syncLeisureCatalogWithSupabase({ silent: true });
@@ -14052,6 +14058,7 @@ function initOngoingSync() {
 
   async function manualSyncFromSettings(event) {
     if (event) event.preventDefault();
+    await syncMonthlyMissionBackup();
     await syncWithSupabase({ silent: false, pullFirst: true, pullAfter: true, forcePushAll: false });
     await syncLeisureCatalogWithSupabase({ silent: false });
   }
@@ -14291,9 +14298,9 @@ function initOngoingSync() {
         .from('monthly_missions')
         .upsert(rowsForCurrentUser(rows), { onConflict: 'id' })
         .select('id');
-      if (error && isMissingRemoteRelationError(error)) {
+      if (error && (isMissingRemoteRelationError(error) || isMonthlyMissionSchemaCompatibilityError(error))) {
         remoteMonthlyMissionsSupported = false;
-        console.warn('Remote Monats-Missionen-Tabelle fehlt. Missionen bleiben lokal, bis supabase.sql angewendet ist.', error);
+        console.warn('Primärer Monats-Missionen-Sync ist nicht kompatibel. Der private Auth-Fallback bleibt aktiv.', error);
         return false;
       }
       if (error) throw error;
@@ -14301,6 +14308,7 @@ function initOngoingSync() {
       const confirmedIds = new Set((data || []).map(row => row?.id).filter(Boolean));
       const confirmedRows = rows.filter(row => confirmedIds.has(row.id));
       if (confirmedRows.length !== rows.length) {
+        remoteMonthlyMissionsSupported = false;
         throw new Error(`Monats-Missionen-Sync unvollständig: ${confirmedRows.length} von ${rows.length} bestätigt.`);
       }
 
@@ -14315,8 +14323,160 @@ function initOngoingSync() {
     }
   }
 
+  function isMonthlyMissionSchemaCompatibilityError(error) {
+    const message = String(error?.message || error?.details || error?.hint || error || '').toLowerCase();
+    return message.includes('monthly_missions_metric_check')
+      || message.includes('monthly_missions_target_check')
+      || (message.includes('check constraint') && message.includes('monthly_missions'));
+  }
+
+  function monthlyMissionBackupSnapshot(user = currentUser) {
+    const raw = user?.user_metadata?.[MONTHLY_MISSION_BACKUP_META_KEY];
+    const rawMissions = Array.isArray(raw) ? raw : (Array.isArray(raw?.missions) ? raw.missions : []);
+    const rawDeleted = raw && !Array.isArray(raw) && raw.deleted && typeof raw.deleted === 'object' ? raw.deleted : {};
+    const missions = rawMissions
+      .map(mission => normalizeMonthlyMission({ ...mission, synced: false }))
+      .filter(mission => mission.id && mission.month_key);
+    const deleted = {};
+    Object.entries(rawDeleted).forEach(([id, deletedAt]) => {
+      const value = typeof deletedAt === 'string' ? deletedAt : deletedAt?.deleted_at;
+      if (id && Number.isFinite(Date.parse(value || ''))) deleted[id] = value;
+    });
+    return { version: 1, missions, deleted };
+  }
+
+  function monthlyMissionBackupRow(mission) {
+    const normalized = normalizeMonthlyMission(mission);
+    return {
+      id: normalized.id,
+      month_key: normalized.month_key,
+      title: normalized.title,
+      category: normalized.category,
+      metric: normalized.metric,
+      target: normalized.target,
+      manual_count: normalized.manual_count,
+      is_archived: Boolean(normalized.is_archived),
+      completed_at: normalized.completed_at || null,
+      created_at: normalized.created_at,
+      updated_at: normalized.updated_at
+    };
+  }
+
+  function sortMonthlyMissionBackupRows(rows = []) {
+    return [...rows].sort((a, b) => {
+      const byMonth = String(b.month_key).localeCompare(String(a.month_key));
+      if (byMonth) return byMonth;
+      return (Date.parse(b.updated_at || b.created_at || '') || 0) - (Date.parse(a.updated_at || a.created_at || '') || 0);
+    });
+  }
+
+  function compactMonthlyMissionDeletions(deleted = {}) {
+    return Object.fromEntries(
+      Object.entries(deleted)
+        .sort((a, b) => (Date.parse(b[1] || '') || 0) - (Date.parse(a[1] || '') || 0))
+        .slice(0, MONTHLY_MISSION_BACKUP_MAX_DELETIONS)
+    );
+  }
+
+  function mergeMonthlyMissionBackup(remoteSnapshot) {
+    state.deletedRemoteIds = combineDeletedRemoteIds(state.deletedRemoteIds, readRemoteDeleteArchive());
+    if (!state.deletedRemoteIds.monthly_missions) state.deletedRemoteIds.monthly_missions = {};
+
+    const missionsById = new Map();
+    [...(remoteSnapshot.missions || []), ...(state.monthlyMissions || [])]
+      .map(mission => normalizeMonthlyMission({ ...mission, synced: false }))
+      .filter(mission => mission.id && mission.month_key)
+      .forEach(mission => {
+        const current = missionsById.get(mission.id);
+        const missionTime = Date.parse(mission.updated_at || mission.created_at || '') || 0;
+        const currentTime = Date.parse(current?.updated_at || current?.created_at || '') || 0;
+        if (!current || missionTime >= currentTime) missionsById.set(mission.id, mission);
+      });
+
+    const deleted = {};
+    const rememberDeletion = (id, deletedAt) => {
+      const value = typeof deletedAt === 'string' ? deletedAt : deletedAt?.deleted_at;
+      const time = Date.parse(value || '') || 0;
+      const currentTime = Date.parse(deleted[id] || '') || 0;
+      if (id && time && time >= currentTime) deleted[id] = value;
+    };
+    Object.entries(remoteSnapshot.deleted || {}).forEach(([id, value]) => rememberDeletion(id, value));
+    Object.entries(state.deletedRemoteIds.monthly_missions || {}).forEach(([id, value]) => rememberDeletion(id, value));
+
+    Object.entries(deleted).forEach(([id, deletedAt]) => {
+      const mission = missionsById.get(id);
+      const missionTime = Date.parse(mission?.updated_at || mission?.created_at || '') || 0;
+      const deletionTime = Date.parse(deletedAt || '') || 0;
+      if (mission && missionTime > deletionTime) {
+        delete deleted[id];
+        clearRemoteDeleteMarker('monthly_missions', id);
+        return;
+      }
+      missionsById.delete(id);
+      const localMarker = state.deletedRemoteIds.monthly_missions[id];
+      state.deletedRemoteIds.monthly_missions[id] = {
+        deleted_at: deletedAt,
+        synced_at: localMarker?.synced_at || null
+      };
+    });
+
+    state.monthlyMissions = Array.from(missionsById.values());
+    dedupeMonthlyMissions(state);
+    writeRemoteDeleteArchive(state.deletedRemoteIds);
+
+    return {
+      version: 1,
+      missions: sortMonthlyMissionBackupRows(state.monthlyMissions.map(monthlyMissionBackupRow))
+        .slice(0, MONTHLY_MISSION_BACKUP_MAX_ROWS),
+      deleted: compactMonthlyMissionDeletions(deleted)
+    };
+  }
+
+  function updateCurrentAuthUser(user) {
+    if (!user) return;
+    currentUser = user;
+    if (authSession) authSession = { ...authSession, user };
+  }
+
+  async function syncMonthlyMissionBackup() {
+    if (!supabaseClient || !isAuthenticated()) return false;
+    const before = JSON.stringify((state.monthlyMissions || []).map(monthlyMissionBackupRow));
+    try {
+      const { data: userData, error: userError } = await supabaseClient.auth.getUser();
+      if (userError) throw userError;
+      updateCurrentAuthUser(userData?.user);
+
+      const remoteSnapshot = monthlyMissionBackupSnapshot(userData?.user);
+      const payload = mergeMonthlyMissionBackup(remoteSnapshot);
+      const remotePayload = {
+        version: 1,
+        missions: sortMonthlyMissionBackupRows((remoteSnapshot.missions || []).map(monthlyMissionBackupRow))
+          .slice(0, MONTHLY_MISSION_BACKUP_MAX_ROWS),
+        deleted: compactMonthlyMissionDeletions(remoteSnapshot.deleted || {})
+      };
+
+      if (JSON.stringify(payload) !== JSON.stringify(remotePayload)) {
+        const { data: updateData, error: updateError } = await supabaseClient.auth.updateUser({
+          data: { [MONTHLY_MISSION_BACKUP_META_KEY]: payload }
+        });
+        if (updateError) throw updateError;
+        updateCurrentAuthUser(updateData?.user);
+      }
+
+      const after = JSON.stringify((state.monthlyMissions || []).map(monthlyMissionBackupRow));
+      saveState({ skipRender: true });
+      if (after !== before) safeRender();
+      return true;
+    } catch (error) {
+      console.warn('Privater Monats-Missionen-Fallback konnte nicht synchronisieren.', error);
+      scheduleRemoteSyncRetry();
+      return false;
+    }
+  }
+
   function queueMonthlyMissionSync(missionIds = []) {
-    syncMonthlyMissionsDirect({ missionIds })
+    syncMonthlyMissionBackup()
+      .then(() => syncMonthlyMissionsDirect({ missionIds }))
       .finally(() => syncWithSupabase({ silent: true, pullFirst: false }));
   }
 
@@ -14605,6 +14765,11 @@ function initOngoingSync() {
     if (table === 'weekly_reviews' && isMissingRemoteRelationError(error)) {
       remoteWeeklyReviewsSupported = false;
       console.warn('Remote Wochenrückblick-Tabelle fehlt. Delete wird lokal behandelt.', error);
+      return true;
+    }
+    if (table === 'monthly_missions' && isMissingRemoteRelationError(error)) {
+      remoteMonthlyMissionsSupported = false;
+      console.warn('Remote Monats-Missionen-Tabelle fehlt. Delete wird über den privaten Auth-Fallback gespiegelt.', error);
       return true;
     }
     console.warn(`Remote-Delete ${table} fehlgeschlagen`, error);
