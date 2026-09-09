@@ -17,7 +17,7 @@ assert.ok(totalBlock, 'getTotalPoints must exist');
 assert.match(totalBlock, /sum\(visibleLedgerPoints\(\)\.map\(p => Number\(p\.points \|\| 0\)\)\)/);
 assert.doesNotMatch(totalBlock, /Math\.max\(0/);
 
-const summaryBlock = appSource.match(/  function renderPointEvolutionSummary\(\) \{[\s\S]*?(?=\n  function renderDashboard)/)?.[0];
+const summaryBlock = appSource.match(/  function renderPointEvolutionSummary\(\{ followActualStage = false \} = \{\}\) \{[\s\S]*?(?=\n  function renderDashboard)/)?.[0];
 assert.ok(summaryBlock, 'point evolution summary renderer must exist');
 assert.match(summaryBlock, /getTotalPoints\(\)/);
 assert.match(summaryBlock, /followActualStage[\s\S]*?selectedCompanionStage = null/);
@@ -30,10 +30,10 @@ assert.match(recordBlock, /recalculateAlcoholScores\(\);[\s\S]*?saveState\(\{ sk
 
 const editBlock = appSource.match(/  function saveAlcoholDay\(id\) \{[\s\S]*?(?=\n  function deleteAlcoholDay)/)?.[0];
 assert.ok(editBlock, 'saveAlcoholDay must exist');
-assert.match(editBlock, /renderPointEvolutionSummary\(\)/);
+assert.match(editBlock, /renderPointEvolutionSummary\(\{ followActualStage: true \}\)/);
 
 const deleteBlock = appSource.match(/  function deleteAlcoholDay\(id\) \{[\s\S]*?(?=\n  async function deleteAlcoholLog)/)?.[0];
 assert.ok(deleteBlock, 'deleteAlcoholDay must exist');
-assert.ok((deleteBlock.match(/renderPointEvolutionSummary\(\)/g) || []).length >= 2);
+assert.ok((deleteBlock.match(/renderPointEvolutionSummary\(\{ followActualStage: true \}\)/g) || []).length >= 2);
 
 console.log('alcohol companion point representation checks passed');
