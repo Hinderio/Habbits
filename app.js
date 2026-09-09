@@ -4049,13 +4049,20 @@ cacheEls();
   }
 
 
-  function renderDashboard() {
+  function renderPointEvolutionSummary({ followActualStage = false } = {}) {
+    if (followActualStage) selectedCompanionStage = null;
     const total = getTotalPoints();
     const safeTotal = Math.max(0, Number(total || 0));
     const evolutionMeta = evolutionStageFromPoints(safeTotal);
     if (els.totalPoints) els.totalPoints.textContent = total.toLocaleString('de-CH');
     if (els.levelLabel) els.levelLabel.textContent = `Level ${evolutionMeta.stage}`;
     if (els.levelProgress) els.levelProgress.style.width = `${evolutionMeta.stageProgress}%`;
+    renderGamification();
+    if (els.pointsRulesPopover && !els.pointsRulesPopover.classList.contains('hidden')) renderPointsRulesPopover();
+  }
+
+  function renderDashboard() {
+    renderPointEvolutionSummary();
     const todayKey = toDateKey(new Date());
     const todayCount = cigarettesOnDate(todayKey).length;
     const habitLogsToday = visibleHabitEntries().filter(e => toDateKey(e.occurred_at) === todayKey).length;
@@ -4079,10 +4086,8 @@ cacheEls();
     renderMonthlyMissions();
     renderMonthlyMagazine();
     renderBehaviorIntelligence();
-    renderGamification();
     renderHabitHeatmap();
     renderCharts();
-    if (els.pointsRulesPopover && !els.pointsRulesPopover.classList.contains('hidden')) renderPointsRulesPopover();
   }
 
   function renderGamification() {
@@ -15646,13 +15651,14 @@ function initOngoingSync() {
     scheduleAlcoholLedgerRepair.pending = true;
     window.setTimeout(async () => {
       try {
-        recalculateAlcoholScores();
+        const pointSurfacesChanged = recalculateAlcoholScores();
         const rows = alcoholLedgerRowsForRemote();
         if (rows.length && await upsertRows('points_ledger', rows)) {
           markRowsSynced('pointsLedger', rows);
         }
         scheduleAlcoholLedgerRepair.done = true;
         saveState({ skipRender: true });
+        if (pointSurfacesChanged) renderPointEvolutionSummary({ followActualStage: true });
       } catch (error) {
         console.warn('[HabitFlow/alcohol] Ledger-Reparatur wird später erneut versucht.', error);
       } finally {
@@ -15687,6 +15693,7 @@ function initOngoingSync() {
     dedupeAlcoholLogs(state);
     recalculateAlcoholScores();
     saveState({ skipRender: true });
+    renderPointEvolutionSummary({ followActualStage: true });
     if (noteInput) noteInput.value = '';
     renderAlcoholExperience();
     toast(`${level.label} gespeichert · ${formatSignedPoints(level.points)} Pkt.`);
@@ -15744,6 +15751,7 @@ function initOngoingSync() {
     dedupeAlcoholLogs(state);
     recalculateAlcoholScores();
     saveState({ skipRender: true });
+    renderPointEvolutionSummary({ followActualStage: true });
 
     renderAlcoholDayHistoryItemInPlace(id);
     renderHistoryModal();
@@ -15766,6 +15774,7 @@ function initOngoingSync() {
 
     state.alcoholLogs.splice(index, 1);
     state.pointsLedger = state.pointsLedger.filter(entry => !ledgerIds.includes(entry.id));
+    renderPointEvolutionSummary({ followActualStage: true });
     if (editingAlcoholDayId === id) editingAlcoholDayId = null;
 
     els.historyModalContent
@@ -15787,6 +15796,7 @@ function initOngoingSync() {
       markRemoteDeletedMany("points_ledger", ledgerIds);
       recalculateAlcoholScores();
       saveState({ skipRender: true });
+      renderPointEvolutionSummary({ followActualStage: true });
       renderHistoryModal();
       renderAlcoholExperience();
       scheduleConsumptionBackgroundRender();
