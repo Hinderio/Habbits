@@ -52,14 +52,17 @@ assert.match(moduleSource, /class="habit-story-chart-stat is-personal-best"><spa
 assert.match(moduleSource, /const personalBest = personalBestFor\(habit, entries\)/);
 assert.match(styleSource, /grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
 assert.match(styleSource, /@media \(max-width: 760px\)/);
-assert.match(indexSource, /modules\/habit-personal-best\.css\?v=295/);
+assert.match(indexSource, /modules\/habit-personal-best\.css\?v=296/);
 assert.match(workerSource, /\.\/modules\/habit-personal-best\.css/);
+assert.match(styleSource, /habit-story-flip-inner,[\s\S]*?habit-story-face \{[\s\S]*?height: 100%/);
+assert.match(styleSource, /habit-story-front \.habit-story-switch-indicator[\s\S]*?bottom: 14px/);
 
 const detailStart = appSource.indexOf('function renderHabitDetailModal(habit)');
 const detailEnd = appSource.indexOf('function timeBucketForHour(', detailStart);
 const detailSource = appSource.slice(detailStart, detailEnd);
 assert.match(detailSource, /class="consumption-icon-action"[^>]+data-action="edit-habit"/);
 assert.match(detailSource, /class="consumption-icon-action consumption-icon-action-delete"[^>]+data-action="delete-habit"/);
+assert.match(detailSource, /class="habit-detail-icon-actions">\$\{editAction\}\$\{deleteAction\}/);
 assert.doesNotMatch(detailSource, /class="mini-btn danger"[^>]+data-action="delete-habit"/);
 
 const entryStart = appSource.indexOf('function renderHabitEntryCard(habit, entry)');

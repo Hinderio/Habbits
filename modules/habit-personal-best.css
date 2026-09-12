@@ -32,6 +32,25 @@
   text-overflow: ellipsis;
 }
 
+#screen-habits .habit-story-card[data-habit-story-enhanced="true"],
+#screen-habits .habit-story-flip-inner,
+#screen-habits .habit-story-face {
+  height: 100%;
+}
+
+#screen-habits .habit-story-front .habit-story-switch-indicator {
+  top: auto;
+  right: 14px;
+  bottom: 14px;
+}
+
+.habit-detail-icon-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
 .habit-entry-actions {
   flex: 0 0 auto;
   flex-wrap: nowrap;

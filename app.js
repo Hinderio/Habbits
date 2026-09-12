@@ -7737,7 +7737,7 @@ cacheEls();
     const deleteAction = `<button class="consumption-icon-action consumption-icon-action-delete" type="button" data-action="delete-habit" data-id="${escapeHtml(normalizedHabit.id)}" aria-label="Habit löschen" title="Löschen">${svgIcon('trash', 'ui-icon')}</button>`;
     const actions = isSystemMeditationHabit(normalizedHabit)
       ? `${editAction}${pauseAction}`
-      : `${editAction}${pauseAction}${archiveAction}${deleteAction}`;
+      : `${pauseAction}${archiveAction}<span class="habit-detail-icon-actions">${editAction}${deleteAction}</span>`;
     return `<div class="habit-detail-shell" style="${habitCategoryStyle(category)}">
       <div class="history-modal-head habit-detail-head">
         <div class="habit-detail-title-row">
