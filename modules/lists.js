@@ -41,7 +41,7 @@
     { id: 'terms', slug: 'begriffe', title: 'Begriffe', type: 'generic', icon: 'book', color: '#ff8fa3', description: 'Begriffe nach Kategorien sammeln und mit Lernkarten festigen.' },
     { id: 'finance', slug: 'finanzen', title: 'Finanzen', type: 'generic', icon: 'wallet', color: '#6fd6a8', description: 'Investitionen, Guthaben und offene Schulden in einem ruhigen Finanzbild.' },
     { id: 'chatgpt', slug: 'chatgpt', title: 'ChatGPT', type: 'generic', icon: 'message', color: '#7f9fd4', description: 'Wichtige Projekte und Threads gruppiert sichern und direkt wieder öffnen.' },
-    { id: WEEKLY_LIST_ID, slug: 'wochenzettel', title: 'Wochenzettel', type: 'generic', icon: 'note', color: '#e7c887', description: 'Kleine Gedanken und Erinnerungen – Woche für Woche.' }
+    { id: WEEKLY_LIST_ID, slug: 'wochenzettel', title: 'Wochenzettel', type: 'generic', icon: 'note', color: '#EDBDC3', description: 'Kleine Gedanken und Erinnerungen – Woche für Woche.' }
   ];
 
   const ICONS = {
@@ -221,6 +221,7 @@
       if (!list?.id) return;
       const merged = { ...listsById.get(list.id), ...list };
       if (list.id === 'subscriptions') merged.color = '#61CBF4';
+      if (list.id === WEEKLY_LIST_ID) merged.color = '#EDBDC3';
       listsById.set(list.id, merged);
     });
     return {
@@ -489,8 +490,9 @@
     return `
       <article class="hf-weekly-card ${stateClass}" data-week-start="${escapeHtml(weekStart)}" data-week-offset="${offset}">
         <header class="hf-weekly-card-head">
-          <div><small>${escapeHtml(weeklyRelationLabel(offset))} · KW ${info.week}</small><h4>${escapeHtml(formatWeekRange(weekStart))}</h4></div>
-          <span>${open} offen</span>
+          <span class="hf-weekly-card-icon" aria-hidden="true">${icon('note')}</span>
+          <div class="hf-weekly-card-heading"><small>${escapeHtml(weeklyRelationLabel(offset))} · KW ${info.week}</small><h4>${escapeHtml(formatWeekRange(weekStart))}</h4></div>
+          <span class="hf-weekly-card-status">${open} offen</span>
         </header>
         ${previousOpen.length ? renderWeeklyCarryPrompt(previousOpen) : ''}
         <div class="hf-weekly-items ${items.length ? '' : 'is-empty'}">
