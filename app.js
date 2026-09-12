@@ -14075,6 +14075,7 @@ function initOngoingSync() {
     }
     try {
       await syncMonthlyMissionBackup();
+      await syncMonthlyMissionsDirect();
       await syncWithSupabase({ silent: false, pullFirst: true, pullAfter: true, forcePushAll: false });
       await syncLeisureCatalogWithSupabase({ silent: false });
     } finally {
@@ -15033,7 +15034,8 @@ function initOngoingSync() {
     if (remoteAppointmentRows) applyRemoteCollectionAuthority('appointments', 'appointments', remoteAppointmentRows);
     if (remotePausePeriodsSupported && remotePauseRows) applyRemoteCollectionAuthority('pause_periods', 'pausePeriods', remotePauseRows);
     if (remoteWeeklyReviewsSupported && remoteWeeklyReviewRows) applyRemoteCollectionAuthority('weekly_reviews', 'weeklyReviews', remoteWeeklyReviewRows);
-    if (remoteMonthlyMissionsSupported && remoteMonthlyMissionRows) applyRemoteCollectionAuthority('monthly_missions', 'monthlyMissions', remoteMonthlyMissionRows);
+    // Monthly missions also live in the private auth backup. A missing or delayed
+    // table row must never delete a newer mission recovered from that fallback.
     if (remoteTaskIdeasSupported && remoteTaskIdeaRows) applyRemoteCollectionAuthority('task_ideas', 'taskIdeas', remoteTaskIdeaRows);
     if (remoteAlcoholEventRows) {
       const removedAlcoholUnits = applyRemoteCollectionAuthority('alcohol_events', 'alcoholUnits', remoteAlcoholEventRows, {
@@ -15069,7 +15071,11 @@ function initOngoingSync() {
         : remoteLedgerRows.map(mapRemoteLedger);
       if (remotePauseRows) state.pausePeriods = remotePauseRows.map(mapRemotePausePeriod).map(normalizePausePeriod);
       if (remoteWeeklyReviewRows) state.weeklyReviews = remoteWeeklyReviewRows.map(mapRemoteWeeklyReview).map(normalizeWeeklyReview);
-      if (remoteMonthlyMissionRows) state.monthlyMissions = remoteMonthlyMissionRows.map(mapRemoteMonthlyMission).map(normalizeMonthlyMission);
+      if (remoteMonthlyMissionRows) state.monthlyMissions = window.HabitFlowSyncIntegrity.mergeRemoteNewest(
+        state.monthlyMissions || [],
+        remoteMonthlyMissionRows,
+        row => normalizeMonthlyMission(mapRemoteMonthlyMission(row))
+      );
     } else {
       if (remoteHabitRows) state.habits = mergeById(state.habits, remoteHabitRows, mapRemoteHabit).map(habit => preserveLocalHabitFallbacks(normalizeHabit(habit), localHabitsBeforePull.get(habit.id)));
       if (remoteEntryRows) state.habitEntries = mergeById(state.habitEntries, remoteEntryRows, mapRemoteEntry);
@@ -15084,7 +15090,11 @@ function initOngoingSync() {
         : mergeById(state.pointsLedger, remoteLedgerRows, mapRemoteLedger);
       if (remotePauseRows) state.pausePeriods = mergeById(state.pausePeriods || [], remotePauseRows, mapRemotePausePeriod).map(normalizePausePeriod);
       if (remoteWeeklyReviewRows) state.weeklyReviews = mergeById(state.weeklyReviews || [], remoteWeeklyReviewRows, mapRemoteWeeklyReview).map(normalizeWeeklyReview);
-      if (remoteMonthlyMissionRows) state.monthlyMissions = mergeById(state.monthlyMissions || [], remoteMonthlyMissionRows, mapRemoteMonthlyMission).map(normalizeMonthlyMission);
+      if (remoteMonthlyMissionRows) state.monthlyMissions = window.HabitFlowSyncIntegrity.mergeRemoteNewest(
+        state.monthlyMissions || [],
+        remoteMonthlyMissionRows,
+        row => normalizeMonthlyMission(mapRemoteMonthlyMission(row))
+      );
     }
     dedupeStateCollections(state);
     migrateCigaretteScoring();

@@ -15,7 +15,8 @@ vm.runInNewContext(moduleSource, { window, Map, TypeError, Error });
 const {
   fetchAllRows,
   compactActivityIdeasForStorage,
-  mergeRemoteAuthoritative
+  mergeRemoteAuthoritative,
+  mergeRemoteNewest
 } = window.HabitFlowSyncIntegrity;
 
 test('loads every remote page even when the server caps each response', async () => {
@@ -68,6 +69,34 @@ test('keeps local pending points but removes stale synced device-only rows', () 
   assert.equal(merged.find(row => row.id === 'edited').points, 30);
 });
 
+test('keeps the newest monthly mission across auth fallback and delayed table rows', () => {
+  const fallback = [
+    { id: 'desktop-new', title: 'Neue Mission', updated_at: '2026-09-12T08:00:00Z', synced: false },
+    { id: 'edited', title: 'Neuer Titel', updated_at: '2026-09-12T08:05:00Z', synced: false }
+  ];
+  const delayedTable = [
+    { id: 'edited', title: 'Alter Titel', updated_at: '2026-09-12T07:55:00Z' }
+  ];
+  const merged = mergeRemoteNewest(fallback, delayedTable, row => ({ ...row, synced: true }));
+
+  assert.deepEqual(Array.from(merged, row => row.id).sort(), ['desktop-new', 'edited']);
+  assert.equal(merged.find(row => row.id === 'edited').title, 'Neuer Titel');
+  assert.equal(merged.find(row => row.id === 'edited').synced, false);
+});
+
+test('accepts an equally new confirmed table row and marks it synced', () => {
+  const fallback = [
+    { id: 'confirmed', title: 'Mission', updated_at: '2026-09-12T08:00:00Z', synced: false }
+  ];
+  const remote = [
+    { id: 'confirmed', title: 'Mission', updated_at: '2026-09-12T08:00:00Z' }
+  ];
+  const merged = mergeRemoteNewest(fallback, remote, row => ({ ...row, synced: true }));
+
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].synced, true);
+});
+
 test('does not persist the reproducible seed catalogue in the main state blob', () => {
   const compact = compactActivityIdeasForStorage([
     { id: 'seed-synced', source: 'seed', synced: true },
@@ -89,6 +118,9 @@ test('compacts the complete shipped catalogue while keeping it available as a st
 test('wires pagination, authoritative ledger merge and compact persistence into the app', () => {
   assert.match(appSource, /HabitFlowSyncIntegrity\?\.compactActivityIdeasForStorage/);
   assert.match(appSource, /HabitFlowSyncIntegrity\?\.mergeRemoteAuthoritative/);
+  assert.match(appSource, /HabitFlowSyncIntegrity\.mergeRemoteNewest/);
+  assert.doesNotMatch(appSource, /applyRemoteCollectionAuthority\('monthly_missions'/);
+  assert.match(appSource, /syncMonthlyMissionBackup\(\);\s*await syncMonthlyMissionsDirect\(\);\s*await syncWithSupabase\(\{ silent: false/);
   assert.match(appSource, /pagination\?\.fetchAllRows/);
   assert.match(appSource, /select\('\*', page === 0 \? \{ count: 'exact' \} : undefined\)/);
   assert.match(appSource, /leisureCatalog = mergeActivityIdeas\(leisureSeedCatalog, state\.activityIdeas \|\| \[\]\)/);

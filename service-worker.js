@@ -1,4 +1,4 @@
-const CACHE_NAME = 'habitflow-v288-ghost-arena-production-monthly-sync-289-alcohol-points-290-sync-integrity-291';
+const CACHE_NAME = 'habitflow-v288-ghost-arena-production-monthly-sync-289-alcohol-points-290-sync-integrity-291-monthly-freshness-292';
 const MODULE_ASSETS = [
   './modules/module-registry.js',
   './modules/points-domain.js',

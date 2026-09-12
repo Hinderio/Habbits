@@ -70,10 +70,26 @@
     return Array.from(byId.values());
   }
 
+  function mergeRemoteNewest(localRows = [], remoteRows = [], mapper = row => row) {
+    const byId = new Map();
+    (Array.isArray(localRows) ? localRows : []).forEach(row => {
+      if (row?.id) byId.set(row.id, row);
+    });
+    (Array.isArray(remoteRows) ? remoteRows : []).map(mapper).forEach(row => {
+      if (!row?.id) return;
+      const current = byId.get(row.id);
+      const currentTime = Date.parse(current?.updated_at || current?.created_at || '') || 0;
+      const remoteTime = Date.parse(row.updated_at || row.created_at || '') || 0;
+      if (!current || remoteTime >= currentTime) byId.set(row.id, row);
+    });
+    return Array.from(byId.values());
+  }
+
   window.HabitFlowSyncIntegrity = Object.freeze({
     DEFAULT_PAGE_SIZE,
     fetchAllRows,
     compactActivityIdeasForStorage,
-    mergeRemoteAuthoritative
+    mergeRemoteAuthoritative,
+    mergeRemoteNewest
   });
 })(window);
