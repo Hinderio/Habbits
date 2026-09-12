@@ -7731,9 +7731,13 @@ cacheEls();
     const control = isSystemMeditationHabit(normalizedHabit)
       ? renderMeditationHabitControl(normalizedHabit)
       : renderHabitQuickLogControl(normalizedHabit, { inputId, todayValue, buttonLabel: 'Jetzt loggen', context: 'detail' });
+    const editAction = `<button class="consumption-icon-action" type="button" data-action="edit-habit" data-id="${escapeHtml(normalizedHabit.id)}" aria-label="Habit bearbeiten" title="Bearbeiten">${svgIcon('edit', 'ui-icon')}</button>`;
+    const pauseAction = `<button class="mini-btn" type="button" data-action="open-pause-modal" data-scope="habit" data-target-id="${escapeHtml(normalizedHabit.id)}">Pausieren</button>`;
+    const archiveAction = `<button class="mini-btn" type="button" data-action="archive-habit" data-id="${escapeHtml(normalizedHabit.id)}">Archiv</button>`;
+    const deleteAction = `<button class="consumption-icon-action consumption-icon-action-delete" type="button" data-action="delete-habit" data-id="${escapeHtml(normalizedHabit.id)}" aria-label="Habit löschen" title="Löschen">${svgIcon('trash', 'ui-icon')}</button>`;
     const actions = isSystemMeditationHabit(normalizedHabit)
-      ? `<button class="mini-btn" type="button" data-action="edit-habit" data-id="${normalizedHabit.id}">Bearbeiten</button><button class="mini-btn" type="button" data-action="open-pause-modal" data-scope="habit" data-target-id="${normalizedHabit.id}">Pausieren</button>`
-      : `<button class="mini-btn" type="button" data-action="edit-habit" data-id="${normalizedHabit.id}">Bearbeiten</button><button class="mini-btn" type="button" data-action="open-pause-modal" data-scope="habit" data-target-id="${normalizedHabit.id}">Pausieren</button><button class="mini-btn" type="button" data-action="archive-habit" data-id="${normalizedHabit.id}">Archiv</button><button class="mini-btn danger" type="button" data-action="delete-habit" data-id="${normalizedHabit.id}">Löschen</button>`;
+      ? `${editAction}${pauseAction}`
+      : `${editAction}${pauseAction}${archiveAction}${deleteAction}`;
     return `<div class="habit-detail-shell" style="${habitCategoryStyle(category)}">
       <div class="history-modal-head habit-detail-head">
         <div class="habit-detail-title-row">
@@ -9256,9 +9260,9 @@ cacheEls();
         <strong>${escapeHtml(title)}</strong>
         <span>${formatDateTime(entry.occurred_at)}${escapeHtml(note)}</span>
       </div>
-      <div class="list-actions compact-actions">
-        <button class="mini-btn" type="button" data-action="edit-habit-entry" data-id="${entry.id}">Bearbeiten</button>
-        <button class="mini-btn danger" type="button" data-action="delete-habit-entry" data-id="${entry.id}">Löschen</button>
+      <div class="list-actions compact-actions habit-entry-actions">
+        <button class="consumption-icon-action" type="button" data-action="edit-habit-entry" data-id="${escapeHtml(entry.id)}" aria-label="Habit-Log bearbeiten" title="Bearbeiten">${svgIcon('edit', 'ui-icon')}</button>
+        <button class="consumption-icon-action consumption-icon-action-delete" type="button" data-action="delete-habit-entry" data-id="${escapeHtml(entry.id)}" aria-label="Habit-Log löschen" title="Löschen">${svgIcon('trash', 'ui-icon')}</button>
       </div>
     </article>`;
   }

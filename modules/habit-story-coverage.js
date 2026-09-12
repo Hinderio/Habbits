@@ -232,6 +232,43 @@
       .map(([date, value]) => ({ date, value }));
   }
 
+  function longestSuccessStreak(habit = {}, entries = []) {
+    const dayNumbers = successDateKeys(habit, entries)
+      .map(key => key.split('-').map(Number))
+      .filter(parts => parts.length === 3 && parts.every(Number.isFinite))
+      .map(([year, month, day]) => Math.floor(Date.UTC(year, month - 1, day) / 86400000));
+    if (!dayNumbers.length) return 0;
+
+    let best = 1;
+    let current = 1;
+    for (let index = 1; index < dayNumbers.length; index += 1) {
+      current = dayNumbers[index] === dayNumbers[index - 1] + 1 ? current + 1 : 1;
+      best = Math.max(best, current);
+    }
+    return best;
+  }
+
+  function personalBestFor(habit = {}, entries = []) {
+    const key = iconKey(habit);
+    const isDistanceHabit = ['hiking', 'jogging', 'walking'].includes(key);
+    if (!isDistanceHabit && (habit.type === 'boolean' || key === 'bread')) {
+      const streak = longestSuccessStreak(habit, entries);
+      return `${streak} Tag${streak === 1 ? '' : 'e'}`;
+    }
+
+    const values = entries
+      .filter(entry => entry && entry.value_num !== null && entry.value_num !== undefined && String(entry.value_num).trim() !== '')
+      .map(entry => Number(entry.value_num))
+      .filter(Number.isFinite)
+      .filter(value => habit.type !== 'weight' || value > 0)
+      .filter(value => !isDistanceHabit || value > 0);
+    if (!values.length) return '–';
+
+    const lowerIsBetter = habit.type === 'weight' || habit.direction === 'decrease';
+    const best = lowerIsBetter ? Math.min(...values) : Math.max(...values);
+    return formatChartValue(best, chartUnit(habit));
+  }
+
   function chartIcon() {
     return '<svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5"/><path d="M4 19h16"/><path d="m7 15 4-4 3 2 5-6"/></svg>';
   }
@@ -267,6 +304,8 @@
     const dots = coordinates.map(point => `<circle cx="${point.x.toFixed(2)}" cy="${point.y.toFixed(2)}" r="${dotRadius.toFixed(2)}" class="habit-story-chart-dot"><title>${escapeHtml(new Date(`${point.date}T12:00:00`).toLocaleDateString('de-CH'))}: ${escapeHtml(formatChartValue(point.value, unit))}</title></circle>`).join('');
     const firstDate = new Date(`${points[0].date}T12:00:00`).toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' });
     const lastDate = new Date(`${points.at(-1).date}T12:00:00`).toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' });
+    const latestValue = formatChartValue(points.at(-1).value, unit);
+    const personalBest = personalBestFor(habit, entries);
 
     return `<div class="habit-story-chart-shell">
       <svg class="habit-story-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Verlauf von ${escapeHtml(habit.name || 'Habit')}">
@@ -276,7 +315,10 @@
         <text x="${left}" y="${height - 8}" class="habit-story-chart-label">${escapeHtml(firstDate)}</text>
         <text x="${width - right}" y="${height - 8}" text-anchor="end" class="habit-story-chart-label">${escapeHtml(lastDate)}</text>
       </svg>
-      <div class="habit-story-chart-summary"><span>Letzter Wert</span><strong>${escapeHtml(formatChartValue(points.at(-1).value, unit))}</strong></div>
+      <div class="habit-story-chart-summary">
+        <div class="habit-story-chart-stat"><span>Letzter Wert</span><strong title="${escapeHtml(latestValue)}">${escapeHtml(latestValue)}</strong></div>
+        <div class="habit-story-chart-stat is-personal-best"><span>PB</span><strong title="${escapeHtml(personalBest)}">${escapeHtml(personalBest)}</strong></div>
+      </div>
     </div>`;
   }
 

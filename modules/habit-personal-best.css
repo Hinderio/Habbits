@@ -1,0 +1,63 @@
+/* Personal-best summary and compact habit actions. */
+#screen-habits .habit-story-chart-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 0;
+}
+
+#screen-habits .habit-story-chart-stat {
+  min-width: 0;
+  display: grid;
+  align-content: end;
+  gap: 3px;
+}
+
+#screen-habits .habit-story-chart-stat.is-personal-best {
+  padding-left: 12px;
+  border-left: 1px solid rgba(95, 119, 146, .14);
+  text-align: right;
+}
+
+#screen-habits .habit-story-chart-stat.is-personal-best span {
+  color: var(--primary);
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+
+#screen-habits .habit-story-chart-stat strong {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.habit-entry-actions {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+}
+
+@media (max-width: 760px) {
+  #screen-habits .habit-story-chart-stat.is-personal-best {
+    padding-left: 10px;
+  }
+
+  #screen-habits .habit-story-chart-stat strong {
+    font-size: clamp(.92rem, 4vw, 1.05rem);
+  }
+
+  .history-modal-content .habit-entry-card:not(.is-editing) {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .history-modal-content .habit-entry-actions {
+    margin-left: auto;
+  }
+}
+
+@media (max-width: 380px) {
+  #screen-habits .habit-story-chart-summary {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr);
+  }
+}
