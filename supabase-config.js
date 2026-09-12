@@ -50,7 +50,8 @@ window.HABITFLOW_SUPABASE_CONFIG = Object.freeze({
       event.stopImmediatePropagation();
 
       if (activeScreen === 'settings') {
-        openScreen(lastNonSettingsTarget || 'dashboard');
+        const manualSyncButton = document.getElementById('manualSyncBtn');
+        if (manualSyncButton && !manualSyncButton.disabled) manualSyncButton.click();
         return;
       }
 
@@ -79,6 +80,7 @@ window.HABITFLOW_SUPABASE_CONFIG = Object.freeze({
     'modules/smoking-domain-persistence.js',
     'modules/alcohol-domain-parity.js',
     'modules/alcohol-domain-persistence.js',
+    'modules/sync-integrity.js',
     'modules/points-ledger-sync-guard.js',
     'modules/points-domain-parity.js',
     'modules/domain-diagnostics.js',

@@ -9,7 +9,7 @@ const indexSource = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const workerSource = fs.readFileSync(path.join(root, 'service-worker.js'), 'utf8');
 
 new vm.Script(appSource);
-assert.match(indexSource, /app\.js\?v=290/);
+assert.match(indexSource, /app\.js\?v=291/);
 assert.match(workerSource, /alcohol-points-290/);
 
 const totalBlock = appSource.match(/  function getTotalPoints\(\) \{[\s\S]*?\n  \}/)?.[0];

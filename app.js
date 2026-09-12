@@ -441,6 +441,7 @@
   const SAFETY_REMOTE_PULL_MS = 10 * 60_000;
   const REMOTE_PULL_DEBOUNCE_MS = 1_500;
   const REMOTE_PULL_BATCH_SIZE = 4;
+  const REMOTE_TABLE_PAGE_SIZE = 1000;
   const REMOTE_PULL_RETRY_DELAYS_MS = Object.freeze([0, 350, 1_000]);
   const REMOTE_SYNC_RETRY_DELAYS_MS = Object.freeze([3_000, 10_000, 30_000, 60_000]);
   const SELF_WRITE_ECHO_GRACE_MS = 4_000;
@@ -3189,7 +3190,10 @@ cacheEls();
       recalculateSmokeIntervals({ markUpdated: false });
     }
     writeRemoteDeleteArchive(state.deletedRemoteIds);
-    const serializedState = JSON.stringify(state);
+    const storedActivityIdeas = window.HabitFlowSyncIntegrity?.compactActivityIdeasForStorage
+      ? window.HabitFlowSyncIntegrity.compactActivityIdeasForStorage(state.activityIdeas)
+      : state.activityIdeas;
+    const serializedState = JSON.stringify({ ...state, activityIdeas: storedActivityIdeas });
     window.HabitFlowRuntime?.skipNextSmokingDomainPersistenceNormalization?.();
     localStorage.setItem(STORAGE_KEY, serializedState);
     if (!skipRender) queueRender();
@@ -3272,17 +3276,9 @@ cacheEls();
 
   async function loadLeisureCatalog({ allowJsonFallback = false } = {}) {
     try {
+      await fetchLeisureSeedCatalog({ applyLocalArchives: true });
       refreshLeisureCatalogFromState();
       leisureCatalogError = null;
-      if (allowJsonFallback && !state.activityIdeas?.length) {
-        const seedRows = await fetchLeisureSeedCatalog({ applyLocalArchives: true });
-        if (seedRows.length) {
-          state.activityIdeas = seedRows.map(item => ({ ...item, synced: true }));
-          dedupeActivityIdeas(state);
-          refreshLeisureCatalogFromState();
-          saveState({ skipRender: true });
-        }
-      }
     } catch (error) {
       refreshLeisureCatalogFromState();
       leisureCatalogError = state.activityIdeas?.length ? null : error;
@@ -3314,7 +3310,7 @@ cacheEls();
 
   function refreshLeisureCatalogFromState() {
     const archivedIds = archivedLeisureActivityIds();
-    leisureCatalog = (state.activityIdeas || [])
+    leisureCatalog = mergeActivityIdeas(leisureSeedCatalog, state.activityIdeas || [])
       .map(normalizeLeisureActivity)
       .filter(item => item.id && item.title && !item.is_archived && !archivedIds.has(item.id));
   }
@@ -10134,11 +10130,18 @@ cacheEls();
   async function fetchRemoteLeisureActivities() {
     const userId = currentUserId();
     if (!supabaseClient || !userId || !remoteActivityIdeasSupported) return null;
-    const { data, error } = await supabaseClient
-      .from(ACTIVITY_CATALOG_TABLE)
-      .select('*')
-      .eq('user_id', userId)
-      .order('updated_at', { ascending: false });
+    const pagination = window.HabitFlowSyncIntegrity;
+    if (!pagination?.fetchAllRows) throw new Error('Remote-Paginierung konnte nicht geladen werden.');
+    const { data, error } = await pagination.fetchAllRows({
+      pageSize: REMOTE_TABLE_PAGE_SIZE,
+      fetchPage: ({ from, to, page }) => supabaseClient
+        .from(ACTIVITY_CATALOG_TABLE)
+        .select('*', page === 0 ? { count: 'exact' } : undefined)
+        .eq('user_id', userId)
+        .order('updated_at', { ascending: false })
+        .order('id', { ascending: true })
+        .range(from, to)
+    });
     if (error) {
       if (isMissingActivityRelationError(error)) {
         remoteActivityIdeasSupported = false;
@@ -14063,9 +14066,23 @@ function initOngoingSync() {
 
   async function manualSyncFromSettings(event) {
     if (event) event.preventDefault();
-    await syncMonthlyMissionBackup();
-    await syncWithSupabase({ silent: false, pullFirst: true, pullAfter: true, forcePushAll: false });
-    await syncLeisureCatalogWithSupabase({ silent: false });
+    const button = els.manualSyncBtn;
+    if (button?.disabled) return;
+    const previousLabel = button?.textContent || 'Jetzt synchronisieren';
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Synchronisiert …';
+    }
+    try {
+      await syncMonthlyMissionBackup();
+      await syncWithSupabase({ silent: false, pullFirst: true, pullAfter: true, forcePushAll: false });
+      await syncLeisureCatalogWithSupabase({ silent: false });
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = previousLabel;
+      }
+    }
   }
 
   async function logout() {
@@ -15047,7 +15064,9 @@ function initOngoingSync() {
       if (remoteTaskRows) state.tasks = remoteTaskRows.map(mapRemoteTask).map(normalizeTask);
       if (remoteTaskIdeaRows) state.taskIdeas = remoteTaskIdeaRows.map(mapRemoteTaskIdea).map(normalizeTaskIdea);
       if (remoteAppointmentRows) state.appointments = remoteAppointmentRows.map(mapRemoteAppointment).map(normalizeAppointment);
-      if (remoteLedgerRows) state.pointsLedger = remoteLedgerRows.map(mapRemoteLedger);
+      if (remoteLedgerRows) state.pointsLedger = window.HabitFlowSyncIntegrity?.mergeRemoteAuthoritative
+        ? window.HabitFlowSyncIntegrity.mergeRemoteAuthoritative(state.pointsLedger, remoteLedgerRows, mapRemoteLedger)
+        : remoteLedgerRows.map(mapRemoteLedger);
       if (remotePauseRows) state.pausePeriods = remotePauseRows.map(mapRemotePausePeriod).map(normalizePausePeriod);
       if (remoteWeeklyReviewRows) state.weeklyReviews = remoteWeeklyReviewRows.map(mapRemoteWeeklyReview).map(normalizeWeeklyReview);
       if (remoteMonthlyMissionRows) state.monthlyMissions = remoteMonthlyMissionRows.map(mapRemoteMonthlyMission).map(normalizeMonthlyMission);
@@ -15060,7 +15079,9 @@ function initOngoingSync() {
       if (remoteTaskRows) state.tasks = mergeById(state.tasks, remoteTaskRows, mapRemoteTask).map(task => preserveLocalTaskFallbacks(normalizeTask(task), localTasksBeforePull.get(task.id)));
       if (remoteTaskIdeaRows) state.taskIdeas = mergeById(state.taskIdeas || [], remoteTaskIdeaRows, mapRemoteTaskIdea).map(idea => preserveLocalTaskIdeaFallbacks(normalizeTaskIdea(idea), localTaskIdeasBeforePull.get(idea.id)));
       if (remoteAppointmentRows) state.appointments = mergeAppointmentsByRemoteAuthority(state.appointments, remoteAppointmentRows, mapRemoteAppointment);
-      if (remoteLedgerRows) state.pointsLedger = mergeById(state.pointsLedger, remoteLedgerRows, mapRemoteLedger);
+      if (remoteLedgerRows) state.pointsLedger = window.HabitFlowSyncIntegrity?.mergeRemoteAuthoritative
+        ? window.HabitFlowSyncIntegrity.mergeRemoteAuthoritative(state.pointsLedger, remoteLedgerRows, mapRemoteLedger)
+        : mergeById(state.pointsLedger, remoteLedgerRows, mapRemoteLedger);
       if (remotePauseRows) state.pausePeriods = mergeById(state.pausePeriods || [], remotePauseRows, mapRemotePausePeriod).map(normalizePausePeriod);
       if (remoteWeeklyReviewRows) state.weeklyReviews = mergeById(state.weeklyReviews || [], remoteWeeklyReviewRows, mapRemoteWeeklyReview).map(normalizeWeeklyReview);
       if (remoteMonthlyMissionRows) state.monthlyMissions = mergeById(state.monthlyMissions || [], remoteMonthlyMissionRows, mapRemoteMonthlyMission).map(normalizeMonthlyMission);
@@ -15112,7 +15133,17 @@ function initOngoingSync() {
     if (table === 'monthly_missions' && !remoteMonthlyMissionsSupported) return { data: [], error: null };
     const userId = currentUserId();
     if (!userId) return { data: [], error: null };
-    const result = await supabaseClient.from(table).select('*').eq('user_id', userId);
+    const pagination = window.HabitFlowSyncIntegrity;
+    if (!pagination?.fetchAllRows) throw new Error('Remote-Paginierung konnte nicht geladen werden.');
+    const result = await pagination.fetchAllRows({
+      pageSize: REMOTE_TABLE_PAGE_SIZE,
+      fetchPage: ({ from, to, page }) => supabaseClient
+        .from(table)
+        .select('*', page === 0 ? { count: 'exact' } : undefined)
+        .eq('user_id', userId)
+        .order('id', { ascending: true })
+        .range(from, to)
+    });
     if (result.error) {
       if (OPTIONAL_SYNC_TABLES.has(table) && isMissingRemoteRelationError(result.error)) {
         if (table === 'task_ideas') remoteTaskIdeasSupported = false;
