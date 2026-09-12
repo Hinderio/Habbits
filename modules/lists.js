@@ -5,6 +5,10 @@
   window.__habitFlowListsInstalled = true;
 
   const STORAGE_KEY = 'habitflow-lists-v1';
+  const APP_STATE_KEY = 'habitflow-state-v1';
+  const WEEKLY_LIST_ID = 'weekly';
+  const WEEKLY_PAST_WEEKS = 3;
+  const WEEKLY_FUTURE_WEEKS = 3;
   const PHOTO_IMAGE_MAX_EDGE = 1280;
   const PHOTO_IMAGE_QUALITY = 0.78;
   const SUBSCRIPTION_CYCLES = [
@@ -36,7 +40,8 @@
     { id: 'subscriptions', slug: 'abos', title: 'Abos', type: 'subscription', icon: 'repeat', color: '#61CBF4', description: 'Abos, Kosten, Laufzeiten und Kündigungsfenster ordnen.' },
     { id: 'terms', slug: 'begriffe', title: 'Begriffe', type: 'generic', icon: 'book', color: '#ff8fa3', description: 'Begriffe nach Kategorien sammeln und mit Lernkarten festigen.' },
     { id: 'finance', slug: 'finanzen', title: 'Finanzen', type: 'generic', icon: 'wallet', color: '#6fd6a8', description: 'Investitionen, Guthaben und offene Schulden in einem ruhigen Finanzbild.' },
-    { id: 'chatgpt', slug: 'chatgpt', title: 'ChatGPT', type: 'generic', icon: 'message', color: '#7f9fd4', description: 'Wichtige Projekte und Threads gruppiert sichern und direkt wieder öffnen.' }
+    { id: 'chatgpt', slug: 'chatgpt', title: 'ChatGPT', type: 'generic', icon: 'message', color: '#7f9fd4', description: 'Wichtige Projekte und Threads gruppiert sichern und direkt wieder öffnen.' },
+    { id: WEEKLY_LIST_ID, slug: 'wochenzettel', title: 'Wochenzettel', type: 'generic', icon: 'note', color: '#e7c887', description: 'Kleine Gedanken und Erinnerungen – Woche für Woche.' }
   ];
 
   const ICONS = {
@@ -60,7 +65,11 @@
     route: '<circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M9 6h3a3 3 0 0 1 0 6h-1a3 3 0 0 0 0 6h4"/>',
     pin: '<path d="M12 21s7-5.2 7-12a7 7 0 1 0-14 0c0 6.8 7 12 7 12Z"/><circle cx="12" cy="9" r="2.5"/>',
     message: '<path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8Z"/><path d="M8 9h8"/><path d="M8 13h5"/>',
-    external: '<path d="M15 3h6v6"/><path d="m10 14 11-11"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>'
+    external: '<path d="M15 3h6v6"/><path d="m10 14 11-11"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+    note: '<path d="M6 3h9l4 4v14H6z"/><path d="M15 3v5h5"/><path d="M9 12h7"/><path d="M9 16h5"/>',
+    more: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
+    archive: '<path d="M4 7h16v14H4z"/><path d="M3 3h18v4H3z"/><path d="M9 11h6"/>',
+    carry: '<path d="M5 12h12"/><path d="m13 8 4 4-4 4"/>'
   };
 
   let state = readState();
@@ -72,6 +81,14 @@
   let editingSubscriptionId = '';
   let editingFinanceId = '';
   let editingChatgptId = '';
+  let editingWeeklyId = '';
+  let openWeeklyMenuId = '';
+  let weeklyArchiveOpen = false;
+  let weeklyArchiveWeekStart = '';
+  let weeklyCarryPanelOpen = false;
+  let weeklyFocusedWeekStart = '';
+  let weeklyRailScrollTimer = 0;
+  let pendingWeeklyPromotion = null;
   let termStudyCategory = '';
   let termStudyIndex = 0;
   let termStudyOrder = [];
@@ -86,6 +103,8 @@
   let pullInFlight = false;
   let syncInFlight = false;
   let syncQueued = false;
+  let fullSyncQueued = false;
+  const pendingItemSyncIds = new Set();
 
   function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
@@ -98,6 +117,93 @@
   function uid(prefix = 'item') {
     if (window.crypto?.randomUUID) return `${prefix}-${window.crypto.randomUUID()}`;
     return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
+  function dateFromKey(value) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
+    if (!match) return null;
+    const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12, 0, 0, 0);
+    return Number.isFinite(date.getTime()) ? date : null;
+  }
+
+  function startOfWeekDate(value = new Date()) {
+    const source = typeof value === 'string' ? (dateFromKey(value) || new Date(value)) : value;
+    const date = new Date(source instanceof Date ? source.getTime() : source);
+    if (!Number.isFinite(date.getTime())) return null;
+    date.setHours(12, 0, 0, 0);
+    date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+    return date;
+  }
+
+  function toDateKey(value) {
+    const date = value instanceof Date ? value : new Date(value);
+    if (!Number.isFinite(date.getTime())) return '';
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  function addDays(value, amount) {
+    const source = typeof value === 'string' ? dateFromKey(value) : value;
+    const date = new Date(source instanceof Date ? source.getTime() : source);
+    if (!Number.isFinite(date.getTime())) return null;
+    date.setHours(12, 0, 0, 0);
+    date.setDate(date.getDate() + Number(amount || 0));
+    return date;
+  }
+
+  function normalizeWeekStart(value = new Date()) {
+    return toDateKey(startOfWeekDate(value));
+  }
+
+  function currentWeekStartKey(now = new Date()) {
+    return normalizeWeekStart(now);
+  }
+
+  function visibleWeekStarts(now = new Date()) {
+    const current = startOfWeekDate(now);
+    return Array.from({ length: WEEKLY_PAST_WEEKS + WEEKLY_FUTURE_WEEKS + 1 }, (_, index) =>
+      toDateKey(addDays(current, (index - WEEKLY_PAST_WEEKS) * 7))
+    );
+  }
+
+  function isoWeekData(value) {
+    const local = typeof value === 'string' ? dateFromKey(value) : value;
+    if (!(local instanceof Date) || !Number.isFinite(local.getTime())) return { week: 0, year: 0 };
+    const date = new Date(Date.UTC(local.getFullYear(), local.getMonth(), local.getDate()));
+    date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
+    const year = date.getUTCFullYear();
+    const yearStart = new Date(Date.UTC(year, 0, 1));
+    return { week: Math.ceil((((date - yearStart) / 86400000) + 1) / 7), year };
+  }
+
+  function weeklyItemsFrom(items, weekStart, { includeArchived = false } = {}) {
+    return (Array.isArray(items) ? items : [])
+      .filter(item => item?.listId === WEEKLY_LIST_ID && item?.metadata?.weekStart === weekStart && (includeArchived || !item.isArchived))
+      .sort((a, b) => Number(a.isDone) - Number(b.isDone) || (a.sortRank || 0) - (b.sortRank || 0) || String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+  }
+
+  function createWeeklyCarry(source, targetWeekStart, { id = uid('list-item'), now = new Date().toISOString(), sortRank = Date.now() } = {}) {
+    const target = normalizeWeekStart(targetWeekStart);
+    const sourceWeekStart = source?.metadata?.weekStart;
+    if (!source?.id || !target || target === sourceWeekStart) return null;
+    const next = {
+      id,
+      listId: WEEKLY_LIST_ID,
+      title: String(source.title || '').trim(),
+      note: source.note || '',
+      metadata: { weekStart: target, carriedFromId: source.id },
+      isDone: false,
+      isArchived: false,
+      sortRank,
+      createdAt: now,
+      updatedAt: now
+    };
+    return {
+      source: { ...source, metadata: { ...(source.metadata || {}), carriedToId: id }, updatedAt: now },
+      next
+    };
   }
 
   function readState() {
@@ -141,6 +247,14 @@
       .sort((a, b) => Number(a.isDone) - Number(b.isDone) || (a.sortRank || 0) - (b.sortRank || 0) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
   }
 
+  function weeklyItems(weekStart, options) {
+    return weeklyItemsFrom(state.items, weekStart, options);
+  }
+
+  function weeklyOpenItems(weekStart) {
+    return weeklyItems(weekStart).filter(item => !item.isDone);
+  }
+
   function stopsFor(tourId) {
     return state.stops
       .filter(stop => stop.tourId === tourId && !stop.isArchived)
@@ -148,7 +262,11 @@
   }
 
   function metricValue(kind) {
-    if (kind === 'open') return state.items.filter(item => item.listId !== 'terms' && !item.isDone && !item.isArchived).length;
+    if (kind === 'open') {
+      const currentWeek = currentWeekStartKey();
+      return state.items.filter(item => item.listId !== 'terms' && item.listId !== WEEKLY_LIST_ID && !item.isDone && !item.isArchived).length
+        + weeklyOpenItems(currentWeek).length;
+    }
     if (kind === 'vouchers') return itemsFor('vouchers').length;
     if (kind === 'photos') return state.stops.filter(stop => !stop.isArchived).length;
     return itemsFor('subscriptions').length;
@@ -213,13 +331,20 @@
     renderTermStudyPortal();
   }
 
+  function renderSyncBadge() {
+    const badge = document.getElementById('hfListSyncBadge');
+    if (badge) badge.textContent = syncLabel;
+  }
+
   function renderCards(target) {
     target.innerHTML = state.lists.map(list => {
-      const count = list.type === 'photos' ? state.stops.filter(stop => !stop.isArchived).length : itemsFor(list.id).length;
+      const count = list.id === WEEKLY_LIST_ID
+        ? weeklyOpenItems(currentWeekStartKey()).length
+        : list.type === 'photos' ? state.stops.filter(stop => !stop.isArchived).length : itemsFor(list.id).length;
       const categories = list.id === 'terms' ? termCategories().length : 0;
       const done = list.type === 'photos' ? state.tours.filter(tour => !tour.isArchived).length : itemsFor(list.id).filter(item => item.isDone).length;
-      const cardType = list.type === 'photos' ? 'Touren & Orte' : list.id === 'terms' ? 'Lernkarten' : list.id === 'finance' ? 'Werte & Verpflichtungen' : list.id === 'chatgpt' ? 'Threads & Projekte' : 'Liste';
-      const cardStat = list.type === 'photos' ? `${done} Touren` : list.id === 'terms' ? `${categories} ${categories === 1 ? 'Kategorie' : 'Kategorien'}` : list.id === 'finance' ? 'Positionen' : list.id === 'chatgpt' ? 'Threads' : 'Einträge';
+      const cardType = list.id === WEEKLY_LIST_ID ? 'Weekly Inbox' : list.type === 'photos' ? 'Touren & Orte' : list.id === 'terms' ? 'Lernkarten' : list.id === 'finance' ? 'Werte & Verpflichtungen' : list.id === 'chatgpt' ? 'Threads & Projekte' : 'Liste';
+      const cardStat = list.id === WEEKLY_LIST_ID ? 'diese Woche' : list.type === 'photos' ? `${done} Touren` : list.id === 'terms' ? `${categories} ${categories === 1 ? 'Kategorie' : 'Kategorien'}` : list.id === 'finance' ? 'Positionen' : list.id === 'chatgpt' ? 'Threads' : 'Einträge';
       return `
         <article class="hf-list-card ${list.id === activeListId ? 'is-active' : ''}" style="--hf-list-tone:${escapeHtml(list.color)}">
           <button type="button" data-list-open="${escapeHtml(list.id)}">
@@ -237,6 +362,11 @@
   }
 
   function renderDetail(target, list) {
+    if (list.id === WEEKLY_LIST_ID) {
+      target.innerHTML = renderWeeklyDetail(list);
+      scheduleWeeklyRailPosition();
+      return;
+    }
     if (list.id === 'terms') {
       target.innerHTML = renderTermsDetail(list);
       return;
@@ -293,6 +423,208 @@
         <button class="hf-list-icon-btn danger" type="button" data-action="delete-item" aria-label="Eintrag löschen">${icon('trash')}</button>
       </article>
     `;
+  }
+
+  function formatWeekRange(weekStart) {
+    const start = dateFromKey(weekStart);
+    const end = addDays(start, 6);
+    if (!start || !end) return '';
+    const day = value => new Intl.DateTimeFormat('de-CH', { day: 'numeric' }).format(value);
+    const month = value => new Intl.DateTimeFormat('de-CH', { month: 'long' }).format(value);
+    const shortMonth = value => new Intl.DateTimeFormat('de-CH', { month: 'short' }).format(value).replace(/\.$/, '');
+    if (start.getMonth() === end.getMonth()) return `${day(start)}.–${day(end)}. ${month(end)}`;
+    return `${day(start)}. ${shortMonth(start)}–${day(end)}. ${shortMonth(end)}`;
+  }
+
+  function weekOffsetFromCurrent(weekStart, now = new Date()) {
+    const start = dateFromKey(weekStart);
+    const current = startOfWeekDate(now);
+    if (!start || !current) return 0;
+    return Math.round((start - current) / (7 * 86400000));
+  }
+
+  function weeklyRelationLabel(offset) {
+    if (offset === 0) return 'Diese Woche';
+    if (offset === -1) return 'Letzte Woche';
+    if (offset === 1) return 'Nächste Woche';
+    return offset < 0 ? 'Vergangene Woche' : 'Kommende Woche';
+  }
+
+  function renderWeeklyDetail(list) {
+    if (weeklyArchiveOpen) return renderWeeklyArchive(list);
+    const currentWeek = currentWeekStartKey();
+    const weeks = visibleWeekStarts();
+    if (!weeklyFocusedWeekStart || !weeks.includes(weeklyFocusedWeekStart)) weeklyFocusedWeekStart = currentWeek;
+    const archiveCount = weeklyArchiveWeeks().length;
+    return `
+      <div class="panel-head hf-weekly-head">
+        <div><p class="eyebrow">${escapeHtml(list.title)}</p><h3>Gedanken ohne Task-Stress</h3><span>Ein Gedanke, ein Enter, eine Woche.</span></div>
+        <div class="hf-weekly-head-actions">
+          <div class="hf-weekly-nav" aria-label="Wochen wechseln">
+            <button class="hf-list-icon-btn" type="button" data-action="weekly-previous" aria-label="Vorherige Woche">${icon('chevronLeft')}</button>
+            <button class="hf-list-icon-btn" type="button" data-action="weekly-next" aria-label="Nächste Woche">${icon('chevronRight')}</button>
+          </div>
+          <button class="pill secondary hf-weekly-archive-button" type="button" data-action="open-weekly-archive">${icon('archive')} Archiv${archiveCount ? ` <span>${archiveCount}</span>` : ''}</button>
+        </div>
+      </div>
+      <div class="hf-weekly-rail" data-weekly-rail tabindex="0" aria-label="Wochenzettel von vergangenen bis kommenden Wochen">
+        ${weeks.map(weekStart => renderWeeklyWeekCard(weekStart, { currentWeek })).join('')}
+      </div>
+      <p class="hf-weekly-hint">Wischen oder mit dem Trackpad blättern. Wochen werden nicht automatisch verschoben oder gelöscht.</p>
+    `;
+  }
+
+  function renderWeeklyWeekCard(weekStart, { currentWeek = currentWeekStartKey(), archive = false } = {}) {
+    const offset = weekOffsetFromCurrent(weekStart);
+    const info = isoWeekData(dateFromKey(weekStart));
+    const items = weeklyItems(weekStart);
+    const open = items.filter(item => !item.isDone).length;
+    const done = items.length - open;
+    const canCapture = !archive && offset >= 0;
+    const previousWeek = toDateKey(addDays(dateFromKey(currentWeek), -7));
+    const previousOpen = offset === 0
+      ? weeklyOpenItems(previousWeek).filter(item => !item.metadata?.carriedToId)
+      : [];
+    const stateClass = archive ? 'is-archive' : offset < 0 ? 'is-past' : offset > 0 ? 'is-future' : 'is-current';
+    return `
+      <article class="hf-weekly-card ${stateClass}" data-week-start="${escapeHtml(weekStart)}" data-week-offset="${offset}">
+        <header class="hf-weekly-card-head">
+          <div><small>${escapeHtml(weeklyRelationLabel(offset))} · KW ${info.week}</small><h4>${escapeHtml(formatWeekRange(weekStart))}</h4></div>
+          <span>${open} offen</span>
+        </header>
+        ${previousOpen.length ? renderWeeklyCarryPrompt(previousOpen) : ''}
+        <div class="hf-weekly-items ${items.length ? '' : 'is-empty'}">
+          ${items.length ? items.map(item => renderWeeklyRow(item, weekStart)).join('') : '<p>Noch ist dieser Zettel leer.</p>'}
+        </div>
+        ${canCapture ? `
+          <form class="hf-weekly-capture" data-form="weekly-capture" data-week-start="${escapeHtml(weekStart)}">
+            <span aria-hidden="true">+</span>
+            <input name="title" autocomplete="off" maxlength="240" aria-label="Gedanke für ${escapeHtml(formatWeekRange(weekStart))}" placeholder="Gedanke für diese Woche …">
+            <button type="submit" aria-label="Gedanke speichern">${icon('carry')}</button>
+          </form>
+        ` : ''}
+        <footer>${open} offen · ${done} erledigt</footer>
+      </article>
+    `;
+  }
+
+  function renderWeeklyCarryPrompt(items) {
+    return `
+      <section class="hf-weekly-carry-prompt ${weeklyCarryPanelOpen ? 'is-open' : ''}">
+        <button type="button" data-action="toggle-weekly-carry-panel" aria-expanded="${String(weeklyCarryPanelOpen)}">
+          <span>${items.length} offene ${items.length === 1 ? 'Notiz' : 'Notizen'} aus letzter Woche</span>${icon('chevronRight')}
+        </button>
+        ${weeklyCarryPanelOpen ? `
+          <div>
+            ${items.map(item => `<p><span>${escapeHtml(item.title)}</span><button type="button" data-action="carry-weekly-current" data-weekly-id="${escapeHtml(item.id)}">Mitnehmen</button></p>`).join('')}
+            <button class="pill secondary" type="button" data-action="carry-weekly-all">Alle ${items.length} mitnehmen</button>
+          </div>
+        ` : ''}
+      </section>
+    `;
+  }
+
+  function renderWeeklyRow(item, weekStart) {
+    const carriedTarget = item.metadata?.carriedToId ? state.items.find(entry => entry.id === item.metadata.carriedToId) : null;
+    const carriedSource = item.metadata?.carriedFromId ? state.items.find(entry => entry.id === item.metadata.carriedFromId) : null;
+    const promoted = item.metadata?.promotedTaskId;
+    const status = carriedTarget
+      ? `mitgenommen in KW ${isoWeekData(dateFromKey(carriedTarget.metadata?.weekStart)).week}`
+      : promoted ? 'als Task übernommen'
+        : carriedSource ? `aus KW ${isoWeekData(dateFromKey(carriedSource.metadata?.weekStart)).week} mitgenommen`
+          : '';
+    const isEditing = editingWeeklyId === item.id;
+    const menuOpen = openWeeklyMenuId === item.id;
+    const offset = weekOffsetFromCurrent(weekStart);
+    return `
+      <article class="hf-weekly-row ${item.isDone ? 'is-done' : ''} ${carriedTarget ? 'is-carried' : ''}" data-weekly-id="${escapeHtml(item.id)}">
+        <button class="hf-weekly-check" type="button" data-action="toggle-weekly" aria-label="${item.isDone ? 'Als offen markieren' : 'Als erledigt markieren'}">${item.isDone ? icon('check') : ''}</button>
+        <div class="hf-weekly-copy">
+          ${isEditing
+            ? `<input class="hf-weekly-edit-input" value="${escapeHtml(item.title)}" maxlength="240" aria-label="Gedanke bearbeiten">`
+            : `<button type="button" data-action="edit-weekly"><strong>${escapeHtml(item.title)}</strong></button>`}
+          ${status ? `<small>${carriedTarget ? '→ ' : promoted ? '↗ ' : ''}${escapeHtml(status)}</small>` : ''}
+        </div>
+        <button class="hf-weekly-more" type="button" data-action="toggle-weekly-menu" aria-label="Aktionen für ${escapeHtml(item.title)}" aria-expanded="${String(menuOpen)}">${icon('more')}</button>
+        ${menuOpen ? `
+          <div class="hf-weekly-actions" role="menu">
+            <button type="button" data-action="carry-weekly-next" ${item.metadata?.carriedToId ? 'disabled' : ''}>${icon('carry')} In nächste Woche mitnehmen</button>
+            ${offset < 0 ? `<button type="button" data-action="carry-weekly-current" ${item.metadata?.carriedToId ? 'disabled' : ''}>${icon('carry')} In diese Woche mitnehmen</button>` : ''}
+            <form data-form="weekly-move" data-weekly-id="${escapeHtml(item.id)}">
+              <label><span>In andere Woche verschieben</span><input name="week" type="date" value="${escapeHtml(weekStart)}" max="${escapeHtml(visibleWeekStarts().slice(-1)[0])}" required></label>
+              <button type="submit">Verschieben</button>
+            </form>
+            <button type="button" data-action="promote-weekly" ${promoted ? 'disabled' : ''}>${icon('external')} ${promoted ? 'Als Task übernommen' : 'Als Task übernehmen'}</button>
+            <button class="is-danger" type="button" data-action="delete-weekly">${icon('trash')} Löschen</button>
+          </div>
+        ` : ''}
+      </article>
+    `;
+  }
+
+  function weeklyArchiveWeeks() {
+    const cutoff = toDateKey(addDays(startOfWeekDate(), -WEEKLY_PAST_WEEKS * 7));
+    const grouped = new Map();
+    state.items.filter(item => item.listId === WEEKLY_LIST_ID && !item.isArchived && item.metadata?.weekStart < cutoff).forEach(item => {
+      const key = item.metadata.weekStart;
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key).push(item);
+    });
+    return Array.from(grouped, ([weekStart, items]) => ({ weekStart, items }))
+      .sort((a, b) => b.weekStart.localeCompare(a.weekStart));
+  }
+
+  function renderWeeklyArchive(list) {
+    const weeks = weeklyArchiveWeeks();
+    const groupedYears = new Map();
+    weeks.forEach(entry => {
+      const year = isoWeekData(dateFromKey(entry.weekStart)).year;
+      if (!groupedYears.has(year)) groupedYears.set(year, []);
+      groupedYears.get(year).push(entry);
+    });
+    const selected = weeks.find(entry => entry.weekStart === weeklyArchiveWeekStart);
+    return `
+      <div class="panel-head hf-weekly-head">
+        <div><p class="eyebrow">${escapeHtml(list.title)}</p><h3>Archiv</h3><span>Alte Zettel bleiben als Historie erhalten.</span></div>
+        <button class="pill secondary" type="button" data-action="close-weekly-archive">${icon('chevronLeft')} Zu den Wochen</button>
+      </div>
+      ${selected ? `<section class="hf-weekly-archive-detail">${renderWeeklyWeekCard(selected.weekStart, { archive: true })}</section>` : ''}
+      <div class="hf-weekly-archive ${weeks.length ? '' : 'is-empty'}">
+        ${weeks.length ? Array.from(groupedYears, ([year, entries]) => `
+          <section><h4>${year}</h4>${entries.map(entry => {
+            const info = isoWeekData(dateFromKey(entry.weekStart));
+            const done = entry.items.filter(item => item.isDone).length;
+            return `<button type="button" data-action="open-weekly-archive-week" data-week-start="${escapeHtml(entry.weekStart)}"><strong>KW ${info.week}</strong><span>${entry.items.length} Gedanken · ${done} erledigt</span>${icon('chevronRight')}</button>`;
+          }).join('')}</section>
+        `).join('') : '<p>Noch keine älteren Wochen vorhanden.</p>'}
+      </div>
+    `;
+  }
+
+  function scheduleWeeklyRailPosition({ behavior = 'auto' } = {}) {
+    const schedule = window.requestAnimationFrame || (callback => window.setTimeout(callback, 0));
+    schedule(() => {
+      const rail = document.querySelector('[data-weekly-rail]');
+      const weekStart = weeklyFocusedWeekStart || currentWeekStartKey();
+      const card = rail?.querySelector(`[data-week-start="${weekStart}"]`);
+      card?.scrollIntoView?.({ behavior, block: 'nearest', inline: 'center' });
+    });
+  }
+
+  function focusWeeklyCapture(weekStart = weeklyFocusedWeekStart || currentWeekStartKey()) {
+    const current = currentWeekStartKey();
+    const target = weekStart < current ? current : weekStart;
+    weeklyFocusedWeekStart = target;
+    scheduleWeeklyRailPosition();
+    const schedule = window.requestAnimationFrame || (callback => window.setTimeout(callback, 0));
+    schedule(() => document.querySelector(`form[data-form="weekly-capture"][data-week-start="${target}"] input`)?.focus({ preventScroll: true }));
+  }
+
+  function moveWeeklyFocus(direction) {
+    const weeks = visibleWeekStarts();
+    const currentIndex = Math.max(0, weeks.indexOf(weeklyFocusedWeekStart || currentWeekStartKey()));
+    weeklyFocusedWeekStart = weeks[Math.min(weeks.length - 1, Math.max(0, currentIndex + direction))];
+    scheduleWeeklyRailPosition({ behavior: 'smooth' });
   }
 
   function itemCategory(item, fallback = 'Ohne Kategorie') {
@@ -1089,6 +1421,12 @@
         editingSubscriptionId = '';
         editingFinanceId = '';
         editingChatgptId = '';
+        editingWeeklyId = '';
+        openWeeklyMenuId = '';
+        weeklyArchiveOpen = false;
+        weeklyArchiveWeekStart = '';
+        weeklyCarryPanelOpen = false;
+        if (activeListId === WEEKLY_LIST_ID) weeklyFocusedWeekStart = currentWeekStartKey();
         termStudyCategory = '';
         termStudyIndex = 0;
         termStudyOrder = [];
@@ -1100,11 +1438,61 @@
       }
 
       if (event.target.closest('#hfListQuickAdd')) {
+        if (activeListId === WEEKLY_LIST_ID) {
+          if (weeklyArchiveOpen) {
+            weeklyArchiveOpen = false;
+            weeklyArchiveWeekStart = '';
+            weeklyFocusedWeekStart = currentWeekStartKey();
+            render();
+          }
+          focusWeeklyCapture();
+          return;
+        }
         document.getElementById('hfListDetail')?.querySelector('input,select,textarea')?.focus({ preventScroll: false });
         return;
       }
 
       const action = event.target.closest('[data-action]')?.dataset.action;
+      if (action === 'weekly-previous' || action === 'weekly-next') {
+        moveWeeklyFocus(action === 'weekly-next' ? 1 : -1);
+        return;
+      }
+      if (action === 'open-weekly-archive') {
+        weeklyArchiveOpen = true;
+        weeklyArchiveWeekStart = '';
+        openWeeklyMenuId = '';
+        render();
+        return;
+      }
+      if (action === 'close-weekly-archive') {
+        weeklyArchiveOpen = false;
+        weeklyArchiveWeekStart = '';
+        weeklyFocusedWeekStart = currentWeekStartKey();
+        render();
+        return;
+      }
+      if (action === 'open-weekly-archive-week') {
+        weeklyArchiveWeekStart = String(event.target.closest('[data-week-start]')?.dataset.weekStart || '');
+        openWeeklyMenuId = '';
+        render();
+        return;
+      }
+      if (action === 'toggle-weekly-carry-panel') {
+        weeklyCarryPanelOpen = !weeklyCarryPanelOpen;
+        render();
+        return;
+      }
+      if (action === 'carry-weekly-all') {
+        const previousWeek = toDateKey(addDays(startOfWeekDate(), -7));
+        carryWeeklyItems(weeklyOpenItems(previousWeek).filter(item => !item.metadata?.carriedToId), currentWeekStartKey());
+        return;
+      }
+
+      const weeklyRow = event.target.closest('[data-weekly-id]');
+      if (weeklyRow && ['toggle-weekly', 'edit-weekly', 'toggle-weekly-menu', 'carry-weekly-next', 'carry-weekly-current', 'promote-weekly', 'delete-weekly'].includes(action)) {
+        handleWeeklyAction(action, weeklyRow.dataset.weeklyId);
+        return;
+      }
       if (action === 'cancel-spot-edit') {
         editingSpotId = '';
         render();
@@ -1228,12 +1616,23 @@
 
       const stop = event.target.closest('[data-stop-id]');
       if (stop && !event.target.closest('[data-action]')) handleSpotOpen(stop.dataset.stopId);
+
+      if (openWeeklyMenuId && !event.target.closest('.hf-weekly-actions,.hf-weekly-more')) {
+        openWeeklyMenuId = '';
+        render();
+      }
     });
 
     document.addEventListener('submit', event => {
+      if (event.target?.id === 'taskForm' && pendingWeeklyPromotion) {
+        observePromotedTask(pendingWeeklyPromotion);
+        return;
+      }
       const form = event.target.closest('#screen-lists form[data-form]');
       if (!form) return;
       event.preventDefault();
+      if (form.dataset.form === 'weekly-capture') saveWeeklyThought(form);
+      if (form.dataset.form === 'weekly-move') moveWeeklyItem(form);
       if (form.dataset.form === 'item') saveItem(form);
       if (form.dataset.form === 'term') saveTerm(form);
       if (form.dataset.form === 'shopping') saveShopping(form);
@@ -1261,6 +1660,17 @@
     });
 
     document.addEventListener('keydown', event => {
+      const weeklyEdit = event.target.closest?.('.hf-weekly-edit-input');
+      if (weeklyEdit) {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          commitWeeklyEdit(weeklyEdit);
+        } else if (event.key === 'Escape') {
+          editingWeeklyId = '';
+          render();
+        }
+        return;
+      }
       if (!termStudyCategory) return;
       if (event.key === 'Escape') {
         closeTermStudy();
@@ -1274,6 +1684,26 @@
         render();
       }
     });
+
+    document.addEventListener('focusout', event => {
+      const input = event.target.closest?.('.hf-weekly-edit-input');
+      if (!input) return;
+      window.setTimeout(() => {
+        if (editingWeeklyId) commitWeeklyEdit(input);
+      }, 0);
+    });
+
+    document.addEventListener('scroll', event => {
+      const rail = event.target.closest?.('[data-weekly-rail]');
+      if (!rail) return;
+      window.clearTimeout(weeklyRailScrollTimer);
+      weeklyRailScrollTimer = window.setTimeout(() => {
+        const center = rail.scrollLeft + rail.clientWidth / 2;
+        const cards = Array.from(rail.querySelectorAll('[data-week-start]'));
+        const closest = cards.sort((a, b) => Math.abs((a.offsetLeft + a.offsetWidth / 2) - center) - Math.abs((b.offsetLeft + b.offsetWidth / 2) - center))[0];
+        if (closest?.dataset.weekStart) weeklyFocusedWeekStart = closest.dataset.weekStart;
+      }, 80);
+    }, true);
   }
 
   function closeTermStudy() {
@@ -1282,6 +1712,213 @@
     termStudyOrder = [];
     document.body.classList.remove('hf-term-study-open');
     render();
+  }
+
+  function saveWeeklyThought(form) {
+    const title = String(form.elements?.title?.value || '').trim();
+    const weekStart = normalizeWeekStart(form.dataset.weekStart);
+    if (!title || !weekStart) return;
+    const now = new Date().toISOString();
+    const item = {
+      id: uid('list-item'),
+      listId: WEEKLY_LIST_ID,
+      title,
+      note: '',
+      metadata: { weekStart },
+      isDone: false,
+      isArchived: false,
+      sortRank: Date.now(),
+      createdAt: now,
+      updatedAt: now
+    };
+    state.items.push(item);
+    form.reset();
+    weeklyFocusedWeekStart = weekStart;
+    saveAndSync([item]);
+    focusWeeklyCapture(weekStart);
+  }
+
+  function commitWeeklyEdit(input) {
+    const id = input.closest?.('[data-weekly-id]')?.dataset.weeklyId || editingWeeklyId;
+    const item = state.items.find(entry => entry.id === id && entry.listId === WEEKLY_LIST_ID && !entry.isArchived);
+    if (!item) {
+      editingWeeklyId = '';
+      render();
+      return;
+    }
+    const title = String(input.value || '').trim();
+    editingWeeklyId = '';
+    if (!title || title === item.title) {
+      render();
+      return;
+    }
+    item.title = title;
+    item.updatedAt = new Date().toISOString();
+    saveAndSync([item]);
+  }
+
+  function moveWeeklyItem(form) {
+    const id = String(form.dataset.weeklyId || '');
+    const item = state.items.find(entry => entry.id === id && entry.listId === WEEKLY_LIST_ID && !entry.isArchived);
+    const target = normalizeWeekStart(form.elements?.week?.value);
+    if (!item || !target) return;
+    openWeeklyMenuId = '';
+    if (target === item.metadata?.weekStart) {
+      render();
+      return;
+    }
+    item.metadata = { ...(item.metadata || {}), weekStart: target };
+    item.updatedAt = new Date().toISOString();
+    const visible = visibleWeekStarts().includes(target);
+    weeklyArchiveOpen = !visible && target < visibleWeekStarts()[0];
+    weeklyArchiveWeekStart = weeklyArchiveOpen ? target : '';
+    if (visible) weeklyFocusedWeekStart = target;
+    saveAndSync([item]);
+  }
+
+  function carryWeeklyItems(items, targetWeekStart) {
+    const target = normalizeWeekStart(targetWeekStart);
+    if (!target) return;
+    const changed = [];
+    (Array.isArray(items) ? items : []).forEach((item, index) => {
+      if (!item || item.isArchived || item.metadata?.carriedToId) return;
+      const pair = createWeeklyCarry(item, target, { sortRank: Date.now() + index });
+      if (!pair) return;
+      Object.assign(item, pair.source);
+      state.items.push(pair.next);
+      changed.push(item, pair.next);
+    });
+    if (!changed.length) return;
+    weeklyCarryPanelOpen = false;
+    openWeeklyMenuId = '';
+    weeklyArchiveOpen = false;
+    weeklyArchiveWeekStart = '';
+    if (visibleWeekStarts().includes(target)) weeklyFocusedWeekStart = target;
+    saveAndSync(changed);
+  }
+
+  function archiveWeeklyItem(item) {
+    const changed = [item];
+    item.isArchived = true;
+    item.updatedAt = new Date().toISOString();
+    const source = item.metadata?.carriedFromId
+      ? state.items.find(entry => entry.id === item.metadata.carriedFromId && entry.metadata?.carriedToId === item.id)
+      : null;
+    if (source) {
+      const metadata = { ...(source.metadata || {}) };
+      delete metadata.carriedToId;
+      source.metadata = metadata;
+      source.updatedAt = item.updatedAt;
+      changed.push(source);
+    }
+    openWeeklyMenuId = '';
+    saveAndSync(changed);
+  }
+
+  function handleWeeklyAction(action, id) {
+    const item = state.items.find(entry => entry.id === id && entry.listId === WEEKLY_LIST_ID && !entry.isArchived);
+    if (!item) return;
+    if (action === 'toggle-weekly-menu') {
+      openWeeklyMenuId = openWeeklyMenuId === id ? '' : id;
+      editingWeeklyId = '';
+      render();
+      return;
+    }
+    if (action === 'edit-weekly') {
+      editingWeeklyId = id;
+      openWeeklyMenuId = '';
+      render();
+      const schedule = window.requestAnimationFrame || (callback => window.setTimeout(callback, 0));
+      schedule(() => {
+        const input = document.querySelector(`[data-weekly-id="${id}"] .hf-weekly-edit-input`);
+        input?.focus({ preventScroll: true });
+        input?.select();
+      });
+      return;
+    }
+    if (action === 'toggle-weekly') {
+      item.isDone = !item.isDone;
+      item.updatedAt = new Date().toISOString();
+      openWeeklyMenuId = '';
+      saveAndSync([item]);
+      return;
+    }
+    if (action === 'carry-weekly-next') {
+      carryWeeklyItems([item], toDateKey(addDays(dateFromKey(item.metadata?.weekStart), 7)));
+      return;
+    }
+    if (action === 'carry-weekly-current') {
+      carryWeeklyItems([item], currentWeekStartKey());
+      return;
+    }
+    if (action === 'promote-weekly') {
+      beginWeeklyPromotion(item);
+      return;
+    }
+    if (action === 'delete-weekly') archiveWeeklyItem(item);
+  }
+
+  function readAppState() {
+    try {
+      return JSON.parse(window.localStorage.getItem(APP_STATE_KEY) || '{}');
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function beginWeeklyPromotion(item) {
+    pendingWeeklyPromotion = {
+      itemId: item.id,
+      beforeIds: new Set((readAppState().tasks || []).filter(task => task?.id).map(task => String(task.id))),
+      createdAt: Date.now()
+    };
+    openWeeklyMenuId = '';
+    render();
+    document.querySelector('.nav-btn[data-target="tasks"]')?.click();
+    window.setTimeout(() => {
+      const panel = document.getElementById('taskFormPanel');
+      if (panel && !panel.classList.contains('hidden')) document.getElementById('taskFormCloseBtn')?.click();
+      window.setTimeout(() => {
+        const freshPanel = document.getElementById('taskFormPanel');
+        if (freshPanel?.classList.contains('hidden')) document.getElementById('taskFormToggleBtn')?.click();
+        const form = document.getElementById('taskForm');
+        const input = form?.elements?.title;
+        if (input) {
+          input.value = item.title;
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.focus({ preventScroll: false });
+          input.select();
+          window.setTimeout(() => {
+            if (typeof form.requestSubmit === 'function') form.requestSubmit();
+            else form.querySelector('[type="submit"]')?.click();
+          }, 40);
+        }
+      }, 40);
+    }, 80);
+  }
+
+  function observePromotedTask(context) {
+    if (!context || pendingWeeklyPromotion !== context) return;
+    context.createdAt = Date.now();
+    const findCreatedTask = (attempt = 0) => {
+      if (pendingWeeklyPromotion !== context) return;
+      const task = (readAppState().tasks || [])
+        .filter(entry => entry?.id && !context.beforeIds.has(String(entry.id)))
+        .filter(entry => Date.parse(entry.created_at || entry.updated_at || '') >= context.createdAt - 60000)
+        .sort((a, b) => Date.parse(b.created_at || b.updated_at || 0) - Date.parse(a.created_at || a.updated_at || 0))[0];
+      if (task) {
+        const item = state.items.find(entry => entry.id === context.itemId && entry.listId === WEEKLY_LIST_ID && !entry.isArchived);
+        pendingWeeklyPromotion = null;
+        if (!item) return;
+        item.metadata = { ...(item.metadata || {}), promotedTaskId: task.id };
+        item.updatedAt = new Date().toISOString();
+        saveAndSync([item]);
+        return;
+      }
+      const delays = [120, 260, 520, 900, 1400, 2200, 3200];
+      if (delays[attempt]) window.setTimeout(() => findCreatedTask(attempt + 1), delays[attempt]);
+    };
+    window.setTimeout(() => findCreatedTask(0), 80);
   }
 
   function handleItemAction(action, id) {
@@ -1295,7 +1932,7 @@
       item.title = title.trim() || item.title;
     }
     item.updatedAt = new Date().toISOString();
-    saveAndSync();
+    saveAndSync([item]);
   }
 
   function handleTermAction(action, id) {
@@ -1323,7 +1960,7 @@
         termStudyOrder = [];
         document.body.classList.remove('hf-term-study-open');
       }
-      saveAndSync();
+      saveAndSync([term]);
     }
   }
 
@@ -1352,7 +1989,7 @@
       if (editingShoppingId === id) editingShoppingId = '';
     }
     item.updatedAt = new Date().toISOString();
-    saveAndSync();
+    saveAndSync([item]);
   }
 
 
@@ -1369,7 +2006,7 @@
       item.isArchived = true;
       item.updatedAt = new Date().toISOString();
       if (editingChatgptId === id) editingChatgptId = '';
-      saveAndSync();
+      saveAndSync([item]);
     }
   }
 
@@ -1388,7 +2025,7 @@
       if (editingSubscriptionId === id) editingSubscriptionId = '';
     }
     item.updatedAt = new Date().toISOString();
-    saveAndSync();
+    saveAndSync([item]);
   }
 
   function handleFinanceAction(action, id) {
@@ -1406,7 +2043,7 @@
       if (editingFinanceId === id) editingFinanceId = '';
     }
     item.updatedAt = new Date().toISOString();
-    saveAndSync();
+    saveAndSync([item]);
   }
 
   function handleTourAction(action, id) {
@@ -1453,7 +2090,7 @@
     const data = new FormData(form);
     const title = String(data.get('title') || '').trim();
     if (!title) return;
-    state.items.push({
+    const item = {
       id: uid('list-item'),
       listId: activeListId,
       title,
@@ -1464,9 +2101,10 @@
       sortRank: Date.now(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
-    });
+    };
+    state.items.push(item);
     form.reset();
-    saveAndSync();
+    saveAndSync([item]);
   }
 
   function saveTerm(form) {
@@ -1478,6 +2116,7 @@
     const explanation = String(data.get('explanation') || '').trim();
     if (!title || !category || !explanation) return;
     const now = new Date().toISOString();
+    let changedItem = existingTerm;
     if (existingTerm) {
       Object.assign(existingTerm, {
         title,
@@ -1486,7 +2125,7 @@
         updatedAt: now
       });
     } else {
-      state.items.push({
+      changedItem = {
         id: uid('term'),
         listId: 'terms',
         title,
@@ -1497,11 +2136,12 @@
         sortRank: Date.now(),
         createdAt: now,
         updatedAt: now
-      });
+      };
+      state.items.push(changedItem);
     }
     if (!existingTermId || editingTermId === existingTermId) editingTermId = '';
     form.reset();
-    saveAndSync();
+    saveAndSync([changedItem]);
   }
 
   function saveShopping(form) {
@@ -1515,6 +2155,7 @@
     const store = String(data.get('store') || '').trim();
     const note = String(data.get('note') || '').trim();
     const now = new Date().toISOString();
+    let changedItem = existingItem;
     if (existingItem) {
       Object.assign(existingItem, {
         title,
@@ -1523,7 +2164,7 @@
         updatedAt: now
       });
     } else {
-      state.items.push({
+      changedItem = {
         id: uid('shopping-item'),
         listId: 'shopping',
         title,
@@ -1534,11 +2175,12 @@
         sortRank: Date.now(),
         createdAt: now,
         updatedAt: now
-      });
+      };
+      state.items.push(changedItem);
     }
     editingShoppingId = '';
     form.reset();
-    saveAndSync();
+    saveAndSync([changedItem]);
   }
 
 
@@ -1564,10 +2206,11 @@
     const note = String(data.get('note') || '').trim();
     const now = new Date().toISOString();
     const metadata = { ...(existingItem?.metadata || {}), project, category: project, url };
+    let changedItem = existingItem;
     if (existingItem) {
       Object.assign(existingItem, { title, note, metadata, updatedAt: now });
     } else {
-      state.items.push({
+      changedItem = {
         id: uid('chatgpt-thread'),
         listId: 'chatgpt',
         title,
@@ -1578,11 +2221,12 @@
         sortRank: Date.now(),
         createdAt: now,
         updatedAt: now
-      });
+      };
+      state.items.push(changedItem);
     }
     editingChatgptId = '';
     form.reset();
-    saveAndSync();
+    saveAndSync([changedItem]);
   }
 
   function saveSubscription(form) {
@@ -1599,10 +2243,11 @@
     const note = String(data.get('note') || '').trim();
     const now = new Date().toISOString();
     const metadata = { ...(existingItem?.metadata || {}), cost, cycle: cycleKey, isCancelled, contractEnd, metaA: cost, metaB: cycle.label };
+    let changedItem = existingItem;
     if (existingItem) {
       Object.assign(existingItem, { title, note, metadata, updatedAt: now });
     } else {
-      state.items.push({
+      changedItem = {
         id: uid('subscription'),
         listId: 'subscriptions',
         title,
@@ -1613,11 +2258,12 @@
         sortRank: Date.now(),
         createdAt: now,
         updatedAt: now
-      });
+      };
+      state.items.push(changedItem);
     }
     editingSubscriptionId = '';
     form.reset();
-    saveAndSync();
+    saveAndSync([changedItem]);
   }
 
   function saveFinance(form) {
@@ -1636,10 +2282,11 @@
     const note = String(data.get('note') || '').trim();
     const now = new Date().toISOString();
     const metadata = { ...(existingItem?.metadata || {}), financeKind: kind, amount, totalAmount, unit, direction, counterparty, dueDate };
+    let changedItem = existingItem;
     if (existingItem) {
       Object.assign(existingItem, { title, note, metadata, updatedAt: now });
     } else {
-      state.items.push({
+      changedItem = {
         id: uid('finance-item'),
         listId: 'finance',
         title,
@@ -1650,11 +2297,12 @@
         sortRank: Date.now(),
         createdAt: now,
         updatedAt: now
-      });
+      };
+      state.items.push(changedItem);
     }
     editingFinanceId = '';
     form.reset();
-    saveAndSync();
+    saveAndSync([changedItem]);
   }
 
   function saveTour(form) {
@@ -1792,10 +2440,10 @@
     saveAndSync();
   }
 
-  function saveAndSync() {
+  function saveAndSync(changedItems = null) {
     persist();
     render();
-    syncToSupabase();
+    syncToSupabase(changedItems);
   }
 
   async function getClient() {
@@ -1828,7 +2476,7 @@
     if (failed?.error) throw failed.error;
   }
 
-  async function syncFromSupabase(userId = '') {
+  async function syncFromSupabase(userId = '', { reconcile = true } = {}) {
     const client = await getClient();
     if (!client) return;
     if (!userId) {
@@ -1876,7 +2524,7 @@
       syncLabel = 'synchronisiert';
       persist();
       render();
-      await syncToSupabase();
+      if (reconcile) await syncToSupabase();
     } catch (error) {
       remoteReady = false;
       syncLabel = 'SQL erforderlich';
@@ -1887,37 +2535,68 @@
     }
   }
 
-  async function syncToSupabase() {
+  function itemRemoteRow(item, now = new Date().toISOString()) {
+    return {
+      id: item.id,
+      user_id: remoteUserId,
+      list_id: item.listId,
+      title: item.title,
+      note: item.note || '',
+      metadata: item.metadata || {},
+      is_done: !!item.isDone,
+      is_archived: !!item.isArchived,
+      sort_rank: item.sortRank || 0,
+      created_at: item.createdAt || now,
+      updated_at: item.updatedAt || now
+    };
+  }
+
+  async function syncToSupabase(changedItems = null) {
     if (!remoteReady || !remoteUserId) return;
+    const requestedIds = Array.isArray(changedItems)
+      ? new Set(changedItems.filter(item => item?.id).map(item => String(item.id)))
+      : null;
     if (syncInFlight) {
+      if (requestedIds) requestedIds.forEach(id => pendingItemSyncIds.add(id));
+      else fullSyncQueued = true;
       syncQueued = true;
       return;
     }
     const client = await getClient();
     if (!client) return;
+    const fullSync = requestedIds === null;
+    const itemIds = requestedIds || new Set();
+    if (fullSync) {
+      fullSyncQueued = false;
+      pendingItemSyncIds.clear();
+    } else {
+      pendingItemSyncIds.forEach(id => itemIds.add(id));
+      pendingItemSyncIds.clear();
+    }
     syncInFlight = true;
+    let succeeded = false;
     try {
       const now = new Date().toISOString();
-      const listResult = await client.from('custom_lists').upsert(state.lists.map((list, index) => ({
-        id: list.id, user_id: remoteUserId, slug: list.slug || list.id, title: list.title, list_type: list.type, icon: list.icon, color: list.color,
-        description: list.description || '', sort_rank: index, is_archived: !!list.isArchived, created_at: list.createdAt || now, updated_at: list.updatedAt || now
-      })), { onConflict: 'user_id,id' });
-      assertRemoteResults([listResult]);
-      if (state.items.length) {
-        const result = await client.from('custom_list_items').upsert(state.items.map(item => ({
-          id: item.id, user_id: remoteUserId, list_id: item.listId, title: item.title, note: item.note || '', metadata: item.metadata || {},
-          is_done: !!item.isDone, is_archived: !!item.isArchived, sort_rank: item.sortRank || 0, created_at: item.createdAt || now, updated_at: item.updatedAt || now
+      if (fullSync) {
+        const listResult = await client.from('custom_lists').upsert(state.lists.map((list, index) => ({
+          id: list.id, user_id: remoteUserId, slug: list.slug || list.id, title: list.title, list_type: list.type, icon: list.icon, color: list.color,
+          description: list.description || '', sort_rank: index, is_archived: !!list.isArchived, created_at: list.createdAt || now, updated_at: list.updatedAt || now
         })), { onConflict: 'user_id,id' });
+        assertRemoteResults([listResult]);
+      }
+      const itemsToSync = fullSync ? state.items : state.items.filter(item => itemIds.has(String(item.id)));
+      if (itemsToSync.length) {
+        const result = await client.from('custom_list_items').upsert(itemsToSync.map(item => itemRemoteRow(item, now)), { onConflict: 'user_id,id' });
         assertRemoteResults([result]);
       }
-      if (state.tours.length) {
+      if (fullSync && state.tours.length) {
         const result = await client.from('photo_spot_tours').upsert(state.tours.map(tour => ({
           id: tour.id, user_id: remoteUserId, title: tour.title, region: tour.region || '', note: tour.note || '', cover_url: tour.coverUrl || '',
           sort_rank: tour.sortRank || 0, is_archived: !!tour.isArchived, created_at: tour.createdAt || now, updated_at: tour.updatedAt || now
         })), { onConflict: 'user_id,id' });
         assertRemoteResults([result]);
       }
-      if (state.stops.length) {
+      if (fullSync && state.stops.length) {
         const result = await client.from('photo_spot_tour_stops').upsert(state.stops.map(stop => ({
           id: stop.id, user_id: remoteUserId, tour_id: stop.tourId, title: stop.title, location: stop.location || '', note: stop.note || '', image_url: stop.imageUrl || '',
           stop_order: stop.stopOrder || 0, metadata: stop.metadata || {}, is_archived: !!stop.isArchived, created_at: stop.createdAt || now, updated_at: stop.updatedAt || now
@@ -1925,16 +2604,26 @@
         assertRemoteResults([result]);
       }
       syncLabel = 'synchronisiert';
-      render();
+      succeeded = true;
+      renderSyncBadge();
     } catch (error) {
+      if (fullSync) fullSyncQueued = true;
+      else itemIds.forEach(id => pendingItemSyncIds.add(id));
       syncLabel = 'lokal';
       console.warn('[HabitFlow/lists] Änderungen bleiben lokal und werden später erneut synchronisiert.', error);
-      render();
+      renderSyncBadge();
     } finally {
       syncInFlight = false;
-      if (syncQueued) {
+      if (succeeded && (syncQueued || fullSyncQueued || pendingItemSyncIds.size)) {
+        const runFullSync = fullSyncQueued;
+        const queuedItems = runFullSync
+          ? []
+          : state.items.filter(item => pendingItemSyncIds.has(String(item.id)));
+        fullSyncQueued = false;
+        pendingItemSyncIds.clear();
         syncQueued = false;
-        syncToSupabase();
+        if (runFullSync) syncToSupabase();
+        else if (queuedItems.length) syncToSupabase(queuedItems);
       }
     }
   }
@@ -1959,6 +2648,19 @@
     if (userId) await syncFromSupabase(userId);
   }
 
+  window.HabitFlowWeeklyNotes = Object.freeze({
+    startOfWeekDate,
+    toDateKey,
+    addDays,
+    normalizeWeekStart,
+    currentWeekStartKey,
+    visibleWeekStarts,
+    isoWeekData,
+    weeklyItemsFrom,
+    createWeeklyCarry,
+    mergeById
+  });
+
   insertShell();
   bindEvents();
   document.addEventListener('DOMContentLoaded', () => {
@@ -1967,7 +2669,12 @@
     initRemoteSync();
   }, { once: true });
   window.addEventListener('online', () => {
-    if (remoteReady) syncToSupabase();
+    if (remoteReady) syncFromSupabase(remoteUserId);
+    else initRemoteSync();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    if (remoteReady && remoteUserId) syncFromSupabase(remoteUserId, { reconcile: false });
     else initRemoteSync();
   });
   render();
