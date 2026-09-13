@@ -4063,6 +4063,7 @@ cacheEls();
     <div class="points-rules-grid" aria-label="Nächste Stufenkosten">${sampleRows || '<span><b>20/20</b>Maximalstufe</span>'}</div>
     <button class="points-rules-detail-toggle" type="button" data-action="toggle-points-detail" aria-expanded="false">Detaillierte Punktelogik ansehen</button>
     <div class="points-rules-detail-panel" hidden>
+      <article><strong>Schwimmen</strong><span>Pro Eintrag +30 Pkt. Basis und +2 Pkt. pro Minute. Beispiel: 60 Minuten = 150 Pkt.</span></article>
       <article><strong>Wandern</strong><span>Basis +50 Pkt. · +10 Pkt. pro km · +10 Pkt. pro 100 hm.</span></article>
       <article><strong>Rauchen · Pausen</strong><span>2–4 Std. +20 · 4–8 Std. +60 · 8+ Std. +100. Zwei 2h+ Pausen direkt nacheinander geben zusätzlich +10 Pkt.</span></article>
       <article><strong>Rauchen · Tagesziel</strong><span>Bei 1–10 Zigaretten pro Tag: +50 Pkt. bei 10; jede Zigarette weniger gibt +10 Pkt. extra. Beispiel: 7 Zigaretten = +80 Pkt.</span></article>
@@ -9409,7 +9410,7 @@ cacheEls();
     entry.updated_at = nowIso();
     entry.synced = false;
     const points = habitPoints(habit, entry);
-    const reason = isSystemMeditationHabit(habit) && entry.note ? `${entry.note} abgeschlossen` : `${habit.name} geloggt`;
+    const reason = isSystemMeditationHabit(habit) && entry.note ? `${entry.note} abgeschlossen` : habitPointReason(habit, entry);
     addPoints('habit', entry.id, points, reason, entry.occurred_at);
     editingHabitEntryId = null;
     saveState();
@@ -12219,13 +12220,13 @@ async function deleteAlcoholLog(id) {
     const entry = { id: uid(), habit_id: habit.id, value_num: valueNum, value_bool: valueBool, note, occurred_at: occurredAt, created_at: occurredAt, updated_at: occurredAt, synced: false };
     state.habitEntries.push(entry);
     const points = habitPoints(habit, entry);
-    addPoints('habit', entry.id, points, `${habit.name} geloggt`, occurredAt);
+    addPoints('habit', entry.id, points, habitPointReason(habit, entry), occurredAt);
     saveState();
     renderHistoryModal();
     const duration = parseFitnessDurationNote(note);
     const ascent = parseFitnessAscentNote(note);
     const fitnessSuffix = duration ? ` · ${Math.round(duration)} Min.` : (ascent != null ? ` · ${formatMetersValue(ascent)}` : '');
-    const toastLabel = isFitnessDistanceHabit(habit) && valueNum ? `${habit.name} · ${formatKmValue(valueNum)}${fitnessSuffix} geloggt` : `${habit.name} geloggt`;
+    const toastLabel = isFitnessDistanceHabit(habit) && valueNum ? `${habit.name} · ${formatKmValue(valueNum)}${fitnessSuffix} geloggt` : habitPointReason(habit, entry);
     toast(`${toastLabel} · +${points} Punkte`);
     syncWithSupabase({ silent: true });
   }
@@ -12258,7 +12259,7 @@ async function deleteAlcoholLog(id) {
     const entry = { id: uid(), habit_id: habit.id, value_num: distanceValue, value_bool: null, note, occurred_at: occurredAt, created_at: occurredAt, updated_at: occurredAt, synced: false };
     state.habitEntries.push(entry);
     const points = habitPoints(habit, entry);
-    addPoints('habit', entry.id, points, `${habit.name} geloggt`, occurredAt);
+    addPoints('habit', entry.id, points, habitPointReason(habit, entry), occurredAt);
     saveState();
     renderHistoryModal();
     renderFitnessHub();
@@ -13411,7 +13412,7 @@ async function deleteAlcoholLog(id) {
       const habit = state.habits.find(item => item.id === entry.habit_id);
       if (!habit) return;
       const points = habitPoints(habit, entry);
-      if (addPoints('habit', entry.id, points, `${habit.name} geloggt`, entry.occurred_at || entry.created_at || nowIso())) changed = true;
+      if (addPoints('habit', entry.id, points, habitPointReason(habit, entry), entry.occurred_at || entry.created_at || nowIso())) changed = true;
       if (markUpdated) {
         entry.updated_at = nowIso();
         entry.synced = false;
@@ -13434,7 +13435,28 @@ async function deleteAlcoholLog(id) {
     return Math.round(HIKING_POINTS_BASE + kilometers * HIKING_POINTS_PER_KM + (ascent / 100) * HIKING_POINTS_PER_100M);
   }
 
+  function isSwimmingHabit(habit = {}) {
+    const name = String(habit.name || '').trim().toLowerCase();
+    const unit = String(habit.unit || '').trim().toLowerCase();
+    return /schwimm|swim/.test(name)
+      && (habit.type === 'duration' || /^(min|min\.|minute|minuten|minutes|m)$/.test(unit));
+  }
+
+  function swimmingPoints(entry = {}) {
+    const minutes = Number(entry.value_num || 0);
+    return 30 + (Number.isFinite(minutes) && minutes > 0 ? Math.round(minutes * 2) : 0);
+  }
+
+  function habitPointReason(habit, entry) {
+    if (isSwimmingHabit(habit)) {
+      const minutes = Math.max(0, Number(entry.value_num) || 0);
+      return `${habit.name}: 30 Basis + ${minutes.toLocaleString('de-CH')} Min. × 2 = ${swimmingPoints(entry)} Pkt.`;
+    }
+    return `${habit.name} geloggt`;
+  }
+
   function habitPoints(habit, entry) {
+    if (isSwimmingHabit(habit)) return swimmingPoints(entry);
     if (habit.type === 'boolean' && !isFitnessDistanceHabit(habit)) return 12;
     if (isFitnessDistanceHabit(habit) && fitnessHabitType(habit) === 'hiking') return Math.max(HIKING_POINTS_BASE, hikingPoints(entry));
     const value = Math.abs(Number(entry.value_num || 0));
