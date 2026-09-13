@@ -21,6 +21,7 @@
   <link rel="stylesheet" href="modules/fitness-detail-mobile.css?v=275" />
   <link rel="stylesheet" href="modules/smoke-ring-premium.css?v=281" />
   <link rel="stylesheet" href="modules/points-details.css?v=297" />
+  <link rel="stylesheet" href="modules/upcoming-schedule.css?v=303" />
 </head>
 <body>
   <div id="toast" class="save-toast hidden" role="status" aria-live="polite"></div>
@@ -768,6 +769,17 @@
         </section>
       </section>
 
+      <section id="screen-upcoming" class="screen" data-screen="upcoming" hidden aria-hidden="true">
+        <div class="section-toolbar glass upcoming-toolbar">
+          <div><p class="eyebrow">Bald ist es so weit</p><h3>Geburtstage & Termine</h3><p class="upcoming-intro">Menschen feiern. Deine Woche im Blick.</p></div>
+          <div class="action-row">
+            <button class="pill secondary" type="button" data-action="new-upcoming-birthday"><span data-icon="birthday"></span>Geburtstag</button>
+            <button class="pill primary" type="button" data-action="new-upcoming-appointment"><span data-icon="plus"></span>Termin</button>
+          </div>
+        </div>
+        <div id="upcomingSchedule" class="upcoming-grid"></div>
+      </section>
+
       <section id="screen-settings" class="screen" data-screen="settings" hidden aria-hidden="true">
         <div class="grid two-columns">
           <section class="panel glass">
@@ -808,6 +820,7 @@
       <button data-target="fitness" class="nav-btn" type="button"><span data-icon="jogging"></span>Fitness</button>
       <button data-target="tasks" class="nav-btn" type="button"><span data-icon="tasks"></span>Tasks</button>
       <button data-target="calendar" class="nav-btn" type="button"><span data-icon="calendar"></span>Kalender</button>
+      <button data-target="upcoming" class="nav-btn" type="button"><span data-icon="birthday"></span>Geburtstage</button>
       <button data-target="settings" class="nav-btn" type="button"><span data-icon="sync"></span>Sync</button>
     </nav>
   </div>
@@ -824,7 +837,7 @@
   <script src="modules/projects-milestone-edit.js?v=183"></script>
 
   <script src="modules/life-coach.js"></script>
-  <script src="app.js?v=302"></script>
+  <script src="app.js?v=303"></script>
   <script src="modules/points-details.js?v=297"></script>
   <script src="modules/habit-story-coverage.js?v=295"></script>
   <script src="modules/ghost-arena.js?v=288"></script>

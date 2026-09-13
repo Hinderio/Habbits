@@ -1,0 +1,39 @@
+/* Birthdays and appointments share the calendar's source of truth. */
+.upcoming-grid{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:20px;align-items:start}
+.upcoming-toolbar{gap:20px;flex-wrap:wrap}
+.upcoming-intro{margin-top:6px;color:var(--muted);font-size:.88rem;line-height:1.5}
+.upcoming-toolbar .pill{display:inline-flex;gap:8px;align-items:center}
+.upcoming-toolbar .pill .ui-icon{width:18px;height:18px}
+.upcoming-panel{min-width:0}
+.upcoming-panel .panel-head{gap:14px;align-items:center}
+.upcoming-count{display:grid;place-items:center;flex-shrink:0;min-width:44px;height:44px;padding:0 10px;border-radius:16px;background:rgba(74,215,209,.1);border:1px solid rgba(74,215,209,.15);font-weight:900;color:var(--primary);font-size:1.1rem}
+.upcoming-day+.upcoming-day{margin-top:24px}
+.upcoming-day-heading{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:4px 0 10px;font-size:.86rem}
+.upcoming-day-heading time{color:var(--muted);font-size:.76rem;font-weight:600}
+.upcoming-day-list{display:grid;gap:9px}
+.upcoming-entry{display:flex;align-items:center;gap:12px;width:100%;padding:15px 13px;text-align:left;border:1px solid var(--card-border);border-radius:20px;background:rgba(74,215,209,.035);color:var(--text);font:inherit;cursor:pointer;transition:background .18s,border-color .18s}
+.upcoming-entry:hover{background:rgba(74,215,209,.09);border-color:rgba(74,215,209,.3)}
+.upcoming-entry:focus-visible{outline:2px solid var(--primary);outline-offset:3px}
+.upcoming-avatar{display:grid;place-items:center;flex:0 0 44px;width:44px;height:44px;border-radius:15px;background:rgba(74,215,209,.1);color:var(--primary);font-size:.85rem;font-weight:900;letter-spacing:.04em}
+.upcoming-avatar .ui-icon{width:21px;height:21px}
+.upcoming-entry.is-birthday .upcoming-avatar{background:rgba(255,166,154,.14);color:#efa091}
+body.light .upcoming-entry.is-birthday .upcoming-avatar{color:#aa5963}
+.upcoming-entry-copy{display:grid;gap:5px;min-width:0;flex:1;overflow-wrap:anywhere}
+.upcoming-entry-copy>strong{font-size:.97rem;line-height:1.35;letter-spacing:-.02em}
+.upcoming-entry-meta,.upcoming-location{color:var(--muted);font-size:.77rem;line-height:1.45}
+.upcoming-location{font-size:.74rem}
+.upcoming-entry-arrow{font-size:1.5rem;color:var(--muted);flex-shrink:0}
+.upcoming-live{font-size:.65rem;font-weight:800;color:var(--primary);max-width:60px;line-height:1.4}
+.upcoming-empty{display:grid;justify-items:center;gap:12px;text-align:center;padding:34px 14px;color:var(--muted)}
+.upcoming-empty-icon{display:grid;place-items:center;width:58px;height:58px;border-radius:20px;background:rgba(74,215,209,.07);color:var(--primary)}
+.upcoming-empty-icon .ui-icon{width:26px;height:26px}
+.upcoming-empty strong{color:var(--text);font-size:.93rem;line-height:1.5;max-width:28ch}
+.upcoming-empty p{font-size:.8rem;line-height:1.55;max-width:32ch}
+.bottom-nav{grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:minmax(82px,1fr)}
+@media(max-width:760px){
+  .upcoming-grid{grid-template-columns:minmax(0,1fr);gap:16px}
+  .upcoming-toolbar .action-row{width:100%}
+  .upcoming-toolbar .pill{flex:1;justify-content:center;padding:11px 12px}
+  .upcoming-entry{padding:13px 11px;gap:10px}
+  .bottom-nav{grid-template-columns:none;grid-auto-columns:minmax(74px,1fr)}
+}
