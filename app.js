@@ -16258,7 +16258,12 @@ function initOngoingSync() {
     const max = Math.max(0, ...values.map(day => day.points));
     const range = Math.max(1, max - min);
     const points = values.map((day, index) => ({ ...day, x: 10 + index * 14, y: 12 + (max - day.points) / range * 42 }));
-    const path = points.map((day, index) => `${index ? 'L' : 'M'} ${day.x} ${day.y}`).join(' ');
+    const path = points.reduce((curve, day, index) => {
+      if (index === 0) return `M ${day.x} ${day.y}`;
+      const previous = points[index - 1];
+      const midX = (previous.x + day.x) / 2;
+      return `${curve} C ${midX} ${previous.y}, ${midX} ${day.y}, ${day.x} ${day.y}`;
+    }, '');
     return `<article class="hf-time-profile-card is-alcohol" id="hfTimeProfile-alcohol">
       <div class="hf-time-profile-head"><div><p class="eyebrow">Wochentagsprofil</p><h4>Alkohol-Punkte pro Wochentag</h4></div><span class="badge muted">${formatSignedPoints(sum(values.map(day => day.points)))} Pkt.</span></div>
       <svg viewBox="0 0 104 72" style="display:block;width:100%;height:auto" role="img" aria-label="Summierte Alkohol-Punkte je Wochentag seit 27.07.2026">
