@@ -15639,6 +15639,7 @@ function initOngoingSync() {
 
   // Daily alcohol domain v2: one honest intensity record per calendar day.
 
+  const ALCOHOL_ANALYSIS_START = '2026-07-27';
   const ALCOHOL_DAY_LEVELS = Object.freeze({
     light: { rank: 1, label: 'Leicht', short: 'Ein Getränk', description: 'Ein einzelnes alkoholisches Getränk.', points: -10 },
     moderate: { rank: 2, label: 'Moderat', short: 'Zwei bis drei Getränke', description: 'Ein klar begrenzter Konsumabend.', points: -30 },
@@ -16056,16 +16057,18 @@ function initOngoingSync() {
     renderAlcoholCoachTip();
   }
 
-  function alcoholFreeStreakStats(days, endKey = toDateKey(new Date())) {
+  function alcoholFreeStreakStats(days, endKey = toDateKey(new Date()), startKey = null) {
     const occupied = [...new Set(
-      days.map(day => day?.log_date).filter(key => /^\d{4}-\d{2}-\d{2}$/.test(String(key || '')) && key <= endKey)
+      days.map(day => day?.log_date).filter(key => /^\d{4}-\d{2}-\d{2}$/.test(String(key || '')) && key <= endKey && (!startKey || key >= startKey))
     )].sort();
-    if (!occupied.length) return { current: 0, best: 0 };
-
     const dayDistance = (fromKey, toKey) => Math.max(0, Math.round(
       (new Date(`${toKey}T12:00:00`).getTime() - new Date(`${fromKey}T12:00:00`).getTime()) / DAY_MS
     ));
-    let best = 0;
+    if (!occupied.length) {
+      const freeDays = startKey && startKey <= endKey ? dayDistance(startKey, endKey) + 1 : 0;
+      return { current: freeDays, best: freeDays };
+    }
+    let best = startKey ? dayDistance(startKey, occupied[0]) : 0;
     for (let index = 1; index < occupied.length; index += 1) {
       best = Math.max(best, Math.max(0, dayDistance(occupied[index - 1], occupied[index]) - 1));
     }
@@ -16215,7 +16218,10 @@ function initOngoingSync() {
       weekdayCounts.set(weekday, (weekdayCounts.get(weekday) || 0) + 1);
     });
     const dominant = [...weekdayCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 1;
-    const header = weeks.map(week => `<span title="${escapeHtml(week.label || week.key)}">${escapeHtml(String(week.label || week.key).replace('KW ', ''))}</span>`).join('');
+    const header = weeks.map(week => {
+      const total = sum([1,2,3,4,5,6,0].map(weekday => Number(cells.get(`${week.key}-${weekday}`)?.consumption_level || 0)));
+      return `<span style="white-space:nowrap;font-size:.75rem" title="${escapeHtml(week.label || week.key)} · Intensitätssumme ${total}">${escapeHtml(week.label || week.key)} | ${total}</span>`;
+    }).join('');
     const rows = [1,2,3,4,5,6,0].map(weekday => `<div class="alcohol-map-row"><strong>${escapeHtml(smokingWeekdayLabel(weekday, { short: true }))}</strong>${weeks.map(week => {
       const day = cells.get(`${week.key}-${weekday}`);
       const level = day ? alcoholDayLevel(day.consumption_key) : null;
@@ -16235,16 +16241,45 @@ function initOngoingSync() {
     });
   }
 
-  function renderAlcoholIntervalVisual(daysWindow = 30) {
+  function alcoholAnalysisDays(endKey = toDateKey(new Date())) {
+    return visibleAlcoholDays().filter(day => day.log_date >= ALCOHOL_ANALYSIS_START && day.log_date <= endKey);
+  }
+
+  function alcoholWeekdayPoints(days) {
+    return [1,2,3,4,5,6,0].map(weekday => ({
+      label: smokingWeekdayLabel(weekday, { short: true }),
+      points: sum(days.filter(day => new Date(`${day.log_date}T12:00:00`).getDay() === weekday).map(day => alcoholPointsForDay(day)))
+    }));
+  }
+
+  function renderAlcoholWeekdayProfile(days) {
+    const values = alcoholWeekdayPoints(days);
+    const min = Math.min(0, ...values.map(day => day.points));
+    const max = Math.max(0, ...values.map(day => day.points));
+    const range = Math.max(1, max - min);
+    const points = values.map((day, index) => ({ ...day, x: 10 + index * 14, y: 12 + (max - day.points) / range * 42 }));
+    const path = points.map((day, index) => `${index ? 'L' : 'M'} ${day.x} ${day.y}`).join(' ');
+    return `<article class="hf-time-profile-card is-alcohol" id="hfTimeProfile-alcohol">
+      <div class="hf-time-profile-head"><div><p class="eyebrow">Wochentagsprofil</p><h4>Alkohol-Punkte pro Wochentag</h4></div><span class="badge muted">${formatSignedPoints(sum(values.map(day => day.points)))} Pkt.</span></div>
+      <svg viewBox="0 0 104 72" style="display:block;width:100%;height:auto" role="img" aria-label="Summierte Alkohol-Punkte je Wochentag seit 27.07.2026">
+        <g stroke="currentColor" opacity=".12" stroke-width=".2"><path d="M10 12H94 M10 33H94 M10 54H94"/></g>
+        <path d="${path}" fill="none" stroke="#a994ef" stroke-width=".65" stroke-linejoin="round"/>
+        ${points.map(day => `<circle cx="${day.x}" cy="${day.y}" r=".9" fill="#a994ef"><title>${day.label}: ${formatSignedPoints(day.points)} Punkte</title></circle><text x="${day.x}" y="${day.y - 3}" text-anchor="middle" fill="currentColor" font-size="3">${formatSignedPoints(day.points)}</text><text x="${day.x}" y="65" text-anchor="middle" fill="currentColor" font-size="3.2">${escapeHtml(day.label)}</text>`).join('')}
+      </svg><p>Summierte Tagespunkte seit 27.07.2026 · Montag bis Sonntag.</p>
+    </article>`;
+  }
+
+  function renderAlcoholIntervalVisual() {
     if (!els.alcoholIntervalVisual) return;
-    const allDays = visibleAlcoholDays();
-    const keys = new Set(daysBack(daysWindow));
-    const days = allDays.filter(day => keys.has(day.log_date));
+    const endKey = toDateKey(new Date());
+    const days = alcoholAnalysisDays(endKey);
+    const daysWindow = endKey < ALCOHOL_ANALYSIS_START ? 0 : Math.round((new Date(`${endKey}T12:00:00`) - new Date(`${ALCOHOL_ANALYSIS_START}T12:00:00`)) / DAY_MS) + 1;
     const alcoholFreeDays = Math.max(0, daysWindow - days.length);
-    const freeRate = Math.round((alcoholFreeDays / daysWindow) * 100);
+    const freeRate = daysWindow ? Math.round((alcoholFreeDays / daysWindow) * 100) : 0;
     const average = days.length ? sum(days.map(day => day.consumption_level)) / days.length : 0;
-    const streaks = alcoholFreeStreakStats(allDays);
-    const quality = !days.length ? 'ruhig' : freeRate >= 80 && average <= 2 ? 'stabil' : average >= 3 || days.length >= 12 ? 'erhöht' : 'in Bewegung';
+    const streaks = alcoholFreeStreakStats(days, endKey, ALCOHOL_ANALYSIS_START);
+    const monthlyFrequency = daysWindow ? days.length / daysWindow * 30 : 0;
+    const quality = !days.length ? 'ruhig' : freeRate >= 80 && average <= 2 ? 'stabil' : average >= 3 || monthlyFrequency >= 12 ? 'erhöht' : 'in Bewegung';
     if (els.alcoholIntervalQuality) els.alcoholIntervalQuality.textContent = quality;
     const distribution = Object.entries(ALCOHOL_DAY_LEVELS).map(([key, level]) => {
       const count = days.filter(day => day.consumption_key === key).length;
@@ -16253,17 +16288,17 @@ function initOngoingSync() {
     }).join('');
     const signal = average >= 3
       ? 'Die Intensität ist aktuell das stärkste Signal. Priorisiere einen klaren alkoholfreien Block und nutze den Coach vor dem nächsten Anlass.'
-      : days.length >= 10
+      : monthlyFrequency >= 10
         ? 'Die Frequenz ist höher als die Intensität. Mehr zusammenhängende alkoholfreie Tage bringen den grössten Hebel.'
         : 'Die Konsumtage bleiben klar getrennt. Halte die alkoholfreien Serien sichtbar und dokumentiere Ausnahmen ehrlich.';
-    els.alcoholIntervalVisual.innerHTML = `<div class="smoking-visual-summary-grid">
+    els.alcoholIntervalVisual.innerHTML = `${renderAlcoholWeekdayProfile(days)}<div class="smoking-visual-summary-grid">
       <article><small>Alkoholfreie Quote</small><strong>${freeRate}%</strong><p>${alcoholFreeDays} von ${daysWindow} Tagen</p></article>
-      <article><small>Konsumtage</small><strong>${days.length}</strong><p>im 30-Tage-Fenster</p></article>
+      <article><small>Konsumtage</small><strong>${days.length}</strong><p>seit 27.07.2026</p></article>
       <article><small>Ø Intensität</small><strong>${days.length ? average.toFixed(1) : '–'}</strong><p>auf einer Skala von 1 bis 4</p></article>
-      <article><small>Freie Tage</small><strong>${alcoholFreeDays}</strong><p>im 30-Tage-Fenster</p></article>
+      <article><small>Freie Tage</small><strong>${alcoholFreeDays}</strong><p>seit 27.07.2026</p></article>
     </div>
     <div class="smoking-visual-summary-grid">
-      <article><small>Bester Strike</small><strong>${streaks.best} Tage</strong><p>Längste Serie ohne Alkohol.</p></article>
+      <article><small>Bester Strike</small><strong>${streaks.best} Tage</strong><p>Längste Serie seit 27.07.2026.</p></article>
       <article><small>Aktueller Strike</small><strong>${streaks.current} Tage</strong><p>Seit dem letzten Konsumtag.</p></article>
     </div>
     <div class="alcohol-distribution-grid">${distribution}</div>

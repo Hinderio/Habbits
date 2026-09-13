@@ -4,7 +4,8 @@
   const STORAGE_KEY = 'habitflow-state-v1';
   const LOOKBACK_DAYS = 120;
   const HOURS = 24;
-  const TARGETS = { smoke: 'smokeIntervalVisual', alcohol: 'alcoholIntervalVisual' };
+  // Alcohol is rendered from canonical daily records by app.js.
+  const TARGETS = { smoke: 'smokeIntervalVisual' };
   const observedTargets = new WeakSet();
   let renderTimer = null;
   let isRendering = false;
@@ -189,7 +190,6 @@
     try {
       injectStyle(document);
       upsertCard(TARGETS.smoke, 'smoke', state);
-      upsertCard(TARGETS.alcohol, 'alcohol', state);
       Object.values(TARGETS).forEach(id => observeTarget(document.getElementById(id)));
     } finally {
       window.setTimeout(() => { isRendering = false; }, 0);
