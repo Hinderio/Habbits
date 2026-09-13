@@ -1,5 +1,7 @@
-const CACHE_NAME = 'habitflow-v288-ghost-arena-production-monthly-sync-289-alcohol-points-290-sync-integrity-291-monthly-freshness-292-weekly-notes-293-weekly-habit-card-294-habit-pb-295-habit-actions-296-points-details-297-companion-consistency-298-smoke-bonus-pause-299-swimming-points-300-magazine-covers-301';
+const CACHE_NAME = 'habitflow-v288-ghost-arena-production-monthly-sync-289-alcohol-points-290-sync-integrity-291-monthly-freshness-292-weekly-notes-293-weekly-habit-card-294-habit-pb-295-habit-actions-296-points-details-297-companion-consistency-298-smoke-bonus-pause-299-swimming-points-300-magazine-covers-301-life-coach-302';
 const MODULE_ASSETS = [
+  './modules/life-coach.js',
+  './modules/life-coach.css',
   './modules/points-details.js',
   './modules/points-details.css',
   './modules/module-registry.js',

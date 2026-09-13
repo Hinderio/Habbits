@@ -315,7 +315,7 @@
 
   function renderInline() {
     const card = document.querySelector('#screen-smoking .craving-coach-card');
-    if (!card) return;
+    if (!card || document.hidden || !document.getElementById('screen-smoking')?.classList.contains('active')) return;
     const state = readState();
     const context = getCravingContext(state);
     const recommendation = getCoachRecommendation(context);
@@ -335,7 +335,7 @@
 
   function renderModal() {
     const modal = document.getElementById('coachModal');
-    if (!modal) return;
+    if (!modal || document.getElementById('lifeCoachContent')) return;
     const state = readState();
     const triggerSelect = document.getElementById('coachTrigger');
     const overrideTrigger = normalizeTrigger(triggerSelect?.value) || selectedTrigger;
@@ -482,6 +482,7 @@
     }, true);
     window.addEventListener('storage', event => { if (event.key === STORAGE_KEY || event.key === LEARNING_KEY) scheduleRender(120); });
     window.addEventListener('focus', () => scheduleRender(120));
+    window.addEventListener('habitflow:consumption-live-update', () => scheduleRender(80));
     document.addEventListener('visibilitychange', () => { if (!document.hidden) scheduleRender(120); });
     [100, 500, 1200, 2600].forEach(delay => window.setTimeout(renderAll, delay));
     window.setInterval(() => scheduleRender(0), 60000);

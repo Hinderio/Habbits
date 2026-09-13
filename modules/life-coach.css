@@ -1,0 +1,64 @@
+/* Scoped dashboard coach. Uses the existing app's semantic design tokens. */
+#coachModal .lc-dialog { width: min(1120px, 96vw); padding: 24px; gap: 0; border-radius: 12px; color: var(--ink, var(--text)); }
+#coachModal .lc-topline { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 18px; border-bottom: 1px solid var(--card-border); }
+#coachModal .lc-topline > span { color: var(--muted); font-size: .82rem; font-weight: 750; }
+#coachModal .lc-topline .coach-close-btn { position: static; flex: 0 0 44px; width: 44px; height: 44px; border-radius: 8px; }
+#coachModal .lc-summary { display: flex; justify-content: space-between; align-items: start; gap: 24px; padding: 26px 0; }
+#coachModal .lc-kicker { color: var(--muted); font-size: .75rem; font-weight: 750; }
+#coachModal .lc-summary h2 { margin: 9px 0; max-width: 640px; font-size: clamp(1.6rem, 3vw, 2.25rem); line-height: 1.16; letter-spacing: -.025em; }
+#coachModal p { color: var(--muted); line-height: 1.55; }
+#coachModal .lc-summary p { margin: 0; }
+#coachModal .lc-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--card-border); border-radius: 8px; overflow: hidden; }
+#coachModal .lc-metrics > div { padding: 17px; display: grid; gap: 7px; border-right: 1px solid var(--card-border); }
+#coachModal .lc-metrics > div:last-child { border-right: 0; }
+#coachModal .lc-metrics small, #coachModal .lc-metrics span { font-size: .74rem; line-height: 1.4; color: var(--muted); }
+#coachModal .lc-metrics strong { font-size: 1.6rem; line-height: 1.2; }
+#coachModal .lc-filters { display: flex; flex-wrap: wrap; gap: 6px; padding: 24px 0 18px; }
+#coachModal .lc-filters button { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 10px 14px; background: transparent; border: 1px solid transparent; border-radius: 8px; color: var(--muted); font: inherit; font-size: .86rem; font-weight: 700; }
+#coachModal .lc-filters button[aria-pressed="true"] { color: var(--ink, var(--text)); border-color: var(--card-border); background: color-mix(in srgb, var(--primary) 14%, transparent); }
+#coachModal .lc-filters button span { font-size: .7rem; opacity: .8; }
+#coachModal .lc-section-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; margin: 0 0 14px; }
+#coachModal .lc-section-head h3 { margin: 0; font-size: 1rem; }
+#coachModal .lc-section-head > span { font-size: .74rem; color: var(--muted); }
+#coachModal .lc-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 16px; }
+#coachModal .lc-card { display: flex; flex-direction: column; min-width: 0; padding: 20px; border: 1px solid var(--card-border); border-radius: 8px; background: color-mix(in srgb, var(--text) 3%, transparent); overflow-wrap: anywhere; }
+#coachModal .lc-featured { grid-column: 1 / -1; border-left: 3px solid var(--primary); background: color-mix(in srgb, var(--primary) 7%, transparent); }
+#coachModal .lc-card-meta { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: .72rem; font-weight: 750; }
+#coachModal .lc-card h3 { margin: 13px 0 7px; font-size: 1.15rem; line-height: 1.35; }
+#coachModal .lc-card p { margin: 0 0 14px; font-size: .9rem; }
+#coachModal .lc-evidence { display: block; color: var(--muted); font-size: .76rem; line-height: 1.5; margin-bottom: 18px; }
+#coachModal .lc-card-actions { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-top: auto; }
+#coachModal .lc-button { display: inline-flex; align-items: center; justify-content: center; gap: 12px; min-height: 44px; padding: 10px 14px; border: 1px solid var(--card-border); border-radius: 8px; background: transparent; color: var(--ink, var(--text)); font: inherit; font-size: .84rem; font-weight: 750; cursor: pointer; }
+#coachModal .lc-primary { background: #9edcce; color: #102a2a; border-color: transparent; }
+#coachModal .lc-dismiss, #coachModal .lc-restore { min-height: 44px; padding: 8px; background: transparent; border: 0; color: var(--muted); font: inherit; font-size: .76rem; cursor: pointer; }
+#coachModal button:hover { filter: brightness(.96); }
+#coachModal button:focus-visible, #coachModal summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+#coachModal .lc-pause { margin-top: 14px; padding: 18px 0; border-top: 1px solid var(--card-border); border-bottom: 1px solid var(--card-border); }
+#coachModal summary { padding: 10px 0; min-height: 44px; cursor: pointer; font-size: .84rem; font-weight: 700; }
+#coachModal .lc-pause p { max-width: 740px; font-size: .86rem; }
+#coachModal .lc-pause-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+#coachModal #lifeCoachTimer { font-variant-numeric: tabular-nums; font-size: .86rem; }
+#coachModal .lc-footer { padding-top: 18px; color: var(--muted); font-size: .74rem; }
+#coachModal .lc-footer details { max-width: 840px; }
+#coachModal .lc-footer p { margin-top: 0; }
+#coachModal .lc-empty { grid-column: 1 / -1; padding: 24px; border: 1px dashed var(--card-border); border-radius: 8px; }
+#coachModal [hidden] { display: none !important; }
+@media (max-width: 760px) {
+  #coachModal { padding: 10px; }
+  #coachModal .lc-dialog { width: 100%; padding: 16px; max-height: calc(100dvh - 20px); border-radius: 10px; }
+  #coachModal .lc-summary { flex-direction: column; gap: 14px; padding: 22px 0; }
+  #coachModal .lc-refresh { align-self: flex-start; }
+  #coachModal .lc-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #coachModal .lc-metrics > div { padding: 13px; }
+  #coachModal .lc-metrics > div:nth-child(2) { border-right: 0; }
+  #coachModal .lc-metrics > div:nth-child(-n+2) { border-bottom: 1px solid var(--card-border); }
+  #coachModal .lc-cards { grid-template-columns: 1fr; }
+  #coachModal .lc-card { padding: 16px; }
+  #coachModal .lc-section-head { align-items: start; flex-direction: column; gap: 5px; }
+  #coachModal .lc-filters { gap: 3px; }
+  #coachModal .lc-filters button { padding: 9px 10px; }
+}
+
+#coachModal .lc-topline { position: sticky; top: -24px; z-index: 3; background: var(--bg2); padding-top: 8px; }
+body.light #coachModal .lc-topline { background: #f5faff; }
+@media (max-width: 760px) { #coachModal .lc-topline { top: -16px; } }

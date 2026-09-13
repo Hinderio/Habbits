@@ -3221,6 +3221,7 @@ cacheEls();
     const serializedState = JSON.stringify({ ...state, activityIdeas: storedActivityIdeas });
     window.HabitFlowRuntime?.skipNextSmokingDomainPersistenceNormalization?.();
     localStorage.setItem(STORAGE_KEY, serializedState);
+    window.HabitFlowCoach?.refresh();
     if (!skipRender) queueRender();
     queuePointEvolutionRefresh();
   }
@@ -3552,17 +3553,31 @@ cacheEls();
 
   function openCoachModal() {
     if (!els.coachModal) return;
-    els.coachModal.classList.remove('hidden');
-    document.body.classList.add('modal-open');
-    renderCoach();
-    requestAnimationFrame(() => els.coachUrgeLevel?.focus({ preventScroll: true }));
+    window.HabitFlowCoach?.open({
+      snapshot: () => state,
+      navigate: action => {
+        if (action.type === 'task') { showScreen('tasks'); openTaskDetail(action.id); els.taskDetailCloseBtn?.focus({ preventScroll: true }); }
+        else if (action.type === 'habit') { showScreen('habits'); openHistoryModal('habit-detail', action.id); els.historyModal?.querySelector('button')?.focus({ preventScroll: true }); }
+        else if (action.type === 'calendar') {
+          selectedCalendarDate = action.day;
+          calendarCursor = new Date(`${action.day}T12:00:00`);
+          showScreen('calendar');
+          requestAnimationFrame(() => document.querySelector('.calendar-day.is-selected')?.focus({ preventScroll: true }));
+        } else if (action.type === 'list') {
+          showScreen('lists');
+          window.HabitFlowListsCoach?.open(action.id, action.itemId);
+        } else if (action.type === 'smoke' || action.type === 'alcohol') {
+          switchConsumptionMode(action.type);
+          showScreen('smoking');
+        }
+      }
+    });
   }
 
   function closeCoachModal() {
-    if (!els.coachModal) return;
-    els.coachModal.classList.add('hidden');
-    document.body.classList.remove('modal-open');
+    window.HabitFlowCoach?.close();
   }
+
 
   function render() {
     renderSection('timers', renderTimers);
@@ -7618,45 +7633,8 @@ cacheEls();
   }
 
   function renderCoach() {
-    if (!els.coachResult || !els.coachPlanGrid) return;
-    if (els.coachUrgeLevel && String(els.coachUrgeLevel.value) !== String(coachSession.urgeLevel)) els.coachUrgeLevel.value = String(coachSession.urgeLevel);
-    if (els.coachTrigger && els.coachTrigger.value !== coachSession.trigger) els.coachTrigger.value = coachSession.trigger;
-
-    const insight = buildCoachInsight();
-    const badgeClass = insight.tone === 'high' ? 'danger-badge' : insight.tone === 'mid' ? 'warning-badge' : 'muted';
-    if (els.coachRiskBadge) {
-      els.coachRiskBadge.className = `badge ${badgeClass}`;
-      els.coachRiskBadge.textContent = insight.label;
-    }
-    if (els.coachConfidence) {
-      els.coachConfidence.className = `coach-confidence-score is-${insight.tone}`;
-      els.coachConfidence.innerHTML = `<strong>${insight.risk}%</strong><span>Risiko</span>`;
-    }
-
-    els.coachChallengeCard.innerHTML = renderCoachChallenge(insight);
-    const focusTaskTitle = insight.focusTask ? insight.focusTask.title : 'keine aktive Aufgabe';
-    const focusHabitTitle = insight.focusHabit ? insight.focusHabit.name : (insight.activeHabits.length ? 'alle aktiven Habits geloggt' : 'noch keine Habits');
-    const personality = insight.personality || null;
-    const personalityBlock = personality ? `<article class="coach-personality-card">
-      <div class="coach-personality-head">
-        <span>${svgIcon('coach', 'ui-icon')}</span>
-        <div><small>Coach-Persönlichkeit</small><strong>${escapeHtml(personality.title)}</strong><p>${escapeHtml(personality.body)}</p></div>
-      </div>
-      <div class="coach-personality-tags">
-        ${personality.tags.map(tag => `<span>${escapeHtml(tag)}</span>`).join('')}
-      </div>
-    </article>` : '';
-    els.coachResult.innerHTML = `
-      <div class="coach-result-topline"><small>${escapeHtml(insight.stage)} · Drang ${insight.urge}/5</small><h3>${escapeHtml(insight.headline)}</h3><p>${escapeHtml(insight.coachLine)}</p></div>
-      <div class="coach-context-grid">
-        <article class="coach-context-card is-primary"><span>${svgIcon('delay', 'ui-icon')}</span><div><small>Mini-Ziel</small><strong>${escapeHtml(insight.microGoal)}</strong><p>${escapeHtml(insight.comparison)}</p></div></article>
-        <article class="coach-context-card"><span>${svgIcon('tasks', 'ui-icon')}</span><div><small>Aufgaben</small><strong>${escapeHtml(focusTaskTitle)}</strong><p>${escapeHtml(insight.taskText)}</p></div></article>
-        <article class="coach-context-card"><span>${svgIcon(insight.focusHabit ? habitIconKey(insight.focusHabit) : 'habits', 'ui-icon')}</span><div><small>Habits</small><strong>${escapeHtml(focusHabitTitle)}</strong><p>${escapeHtml(insight.habitText)}</p></div></article>
-        <article class="coach-context-card"><span>${svgIcon(insight.trigger.icon, 'ui-icon')}</span><div><small>Kontext</small><strong>${insight.alcoholToday ? 'Alkohol aktiv' : escapeHtml(insight.trigger.label)}</strong><p>Beste Pause: ${escapeHtml(insight.bestText)}</p></div></article>
-      </div>
-      ${personalityBlock}
-      <div class="coach-callout"><b>Nächster Schritt:</b> ${escapeHtml(insight.steps[0].body)} <em>${escapeHtml(insight.microGoal)}</em></div>`;
-    els.coachPlanGrid.innerHTML = insight.steps.map((step, index) => `<article class="coach-plan-card"><span>${svgIcon(step.icon, 'ui-icon')}</span><small>Schritt ${index + 1}</small><strong>${escapeHtml(step.title)}</strong><p>${escapeHtml(step.body)}</p></article>`).join('');
+    // The coach does no analysis or DOM work while closed; updates coalesce in one frame.
+    window.HabitFlowCoach?.refresh();
   }
 
   function renderCoachChallenge(insight) {

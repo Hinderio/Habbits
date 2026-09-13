@@ -11,6 +11,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="modules/life-coach.css" />
   <link rel="stylesheet" href="modules/habit-card-typography.css" />
   <link rel="stylesheet" href="modules/habit-personal-best.css?v=296" />
   <link rel="stylesheet" href="modules/ghost-arena.css?v=288" />
@@ -475,52 +476,9 @@
       </div>
 
       <div id="coachModal" class="coach-modal hidden" role="dialog" aria-modal="true" aria-labelledby="coachModalTitle">
-        <section id="coachDialog" class="coach-modal-card">
-          <button id="coachCloseBtn" class="icon-btn coach-close-btn" type="button" aria-label="Coach schliessen">×</button>
-        <section class="panel glass coach-hero-panel">
-          <div class="coach-hero">
-            <div class="coach-avatar-wrap" aria-hidden="true">
-              <img src="icons/coach-clean.svg" alt="" class="coach-avatar" />
-            </div>
-            <div class="coach-hero-copy">
-              <p class="eyebrow">Clean Coach</p>
-              <h2 id="coachModalTitle">Der nächste bessere Entscheid.</h2>
-              <p>Der Coach verbindet Konsum, offene Aufgaben, Habit-Rhythmus und aktuelle Trigger zu einem konkreten Mini-Plan für genau jetzt.</p>
-            </div>
-          </div>
-        </section>
-
-        <div class="grid two-columns coach-layout">
-          <section class="panel glass coach-control-panel">
-            <div class="panel-head">
-              <div><p class="eyebrow">Jetzt</p><h3>Check-in</h3></div>
-              <span id="coachRiskBadge" class="badge muted">Bereit</span>
-            </div>
-            <div class="coach-check-grid">
-              <label><span>Drang</span><select id="coachUrgeLevel" aria-label="Aktuelle Drangstärke"><option value="1">1 · kaum spürbar</option><option value="2">2 · leicht</option><option value="3" selected>3 · mittel</option><option value="4">4 · stark</option><option value="5">5 · sehr stark</option></select></label>
-              <label><span>Trigger</span><select id="coachTrigger" aria-label="Aktueller Trigger"><option value="stress">Stress / Druck</option><option value="coffee">Kaffee / Routine</option><option value="alcohol">Alkohol / Ausgang</option><option value="boredom">Langeweile</option><option value="reward">Belohnung</option><option value="social">Sozialer Moment</option><option value="meal">Nach dem Essen</option><option value="tasks">Aufgaben-Druck</option><option value="habits">Habit-Check</option></select></label>
-            </div>
-            <div id="coachChallengeCard" class="coach-challenge-card"></div>
-            <div class="coach-actions">
-              <button class="pill primary" type="button" data-action="start-coach-delay">10 Min. halten</button>
-              <button class="pill secondary" type="button" data-action="coach-breath-reset">Atem-Reset loggen</button>
-              <button class="pill danger" type="button" data-action="coach-record-smoke">Trotzdem erfassen</button>
-            </div>
-          </section>
-
-          <section class="panel glass coach-result-panel">
-            <div class="panel-head">
-              <div><p class="eyebrow">Analyse</p><h3>Coach sagt</h3></div>
-              <div id="coachConfidence" class="coach-confidence-score"><strong>0%</strong><span>Risiko</span></div>
-            </div>
-            <div id="coachResult" class="coach-result"></div>
-          </section>
-        </div>
-
-        <section class="panel glass coach-plan-panel">
-          <div class="panel-head"><div><p class="eyebrow">Plan</p><h3>3-Schritt-Strategie</h3></div><span class="subtle">kurz, konkret, machbar</span></div>
-          <div id="coachPlanGrid" class="coach-plan-grid"></div>
-        </section>
+        <section id="coachDialog" class="coach-modal-card lc-dialog">
+          <header class="lc-topline"><span>HabitFlow Coach · Dein Alltag im Blick</span><button id="coachCloseBtn" class="icon-btn coach-close-btn" type="button" aria-label="Coach schliessen">×</button></header>
+          <div id="lifeCoachContent"><h2 id="coachModalTitle">Dein Coach wird vorbereitet.</h2></div>
         </section>
       </div>
 
@@ -865,7 +823,8 @@
   <script src="modules/lists.js?v=294"></script>
   <script src="modules/projects-milestone-edit.js?v=183"></script>
 
-  <script src="app.js?v=301"></script>
+  <script src="modules/life-coach.js"></script>
+  <script src="app.js?v=302"></script>
   <script src="modules/points-details.js?v=297"></script>
   <script src="modules/habit-story-coverage.js?v=295"></script>
   <script src="modules/ghost-arena.js?v=288"></script>

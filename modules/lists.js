@@ -236,6 +236,7 @@
   function persist() {
     state.activeListId = activeListId;
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    window.HabitFlowCoach?.refresh();
   }
 
   function currentList() {
@@ -2649,6 +2650,26 @@
     const userId = data?.session?.user?.id || '';
     if (userId) await syncFromSupabase(userId);
   }
+
+  // The dashboard coach uses live memory and the existing list navigation path.
+  window.HabitFlowListsCoach = Object.freeze({
+    snapshot: () => ({ lists: state.lists, items: state.items }),
+    open: (listId, itemId) => {
+      const button = Array.from(document.querySelectorAll('[data-list-open]')).find(node => node.dataset.listOpen === listId);
+      if (!button) return;
+      button.click();
+      requestAnimationFrame(() => {
+        const row = Array.from(document.querySelectorAll('[data-item-id], [data-weekly-id], [data-shopping-id], [data-subscription-id], [data-spot-id], [data-term-id], [data-finance-id], [data-chatgpt-id]'))
+          .find(node => Object.values(node.dataset).includes(String(itemId)));
+        const target = row || document.getElementById('hfListDetail');
+        if (target) {
+          target.tabIndex = -1;
+          target.focus({ preventScroll: true });
+          target.scrollIntoView({ block: 'center', behavior: 'auto' });
+        }
+      });
+    }
+  });
 
   window.HabitFlowWeeklyNotes = Object.freeze({
     startOfWeekDate,
