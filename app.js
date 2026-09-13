@@ -1302,6 +1302,7 @@ cacheEls();
   }
 
   function bindEvents() {
+    window.HabitFlowGiftTasks = Object.freeze({ create: createTaskFromGift });
     els.themeToggle.addEventListener('click', () => {
       document.body.classList.toggle('light');
       localStorage.setItem(THEME_KEY, document.body.classList.contains('light') ? 'light' : 'dark');
@@ -12681,6 +12682,37 @@ async function deleteAlcoholLog(id) {
     saveState();
     toast(nextRating ? `Idee mit Rating ${nextRating}/5 bewertet` : 'Ideen-Rating entfernt');
     syncWithSupabase({ silent: true, pullFirst: false });
+  }
+
+  // Use the normal task persistence and sync path without changing a task form draft.
+  async function createTaskFromGift({ itemId, title, person, note = '' } = {}) {
+    if (!String(itemId || '').startsWith('gift-') || !String(title || '').trim() || !String(person || '').trim()) {
+      throw new Error('Person und Geschenkidee sind erforderlich.');
+    }
+    // Stable UUID across devices: repeated conversions resolve to the same task.
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('habitflow:gift-task:' + itemId));
+    const bytes = new Uint8Array(digest).slice(0, 16);
+    bytes[6] = (bytes[6] & 15) | 128;
+    bytes[8] = (bytes[8] & 63) | 128;
+    const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+    const taskId = [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join('-');
+    let task = state.tasks.find(entry => entry.id === taskId);
+    if (!task) {
+      const created = nowIso();
+      task = normalizeTask({
+        id: taskId, title: `Geschenk für ${String(person).trim()}: ${String(title).trim()}`,
+        description: [`Für: ${String(person).trim()}`, String(note).trim(), 'Aus der Geschenkliste übernommen'].filter(Boolean).join('\n\n'),
+        effort: storyPointsToEffort(2), priority: normalizeTaskPriority('medium'),
+        due_at: null, status: 'open', backlog_rank: null, completed_at: null,
+        done_archived_at: null, done_archive_rank: null, points: 0,
+        created_at: created, updated_at: created, synced: false
+      });
+      state.tasks.push(task);
+    }
+    // Retrying after a storage error also retries persistence, without adding a duplicate.
+    saveState();
+    syncWithSupabase({ silent: true });
+    return taskId;
   }
 
   function createTaskFromIdea(id, targetStatus = 'open', { dueAt = null } = {}) {

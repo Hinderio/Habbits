@@ -7,6 +7,7 @@
   const STORAGE_KEY = 'habitflow-lists-v1';
   const APP_STATE_KEY = 'habitflow-state-v1';
   const WEEKLY_LIST_ID = 'weekly';
+  const GIFT_LIST_ID = 'gifts';
   const WEEKLY_PAST_WEEKS = 3;
   const WEEKLY_FUTURE_WEEKS = 3;
   const PHOTO_IMAGE_MAX_EDGE = 1280;
@@ -41,10 +42,12 @@
     { id: 'terms', slug: 'begriffe', title: 'Begriffe', type: 'generic', icon: 'book', color: '#ff8fa3', description: 'Begriffe nach Kategorien sammeln und mit Lernkarten festigen.' },
     { id: 'finance', slug: 'finanzen', title: 'Finanzen', type: 'generic', icon: 'wallet', color: '#6fd6a8', description: 'Investitionen, Guthaben und offene Schulden in einem ruhigen Finanzbild.' },
     { id: 'chatgpt', slug: 'chatgpt', title: 'ChatGPT', type: 'generic', icon: 'message', color: '#7f9fd4', description: 'Wichtige Projekte und Threads gruppiert sichern und direkt wieder öffnen.' },
+    { id: GIFT_LIST_ID, slug: 'geschenk', title: 'Geschenk', type: 'generic', icon: 'gift', color: '#E49767', description: 'Geschenkideen für deine Lieblingsmenschen sammeln und als Task umsetzen.' },
     { id: WEEKLY_LIST_ID, slug: 'wochenzettel', title: 'Wochenzettel', type: 'generic', icon: 'note', color: '#EDBDC3', description: 'Kleine Gedanken und Erinnerungen – Woche für Woche.' }
   ];
 
   const ICONS = {
+    gift: '<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M5 12v9h14v-9M12 8v13"/><path d="M12 8H8a3 3 0 1 1 3-3l1 3Zm0 0h4a3 3 0 1 0-3-3l-1 3Z"/>',
     list: '<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>',
     ticket: '<path d="M3 9a3 3 0 0 0 0 6v3h18v-3a3 3 0 0 0 0-6V6H3v3Z"/><path d="M13 6v12"/><path d="M8 10h2"/><path d="M8 14h2"/>',
     shopping: '<path d="M6 8h12l-1 12H7L6 8Z"/><path d="M9 8a3 3 0 0 1 6 0"/>',
@@ -81,6 +84,9 @@
   let editingSubscriptionId = '';
   let editingFinanceId = '';
   let editingChatgptId = '';
+  let editingGiftId = '';
+  let giftMessage = '';
+  const promotingGiftIds = new Set();
   let editingWeeklyId = '';
   let openWeeklyMenuId = '';
   let weeklyArchiveOpen = false;
@@ -364,6 +370,10 @@
   }
 
   function renderDetail(target, list) {
+    if (list.id === GIFT_LIST_ID) {
+      target.innerHTML = renderGiftsDetail(list);
+      return;
+    }
     if (list.id === WEEKLY_LIST_ID) {
       target.innerHTML = renderWeeklyDetail(list);
       scheduleWeeklyRailPosition();
@@ -410,6 +420,126 @@
         ${listItems.length ? listItems.map(renderItem).join('') : '<p>Noch keine Einträge vorhanden.</p>'}
       </div>
     `;
+  }
+
+
+  function renderGiftsDetail(list) {
+    const items = itemsFor(GIFT_LIST_ID);
+    const editing = items.find(item => item.id === editingGiftId);
+    const people = [...new Set(items.map(item => item.metadata?.person).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b, 'de-CH'));
+    return `
+      <div class="panel-head">
+        <div><p class="eyebrow">${escapeHtml(list.title)}</p><h3>Eine Idee, die Freude macht</h3></div>
+        <span class="badge">${items.length} Geschenkideen</span>
+      </div>
+      <form class="hf-list-form ${editing ? 'is-editing' : ''}" data-form="gift" data-editing-id="${escapeHtml(editing?.id || '')}">
+        <label><span>Person</span><input name="person" list="hfGiftPeople" value="${escapeHtml(editing?.metadata?.person || '')}" placeholder="Für wen ist das Geschenk?" maxlength="120" required></label>
+        <label><span>Geschenkidee</span><input name="title" value="${escapeHtml(editing?.title || '')}" placeholder="Zum Beispiel ein gemeinsamer Kochkurs" maxlength="240" required></label>
+        <datalist id="hfGiftPeople">${people.map(person => `<option value="${escapeHtml(person)}"></option>`).join('')}</datalist>
+        <label class="full"><span>Notizen</span><textarea name="note" rows="2" maxlength="4000" placeholder="Anlass, Wünsche oder weitere Details (optional)">${escapeHtml(editing?.note || '')}</textarea></label>
+        <div class="hf-list-form-actions full">
+          <button class="pill primary" type="submit">${icon(editing ? 'check' : 'plus')} ${editing ? 'Änderungen speichern' : 'Geschenkidee speichern'}</button>
+          ${editing ? '<button class="pill secondary" type="button" data-action="cancel-gift-edit">Abbrechen</button>' : ''}
+        </div>
+      </form>
+      <p class="hf-gift-message" role="status" aria-live="polite">${escapeHtml(giftMessage)}</p>
+      <div class="hf-list-items ${items.length ? '' : 'is-empty'}">
+        ${items.length ? items.map(item => `
+          <article class="hf-list-row hf-gift-row ${item.isDone ? 'is-done' : ''}" data-gift-id="${escapeHtml(item.id)}">
+            <button class="hf-list-check" type="button" data-action="toggle-gift" aria-label="${item.isDone ? 'Als offen markieren' : 'Als verschenkt markieren'}">${item.isDone ? icon('check') : ''}</button>
+            <div class="hf-gift-copy">
+              <small>Für ${escapeHtml(item.metadata?.person || '')}</small>
+              <strong>${escapeHtml(item.title)}</strong>
+              ${item.note ? `<span>${escapeHtml(item.note)}</span>` : ''}
+              ${item.isDone ? '<span>Verschenkt</span>' : ''}
+            </div>
+            <div class="hf-gift-actions">
+              <button class="pill secondary" type="button" data-action="promote-gift" ${item.metadata?.promotedTaskId || promotingGiftIds.has(item.id) ? 'disabled' : ''}>${icon('external')} ${item.metadata?.promotedTaskId ? 'Als Task angelegt' : promotingGiftIds.has(item.id) ? 'Wird angelegt …' : 'Als Task'}</button>
+              <button class="hf-list-icon-btn" type="button" data-action="edit-gift" aria-label="Geschenkidee bearbeiten">${icon('edit')}</button>
+              <button class="hf-list-icon-btn danger" type="button" data-action="delete-gift" aria-label="Geschenkidee löschen">${icon('trash')}</button>
+            </div>
+          </article>`).join('') : '<p>Noch keine Geschenkideen. Beginne mit einer Person und einer Idee.</p>'}
+      </div>
+    `;
+  }
+
+  function saveGift(form) {
+    const data = new FormData(form);
+    const title = String(data.get('title') || '').trim();
+    const person = String(data.get('person') || '').trim();
+    if (!title || !person) {
+      giftMessage = 'Bitte eine Person und eine Geschenkidee angeben.';
+      const message = document.querySelector('.hf-gift-message');
+      if (message) message.textContent = giftMessage;
+      form.elements[!person ? 'person' : 'title']?.focus();
+      return;
+    }
+    const editingId = String(form.dataset.editingId || '');
+    let item = state.items.find(entry => entry.id === editingId && entry.listId === GIFT_LIST_ID && !entry.isArchived);
+    if (editingId && !item) return;
+    const now = new Date().toISOString();
+    if (!item) {
+      item = { id: uid('gift'), listId: GIFT_LIST_ID, isDone: false, isArchived: false, sortRank: Date.now(), createdAt: now };
+      state.items.push(item);
+    }
+    Object.assign(item, {
+      title, note: String(data.get('note') || '').trim(),
+      metadata: { ...item.metadata, person }, updatedAt: now
+    });
+    editingGiftId = '';
+    giftMessage = editingId ? 'Geschenkidee aktualisiert.' : 'Geschenkidee gespeichert.';
+    form.reset();
+    saveAndSync([item]);
+  }
+
+  async function handleGiftAction(action, id) {
+    const item = state.items.find(entry => entry.id === id && entry.listId === GIFT_LIST_ID && !entry.isArchived);
+    if (!item) return;
+    if (action === 'edit-gift') {
+      editingGiftId = id;
+      giftMessage = '';
+      render();
+      focusListForm('gift');
+      return;
+    }
+    if (action === 'promote-gift') {
+      if (item.metadata?.promotedTaskId || promotingGiftIds.has(id)) return;
+      if (!window.HabitFlowGiftTasks?.create) {
+        giftMessage = 'Tasks werden noch geladen. Bitte gleich erneut versuchen.';
+        render();
+        return;
+      }
+      promotingGiftIds.add(id);
+      giftMessage = '';
+      render();
+      try {
+        const taskId = await window.HabitFlowGiftTasks.create({
+          itemId: item.id, title: item.title, person: item.metadata?.person, note: item.note
+        });
+        // A background pull can replace the item object while the task is created.
+        const current = state.items.find(entry => entry.id === id && entry.listId === GIFT_LIST_ID);
+        if (current) {
+          current.metadata = { ...current.metadata, promotedTaskId: taskId };
+          current.updatedAt = new Date().toISOString();
+          saveAndSync([current]);
+        }
+        giftMessage = 'Geschenk als Task angelegt – inklusive Person und Notizen.';
+      } catch (_) {
+        giftMessage = 'Der Task konnte nicht gespeichert werden. Bitte erneut versuchen.';
+      } finally {
+        promotingGiftIds.delete(id);
+        render();
+      }
+      return;
+    }
+    if (action === 'toggle-gift') item.isDone = !item.isDone;
+    if (action === 'delete-gift') {
+      item.isArchived = true;
+      if (editingGiftId === id) editingGiftId = '';
+    }
+    item.updatedAt = new Date().toISOString();
+    saveAndSync([item]);
   }
 
   function renderItem(item) {
@@ -1424,6 +1554,8 @@
         editingSubscriptionId = '';
         editingFinanceId = '';
         editingChatgptId = '';
+        editingGiftId = '';
+        giftMessage = '';
         editingWeeklyId = '';
         openWeeklyMenuId = '';
         weeklyArchiveOpen = false;
@@ -1581,6 +1713,18 @@
         return;
       }
 
+      if (action === 'cancel-gift-edit') {
+        editingGiftId = '';
+        giftMessage = '';
+        render();
+        return;
+      }
+      const giftRow = event.target.closest('[data-gift-id]');
+      if (giftRow && ['edit-gift', 'delete-gift', 'toggle-gift', 'promote-gift'].includes(action)) {
+        void handleGiftAction(action, giftRow.dataset.giftId);
+        return;
+      }
+
       const chatgptRow = event.target.closest('[data-chatgpt-id]');
       if (chatgptRow && ['edit-chatgpt', 'delete-chatgpt'].includes(action)) {
         handleChatgptAction(action, chatgptRow.dataset.chatgptId);
@@ -1636,6 +1780,7 @@
       event.preventDefault();
       if (form.dataset.form === 'weekly-capture') saveWeeklyThought(form);
       if (form.dataset.form === 'weekly-move') moveWeeklyItem(form);
+      if (form.dataset.form === 'gift') saveGift(form);
       if (form.dataset.form === 'item') saveItem(form);
       if (form.dataset.form === 'term') saveTerm(form);
       if (form.dataset.form === 'shopping') saveShopping(form);
