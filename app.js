@@ -937,6 +937,8 @@
   let taskStepsDraft = [];
   let editingAppointmentId = null;
   let renderQueued = false;
+  let pointEvolutionRenderQueued = false;
+  let lastRenderedPointsSignature = null;
   let deferredRenderPending = false;
   let consumptionBackgroundRenderQueued = false;
   let habitFormOpen = false;
@@ -3214,6 +3216,24 @@ cacheEls();
     window.HabitFlowRuntime?.skipNextSmokingDomainPersistenceNormalization?.();
     localStorage.setItem(STORAGE_KEY, serializedState);
     if (!skipRender) queueRender();
+    queuePointEvolutionRefresh();
+  }
+
+  // Points may change during background repairs or while an edit defers the
+  // full dashboard render. Refresh only the point surfaces, once per frame.
+  function pointsPresentationSignature() {
+    return JSON.stringify(visibleLedgerPoints());
+  }
+
+  function queuePointEvolutionRefresh() {
+    if (pointEvolutionRenderQueued) return;
+    pointEvolutionRenderQueued = true;
+    requestAnimationFrame(() => {
+      pointEvolutionRenderQueued = false;
+      if (pointsPresentationSignature() !== lastRenderedPointsSignature) {
+        renderPointEvolutionSummary();
+      }
+    });
   }
 
   function queueRender() {
@@ -4071,6 +4091,7 @@ cacheEls();
     if (els.levelLabel) els.levelLabel.textContent = `Level ${evolutionMeta.stage}`;
     if (els.levelProgress) els.levelProgress.style.width = `${evolutionMeta.stageProgress}%`;
     renderGamification();
+    lastRenderedPointsSignature = pointsPresentationSignature();
     window.dispatchEvent(new CustomEvent('habitflow:points-update'));
     if (els.pointsRulesPopover && !els.pointsRulesPopover.classList.contains('hidden')) renderPointsRulesPopover();
   }
@@ -4112,7 +4133,7 @@ cacheEls();
     const visibleBadges = gamificationShowLocked ? badgeStates : badgeStates.filter(badge => badge.unlocked);
     const companion = companionProfile(stats);
     if (!Number.isFinite(Number(selectedCompanionStage)) || Number(selectedCompanionStage) < 1 || Number(selectedCompanionStage) > 20) {
-      selectedCompanionStage = companion.stage;
+      selectedCompanionStage = null;
     }
     const hiddenCount = Math.max(0, badgeStates.length - stats.unlockedBadges);
     if (els.badgeUnlockCount) els.badgeUnlockCount.textContent = `${stats.unlockedBadges}/${badgeStates.length} Badges`;
@@ -4157,11 +4178,17 @@ cacheEls();
   }
 
   function handleCompanionCardClick(event) {
+    if (event.target.closest('[data-companion-current]')) {
+      selectedCompanionStage = null;
+      renderGamification();
+      return;
+    }
     const stageButton = event.target.closest('[data-companion-stage]');
     if (stageButton) {
       const stage = Number(stageButton.dataset.companionStage);
       if (Number.isFinite(stage)) {
-        selectedCompanionStage = Math.min(20, Math.max(1, stage));
+        selectedCompanionStage = stage === evolutionStageFromPoints(getTotalPoints()).stage
+          ? null : Math.min(20, Math.max(1, stage));
         renderGamification();
       }
       return;
@@ -4182,7 +4209,7 @@ cacheEls();
   }
 
   function companionPreviewProfile(companion, previewStage) {
-    const numericStage = Number(previewStage);
+    const numericStage = previewStage == null ? companion.stage : Number(previewStage);
     const safeStage = Number.isFinite(numericStage) ? Math.min(20, Math.max(1, numericStage)) : companion.stage;
     const chapterIndex = Math.min(4, Math.floor((safeStage - 1) / 4));
     return {
@@ -4461,7 +4488,12 @@ cacheEls();
     const pointFloor = Math.max(0, Number(meta.previousStageAt || 0));
     const targetPoints = Math.max(pointFloor + 1, Number(meta.nextStageAt || total || 1));
     const keys = daysBack(21);
-    const dailyDeltas = keys.map(key => Number(pointsOnDate(key) || 0));
+    // Match the details ledger and its day attribution, without adding
+    // unbooked fallback events from other dashboard metrics.
+    const ledger = window.HabitFlowPointsLive.snapshot().rows;
+    const dailyDeltas = keys.map(key => sum(ledger
+      .filter(point => (point.day || toDateKey(point.earned_at || point.created_at)) === key)
+      .map(point => Number(point.points || 0))));
     const windowDelta = sum(dailyDeltas);
     let runningTotal = total - windowDelta;
     const values = dailyDeltas.map(delta => {
@@ -4493,7 +4525,7 @@ cacheEls();
     const areaPath = `M ${points[0].x} ${chartBottom} ` + points.map(point => `L ${point.x} ${point.y}`).join(' ') + ` L ${points[points.length - 1].x} ${chartBottom} Z`;
     const nextPoints = Math.max(0, Math.round(targetPoints - total));
     const nextStageLabel = meta.stage >= EVOLUTION_LEVEL_RULES.maxStage ? 'Max' : (nextPoints ? `+${nextPoints.toLocaleString('de-CH')} Pkt.` : 'Ziel erreicht');
-    const windowLabel = `${windowDelta >= 0 ? '+' : ''}${Math.round(windowDelta).toLocaleString('de-CH')} / 21T`;
+    const windowLabel = `${windowDelta >= 0 ? '+' : ''}${Math.round(windowDelta).toLocaleString('de-CH')} Pkt. / 21 Tage`;
     return `<div class="poster-progress-overlay" aria-hidden="true">
       <svg class="poster-progress-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
         <line class="poster-progress-target-line" x1="0" y1="${targetPoint.y}" x2="100" y2="${targetPoint.y}"></line>
@@ -4575,15 +4607,16 @@ cacheEls();
           <b>${companion.isPreview ? 'Vorschau' : `${companion.stage}/20`}</b>
         </div>
         <div class="fish-poster-art motion-poster-art">
-          ${renderCompanionFish(companion.stage, 'hero', companion.stageName, renderPosterProgressOverlay(stats, companion))}
+          ${renderCompanionFish(companion.stage, 'hero', companion.stageName, companion.isPreview ? '' : renderPosterProgressOverlay(stats, companion))}
         </div>
-        <div class="fish-progress-row"><span>${companion.stage}/20</span><i><b style="width:${companion.stageProgress}%"></b></i><em>${nextPoints}</em></div>
+        <div class="fish-progress-row"><span>${companion.stage}/20</span><i><b style="width:${companion.stageProgress}%"></b></i><em>${companion.isPreview ? 'Vorschau' : nextPoints}</em></div>
       </div>
       <div class="fish-companion-copy">
         <p class="eyebrow">Photo Evolution</p>
         <h4>${escapeHtml(progressHeadline)}</h4>
         <p>${escapeHtml(progressInsight)} ${escapeHtml(momentumInsight)}</p>
         <div class="companion-traits fish-traits">
+          <span>Gesamtstand: ${Number(stats.total || 0).toLocaleString('de-CH')} Pkt.</span>
           <span>${unlockedText} Badges</span>
           <span>${escapeHtml(companion.trait)}</span>
           <span>${escapeHtml(companion.mood)}</span>
@@ -4596,6 +4629,7 @@ cacheEls();
         <div class="fish-stage-grid" aria-label="20 Companion-Stufen">${stageTiles}</div>
         <div class="fish-chapter-strip">${chapterTiles}</div>
         <div class="companion-actions fish-actions">
+          ${companion.isPreview ? '<button class="mini-btn" type="button" data-companion-current>Aktuelle Stufe anzeigen</button>' : ''}
           <button class="mini-btn primary" type="button" data-action="open-coach">Coach</button>
           <button class="mini-btn primary" type="button" data-action="open-morning-routine">Routine</button>
           <button class="mini-btn primary" type="button" data-points-details-open aria-haspopup="dialog" aria-controls="pointsDetailsModal">Details</button>
