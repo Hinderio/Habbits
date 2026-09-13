@@ -43,3 +43,26 @@ Die visuelle Richtung orientiert sich am bereitgestellten FishTrack-ZIP: dunkle 
 - Raucher-Analytics erweitert: horizontale Violin-Plot-Visualisierung für Zigaretten-Intervalle (rechts→links lesbar, distributionsfokussiert).
 
 - Deep Smoke Map erweitert: zusätzliche Visuals für Wochentag-Signatur und Wochen-Puls als Ergänzung zur KW-Heatmap.
+
+## Monatsmagazin-Bilder
+
+Magazinbilder liegen direkt im öffentlichen Supabase-Bucket `companion-posters`:
+`stage-21.png`, `stage-22.png`, … ohne obere Grenze. PNG, JPG/JPEG, WebP und AVIF
+werden unterstützt. Die Stages 1–20 bleiben für den Companion reserviert.
+
+Nach dem Login liest die App alle Seiten der Storage-Dateiliste. Beim erneuten
+Rendern des Magazins oder bei Rückkehr in die App wird die Liste nach frühestens
+fünf Minuten erneut geladen; ein App-Neustart liest sie ebenfalls neu ein.
+Neue Bilder werden in die drei bestehenden Score-Gruppen eingeordnet und für
+Titelbilder und Innenseiten verwendet. Derselbe Monat und Score liefern bei
+unverändertem Katalog dasselbe Titelbild. Zusätzliche Bilder können auch die
+Titelbilder früherer Ausgaben ändern.
+
+Zum Auflisten benötigt der angemeldete Benutzer eine Storage-SELECT-Policy.
+Falls diese fehlt, einmal `sql/add-monthly-magazine-covers.sql` im Supabase SQL
+Editor ausführen. Sie gewährt ausschliesslich Lesezugriff auf Magazinbild-Dateien
+im Poster-Bucket. Bei Ladefehlern oder einer leeren Liste bleibt der zuletzt
+geladene Katalog erhalten; beim ersten Start dienen die bisherigen zehn Bilder
+als Rückfallauswahl.
+
+Prüfung: `node --test tests/monthly-magazine-covers.test.cjs`.

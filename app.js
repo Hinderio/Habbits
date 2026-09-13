@@ -100,6 +100,10 @@
     { file: 'stage-26.png', label: 'Bold Edition', minScore: 75 },
     { file: 'stage-29.png', label: 'High Point', minScore: 75 }
   ]);
+  let monthlyMagazineCovers = MONTHLY_MAGAZINE_COVERS;
+  let monthlyMagazineCoversRequest = null;
+  let monthlyMagazineCoversCheckedAt = 0;
+  const MONTHLY_MAGAZINE_COVERS_REFRESH_MS = 5 * 60 * 1000;
   const SUPABASE_CONFIG = window.HABITFLOW_SUPABASE_CONFIG || {};
 
   function appDomainFacade() {
@@ -4947,15 +4951,73 @@ cacheEls();
     return Number.isNaN(date.getTime()) ? key : date.toLocaleDateString('de-CH', { weekday: 'short', day: '2-digit', month: '2-digit' });
   }
 
+  function monthlyMagazineCoverCatalog(files = []) {
+    const known = new Map(MONTHLY_MAGAZINE_COVERS.map(cover => [cover.file, cover]));
+    const covers = new Map();
+    files.forEach(item => {
+      const match = /^stage-(\d+)\.(png|jpe?g|webp|avif)$/i.exec(String(item?.name || ''));
+      const stage = match ? Number(match[1]) : 0;
+      if (!Number.isSafeInteger(stage) || stage < 21 || !item.id) return;
+      const tier = (stage - 21) % 3;
+      covers.set(item.name, known.get(item.name) || {
+        file: item.name,
+        label: ['New Chapter', 'Momentum Issue', 'Peak Issue'][tier],
+        minScore: [0, 45, 75][tier]
+      });
+    });
+    return [...covers.values()].sort((a, b) => a.minScore - b.minScore
+      || Number(a.file.match(/\d+/)[0]) - Number(b.file.match(/\d+/)[0])
+      || a.file.localeCompare(b.file));
+  }
+
+  async function refreshMonthlyMagazineCovers() {
+    if (!supabaseClient || !currentUser) return;
+    if (monthlyMagazineCoversRequest) return monthlyMagazineCoversRequest;
+    if (Date.now() - monthlyMagazineCoversCheckedAt < MONTHLY_MAGAZINE_COVERS_REFRESH_MS) return;
+    monthlyMagazineCoversRequest = (async () => {
+      try {
+        const bucket = supabaseClient.storage.from(COMPANION_POSTER_BUCKET);
+        const files = [];
+        const limit = 100;
+        for (let offset = 0; ; offset += limit) {
+          const { data, error } = await bucket.list('', {
+            limit, offset, sortBy: { column: 'name', order: 'asc' }
+          });
+          if (error) throw error;
+          if (!Array.isArray(data)) throw new Error('Ungültige Magazin-Bildliste');
+          files.push(...data);
+          if (data.length < limit) break;
+        }
+        const covers = monthlyMagazineCoverCatalog(files);
+        // Empty lists can also indicate missing Storage SELECT permissions.
+        // Keep the last working catalog in that case.
+        if (covers.length && JSON.stringify(covers) !== JSON.stringify(monthlyMagazineCovers)) {
+          monthlyMagazineCovers = covers;
+          renderMonthlyMagazine();
+        }
+      } catch (error) {
+        console.warn('Magazinbilder konnten nicht aktualisiert werden.', error);
+      } finally {
+        monthlyMagazineCoversCheckedAt = Date.now();
+      }
+    })();
+    try {
+      await monthlyMagazineCoversRequest;
+    } finally {
+      monthlyMagazineCoversRequest = null;
+    }
+  }
+
   function monthlyMagazineCoverUrl(score = 0, monthKey = currentMonthKey()) {
-    const eligibleScore = [...new Set(MONTHLY_MAGAZINE_COVERS.map(item => item.minScore))]
+    const eligibleScore = [...new Set(monthlyMagazineCovers.map(item => item.minScore))]
       .sort((a, b) => b - a)
       .find(minScore => score >= minScore) ?? 0;
-    const candidates = MONTHLY_MAGAZINE_COVERS.filter(item => item.minScore === eligibleScore);
+    const eligible = monthlyMagazineCovers.filter(item => item.minScore === eligibleScore);
+    const candidates = eligible.length ? eligible : monthlyMagazineCovers;
     const monthSeed = String(monthKey || currentMonthKey())
       .split('')
       .reduce((total, character) => ((total * 31) + character.charCodeAt(0)) >>> 0, 0);
-    const cover = candidates[monthSeed % candidates.length] || MONTHLY_MAGAZINE_COVERS[0];
+    const cover = candidates[monthSeed % candidates.length] || monthlyMagazineCovers[0];
     return { ...cover, url: companionPosterAssetUrl(cover.file) };
   }
 
@@ -5166,8 +5228,8 @@ cacheEls();
   }
 
   function monthlyMagazinePageCover(magazine, pageIndex = 0) {
-    const baseIndex = Math.max(0, MONTHLY_MAGAZINE_COVERS.findIndex(item => item.file === magazine.cover.file));
-    const cover = MONTHLY_MAGAZINE_COVERS[(baseIndex + pageIndex) % MONTHLY_MAGAZINE_COVERS.length] || MONTHLY_MAGAZINE_COVERS[0];
+    const baseIndex = Math.max(0, monthlyMagazineCovers.findIndex(item => item.file === magazine.cover.file));
+    const cover = monthlyMagazineCovers[(baseIndex + pageIndex) % monthlyMagazineCovers.length] || monthlyMagazineCovers[0];
     return { ...cover, url: companionPosterAssetUrl(cover.file) };
   }
 
@@ -5311,6 +5373,7 @@ cacheEls();
 
   function renderMonthlyMagazine() {
     if (!els.monthlyMagazine) return;
+    void refreshMonthlyMagazineCovers();
     const source = {
       sessions: buildFitnessSessions('all'),
       cigarettes: visibleCigarettes(),
@@ -13967,6 +14030,7 @@ function initOngoingSync() {
 
   function requestForegroundSync({ restartRealtime = false } = {}) {
     if (!isAuthenticated()) return;
+    void refreshMonthlyMagazineCovers();
     renderTimers();
     const now = Date.now();
     if (restartRealtime) restartRemoteSubscription();
