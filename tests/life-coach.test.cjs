@@ -146,9 +146,9 @@ test('modal refresh is lazy, coalesced and cancelled when closed; rendering esca
   assert.ok(!content.innerHTML.includes('<img src=x'));
   assert.equal(intervals.size,0);
   handlers.click({target:{closest:()=>({dataset:{lcFilter:'agenda'}})}});
-  assert.match(content.innerHTML,/Geburtstage: nächste 3 Tage/);
-  assert.match(content.innerHTML,/Termine: nächste 7 Tage/);
-  assert.match(content.innerHTML,/jeweils inklusive heute/);
+  assert.match(content.innerHTML,/Nächste 3 Tage · inklusive heute/);
+  assert.match(content.innerHTML,/Nächste 7 Tage · inklusive heute/);
+  assert.match(content.innerHTML,/lc-agenda-tasks/);
   coach.refresh();coach.close();assert.equal(frames.size,0);
   coach.refresh();assert.equal(snapshots,1);
 });
@@ -254,4 +254,100 @@ test('standalone birthdays screen and navigation overrides are fully removed', (
   assert.doesNotMatch(coachCss,/bottom-nav|nav-btn/);
   assert.equal(fs.existsSync(path.join(__dirname,'../modules/upcoming-schedule.css')),false);
   assert.match(html,/id="lifeCoachContent"/);
+});
+
+
+function agendaUi(state) {
+  const handlers = {}, frames = new Map(), calls = [];
+  let frameId = 0;
+  const classes = new Set(['hidden']);
+  const modal = {classList:{contains:k=>classes.has(k),add:k=>classes.add(k),remove:k=>classes.delete(k)},addEventListener:(key,fn)=>handlers[key]=fn};
+  const content = {innerHTML:'',querySelector:()=>null,querySelectorAll:()=>[]};
+  const closeButton = {dataset:{},focus(){}};
+  const document = {hidden:false,activeElement:closeButton,body:{classList:{add(){},remove(){}}},
+    getElementById:id=>({coachModal:modal,lifeCoachContent:content,coachCloseBtn:closeButton,coachDialog:{addEventListener:(key,fn)=>handlers[key]=fn}})[id],
+    addEventListener(){},querySelector(){return null;}};
+  const window = {document,requestAnimationFrame:fn=>{frames.set(++frameId,fn);return frameId;},cancelAnimationFrame:id=>frames.delete(id),setInterval(){},clearInterval(){},addEventListener(){}};
+  class Clock extends Date { constructor(...args) { super(...(args.length?args:[+now])); } static now(){return +now;} }
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../modules/life-coach.js'),'utf8'),{window,Date:Clock,Set,Map});
+  const coach=window.HabitFlowCoach;
+  const flush=()=>{const queued=[...frames.values()];frames.clear();queued.forEach(fn=>fn());};
+  const click=dataset=>handlers.click({target:{closest:()=>({dataset})}});
+  const open=()=>{coach.open({snapshot:()=>state,navigate:action=>calls.push(action)});flush();};
+  open();
+  return {coach,open,click,flush,calls,html:()=>content.innerHTML,group:key=>{
+    const start=content.innerHTML.indexOf('<section class="lc-agenda-group" aria-labelledby="lc-agenda-'+key+'">');
+    assert.ok(start>=0,key);
+    return content.innerHTML.slice(start,content.innerHTML.indexOf('</section>',start)+10);
+  }};
+}
+
+test('agenda group identity follows event metadata, not title or label text',()=>{
+  const m=analyze({tasks:[{id:'task',title:'Geburtstag planen'}],appointments:[
+    {id:'birth',title:'Alex',starts_at:at(1),description:'<!--hf:event-kind=birthday-->'},
+    {id:'meeting',title:'Geburtstag planen',starts_at:at(1)}
+  ]},{},now);
+  assert.equal(byId(m,'agenda:task:task').agendaGroup,'tasks');
+  assert.equal(byId(m,'agenda:appointment:birth').agendaGroup,'birthdays');
+  assert.equal(byId(m,'agenda:appointment:meeting').agendaGroup,'appointments');
+  assert.ok(m.cards.filter(c=>c.category!=='agenda').every(c=>!c.agendaGroup));
+});
+
+test('many urgent tasks cannot crowd birthdays and appointments out of Agenda',()=>{
+  const ui=agendaUi({tasks:Array.from({length:20},(_,i)=>({id:'t'+i,title:'Task '+i,due_at:at(-2)})),
+    appointments:[{id:'b',title:'Anna',starts_at:at(1),is_birthday:true},{id:'a',title:'Meeting',starts_at:at(1)}]});
+  assert.doesNotMatch(ui.html(),/lc-agenda-groups/,'overview keeps its existing top recommendations');
+  ui.click({lcFilter:'agenda'});
+  assert.ok(ui.html().indexOf('aria-labelledby="lc-agenda-birthdays"')<ui.html().indexOf('aria-labelledby="lc-agenda-appointments"'));
+  assert.ok(ui.html().indexOf('aria-labelledby="lc-agenda-appointments"')<ui.html().indexOf('aria-labelledby="lc-agenda-tasks"'));
+  assert.match(ui.group('birthdays'),/<h5>Anna<\/h5>/);
+  assert.match(ui.group('appointments'),/<h5>Meeting<\/h5>/);
+  assert.doesNotMatch(ui.group('birthdays'),/data-lc-open="agenda:task/);
+  assert.equal((ui.group('tasks').match(/data-lc-open=/g)||[]).length,4);
+  assert.match(ui.group('tasks'),/4 von 20 angezeigt/);
+  assert.match(ui.group('tasks'),/aria-label="20 sichtbare Hinweise"/);
+});
+
+test('each Agenda group paginates independently and resets on reopening',()=>{
+  const ui=agendaUi({tasks:Array.from({length:10},(_,i)=>({id:'t'+i,title:'Task '+i})),
+    appointments:Array.from({length:6},(_,i)=>({id:'b'+i,title:'Birthday '+i,starts_at:at(1),is_birthday:true}))});
+  ui.click({lcFilter:'agenda'});
+  ui.click({lcAgendaMore:'tasks'});
+  assert.equal((ui.group('tasks').match(/data-lc-open=/g)||[]).length,8);
+  assert.equal((ui.group('birthdays').match(/data-lc-open=/g)||[]).length,4);
+  ui.click({lcAgendaMore:'birthdays'});
+  assert.equal((ui.group('birthdays').match(/data-lc-open=/g)||[]).length,6);
+  assert.doesNotMatch(ui.group('birthdays'),/data-lc-agenda-more/);
+  ui.click({lcAgendaMore:'tasks'});
+  assert.equal((ui.group('tasks').match(/data-lc-open=/g)||[]).length,10);
+  ui.coach.close();ui.open();ui.click({lcFilter:'agenda'});
+  assert.equal((ui.group('tasks').match(/data-lc-open=/g)||[]).length,4);
+  assert.equal((ui.group('birthdays').match(/data-lc-open=/g)||[]).length,4);
+});
+
+test('empty groups remain visible; dismiss and restore update their counts and explanation',()=>{
+  const ui=agendaUi({appointments:[{id:'b',title:'Anna',starts_at:at(1),is_birthday:true}]});
+  ui.click({lcFilter:'agenda'});
+  assert.match(ui.group('appointments'),/Keine anstehenden Termine/);
+  assert.match(ui.group('tasks'),/Keine offenen Tasks/);
+  ui.click({lcDismiss:'agenda:appointment:b'});
+  assert.match(ui.group('birthdays'),/aria-label="0 sichtbare Hinweise"/);
+  assert.match(ui.group('birthdays'),/1 ausgeblendet/);
+  assert.match(ui.group('birthdays'),/für diese Sitzung ausgeblendet/);
+  assert.doesNotMatch(ui.group('birthdays'),/Keine Geburtstage/);
+  ui.click({lcRestore:''});
+  assert.match(ui.group('birthdays'),/aria-label="1 sichtbare Hinweise"/);
+  assert.match(ui.group('birthdays'),/<h5>Anna<\/h5>/);
+  assert.doesNotMatch(ui.group('birthdays'),/1 ausgeblendet/);
+});
+
+test('grouped actions retain calendar navigation and escape user content',()=>{
+  const ui=agendaUi({appointments:[{id:'b',title:'<img onerror="alert(1)">',starts_at:at(1),is_birthday:true}]});
+  ui.click({lcFilter:'agenda'});
+  assert.match(ui.group('birthdays'),/&lt;img/);
+  assert.doesNotMatch(ui.group('birthdays'),/<img/);
+  ui.click({lcOpen:'agenda:appointment:b'});
+  assert.equal(ui.calls.length,1);
+  assert.equal(ui.calls[0].type,'calendar');
+  assert.equal(ui.calls[0].day,key(1));
 });

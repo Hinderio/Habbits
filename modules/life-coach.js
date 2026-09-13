@@ -2,6 +2,11 @@
   'use strict';
   const DAY = 86400000;
   const CATEGORIES = { all: 'Für dich', agenda: 'Agenda', habits: 'Habits', consumption: 'Konsum', lists: 'Listen' };
+  const AGENDA_GROUPS = [
+    { key: 'birthdays', title: 'Geburtstage', window: 'Nächste 3 Tage · inklusive heute', empty: 'Keine Geburtstage in den nächsten 3 Tagen.' },
+    { key: 'appointments', title: 'Termine', window: 'Nächste 7 Tage · inklusive heute', empty: 'Keine anstehenden Termine in den nächsten 7 Tagen.' },
+    { key: 'tasks', title: 'Tasks', window: 'Überfällig, anstehend & offen · nach Dringlichkeit', empty: 'Keine offenen Tasks in deiner Agenda.' }
+  ];
   const array = value => Array.isArray(value) ? value : [];
   const alive = row => row && !row.deleted_at && !row.is_archived && !row.isArchived;
   const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -56,7 +61,7 @@
       const t = date(value);
       return t && ranges.some(([start, end]) => +t >= start && +t <= end);
     };
-    const add = (category, id, score, title, body, evidence, action, label, tag = '') => cards.push({ category, id: `${category}:${id}`, score, title, body, evidence, action, label, tag });
+    const add = (category, id, score, title, body, evidence, action, label, tag = '', agendaGroup = '') => cards.push({ category, id: `${category}:${id}`, score, title, body, evidence, action, label, tag, ...(agendaGroup ? { agendaGroup } : {}) });
     for (const t of array(state.tasks)) {
       if (!alive(t) || !['open', 'in_progress'].includes(t.status || 'open')) continue;
       const due = day(t.due_at), offset = due == null ? null : due - today;
@@ -65,7 +70,7 @@
       add('agenda', `task:${t.id}`, offset != null && offset < 0 ? 100 + Math.min(9, -offset / 10) : offset === 0 ? 92 : offset === 1 ? 82 : offset != null ? 60 - offset : t.status === 'in_progress' ? 52 : 28,
         t.title || 'Offene Aufgabe', next?.title ? `Nächster Schritt: ${next.title}` : 'Reserviere fünf Minuten für den kleinsten nächsten Schritt.',
         offset == null ? 'Ohne Termin · bewusst einplanen oder zurückstellen.' : `Fällig ${shortDate(t.due_at)}${String(t.due_at).includes('T') ? `, ${shortTime(t.due_at)}` : ''}`,
-        { type: 'task', id: t.id }, 'Task öffnen', offset == null ? 'Offen' : when(offset));
+        { type: 'task', id: t.id }, 'Task öffnen', offset == null ? 'Offen' : when(offset), 'tasks');
     }
     // Recurrences are materialized by the app. Do not invent extra birthday instances.
     for (const a of array(state.appointments).filter(alive)) {
@@ -80,7 +85,7 @@
       add('agenda', `appointment:${a.id}`, birthday ? 94 - offset * 2 : 86 - offset * 3,
         a.title || (birthday ? 'Geburtstag' : 'Termin'), birthday ? 'Plane Zeit für einen persönlichen Gruss oder eine kleine Aufmerksamkeit ein.' : a.location ? `Ort: ${a.location}. Plane einen Puffer ein.` : 'Prüfe die Vorbereitung und lass etwas Zeit zwischen deinen Terminen.',
         `${birthday ? 'Geburtstag' : 'Termin'} · ${shortDate(start)}${birthday ? '' : ` · ${shortTime(start)}`}`,
-        { type: 'calendar', day: dateKey(day(start) < today ? now : start) }, 'Im Kalender öffnen', when(offset));
+        { type: 'calendar', day: dateKey(day(start) < today ? now : start) }, 'Im Kalender öffnen', when(offset), birthday ? 'birthdays' : 'appointments');
     }
     const history = new Map();
     for (const entry of array(state.habitEntries)) {
@@ -200,10 +205,31 @@
   if (!document || root.HabitFlowCoach) return;
   let api, model, category = 'all', frame = 0, deadline = 0, tick = 0, opener, dismissedDay = '', limit = 8;
   const dismissed = new Set();
+  let agendaLimits = {};
   const modal = () => document.getElementById('coachModal');
   const visible = () => modal() && !modal().classList.contains('hidden') && !document.hidden;
-  function cardHtml(card, primary = false) {
-    return `<article class="lc-card${primary ? ' lc-featured' : ''}"><div class="lc-card-meta"><span>${escape(CATEGORIES[card.category])}</span><span>${escape(card.tag)}</span></div><h3>${escape(card.title)}</h3><p>${escape(card.body)}</p><small class="lc-evidence">${escape(card.evidence)}</small><div class="lc-card-actions"><button type="button" class="lc-button${primary ? ' lc-primary' : ''}" data-lc-open="${escape(card.id)}">${escape(card.label)} <span aria-hidden="true">↗</span></button><button type="button" class="lc-dismiss" data-lc-dismiss="${escape(card.id)}" aria-label="${escape(card.title)} für diese Sitzung ausblenden" title="Für diese Sitzung ausblenden">Ausblenden</button></div></article>`;
+  function cardHtml(card, primary = false, heading = 'h3') {
+    return `<article class="lc-card${primary ? ' lc-featured' : ''}"><div class="lc-card-meta"><span>${escape(AGENDA_GROUPS.find(group => group.key === card.agendaGroup)?.title || CATEGORIES[card.category])}</span><span>${escape(card.tag)}</span></div><${heading}>${escape(card.title)}</${heading}><p>${escape(card.body)}</p><small class="lc-evidence">${escape(card.evidence)}</small><div class="lc-card-actions"><button type="button" class="lc-button${primary ? ' lc-primary' : ''}" data-lc-open="${escape(card.id)}">${escape(card.label)} <span aria-hidden="true">↗</span></button><button type="button" class="lc-dismiss" data-lc-dismiss="${escape(card.id)}" aria-label="${escape(card.title)} für diese Sitzung ausblenden" title="Für diese Sitzung ausblenden">Ausblenden</button></div></article>`;
+  }
+  function agendaHtml(cards) {
+    return '<div class="lc-agenda-groups">' + AGENDA_GROUPS.map((group, index) => {
+      const items = cards.filter(card => card.agendaGroup === group.key);
+      const hiddenCount = model.cards.filter(card => card.agendaGroup === group.key && dismissed.has(card.id)).length;
+      const count = agendaLimits[group.key] || 4;
+      const shown = items.slice(0, count);
+      const headingId = 'lc-agenda-' + group.key;
+      const listId = headingId + '-cards';
+      return '<section class="lc-agenda-group" aria-labelledby="' + headingId + '">'
+        + '<header class="lc-agenda-heading"><span class="lc-agenda-number" aria-hidden="true">' + String(index + 1).padStart(2, '0') + '</span>'
+        + '<div class="lc-agenda-title"><h4 id="' + headingId + '" tabindex="-1">' + group.title
+        + '<span class="lc-agenda-count" aria-label="' + items.length + ' sichtbare Hinweise">' + items.length + '</span></h4><p>' + group.window + '</p></div>'
+        + (hiddenCount ? '<span class="lc-agenda-hidden">' + hiddenCount + ' ausgeblendet</span>' : '') + '</header>'
+        + '<div id="' + listId + '" class="lc-cards">' + (shown.length ? shown.map(card => cardHtml(card, false, 'h5')).join('')
+          : '<div class="lc-agenda-empty"><p>' + (hiddenCount ? 'Alle Hinweise in diesem Bereich sind für diese Sitzung ausgeblendet.' : group.empty) + '</p></div>') + '</div>'
+        + (items.length > count ? '<div class="lc-agenda-pagination"><span>' + shown.length + ' von ' + items.length + ' angezeigt</span>'
+          + '<button class="lc-button" type="button" data-lc-agenda-more="' + group.key + '" aria-controls="' + listId + '">Weitere ' + group.title + ' anzeigen <span aria-hidden="true">↓</span></button></div>' : '')
+        + '</section>';
+    }).join('') + '</div>';
   }
   function render() {
     const content = document.getElementById('lifeCoachContent');
@@ -222,9 +248,8 @@
       <div class="lc-metrics"><div><small>Agenda · anstehend & offen</small><strong>${model.cards.filter(x => x.category === 'agenda').length}</strong><span>relevante Aufgaben & Termine</span></div><div><small>Habit-Rhythmus</small><strong>${habitAttention}</strong><span>zum Wiederaufnehmen oder Prüfen</span></div><div><small>Zigaretten · heute</small><strong>${c.smokeToday}</strong><span>erfasste Zigaretten</span></div><div><small>Alkohol · heute</small><strong>${c.alcoholToday ? 'Erfasst' : c.alcoholTodayKnown ? 'Ohne' : 'Offen'}</strong><span>${c.alcoholToday ? 'Konsum dokumentiert' : c.alcoholTodayKnown ? 'als konsumfrei dokumentiert' : 'noch kein Tages-Check-in'}</span></div></div>
       <div class="lc-filters" role="group" aria-label="Coach-Bereich">${Object.entries(CATEGORIES).map(([key, label]) => `<button type="button" data-lc-filter="${key}" aria-pressed="${category === key}">${label}${key === 'all' ? '' : `<span>${available.filter(c => c.category === key).length}</span>`}</button>`).join('')}</div>
       <div class="lc-section-head"><h3>${category === 'all' ? 'Deine nächsten Schritte' : escape(CATEGORIES[category])}</h3><span>${category === 'all' ? 'Nach Dringlichkeit geordnet' : `${filtered.length} Hinweise`}</span></div>
-      ${category === 'agenda' ? '<p class="lc-agenda-window">Geburtstage: nächste 3 Tage · Termine: nächste 7 Tage · jeweils inklusive heute.</p>' : ''}
-      <div class="lc-cards">${chosen.length ? chosen.map((card, i) => cardHtml(card, category === 'all' && i === 0)).join('') : '<div class="lc-empty"><h3>Hier ist gerade Raum.</h3><p>Keine offenen Hinweise in diesem Bereich. Schau in deine anderen Bereiche oder geniesse den freien Kopf.</p></div>'}</div>
-      ${category !== 'all' && filtered.length > limit ? '<button class="lc-button" type="button" data-lc-more>Weitere Hinweise anzeigen</button>' : ''}
+      ${category === 'agenda' ? agendaHtml(filtered) : `<div class="lc-cards">${chosen.length ? chosen.map((card, i) => cardHtml(card, category === 'all' && i === 0)).join('') : '<div class="lc-empty"><h3>Hier ist gerade Raum.</h3><p>Keine offenen Hinweise in diesem Bereich. Schau in deine anderen Bereiche oder geniesse den freien Kopf.</p></div>'}</div>`}
+      ${category !== 'all' && category !== 'agenda' && filtered.length > limit ? '<button class="lc-button" type="button" data-lc-more>Weitere Hinweise anzeigen</button>' : ''}
       ${dismissed.size ? `<button class="lc-restore" type="button" data-lc-restore>${dismissed.size} ausgeblendete Hinweise wieder anzeigen</button>` : ''}
       <details class="lc-pause" ${pauseOpen ? 'open' : ''}><summary id="lifeCoachPauseTitle">Du brauchst gerade eine Pause?</summary><p>Leg kurz beiseite, was dich beschäftigt. Löse die Schultern, atme ruhig und entscheide danach über deinen nächsten Schritt.</p><div class="lc-pause-actions"><button class="lc-button" type="button" data-lc-timer>3 Minuten für mich</button><output id="lifeCoachTimer" aria-live="off" aria-label="Verbleibende Pausenzeit"></output><button class="lc-restore" type="button" data-lc-cancel ${deadline ? '' : 'hidden'}>Beenden</button></div></details>
       <footer class="lc-footer"><span>Stand ${new Date(model.generatedAt).toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' })} · Aus deinen geladenen Daten</span><details ${explanationOpen ? 'open' : ''}><summary id="lifeCoachExplanationTitle">Wie der Coach auswählt</summary><p>Fristen und nahe Termine zuerst, danach auffällige Habit-Rhythmen und Konsumverläufe, dann offene Listen. Habit-Trends vergleichen aktive Tage, Konsumtrends die letzten zwei abgeschlossenen 7-Tage-Zeiträume. Wochen- und Monatsziele berücksichtigen 7 bzw. 30 Tage. Fehlende Einträge sind kein Beleg für Konsumfreiheit. Pausierte Habits und archivierte Einträge werden ausgelassen. Es werden keine Daten an einen KI-Dienst gesendet und keine Einträge automatisch verändert.</p></details></footer>`;
@@ -258,7 +283,7 @@
   }
   function open(bridge) {
     if (modal() && !modal().classList.contains('hidden')) { refresh(); return; }
-    api = bridge; opener = document.activeElement; category = 'all'; limit = 8;
+    api = bridge; opener = document.activeElement; category = 'all'; limit = 8; agendaLimits = {};
     modal()?.classList.remove('hidden'); document.body.classList.add('modal-open');
     for (let current = modal(); current?.parentElement && current.parentElement !== document.body; current = current.parentElement) {
       [...current.parentElement.children].filter(child => child !== current).forEach(child => { child.dataset.lcWasInert = String(child.inert); child.inert = true; });
@@ -281,6 +306,11 @@
     if (d.lcDismiss) { dismissed.add(d.lcDismiss); render(); }
     if ('lcRestore' in d) { dismissed.clear(); render(); document.querySelector(`[data-lc-filter="${category}"]`)?.focus(); }
     if ('lcRefresh' in d) refresh();
+    if (d.lcAgendaMore && AGENDA_GROUPS.some(group => group.key === d.lcAgendaMore)) {
+      agendaLimits[d.lcAgendaMore] = (agendaLimits[d.lcAgendaMore] || 4) + 4;
+      render();
+      document.getElementById('lc-agenda-' + d.lcAgendaMore)?.focus({ preventScroll: true });
+    }
     if ('lcMore' in d) { limit += 8; render(); document.querySelector(`[data-lc-filter="${category}"]`)?.focus(); }
     if ('lcTimer' in d) { deadline = Date.now() + 180000; document.querySelector('[data-lc-cancel]').hidden = false; resumeTimer(); }
     if ('lcCancel' in d) { deadline = 0; root.clearInterval(tick); tick = 0; updateTimer(); button.hidden = true; document.querySelector('[data-lc-timer]')?.focus(); }

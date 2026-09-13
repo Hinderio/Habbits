@@ -7,7 +7,11 @@ serialize or write the application cache, request AI services, or add remote
 queries. Navigation uses the existing task, habit, calendar and list screens.
 
 The overview shows at most three recommendations. Filters expose all areas,
-with eight cards per batch. Hiding a recommendation is temporary and is cleared
+with eight cards per batch. Agenda is split into Birthdays, Appointments and
+Tasks, each with its own count, empty state and four-card pagination. Grouping
+uses explicit event metadata rather than display text, and preserves urgency
+ordering within each group. Dismissed cards update the group counts and are
+identified as hidden rather than missing. Reopening resets group pagination. Hiding a recommendation is temporary and is cleared
 on reload or the next local date. No domain records change automatically.
 
 Selection rules:

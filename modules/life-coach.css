@@ -24,7 +24,7 @@
 #coachModal .lc-card { display: flex; flex-direction: column; min-width: 0; padding: 20px; border: 1px solid var(--card-border); border-radius: 8px; background: color-mix(in srgb, var(--text) 3%, transparent); overflow-wrap: anywhere; }
 #coachModal .lc-featured { grid-column: 1 / -1; border-left: 3px solid var(--primary); background: color-mix(in srgb, var(--primary) 7%, transparent); }
 #coachModal .lc-card-meta { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: .72rem; font-weight: 750; }
-#coachModal .lc-card h3 { margin: 13px 0 7px; font-size: 1.15rem; line-height: 1.35; }
+#coachModal .lc-card h3, #coachModal .lc-card h5 { margin: 13px 0 7px; font-size: 1.15rem; line-height: 1.35; }
 #coachModal .lc-card p { margin: 0 0 14px; font-size: .9rem; }
 #coachModal .lc-evidence { display: block; color: var(--muted); font-size: .76rem; line-height: 1.5; margin-bottom: 18px; }
 #coachModal .lc-card-actions { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-top: auto; }
@@ -63,4 +63,26 @@
 body.light #coachModal .lc-topline { background: #f5faff; }
 @media (max-width: 760px) { #coachModal .lc-topline { top: -16px; } }
 
-#coachModal .lc-agenda-window { margin: -4px 0 16px; font-size: .76rem; line-height: 1.5; }
+/* Agenda groups stay inside the existing Coach dialog. */
+#coachModal .lc-agenda-groups { display: grid; gap: 28px; margin-bottom: 20px; }
+#coachModal .lc-agenda-group { min-width: 0; border-top: 1px solid var(--card-border); padding-top: 20px; }
+#coachModal .lc-agenda-heading { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+#coachModal .lc-agenda-number { display: grid; place-items: center; flex: 0 0 38px; height: 38px; border: 1px solid var(--card-border); border-radius: 8px; color: var(--muted); font-size: .73rem; font-weight: 750; font-variant-numeric: tabular-nums; }
+#coachModal .lc-agenda-title { flex: 1; min-width: 150px; }
+#coachModal .lc-agenda-title h4 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 1.04rem; letter-spacing: -.015em; }
+#coachModal .lc-agenda-title h4:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; border-radius: 3px; }
+#coachModal .lc-agenda-title p { margin: 5px 0 0; font-size: .75rem; line-height: 1.5; }
+#coachModal .lc-agenda-count { display: inline-grid; place-items: center; min-width: 25px; height: 24px; padding: 0 6px; border-radius: 6px; background: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--ink, var(--text)); font-size: .73rem; font-weight: 750; font-variant-numeric: tabular-nums; }
+#coachModal .lc-agenda-hidden { align-self: center; color: var(--muted); font-size: .72rem; }
+#coachModal .lc-agenda-group .lc-cards { margin-bottom: 0; }
+#coachModal .lc-agenda-empty { grid-column: 1 / -1; border: 1px dashed var(--card-border); border-radius: 8px; padding: 18px 20px; }
+#coachModal .lc-agenda-empty p { margin: 0; font-size: .83rem; line-height: 1.5; }
+#coachModal .lc-agenda-pagination { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+#coachModal .lc-agenda-pagination > span { color: var(--muted); font-size: .74rem; }
+@media (max-width: 760px) {
+  #coachModal .lc-agenda-groups { gap: 24px; }
+  #coachModal .lc-agenda-number { flex-basis: 32px; height: 32px; }
+  #coachModal .lc-agenda-heading { gap: 10px; }
+  #coachModal .lc-agenda-hidden { width: 100%; padding-left: 42px; }
+  #coachModal .lc-agenda-pagination { align-items: stretch; flex-direction: column; }
+}
