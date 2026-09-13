@@ -30,7 +30,7 @@ assert.ok(!html.includes('<img'));
 // Exercise the actual application snapshot against its total and pause filter.
 const snapshotCode = app.match(/  window.HabitFlowPointsLive = Object.freeze\(\{[\s\S]*?\n  \}\);/)[0];
 const ledger = [row(100, '2026-09-13', { source_id: 'a' }), row(-20, '2026-09-13', { source_id: 'b' }), row(900, '2026-09-13', { paused: true }), row(60, '2026-09-14T01:59:00', { source_type: 'bonus', source_id: 'smoke-daily-bonus-2026-09-13' }), row(-50, '2026-09-12', { source_type: 'bonus', source_id: 'alcohol', reason: 'Alkohol-Tag: Stark' })];
-const snapshotContext = { window: {}, state: { pointsLedger: ledger, alcoholLogs: [{ id: 'alcohol', log_date: '2026-09-11' }] }, visibleLedgerPoints: () => ledger.filter(row => !row.paused), getTotalPoints: () => 90, evolutionStageFromPoints: total => ({ stage: 1, nextPoints: 250 - total }), isSmokeDailyBonusEntry: row => row.source_id?.startsWith('smoke-daily-bonus-'), isAlcoholPointsEntry: row => row.source_id === 'alcohol' };
+const snapshotContext = { window: {}, state: { pointsLedger: ledger, alcoholLogs: [{ id: 'alcohol', log_date: '2026-09-11' }] }, visibleLedgerPoints: () => ledger.filter(row => !row.paused), getTotalPoints: () => 90, evolutionStageFromPoints: total => ({ stage: 1, nextPoints: 250 - total }), smokeDailyBonusDay: row => row.source_id.replace('smoke-daily-bonus-', ''), isSmokeDailyBonusEntry: row => row.source_id?.startsWith('smoke-daily-bonus-'), isAlcoholPointsEntry: row => row.source_id === 'alcohol' };
 vm.runInNewContext(snapshotCode, snapshotContext);
 const snapshot = snapshotContext.window.HabitFlowPointsLive.snapshot();
 assert.equal(snapshot.rows.reduce((sum, row) => sum + row.points, 0), snapshot.total);

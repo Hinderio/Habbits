@@ -2156,6 +2156,8 @@ cacheEls();
 
 
   function isPausedLedgerPoint(point = {}) {
+    if (isSmokePauseLedgerEntry(point)) return true;
+    if (isSmokeDailyBonusEntry(point)) return smokeBonusDayPaused(smokeDailyBonusDay(point));
     if (point.source_type === 'cigarette') {
       const source = state.cigarettes.find(item => item.id === point.source_id);
       return source ? isWithinPauseAt(source.smoked_at, { scope: 'smoke' }) : false;
@@ -2178,7 +2180,7 @@ cacheEls();
     snapshot() {
       const rows = visibleLedgerPoints().map(point => {
         let day = '';
-        if (isSmokeDailyBonusEntry(point)) day = String(point.source_id).replace('smoke-daily-bonus-', '');
+        if (isSmokeDailyBonusEntry(point)) day = smokeDailyBonusDay(point);
         if (isAlcoholPointsEntry(point)) {
           day = state.alcoholLogs.find(item => item.id === point.source_id)?.log_date || '';
         }
@@ -11680,11 +11682,36 @@ cacheEls();
   }
 
   function smokeDailyBonusSourceId(key) {
-    return `smoke-daily-bonus-${key}`;
+    return `00000000-0000-4000-8001-0000${key.replace(/-/g, '')}`;
   }
 
   function isSmokeDailyBonusEntry(entry = {}) {
-    return entry.source_type === 'bonus' && String(entry.source_id || '').startsWith('smoke-daily-bonus-');
+    const id = String(entry.source_id || '');
+    return entry.source_type === 'bonus' && (id.startsWith('smoke-daily-bonus-')
+      || id.startsWith('00000000-0000-4000-8001-0000')
+      || String(entry.reason || '').startsWith('Rauchziel:'));
+  }
+
+  function smokeDailyBonusDay(entry = {}) {
+    const id = String(entry.source_id || '');
+    if (id.startsWith('smoke-daily-bonus-')) return id.slice('smoke-daily-bonus-'.length);
+    if (id.startsWith('00000000-0000-4000-8001-0000')) {
+      const day = id.slice(-8);
+      if (/^\d{8}$/.test(day)) return `${day.slice(0, 4)}-${day.slice(4, 6)}-${day.slice(6)}`;
+    }
+    // Legacy rows lost their source_id in the UUID column. Their writer used
+    // 23:59 UTC; the UTC date recovers the accounting day even across DST.
+    const date = new Date(entry.earned_at || entry.created_at || '');
+    return Number.isFinite(date.getTime()) ? date.toISOString().slice(0, 10) : '';
+  }
+
+  function smokeBonusDayPaused(key) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return true;
+    const start = new Date(`${key}T00:00:00`);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+    // A partially paused day is not a complete tracked day either.
+    return intervalCrossesPause(start, end, { scope: 'smoke' });
   }
 
   function smokeDailyBonusPoints(count) {
@@ -11701,28 +11728,48 @@ cacheEls();
     const byDay = new Map();
     visibleCigarettes().forEach(cigarette => {
       const key = toDateKey(cigarette.smoked_at || cigarette.created_at);
-      if (!key) return;
-      byDay.set(key, (byDay.get(key) || 0) + 1);
+      if (key) byDay.set(key, (byDay.get(key) || 0) + 1);
     });
-    const targetKeys = new Set(keys ? [...keys] : [...byDay.keys()]);
+    const groups = new Map();
     state.pointsLedger.filter(isSmokeDailyBonusEntry).forEach(entry => {
-      const key = String(entry.source_id || '').replace('smoke-daily-bonus-', '');
-      if (key) targetKeys.add(key);
+      const key = smokeDailyBonusDay(entry);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(entry);
     });
+    const targetKeys = new Set([...(keys || byDay.keys()), ...groups.keys()]);
+    const removedIds = new Set();
     let changed = false;
     targetKeys.forEach(key => {
+      const entries = groups.get(key) || [];
       const count = byDay.get(key) || 0;
-      const points = smokeDailyBonusPoints(count);
+      const points = smokeBonusDayPaused(key) ? 0 : smokeDailyBonusPoints(count);
+      if (!points) {
+        entries.forEach(entry => removedIds.add(entry.id));
+        return;
+      }
       const sourceId = smokeDailyBonusSourceId(key);
-      const existing = state.pointsLedger.find(entry => entry.source_type === 'bonus' && entry.source_id === sourceId);
-      if (points > 0) {
-        if (addPoints('bonus', sourceId, points, smokeDailyBonusReason(count, points), `${key}T23:59:00.000Z`)) changed = true;
-      } else if (existing) {
-        state.pointsLedger = state.pointsLedger.filter(entry => entry.id !== existing.id);
-        markRemoteDeleted('points_ledger', existing.id);
+      // Prefer the canonical row, then a stable ID order, on every device.
+      const sorted = entries.slice().sort((a, b) =>
+        Number(b.source_id === sourceId) - Number(a.source_id === sourceId)
+        || String(a.id).localeCompare(String(b.id)));
+      const keep = sorted[0];
+      sorted.slice(1).forEach(entry => removedIds.add(entry.id));
+      if (keep && keep.source_id !== sourceId) {
+        keep.source_id = sourceId;
+        keep.synced = false;
+        keep.updated_at = nowIso();
         changed = true;
       }
+      // Remove duplicates before addPoints, which otherwise discards them
+      // without registering remote deletions.
+      if (removedIds.size) state.pointsLedger = state.pointsLedger.filter(entry => !removedIds.has(entry.id));
+      if (addPoints('bonus', sourceId, points, smokeDailyBonusReason(count, points), `${key}T23:59:00.000Z`)) changed = true;
     });
+    if (removedIds.size) {
+      state.pointsLedger = state.pointsLedger.filter(entry => !removedIds.has(entry.id));
+      markRemoteDeletedMany('points_ledger', [...removedIds]);
+      changed = true;
+    }
     return changed;
   }
 
@@ -11992,7 +12039,7 @@ async function deleteAlcoholLog(id) {
           kind: 'smoke',
           at: item.smoked_at || item.created_at,
           title: 'Zigarette',
-          meta: Number.isFinite(Number(item.points)) ? `${Number(item.points) > 0 ? '+' : ''}${Number(item.points)} Pkt.` : 'Pausenlog',
+          meta: '0 Pkt. · pausiert',
           note: String(item.note || '').startsWith('trigger:') ? (COACH_TRIGGER_META[String(item.note).replace('trigger:', '')]?.label || '') : String(item.note || '')
         }));
     }
@@ -13331,52 +13378,19 @@ async function deleteAlcoholLog(id) {
       && String(entry.reason || '').startsWith(SMOKE_PAUSE_POINTS_REASON_PREFIX);
   }
 
-  function reconcileSmokePausePoints(referenceDate = new Date()) {
-    const expectedPauseIds = new Set();
-    let changed = false;
-
-    (state.pausePeriods || [])
-      .map(normalizePausePeriod)
-      .filter(period => period.id && period.scope === 'smoke' && !period.is_archived)
-      .forEach(period => {
-        const days = smokePauseCalendarDays(period, referenceDate);
-        if (days <= 0) return;
-
-        expectedPauseIds.add(period.id);
-        const existingEntries = state.pointsLedger.filter(entry =>
-          entry.source_type === 'manual' && entry.source_id === period.id
-        );
-        const duplicateIds = existingEntries.slice(1).map(entry => entry.id).filter(Boolean);
-        const dayLabel = days === 1 ? 'Tag' : 'Tage';
-        const reason = `${SMOKE_PAUSE_POINTS_REASON_PREFIX} · ${days} ${dayLabel}`;
-
-        if (addPoints('manual', period.id, SMOKE_PAUSE_POINTS_PER_DAY * days, reason, period.starts_at)) {
-          changed = true;
-        }
-        if (duplicateIds.length) {
-          markRemoteDeletedMany('points_ledger', duplicateIds);
-        }
-      });
-
-    const staleEntries = state.pointsLedger.filter(entry =>
-      isSmokePauseLedgerEntry(entry) && !expectedPauseIds.has(entry.source_id)
-    );
-    if (staleEntries.length) {
-      const staleIds = staleEntries.map(entry => entry.id).filter(Boolean);
-      const staleIdSet = new Set(staleIds);
-      state.pointsLedger = state.pointsLedger.filter(entry => !staleIdSet.has(entry.id));
-      markRemoteDeletedMany('points_ledger', staleIds);
-      changed = true;
-    }
-
-    return changed;
+  function reconcileSmokePausePoints() {
+    // Tracking pauses are neutral. Retire the old automatic pause deductions.
+    const ids = state.pointsLedger.filter(isSmokePauseLedgerEntry).map(entry => entry.id);
+    if (!ids.length) return false;
+    const removed = new Set(ids);
+    state.pointsLedger = state.pointsLedger.filter(entry => !removed.has(entry.id));
+    markRemoteDeletedMany('points_ledger', ids);
+    return true;
   }
 
   function migrateCigaretteScoring() {
     const pausePointsChanged = reconcileSmokePausePoints();
-    const cigarettePointsChanged = visibleCigarettes().length
-      ? recalculateSmokeIntervals({ markUpdated: true })
-      : false;
+    const cigarettePointsChanged = recalculateSmokeIntervals({ markUpdated: true });
     const changed = pausePointsChanged || cigarettePointsChanged;
     if (changed) saveState({ skipRender: true });
     return changed;
