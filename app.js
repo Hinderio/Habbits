@@ -2170,6 +2170,23 @@ cacheEls();
     return false;
   }
 
+  // Read-only snapshot shared with the Companion details. Keep the same ledger
+  // and pause filtering as getTotalPoints; never reconstruct or deduplicate here.
+  window.HabitFlowPointsLive = Object.freeze({
+    snapshot() {
+      const rows = visibleLedgerPoints().map(point => {
+        let day = '';
+        if (isSmokeDailyBonusEntry(point)) day = String(point.source_id).replace('smoke-daily-bonus-', '');
+        if (isAlcoholPointsEntry(point)) {
+          day = state.alcoholLogs.find(item => item.id === point.source_id)?.log_date || '';
+        }
+        return { ...point, day };
+      });
+      const total = getTotalPoints();
+      return { rows, total, evolution: evolutionStageFromPoints(total) };
+    }
+  });
+
   function visibleLedgerPoints() {
     return state.pointsLedger.filter(point => !isPausedLedgerPoint(point));
   }
@@ -4054,6 +4071,7 @@ cacheEls();
     if (els.levelLabel) els.levelLabel.textContent = `Level ${evolutionMeta.stage}`;
     if (els.levelProgress) els.levelProgress.style.width = `${evolutionMeta.stageProgress}%`;
     renderGamification();
+    window.dispatchEvent(new CustomEvent('habitflow:points-update'));
     if (els.pointsRulesPopover && !els.pointsRulesPopover.classList.contains('hidden')) renderPointsRulesPopover();
   }
 
@@ -4580,6 +4598,7 @@ cacheEls();
         <div class="companion-actions fish-actions">
           <button class="mini-btn primary" type="button" data-action="open-coach">Coach</button>
           <button class="mini-btn primary" type="button" data-action="open-morning-routine">Routine</button>
+          <button class="mini-btn primary" type="button" data-points-details-open aria-haspopup="dialog" aria-controls="pointsDetailsModal">Details</button>
         </div>
       </div>
     </div>`;
