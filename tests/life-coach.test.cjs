@@ -145,6 +145,10 @@ test('modal refresh is lazy, coalesced and cancelled when closed; rendering esca
   assert.ok(content.innerHTML.includes('&lt;img'));
   assert.ok(!content.innerHTML.includes('<img src=x'));
   assert.equal(intervals.size,0);
+  handlers.click({target:{closest:()=>({dataset:{lcFilter:'agenda'}})}});
+  assert.match(content.innerHTML,/Geburtstage: nächste 3 Tage/);
+  assert.match(content.innerHTML,/Termine: nächste 7 Tage/);
+  assert.match(content.innerHTML,/jeweils inklusive heute/);
   coach.refresh();coach.close();assert.equal(frames.size,0);
   coach.refresh();assert.equal(snapshots,1);
 });
@@ -161,4 +165,93 @@ test('app integration delegates navigation to existing detail and calendar funct
   assert.equal(context.selectedCalendarDate,'2026-10-01');
   assert.equal(context.calendarCursor.getMonth(),9);
   assert.deepEqual(calls.at(-2),['mode','alcohol']);
+});
+
+
+test('Coach Agenda limits birthdays to today plus two days and appointments to today plus six', () => {
+  const appointments = [
+    {id:'birthday-today',starts_at:at(0,0),is_birthday:true},
+    {id:'birthday-last',starts_at:at(2,23),is_birthday:true},
+    {id:'birthday-out',starts_at:at(3,0),is_birthday:true},
+    {id:'appointment-last',starts_at:at(6,23)},
+    {id:'appointment-out',starts_at:at(7,0)},
+    {id:'deleted',starts_at:at(1),deleted_at:at(0)},
+    {id:'archived',starts_at:at(1),is_archived:true}
+  ];
+  const m=analyze({appointments},{},now);
+  const ids=m.cards.filter(c=>c.category==='agenda').map(c=>c.id).sort();
+  assert.deepEqual(ids,[
+    'agenda:appointment:appointment-last',
+    'agenda:appointment:birthday-last',
+    'agenda:appointment:birthday-today'
+  ]);
+});
+
+test('Coach recognizes all birthday markers without extending past birthdays across multiple days', () => {
+  const m=analyze({appointments:[
+    {id:'flag',starts_at:at(1),is_birthday:true},
+    {id:'kind',starts_at:at(1),event_kind:'birthday'},
+    {id:'meta',starts_at:at(2),description:'Notiz\n<!--hf:event-kind=birthday-->'},
+    {id:'old',starts_at:at(-1),ends_at:at(1),is_birthday:true},
+    {id:'meta-out',starts_at:at(3),description:'<!--hf:event-kind=birthday-->'}
+  ]},{},now);
+  for(const id of ['flag','kind','meta']) assert.match(byId(m,'agenda:appointment:'+id).evidence,/Geburtstag/);
+  assert.ok(!byId(m,'agenda:appointment:old'));
+  assert.ok(!byId(m,'agenda:appointment:meta-out'));
+});
+
+test('Coach keeps ongoing appointments and removes ended multi-day appointments', () => {
+  const m=analyze({appointments:[
+    {id:'ended',starts_at:at(-1),ends_at:at(0,11)},
+    {id:'ongoing',starts_at:at(-1),ends_at:at(0,13)},
+    {id:'invalid',starts_at:'invalid'},
+    {id:'missing'}
+  ]},{},now);
+  const cards=m.cards.filter(c=>c.category==='agenda');
+  assert.equal(cards.length,1);
+  assert.equal(cards[0].id,'agenda:appointment:ongoing');
+  assert.equal(cards[0].action.day,key(0));
+});
+
+test('Coach horizons follow local days across New Year and both DST transitions', () => {
+  for(const anchor of [new Date(2026,11,30,12),new Date(2026,2,28,12),new Date(2026,9,24,12)]) {
+    const relative=(offset,hour=0)=>new Date(anchor.getFullYear(),anchor.getMonth(),anchor.getDate()+offset,hour).toISOString();
+    const m=analyze({appointments:[
+      {id:'birthday-in',starts_at:relative(2,23),is_birthday:true},
+      {id:'birthday-out',starts_at:relative(3),is_birthday:true},
+      {id:'appointment-in',starts_at:relative(6,23)},
+      {id:'appointment-out',starts_at:relative(7)}
+    ]},{},anchor);
+    assert.ok(byId(m,'agenda:appointment:birthday-in'));
+    assert.ok(byId(m,'agenda:appointment:appointment-in'));
+    assert.ok(!byId(m,'agenda:appointment:birthday-out'));
+    assert.ok(!byId(m,'agenda:appointment:appointment-out'));
+  }
+});
+
+test('Coach uses existing yearly instances and never mutates appointment or task data', () => {
+  const appointments=[
+    {id:'prior',series_id:'s',recurrence:'yearly',starts_at:at(-365),is_birthday:true},
+    {id:'current',series_id:'s',recurrence:'yearly',starts_at:at(1),is_birthday:true},
+    {id:'future',series_id:'s',recurrence:'yearly',starts_at:at(366),is_birthday:true}
+  ].map(Object.freeze);
+  const state=Object.freeze({appointments:Object.freeze(appointments),tasks:Object.freeze([{id:'task',due_at:at(7)}])});
+  const before=JSON.stringify(state);
+  const m=analyze(state,{},now);
+  assert.equal(m.cards.filter(c=>c.id.startsWith('agenda:appointment:')).length,1);
+  assert.ok(byId(m,'agenda:task:task'),'task horizon is unchanged');
+  assert.equal(JSON.stringify(state),before);
+});
+
+test('standalone birthdays screen and navigation overrides are fully removed', () => {
+  const app=fs.readFileSync(path.join(__dirname,'../app.js'),'utf8');
+  const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8');
+  const worker=fs.readFileSync(path.join(__dirname,'../service-worker.js'),'utf8');
+  const coachCss=fs.readFileSync(path.join(__dirname,'../modules/life-coach.css'),'utf8');
+  assert.doesNotMatch(app,/buildUpcomingSchedule|renderUpcomingSchedule|openUpcomingAppointment|createUpcomingAppointment/);
+  assert.doesNotMatch(html,/screen-upcoming|data-target="upcoming"|upcoming-schedule/);
+  assert.doesNotMatch(worker,/upcoming-schedule/);
+  assert.doesNotMatch(coachCss,/bottom-nav|nav-btn/);
+  assert.equal(fs.existsSync(path.join(__dirname,'../modules/upcoming-schedule.css')),false);
+  assert.match(html,/id="lifeCoachContent"/);
 });

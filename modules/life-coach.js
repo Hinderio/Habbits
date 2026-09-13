@@ -71,9 +71,12 @@
     for (const a of array(state.appointments).filter(alive)) {
       const start = date(a.starts_at), end = date(a.ends_at || a.starts_at);
       const birthday = a.is_birthday || a.event_kind === 'birthday' || /<!--hf:event-kind=birthday-->/.test(a.description || '');
-      if (!start || !end || day(end) < today || day(start) > today + 14) continue;
-      if (day(start) === today && day(end) === today && +end < +now && !birthday) continue;
-      const offset = Math.max(0, day(start) - today);
+      if (!start || !end) continue;
+      const startDay = day(start);
+      // Local calendar days, including today: birthdays 0–2, appointments 0–6.
+      // Birthdays remain visible all day; timed appointments must not have ended.
+      if (birthday ? startDay < today || startDay >= today + 3 : startDay >= today + 7 || +end < +now) continue;
+      const offset = Math.max(0, startDay - today);
       add('agenda', `appointment:${a.id}`, birthday ? 94 - offset * 2 : 86 - offset * 3,
         a.title || (birthday ? 'Geburtstag' : 'Termin'), birthday ? 'Plane Zeit für einen persönlichen Gruss oder eine kleine Aufmerksamkeit ein.' : a.location ? `Ort: ${a.location}. Plane einen Puffer ein.` : 'Prüfe die Vorbereitung und lass etwas Zeit zwischen deinen Terminen.',
         `${birthday ? 'Geburtstag' : 'Termin'} · ${shortDate(start)}${birthday ? '' : ` · ${shortTime(start)}`}`,
@@ -219,6 +222,7 @@
       <div class="lc-metrics"><div><small>Agenda · anstehend & offen</small><strong>${model.cards.filter(x => x.category === 'agenda').length}</strong><span>relevante Aufgaben & Termine</span></div><div><small>Habit-Rhythmus</small><strong>${habitAttention}</strong><span>zum Wiederaufnehmen oder Prüfen</span></div><div><small>Zigaretten · heute</small><strong>${c.smokeToday}</strong><span>erfasste Zigaretten</span></div><div><small>Alkohol · heute</small><strong>${c.alcoholToday ? 'Erfasst' : c.alcoholTodayKnown ? 'Ohne' : 'Offen'}</strong><span>${c.alcoholToday ? 'Konsum dokumentiert' : c.alcoholTodayKnown ? 'als konsumfrei dokumentiert' : 'noch kein Tages-Check-in'}</span></div></div>
       <div class="lc-filters" role="group" aria-label="Coach-Bereich">${Object.entries(CATEGORIES).map(([key, label]) => `<button type="button" data-lc-filter="${key}" aria-pressed="${category === key}">${label}${key === 'all' ? '' : `<span>${available.filter(c => c.category === key).length}</span>`}</button>`).join('')}</div>
       <div class="lc-section-head"><h3>${category === 'all' ? 'Deine nächsten Schritte' : escape(CATEGORIES[category])}</h3><span>${category === 'all' ? 'Nach Dringlichkeit geordnet' : `${filtered.length} Hinweise`}</span></div>
+      ${category === 'agenda' ? '<p class="lc-agenda-window">Geburtstage: nächste 3 Tage · Termine: nächste 7 Tage · jeweils inklusive heute.</p>' : ''}
       <div class="lc-cards">${chosen.length ? chosen.map((card, i) => cardHtml(card, category === 'all' && i === 0)).join('') : '<div class="lc-empty"><h3>Hier ist gerade Raum.</h3><p>Keine offenen Hinweise in diesem Bereich. Schau in deine anderen Bereiche oder geniesse den freien Kopf.</p></div>'}</div>
       ${category !== 'all' && filtered.length > limit ? '<button class="lc-button" type="button" data-lc-more>Weitere Hinweise anzeigen</button>' : ''}
       ${dismissed.size ? `<button class="lc-restore" type="button" data-lc-restore>${dismissed.size} ausgeblendete Hinweise wieder anzeigen</button>` : ''}

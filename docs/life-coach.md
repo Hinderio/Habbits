@@ -13,9 +13,13 @@ on reload or the next local date. No domain records change automatically.
 Selection rules:
 
 - Overdue tasks, nearby deadlines and appointments come first. Task horizon is
-  seven days; appointment horizon is fourteen. Undated active tasks remain
+  seven days. The existing Agenda filter shows birthdays over three local calendar
+  days and appointments over seven local calendar days, both including today.
+  Birthdays remain visible throughout their date; finished timed appointments
+  are excluded, while ongoing events link to today. Undated active tasks remain
   available. Birthdays use actual appointment instances, including the existing
-  materialized recurrence series.
+  materialized recurrence series. There is no separate birthday screen or main
+  navigation entry.
 - Habit history is grouped once by ID. Trends compare distinct active days in
   the two previous complete seven-day windows. False boolean entries do not
   count as active days. Rolling seven- and thirty-day targets are respected;

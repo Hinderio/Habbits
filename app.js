@@ -636,7 +636,6 @@
     habits: '<path d="M12 3v18"/><path d="M12 8c-4.5 0-7 2.1-7 6 4.5 0 7-2.1 7-6Z"/><path d="M12 11c4.5 0 7 2.1 7 6-4.5 0-7-2.1-7-6Z"/>',
     tasks: '<path d="M5 7h14"/><path d="M5 12h14"/><path d="M5 17h8"/><path d="m15 17 2 2 4-5"/>',
     idea: '<path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.2 1 2.1V17h6v-.2c0-.9.4-1.6 1-2.1A7 7 0 0 0 12 2Z"/><path d="M10 9h4"/><path d="M12 7v4"/>',
-    birthday: '<rect x="3" y="11" width="18" height="10" rx="2"/><path d="M3 15h18M7 11V8m5 3V8m5 3V8M7 5v1m5-1v1m5-1v1"/>',
     calendar: '<path d="M7 3v4"/><path d="M17 3v4"/><path d="M4 8h16"/><rect x="4" y="5" width="16" height="16" rx="3"/>',
     sync: '<path d="M20 7h-5V2"/><path d="M20 7a8 8 0 0 0-13.7-2.4"/><path d="M4 17h5v5"/><path d="M4 17a8 8 0 0 0 13.7 2.4"/>',
     weight: '<path d="M7 8h10l2 12H5L7 8Z"/><path d="M9 8a3 3 0 0 1 6 0"/>',
@@ -1059,7 +1058,6 @@ cacheEls();
     setInterval(() => {
       renderTimers();
       renderCoach();
-      if (document.body.dataset.activeScreen === 'upcoming') renderUpcomingSchedule();
     }, 30_000);
   }
 
@@ -1532,9 +1530,6 @@ cacheEls();
       if (action === 'edit-task') editTask(id);
       if (action === 'delete-task') deleteTask(id);
       if (action === 'archive-task') archiveTask(id);
-      if (action === 'open-upcoming-appointment') openUpcomingAppointment(id, actionEl.dataset.date);
-      if (action === 'new-upcoming-birthday') createUpcomingAppointment(true);
-      if (action === 'new-upcoming-appointment') createUpcomingAppointment(false);
       if (action === 'edit-appointment') editAppointment(id);
       if (action === 'delete-appointment') deleteAppointment(id);
       if (action === 'edit-habit') {
@@ -3389,7 +3384,6 @@ cacheEls();
     document.body.dataset.activeScreen = targetScreen;
     document.documentElement.dataset.activeScreen = targetScreen;
     if (!shouldRefresh) return;
-    if (targetScreen === 'upcoming') renderUpcomingSchedule();
     if (targetScreen === 'calendar') {
       renderCalendar();
       renderDayDetails();
@@ -3597,7 +3591,6 @@ cacheEls();
     renderSection('coach', renderCoach);
     renderSection('calendar', renderCalendar);
     renderSection('day-details', renderDayDetails);
-    renderSection('upcoming-schedule', renderUpcomingSchedule);
     renderSection('history-modal', renderHistoryModal);
     renderSection('pause-ui', renderPauseUi);
     renderSection('sync-status', renderSyncStatus);
@@ -11076,119 +11069,6 @@ cacheEls();
     }
     els.calendarGrid.innerHTML = cells.join('');
   }
-  function buildUpcomingSchedule(appointments = [], now = new Date()) {
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const birthdayEnd = new Date(today);
-    birthdayEnd.setDate(birthdayEnd.getDate() + 3);
-    const appointmentEnd = new Date(today);
-    appointmentEnd.setDate(appointmentEnd.getDate() + 7);
-    const result = { birthdays: [], appointments: [] };
-    const seen = new Set();
-    appointments.forEach(appointment => {
-      if (!appointment?.id || !appointment.starts_at || seen.has(appointment.id)) return;
-      seen.add(appointment.id);
-      const start = new Date(appointment.starts_at);
-      if (!Number.isFinite(start.getTime())) return;
-      const isBirthday = appointmentEventKind(appointment) === 'birthday';
-      const rawEnd = new Date(appointment.ends_at || appointment.starts_at);
-      const end = Number.isFinite(rawEnd.getTime()) && rawEnd >= start ? rawEnd : start;
-      if (isBirthday) {
-        if (start < today || start >= birthdayEnd) return;
-      } else if (start >= appointmentEnd || end < now) {
-        return;
-      }
-      const date = isBirthday || start >= today ? start : today;
-      result[isBirthday ? 'birthdays' : 'appointments'].push({
-        appointment,
-        dateKey: toDateKey(date),
-        ongoing: !isBirthday && start < now && end >= now
-      });
-    });
-    const compare = (a, b) => a.dateKey.localeCompare(b.dateKey)
-      || compareAppointments(a.appointment, b.appointment);
-    result.birthdays.sort(compare);
-    result.appointments.sort(compare);
-    return result;
-  }
-
-  function upcomingDayLabel(dateKey, now = new Date()) {
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    for (let offset = 0; offset < 3; offset += 1) {
-      const day = new Date(today);
-      day.setDate(day.getDate() + offset);
-      if (toDateKey(day) === dateKey) return ['Heute', 'Morgen', 'Übermorgen'][offset];
-    }
-    return new Date(dateKey + 'T12:00:00').toLocaleDateString('de-CH', { weekday: 'long' });
-  }
-
-  function renderUpcomingScheduleList(items, isBirthday, now = new Date()) {
-    if (!items.length) {
-      return '<div class="upcoming-empty"><span class="upcoming-empty-icon">' + svgIcon(isBirthday ? 'birthday' : 'calendar', 'ui-icon')
-        + '</span><strong>' + (isBirthday ? 'Keine Geburtstage in den nächsten 3 Tagen' : 'Keine anstehenden Termine in den nächsten 7 Tagen')
-        + '</strong><p>' + (isBirthday ? 'Sobald ein Geburtstag näher rückt, findest du ihn hier.' : 'Zeit für das, was dir wichtig ist.')
-        + '</p></div>';
-    }
-    const groups = new Map();
-    items.forEach(item => {
-      if (!groups.has(item.dateKey)) groups.set(item.dateKey, []);
-      groups.get(item.dateKey).push(item);
-    });
-    return [...groups].map(([dateKey, entries]) => {
-      const dateLabel = new Date(dateKey + 'T12:00:00').toLocaleDateString('de-CH', { day: '2-digit', month: 'long' });
-      return '<section class="upcoming-day"><h4 class="upcoming-day-heading"><span>' + escapeHtml(upcomingDayLabel(dateKey, now))
-        + '</span><time datetime="' + escapeHtml(dateKey) + '">' + escapeHtml(dateLabel) + '</time></h4><div class="upcoming-day-list">'
-        + entries.map(({ appointment, ongoing }) => {
-          const type = appointmentTypeMeta(appointment.appointment_type);
-          const initials = appointmentInitials(appointment.title, 'GB');
-          const detail = isBirthday ? 'Geburtstag' : formatAppointmentRange(appointment);
-          const location = appointment.location ? '<span class="upcoming-location">' + escapeHtml(appointment.location) + '</span>' : '';
-          return '<button class="upcoming-entry' + (isBirthday ? ' is-birthday' : '') + '" type="button" data-action="open-upcoming-appointment" data-id="'
-            + escapeHtml(appointment.id) + '" data-date="' + escapeHtml(dateKey) + '" aria-label="'
-            + escapeHtml(appointment.title + ' · ' + dateLabel + ' · Im Kalender öffnen') + '">'
-            + '<span class="upcoming-avatar">' + (isBirthday ? escapeHtml(initials) : svgIcon('calendar', 'ui-icon')) + '</span>'
-            + '<span class="upcoming-entry-copy"><strong>' + escapeHtml(appointment.title) + '</strong><span class="upcoming-entry-meta">'
-            + escapeHtml(detail) + (isBirthday ? '' : ' · ' + escapeHtml(type.label)) + '</span>' + location + '</span>'
-            + (ongoing ? '<span class="upcoming-live">Läuft gerade</span>' : '')
-            + '<span class="upcoming-entry-arrow" aria-hidden="true">›</span></button>';
-        }).join('') + '</div></section>';
-    }).join('');
-  }
-
-  function renderUpcomingSchedule() {
-    const target = $('#upcomingSchedule');
-    if (!target) return;
-    const now = new Date();
-    const schedule = buildUpcomingSchedule(state.appointments, now);
-    const markup = '<section class="panel glass upcoming-panel" aria-labelledby="upcomingBirthdaysTitle">'
-      + '<div class="panel-head"><div><p class="eyebrow">Nächste 3 Tage · inklusive heute</p><h3 id="upcomingBirthdaysTitle">Geburtstage</h3></div>'
-      + '<span class="upcoming-count" aria-label="' + schedule.birthdays.length + ' Geburtstage">' + schedule.birthdays.length + '</span></div>'
-      + renderUpcomingScheduleList(schedule.birthdays, true, now) + '</section>'
-      + '<section class="panel glass upcoming-panel" aria-labelledby="upcomingAppointmentsTitle">'
-      + '<div class="panel-head"><div><p class="eyebrow">Nächste 7 Tage · inklusive heute</p><h3 id="upcomingAppointmentsTitle">Termine</h3></div>'
-      + '<span class="upcoming-count" aria-label="' + schedule.appointments.length + ' Termine">' + schedule.appointments.length + '</span></div>'
-      + renderUpcomingScheduleList(schedule.appointments, false, now) + '</section>';
-    if (target.innerHTML !== markup) target.innerHTML = markup;
-  }
-
-  function openUpcomingAppointment(id, dateKey) {
-    if (!state.appointments.some(appointment => appointment.id === id)) return;
-    selectedCalendarDate = /^\d{4}-\d{2}-\d{2}$/.test(dateKey || '') ? dateKey : toDateKey(new Date());
-    calendarCursor = new Date(selectedCalendarDate + 'T12:00:00');
-    showScreen('calendar');
-    els.dayDetails?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-
-  function createUpcomingAppointment(isBirthday = false) {
-    selectedCalendarDate = toDateKey(new Date());
-    calendarCursor = new Date(selectedCalendarDate + 'T12:00:00');
-    showScreen('calendar');
-    openAppointmentForm({ dateKey: selectedCalendarDate, forceNew: true });
-    if (els.appointmentForm?.elements?.is_birthday) {
-      els.appointmentForm.elements.is_birthday.checked = isBirthday;
-      syncAppointmentBirthdayRecurrence();
-    }
-  }
-
   function renderDayDetails() {
     const key = selectedCalendarDate;
     els.selectedDateTitle.textContent = new Date(`${key}T12:00:00`).toLocaleDateString('de-CH', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });

@@ -62,3 +62,5 @@
 #coachModal .lc-topline { position: sticky; top: -24px; z-index: 3; background: var(--bg2); padding-top: 8px; }
 body.light #coachModal .lc-topline { background: #f5faff; }
 @media (max-width: 760px) { #coachModal .lc-topline { top: -16px; } }
+
+#coachModal .lc-agenda-window { margin: -4px 0 16px; font-size: .76rem; line-height: 1.5; }
