@@ -13,3 +13,23 @@ body.light .project-editor-record{background:rgba(255,255,255,.72);border-color:
 @media(max-width:760px){.project-editor-content{padding:0 10px 12px}.project-editor-toggle .project-editor-content>.phase-form,.project-editor-toggle .project-editor-content>.milestone-form{padding:0}.project-note-editor .project-note-form{padding:0 10px 12px}}
 
 .project-editor-record .project-icon-action{display:inline-grid;place-items:center;width:38px;height:38px;min-width:38px;padding:0;border-radius:999px;background:rgba(74,215,209,.11);border:1px solid rgba(74,215,209,.24);color:var(--primary);box-shadow:none;font-size:0}.project-editor-record .project-icon-action svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}.project-editor-record .project-icon-action-delete{background:rgba(255,99,99,.08);border-color:rgba(255,99,99,.22);color:#b33a3a}.project-complete-button{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:44px;box-shadow:none}.project-complete-icon{display:inline-grid;place-items:center;width:28px;height:28px;min-width:28px;border-radius:50%;background:rgba(255,255,255,.26)}.project-complete-icon svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+
+/* Linked tasks and compact, keyboard-accessible note previews. */
+.project-task-row > .project-task-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;flex-shrink:0}
+.project-task-actions .mini-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 16px;border-radius:999px;white-space:nowrap}
+.project-task-actions .project-task-unlink{border:1px solid rgba(120,145,168,.35);background:rgba(120,145,168,.08);color:var(--text)}
+.project-task-actions .project-task-unlink:hover{background:rgba(120,145,168,.16);border-color:var(--muted)}
+.project-task-row>div:first-child{min-width:0;overflow-wrap:anywhere}
+.project-note-list{align-items:start}
+.project-note-head>span{min-width:0;overflow-wrap:anywhere}
+.project-note-head .list-actions{flex-shrink:0}
+.project-note-disclosure{margin:9px 0}
+.project-note-disclosure>summary{cursor:pointer;list-style:none;border-radius:8px}
+.project-note-disclosure>summary::-webkit-details-marker{display:none}
+.project-note-preview{display:block;color:var(--text);font-weight:400;line-height:1.45;overflow-wrap:anywhere}
+.project-note-toggle{display:inline-flex;align-items:center;gap:8px;min-height:44px;color:var(--primary);font-size:.82rem;font-weight:800}
+.project-note-less,.project-note-disclosure[open] .project-note-more,.project-note-disclosure[open] .project-note-preview{display:none}
+.project-note-disclosure[open] .project-note-less{display:inline}
+.project-note-disclosure[open] .project-editor-chevron{transform:rotate(180deg)}
+.project-note-disclosure>summary:focus-visible,.project-task-actions .mini-btn:focus-visible{outline:3px solid var(--primary);outline-offset:3px}
+@media(max-width:760px){.project-task-row>.project-task-actions{justify-content:flex-start;width:100%}.project-task-actions .project-task-open{flex:1}}

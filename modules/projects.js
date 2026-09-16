@@ -497,7 +497,15 @@
   }
 
   function renderProjectNote(note) {
-    return `<article class="project-note-card"><div class="project-note-head"><span>${escapeHtml(note.category)}</span><div class="list-actions">${projectActionButton('edit-project-note', note.id, 'Notiz bearbeiten', 'edit')}${projectActionButton('delete-project-note', note.id, 'Notiz löschen', 'trash', true)}</div></div><p>${escapeHtml(note.body).replace(/\n/g, '<br>')}</p><small>${dateLabel(note.updated_at)}</small></article>`;
+    const body = String(note.body || '');
+    const characters = typeof Intl.Segmenter === 'function'
+      ? Array.from(new Intl.Segmenter('de', { granularity: 'grapheme' }).segment(body), part => part.segment)
+      : Array.from(body);
+    const fullText = escapeHtml(body).replace(/\n/g, '<br>');
+    const content = characters.length > 100
+      ? `<details class="project-note-disclosure"><summary aria-label="Notiz: ${escapeHtml(note.category)}"><span class="project-note-preview">${escapeHtml(characters.slice(0, 100).join('')).replace(/\n/g, '<br>')}…</span><span class="project-note-toggle"><span class="project-note-more">Mehr anzeigen</span><span class="project-note-less">Weniger anzeigen</span><span class="project-editor-chevron" aria-hidden="true">⌄</span></span></summary><p>${fullText}</p></details>`
+      : `<p>${fullText}</p>`;
+    return `<article class="project-note-card"><div class="project-note-head"><span>${escapeHtml(note.category)}</span><div class="list-actions">${projectActionButton('edit-project-note', note.id, 'Notiz bearbeiten', 'edit')}${projectActionButton('delete-project-note', note.id, 'Notiz löschen', 'trash', true)}</div></div>${content}<small>${dateLabel(note.updated_at)}</small></article>`;
   }
 
   function renderProjectNotes(project, state) {
@@ -551,7 +559,7 @@
   }
 
   function renderTaskRow(task) {
-    return `<article class="project-task-row ${taskDone(task) ? 'is-done' : ''}"><div><strong>${escapeHtml(task.title)}</strong><span class="subtle">${escapeHtml(task.status || 'open')}${task.due_at ? ` · fällig ${escapeHtml(dateLabel(task.due_at))}` : ''}</span></div><button class="mini-btn" type="button" data-action="unlink-task" data-id="${escapeHtml(task.id)}">Lösen</button></article>`;
+    return `<article class="project-task-row ${taskDone(task) ? 'is-done' : ''}"><div><strong>${escapeHtml(task.title)}</strong><span class="subtle">${escapeHtml(task.status || 'open')}${task.due_at ? ` · fällig ${escapeHtml(dateLabel(task.due_at))}` : ''}</span></div><div class="project-task-actions"><button class="mini-btn primary project-task-open" type="button" data-action="open-task-detail" data-id="${escapeHtml(task.id)}" aria-label="Aufgabe öffnen: ${escapeHtml(task.title)}">Aufgabe öffnen <span aria-hidden="true">↗</span></button><button class="mini-btn project-task-unlink" type="button" data-action="unlink-task" data-id="${escapeHtml(task.id)}" aria-label="Projektverknüpfung lösen: ${escapeHtml(task.title)}" title="Nur die Verknüpfung zum Projekt entfernen">Lösen</button></div></article>`;
   }
 
   function openForm(projectId = '') {
@@ -1013,6 +1021,7 @@
       if (action === 'edit-project-note') editProjectNote(id);
       if (action === 'delete-project-note') deleteProjectNote(id);
       if (action === 'link-selected-task') linkTask(id, document.getElementById('projectTaskSelect')?.value || '');
+      if (action === 'open-task-detail' && actionEl.closest('.project-task-row')) closeDetail({ skipSync: true });
       if (action === 'unlink-task') unlinkTask(id);
       if (action === 'create-project-task') createProjectTask(id);
     });
