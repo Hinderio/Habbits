@@ -911,6 +911,8 @@
   let authSubscription = null;
   let passwordRecoveryMode = false;
   let syncSubscription = null;
+  let remoteDeltaReader = null;
+  let remoteDeltaClient = null;
   let syncInFlight = false;
   let pendingSyncRequest = null;
   let lastSyncAt = null;
@@ -13976,8 +13978,13 @@ async function deleteAlcoholLog(id) {
     if (!supabaseClient || authSubscription) return;
     const { data } = supabaseClient.auth.onAuthStateChange((event, session) => {
       const wasSignedOut = !currentUser;
+      const previousUserId = currentUserId();
       if (event === 'PASSWORD_RECOVERY') passwordRecoveryMode = true;
       setAuthSession(session || null);
+      if (previousUserId !== currentUserId()) {
+        remoteDeltaReader?.reset();
+        lastMobileConsumptionFingerprint = '';
+      }
       renderSyncStatus(currentUser ? 'connected' : 'auth');
       if (!currentUser) clearRemoteSubscription();
       if (currentUser && (wasSignedOut || event === 'SIGNED_IN')) {
@@ -14218,24 +14225,25 @@ function initOngoingSync() {
   }
 
   function cigaretteSnapshotFingerprint(rows = []) {
-    return (rows || [])
-      .filter(item => item?.id)
-      .map(item => [
-        item.id,
-        item.updated_at || item.created_at || '',
-        item.smoked_at || '',
-        item.note || ''
-      ].join(':'))
-      .sort()
-      .join('|');
+    return JSON.stringify((rows || []).filter(item => item?.id).map(item => [
+      item.id, item.updated_at || item.created_at || '', item.smoked_at || '',
+      item.note || '', item.interval_minutes ?? null, Number(item.points || 0), Boolean(item.alcohol_context)
+    ]).sort((a, b) => String(a[0]).localeCompare(String(b[0]))));
+  }
+
+  function remoteRowsForMobileConsumption(result) {
+    if (result?.error || result?.complete !== true || !Array.isArray(result.data)) throw result?.error || new Error('Unvollständiger mobiler Snapshot');
+    return remoteRows('cigarette_events', result);
   }
 
   async function pullMobileConsumptionSnapshot() {
     if (!shouldRunMobileConsumptionPull() || mobileConsumptionPullInFlight || syncInFlight) return;
     mobileConsumptionPullInFlight = true;
+    const pullUserId = currentUserId();
     try {
       const result = await fetchRemoteTable('cigarette_events');
-      const remoteRows = Array.isArray(result?.data) ? result.data : [];
+      if (currentUserId() !== pullUserId) return;
+      const remoteRows = remoteRowsForMobileConsumption(result);
       const remoteFingerprint = cigaretteSnapshotFingerprint(remoteRows);
       if (remoteFingerprint === lastMobileConsumptionFingerprint) return;
       lastMobileConsumptionFingerprint = remoteFingerprint;
@@ -15321,12 +15329,14 @@ function initOngoingSync() {
 
   async function pullSupabaseData() {
     if (!supabaseClient) return;
+    const pullUserId = currentUserId();
     const tableNames = [
       'habit_definitions', 'habit_entries', 'tasks',
       'cigarette_events', 'alcohol_logs', 'alcohol_events', 'task_ideas',
       'appointments', 'points_ledger', 'pause_periods', 'weekly_reviews', 'monthly_missions'
     ];
     const snapshots = await fetchRemoteTableSnapshots(tableNames);
+    if (currentUserId() !== pullUserId) throw new Error('Sync-Konto während des Abrufs gewechselt.');
     const resultFor = table => snapshots.get(table)?.result || null;
     const failedTables = tableNames.filter(table => snapshots.get(table)?.error);
     const rowsFor = table => {
@@ -15464,7 +15474,25 @@ function initOngoingSync() {
     if (!userId) return { data: [], error: null };
     const pagination = window.HabitFlowSyncIntegrity;
     if (!pagination?.fetchAllRows) throw new Error('Remote-Paginierung konnte nicht geladen werden.');
-    const result = await pagination.fetchAllRows({
+    let result = null;
+    if (pagination.createDeltaSnapshotReader && typeof supabaseClient.rpc === 'function') {
+      if (!remoteDeltaReader || remoteDeltaClient !== supabaseClient) {
+        remoteDeltaClient = supabaseClient;
+        const client = supabaseClient;
+        remoteDeltaReader = pagination.createDeltaSnapshotReader({
+          getUserId: currentUserId,
+          request: (tableName, cursor) => client.rpc('habitflow_sync_pull', { p_table: tableName, p_cursor: cursor, p_limit: 1000 })
+        });
+      }
+      try { result = await remoteDeltaReader.read(table); }
+      catch (error) {
+        // Old schemas and transient/invalid delta responses retain the existing
+        // complete paginated read, including optional-table handling below.
+        if (!['PGRST202', '42883'].includes(error?.code)) console.warn('Delta-Abgleich fällt auf vollständigen Abruf zurück.', table, error);
+      }
+      if (currentUserId() !== userId) throw new Error('Sync-Konto während des Abrufs gewechselt.');
+    }
+    if (!result) result = await pagination.fetchAllRows({
       pageSize: REMOTE_TABLE_PAGE_SIZE,
       fetchPage: ({ from, to, page }) => supabaseClient
         .from(table)
@@ -15473,6 +15501,7 @@ function initOngoingSync() {
         .order('id', { ascending: true })
         .range(from, to)
     });
+    if (currentUserId() !== userId) throw new Error('Sync-Konto während des Abrufs gewechselt.');
     if (result.error) {
       if (OPTIONAL_SYNC_TABLES.has(table) && isMissingRemoteRelationError(result.error)) {
         if (table === 'task_ideas') remoteTaskIdeasSupported = false;

@@ -50,6 +50,87 @@
     };
   }
 
+  function createDeltaSnapshotReader({ request, getUserId }) {
+    const snapshots = new Map();
+    const pending = new Map();
+    let owner = null;
+    let generation = 0;
+    let unavailableUntil = 0;
+    const copy = value => JSON.parse(JSON.stringify(value));
+    const revision = value => {
+      if (typeof value !== 'string' || !/^[0-9]{1,18}$/.test(value)) throw new Error('Invalid sync revision');
+      return BigInt(value);
+    };
+    function reset() {
+      generation += 1;
+      snapshots.clear();
+      pending.clear();
+      owner = getUserId();
+    }
+    async function load(table, userId, epoch) {
+      const previous = snapshots.get(table);
+      let cursor = previous?.cursor ?? null;
+      let rows = new Map(previous?.rows || []);
+      for (let page = 0; page < MAX_PAGES; page += 1) {
+        const result = await request(table, cursor);
+        if (epoch !== generation || getUserId() !== userId) throw new Error('Sync account changed');
+        if (result?.error) {
+          if (['PGRST202', '42883'].includes(result.error.code)) unavailableUntil = Date.now() + 300_000;
+          throw result.error;
+        }
+        const payload = result?.data;
+        if (payload?.protocol !== 1 || payload.table !== table || payload.user_id !== userId || typeof payload.has_more !== 'boolean') throw new Error('Invalid sync response');
+        const next = revision(payload.cursor);
+        if (payload.mode === 'snapshot') {
+          if (!Array.isArray(payload.rows) || payload.has_more) throw new Error('Incomplete initial sync snapshot');
+          rows = new Map();
+          for (const row of payload.rows) {
+            if (!row?.id || row.user_id !== userId || rows.has(row.id)) throw new Error('Invalid sync snapshot row');
+            rows.set(row.id, row);
+          }
+        } else if (payload.mode === 'delta') {
+          if (cursor === null || !Array.isArray(payload.changes) || next < revision(cursor)) throw new Error('Invalid delta base');
+          let last = revision(cursor);
+          for (const change of payload.changes) {
+            const current = revision(change.revision);
+            if (!change.id || typeof change.deleted !== 'boolean' || current <= last || current > next) throw new Error('Invalid delta ordering');
+            if (change.deleted) rows.delete(change.id);
+            else {
+              if (change.row?.id !== change.id || change.row.user_id !== userId) throw new Error('Invalid delta row');
+              rows.set(change.id, change.row);
+            }
+            last = current;
+          }
+          if (payload.has_more && (next === revision(cursor) || last !== next)) throw new Error('Delta cursor made no progress');
+        } else throw new Error('Unknown sync mode');
+        cursor = payload.cursor;
+        if (!payload.has_more) {
+          snapshots.set(table, { cursor, rows });
+          // Never expose a partial delta to snapshot-based deletion/merge logic.
+          // Isolate cached rows from callers that normalize or mutate nested data.
+          return { data: copy([...rows.values()]), error: null, complete: true, count: rows.size };
+        }
+      }
+      throw new Error('Delta pagination exceeded safety limit');
+    }
+    async function read(table) {
+      const userId = getUserId();
+      if (owner !== userId) reset();
+      if (!userId || Date.now() < unavailableUntil) return null;
+      if (pending.has(table)) {
+        // A post-write pull must not reuse a read that started before the write.
+        try { await pending.get(table); } catch {}
+        if (getUserId() !== userId) throw new Error('Sync account changed');
+        return read(table);
+      }
+      const job = load(table, userId, generation);
+      pending.set(table, job);
+      try { return await job; }
+      finally { if (pending.get(table) === job) pending.delete(table); }
+    }
+    return Object.freeze({ read, reset });
+  }
+
   function compactActivityIdeasForStorage(rows = []) {
     return (Array.isArray(rows) ? rows : []).filter(row => {
       if (!row || typeof row !== 'object') return false;
@@ -88,6 +169,7 @@
   window.HabitFlowSyncIntegrity = Object.freeze({
     DEFAULT_PAGE_SIZE,
     fetchAllRows,
+    createDeltaSnapshotReader,
     compactActivityIdeasForStorage,
     mergeRemoteAuthoritative,
     mergeRemoteNewest

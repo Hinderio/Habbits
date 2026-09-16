@@ -360,6 +360,48 @@
     window.setTimeout(() => cleanupRemotePointsLedger(client, originalFrom, { force: false }), 8000);
   }
 
+  async function resolveExistingLedgerIds(originalFrom, rows) {
+    const groups = new Map();
+    for (const row of rows) {
+      if (!row.source_id || !row.source_type) continue;
+      const key = JSON.stringify([row.user_id || null, row.source_type]);
+      if (!groups.has(key)) groups.set(key, { userId: row.user_id, type: row.source_type, ids: new Set(), matches: new Map() });
+      groups.get(key).ids.add(String(row.source_id).toLowerCase());
+    }
+    for (const group of groups.values()) {
+      const ids = [...group.ids];
+      for (let offset = 0; offset < ids.length; offset += 100) {
+        const batch = ids.slice(offset, offset + 100);
+        let loaded = 0;
+        let count = null;
+        const seen = new Set();
+        do {
+          let query = originalFrom('points_ledger').select('id,source_id', { count: 'exact' })
+            .eq('source_type', group.type).in('source_id', batch)
+            .order('id', { ascending: true }).range(loaded, loaded + 999);
+          if (group.userId) query = query.eq('user_id', group.userId);
+          const result = await query;
+          if (result?.error) throw result.error;
+          if (!Array.isArray(result?.data) || !Number.isInteger(result.count) || result.count < 0) throw new Error('Incomplete ledger ID lookup');
+          if (count === null) count = result.count;
+          if (count !== result.count) throw new Error('Ledger changed during ID lookup; retry sync');
+          for (const match of result.data) {
+            if (!match.id || seen.has(match.id) || !batch.includes(match.source_id)) throw new Error('Invalid ledger ID lookup');
+            seen.add(match.id);
+            if (!group.matches.has(match.source_id)) group.matches.set(match.source_id, match.id);
+          }
+          loaded += result.data.length;
+          if (!result.data.length && loaded < count) throw new Error('Incomplete ledger ID lookup');
+        } while (loaded < count);
+      }
+    }
+    return rows.map(row => {
+      const group = groups.get(JSON.stringify([row.user_id || null, row.source_type]));
+      const id = group?.matches.get(String(row.source_id).toLowerCase());
+      return id ? { ...row, id } : { ...row };
+    });
+  }
+
   function patchSupabaseCreateClient() {
     const supabase = window.supabase;
     if (!supabase || supabase.__habitFlowPointsLedgerGuard || typeof supabase.createClient !== 'function') return false;
@@ -376,20 +418,12 @@
           const inputWasArray = Array.isArray(rows);
           const normalizedRows = (inputWasArray ? rows : [rows]).map(normalizeRemoteLedgerRow).filter(Boolean);
           if (!normalizedRows.length) return { data: inputWasArray ? [] : null, error: null };
-          const preparedRows = [];
-          for (const row of normalizedRows) {
-            const next = { ...row };
-            if (next.source_id && next.source_type) {
-              try {
-                let query = originalFrom('points_ledger').select('id').eq('source_type', next.source_type).eq('source_id', next.source_id).limit(1);
-                if (next.user_id) query = query.eq('user_id', next.user_id);
-                const { data, error } = await query.maybeSingle();
-                if (!error && data?.id) next.id = data.id;
-              } catch (error) {
-                console.warn('[HabitFlow/points-ledger-sync-guard] Existing ledger row lookup skipped.', error);
-              }
-            }
-            preparedRows.push(next);
+          let preparedRows;
+          try {
+            preparedRows = await resolveExistingLedgerIds(originalFrom, normalizedRows);
+          } catch (error) {
+            // Keep rows pending for retry instead of risking duplicate inserts.
+            return { data: null, error };
           }
           return originalUpsert(inputWasArray ? preparedRows : preparedRows[0], { ...options, onConflict: 'id' });
         };
