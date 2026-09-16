@@ -12194,15 +12194,17 @@ async function deleteAlcoholLog(id) {
     const isActive = isWithinPauseAt(nowIso(), { scope: period.scope, targetId: period.target_id });
     const endLabel = period.ends_at ? formatDateTimeCompact(period.ends_at) : 'offen';
     return `<article class="pause-card ${isActive ? 'is-active' : ''}">
+      <div class="pause-card-overview">
       <div><p class="eyebrow">${escapeHtml(PAUSE_SCOPE_META[period.scope]?.eyebrow || 'Pause')}</p><h4>${escapeHtml(label)}</h4></div>
-      <p>${formatDateTimeCompact(period.starts_at)} – ${endLabel}</p>
+      ${['smoke', 'alcohol'].includes(period.scope) ? `<div class="pause-card-period"><div><span>Beginn</span><p>${formatDateTimeCompact(period.starts_at)}</p></div><div><span>Ende</span><p>${endLabel}</p></div></div>` : `<p>${formatDateTimeCompact(period.starts_at)} – ${endLabel}</p>`}
       ${period.note ? `<small>${escapeHtml(period.note)}</small>` : '<small>Kein Kommentar</small>'}
-      ${['smoke', 'alcohol'].includes(period.scope) ? renderPauseConsumptionLogList(period) : ''}
       <div class="pause-card-actions">
         ${isActive ? `<button class="mini-btn" type="button" data-action="end-pause-now" data-id="${period.id}">Jetzt beenden</button>` : ''}
         <button class="consumption-icon-action" type="button" data-action="edit-pause" data-id="${period.id}" aria-label="Pause bearbeiten" title="Bearbeiten">${svgIcon('edit', 'ui-icon')}</button>
         <button class="consumption-icon-action consumption-icon-action-delete" type="button" data-action="delete-pause" data-id="${period.id}" aria-label="Pause löschen" title="Löschen">${svgIcon('trash', 'ui-icon')}</button>
       </div>
+      </div>
+      ${['smoke', 'alcohol'].includes(period.scope) ? renderPauseConsumptionLogList(period) : ''}
     </article>`;
   }
 
