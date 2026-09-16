@@ -35,17 +35,17 @@
   ];
   const FINANCE_COLORS = ['#35c9a5', '#61cbf4', '#f6b33f'];
   const DEFAULT_LISTS = [
-    { id: 'lists', slug: 'listen', title: 'Listen', type: 'generic', icon: 'list', color: '#AF4360', description: 'Freie Listen für kleine Sammlungen, Ideen und Dinge, die nicht in Tasks gehören.' },
-    { id: 'vouchers', slug: 'gutscheine', title: 'Gutscheine', type: 'voucher', icon: 'ticket', color: '#AD4189', description: 'Gutscheine, Codes und Fristen ruhig im Blick behalten.' },
-    { id: 'shopping', slug: 'shopping', title: 'Shopping', type: 'shopping', icon: 'shopping', color: '#713B89', description: 'Einkäufe, Mengen und Läden als klare Liste sammeln.' },
-    { id: 'photos', slug: 'fotospots', title: 'Fotospots', type: 'photos', icon: 'camera', color: '#2A3680', description: 'Spots sammeln und daraus visuelle Touren planen.' },
-    { id: 'subscriptions', slug: 'abos', title: 'Abos', type: 'subscription', icon: 'repeat', color: '#587E99', description: 'Abos, Kosten, Laufzeiten und Kündigungsfenster ordnen.' },
-    { id: 'terms', slug: 'begriffe', title: 'Begriffe', type: 'generic', icon: 'book', color: '#6EBBBE', description: 'Begriffe nach Kategorien sammeln und mit Lernkarten festigen.' },
-    { id: 'finance', slug: 'finanzen', title: 'Finanzen', type: 'generic', icon: 'wallet', color: '#4AA885', description: 'Investitionen, Guthaben und offene Schulden in einem ruhigen Finanzbild.' },
-    { id: 'chatgpt', slug: 'chatgpt', title: 'ChatGPT', type: 'generic', icon: 'message', color: '#00934A', description: 'Wichtige Projekte und Threads gruppiert sichern und direkt wieder öffnen.' },
-    { id: WEBLINK_LIST_ID, slug: 'weblinks', title: 'Weblinks', type: 'generic', icon: 'external', color: '#429F47', description: 'Wichtige Webseiten sammeln, kategorisieren und schnell wiederfinden.' },
-    { id: GIFT_LIST_ID, slug: 'geschenk', title: 'Geschenk', type: 'generic', icon: 'gift', color: '#8EB844', description: 'Geschenkideen für deine Lieblingsmenschen sammeln und als Task umsetzen.' },
-    { id: WEEKLY_LIST_ID, slug: 'wochenzettel', title: 'Wochenzettel', type: 'generic', icon: 'note', color: '#C9D23F', description: 'Kleine Gedanken und Erinnerungen – Woche für Woche.' }
+    { id: 'lists', slug: 'listen', title: 'Listen', type: 'generic', icon: 'list', color: '#EDAF36', description: 'Freie Listen für kleine Sammlungen, Ideen und Dinge, die nicht in Tasks gehören.' },
+    { id: 'vouchers', slug: 'gutscheine', title: 'Gutscheine', type: 'voucher', icon: 'ticket', color: '#E08230', description: 'Gutscheine, Codes und Fristen ruhig im Blick behalten.' },
+    { id: 'shopping', slug: 'shopping', title: 'Shopping', type: 'shopping', icon: 'shopping', color: '#D8612C', description: 'Einkäufe, Mengen und Läden als klare Liste sammeln.' },
+    { id: 'photos', slug: 'fotospots', title: 'Fotospots', type: 'photos', icon: 'camera', color: '#CF2E26', description: 'Spots sammeln und daraus visuelle Touren planen.' },
+    { id: 'subscriptions', slug: 'abos', title: 'Abos', type: 'subscription', icon: 'repeat', color: '#AF4360', description: 'Abos, Kosten, Laufzeiten und Kündigungsfenster ordnen.' },
+    { id: 'terms', slug: 'begriffe', title: 'Begriffe', type: 'generic', icon: 'book', color: '#AD4189', description: 'Begriffe nach Kategorien sammeln und mit Lernkarten festigen.' },
+    { id: 'finance', slug: 'finanzen', title: 'Finanzen', type: 'generic', icon: 'wallet', color: '#713B89', description: 'Investitionen, Guthaben und offene Schulden in einem ruhigen Finanzbild.' },
+    { id: 'chatgpt', slug: 'chatgpt', title: 'ChatGPT', type: 'generic', icon: 'message', color: '#8C9DD8', description: 'Wichtige Projekte und Threads gruppiert sichern und direkt wieder öffnen.' },
+    { id: WEBLINK_LIST_ID, slug: 'weblinks', title: 'Weblinks', type: 'generic', icon: 'external', color: '#587E99', description: 'Wichtige Webseiten sammeln, kategorisieren und schnell wiederfinden.' },
+    { id: GIFT_LIST_ID, slug: 'geschenk', title: 'Geschenk', type: 'generic', icon: 'gift', color: '#6EBBBE', description: 'Geschenkideen für deine Lieblingsmenschen sammeln und als Task umsetzen.' },
+    { id: WEEKLY_LIST_ID, slug: 'wochenzettel', title: 'Wochenzettel', type: 'generic', icon: 'note', color: '#4AA885', description: 'Kleine Gedanken und Erinnerungen – Woche für Woche.' }
   ];
 
   const ICONS = {

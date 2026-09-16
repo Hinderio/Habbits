@@ -35,11 +35,11 @@ test('service worker caches weekly assets under a bumped version', () => {
   assert.match(workerSource, /'\.\/modules\/lists\.js'/);
   assert.match(workerSource, /'\.\/modules\/lists\.css'/);
   assert.match(indexSource, /modules\/lists\.css\?v=311/);
-  assert.match(indexSource, /modules\/lists\.js\?v=311/);
+  assert.match(indexSource, /modules\/lists\.js\?v=312/);
 });
 
 test('weekly notes keep the habit-card surface with the updated list tone', () => {
-  assert.match(listSource, /id:\s*WEEKLY_LIST_ID[^\n]+color:\s*'#C9D23F'/);
+  assert.match(listSource, /id:\s*WEEKLY_LIST_ID[^\n]+color:\s*'#4AA885'/);
   assert.match(listSource, /class="hf-weekly-card-icon"/);
   assert.match(listStyle, /\.hf-weekly-card\{[^}]*border-radius:24px[^}]*background:rgba\(255,255,255,\.055\)/);
   assert.match(listStyle, /\.hf-weekly-card-icon\{/);
