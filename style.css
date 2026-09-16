@@ -4905,7 +4905,6 @@ body.monthly-magazine-reader-open{overflow:hidden}
   box-shadow: none;
   align-items: start;
 }
-#consumptionPauseList .pause-card.is-active { border-inline-start: 3px solid #4ad7d1; }
 #consumptionPauseList .pause-card-overview { display: grid; gap: 16px; min-width: 0; }
 #consumptionPauseList .pause-card .eyebrow { font-size: .65rem; font-weight: 650; letter-spacing: .12em; }
 #consumptionPauseList .pause-card h4 { margin-top: 5px; font-size: 1.1rem; letter-spacing: -.02em; }
@@ -4928,7 +4927,6 @@ body.monthly-magazine-reader-open{overflow:hidden}
 #consumptionPauseList .pause-card-log-row small { grid-column: 1 / -1; font-size: .72rem; font-weight: 450; line-height: 1.5; overflow-wrap: anywhere; }
 #consumptionPauseList .pause-card-log-more, #consumptionPauseList .pause-card-log-empty { grid-column: 1 / -1; padding-top: 10px; font-size: .72rem; font-weight: 500; line-height: 1.5; }
 body.light #consumptionPauseList .pause-card { background: #fff; border-color: #e2e8ef; }
-body.light #consumptionPauseList .pause-card.is-active { border-inline-start-color: #39bbb5; }
 @container (max-width: 950px) {
   #consumptionPauseList .pause-card { grid-template-columns: minmax(210px, .9fr) minmax(0, 1.2fr); gap: 20px; }
   #consumptionPauseList .pause-card-log-list { grid-template-columns: minmax(0, 1fr); }
