@@ -20,6 +20,11 @@
   let liveSnapshot = null;
   let observer = null;
   let observedTarget = null;
+  let cachedSnapshot = null;
+  let cachedMetrics = null;
+  let cachedDay = '';
+  const CIGARETTE_METRIC_FIELDS = ['id', 'smoked_at', 'points', 'interval_minutes', 'scoring_interval_minutes', 'scoring_sleep_deducted_minutes', 'deleted_at', 'archived_at', 'is_archived'];
+  const PAUSE_METRIC_FIELDS = ['scope', 'pause_scope', 'starts_at', 'ends_at', 'is_archived'];
 
   const $ = (selector, root = document) => root?.querySelector?.(selector);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
@@ -144,15 +149,7 @@
     const intervals = rows.map(item => Number(item.interval_minutes)).filter(value => Number.isFinite(value) && value > 0).sort((a, b) => a - b);
     const activeIntervals = activeDaytimePauses(rows, state, 28);
     const median = medianOf(activeIntervals);
-    const latest = rows[rows.length - 1] || null;
-    const pause = latest ? Math.max(0, Math.floor((Date.now() - new Date(latest.smoked_at).getTime()) / 60000)) : null;
     const bestDaytime = activeIntervals.length ? Math.max(...activeIntervals) : null;
-    const bonusMinutes = median != null && pause != null ? Math.max(0, Math.floor(pause - median)) : 0;
-    const bonusProgress = bonusMinutes > 0 && bestDaytime != null
-      ? bestDaytime > median
-        ? Math.min(1, bonusMinutes / (bestDaytime - median))
-        : 1
-      : 0;
     const todayKey = dateKey(new Date());
     const weekKeys = Array.from({ length: 7 }, (_, index) => {
       const date = new Date();
@@ -163,23 +160,56 @@
     const today = rows.filter(item => dateKey(item.smoked_at) === todayKey);
     const week = rows.filter(item => weekKeys.includes(dateKey(item.smoked_at)));
     const weekIntervals = week.map(item => Number(item.interval_minutes)).filter(value => Number.isFinite(value) && value > 0);
-    const next = pause == null ? 10 : pause < 30 ? Math.min(30, pause + 10) : pause < 60 ? 60 : pause < 120 ? 120 : pause < 240 ? 240 : pause + 30;
-    return {
+    return withCurrentPause({
       rows,
       recent: [...rows].reverse().slice(0, 3),
       total: rows.length,
       today: today.length,
       week: week.length,
-      pause,
       median,
       bestDaytime,
-      bonusMinutes,
-      bonusProgress,
-      next,
-      progress: median && pause != null ? Math.min(1, Math.max(0, pause / median)) : 0,
       avg: weekIntervals.length ? duration(weekIntervals.reduce((sum, value) => sum + value, 0) / weekIntervals.length) : '-',
       best: intervals.length ? Math.max(...intervals) : null
-    };
+    });
+  }
+
+  function withCurrentPause(data) {
+    const latest = data.rows[data.rows.length - 1] || null;
+    const pause = latest ? Math.max(0, Math.floor((Date.now() - new Date(latest.smoked_at).getTime()) / 60000)) : null;
+    const { median, bestDaytime } = data;
+    const bonusMinutes = median != null && pause != null ? Math.max(0, Math.floor(pause - median)) : 0;
+    const bonusProgress = bonusMinutes > 0 && bestDaytime != null
+      ? bestDaytime > median ? Math.min(1, bonusMinutes / (bestDaytime - median)) : 1
+      : 0;
+    const next = pause == null ? 10 : pause < 30 ? Math.min(30, pause + 10) : pause < 60 ? 60 : pause < 120 ? 120 : pause < 240 ? 240 : pause + 30;
+    return { ...data, pause, bonusMinutes, bonusProgress, next,
+      progress: median && pause != null ? Math.min(1, Math.max(0, pause / median)) : 0 };
+  }
+
+  function sameMetricRows(left = [], right = [], fields) {
+    if (left === right) return true;
+    if (left.length !== right.length) return false;
+    return left.every((row, index) => {
+      const other = right[index];
+      if (row === other) return true;
+      if (!row || !other) return false;
+      return fields.every(field => Object.is(row[field], other[field]));
+    });
+  }
+
+  function metricsForSnapshot(snapshot) {
+    const now = new Date();
+    const day = `${dateKey(now)}:${now.getTimezoneOffset()}`;
+    if (!cachedMetrics || cachedDay !== day
+      || !sameMetricRows(cachedSnapshot.cigarettes, snapshot.cigarettes, CIGARETTE_METRIC_FIELDS)
+      || !sameMetricRows(cachedSnapshot.pausePeriods, snapshot.pausePeriods, PAUSE_METRIC_FIELDS)) {
+      // Own the values used for comparison: app rows can be edited in place.
+      cachedSnapshot = cloneLiveSnapshot(snapshot) || { cigarettes: [], pausePeriods: [] };
+      cachedMetrics = metrics(cachedSnapshot);
+      cachedDay = day;
+      return cachedMetrics;
+    }
+    return withCurrentPause(cachedMetrics);
   }
 
   function style() {
@@ -350,8 +380,7 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
           const nextData = queuedRingData;
           queuedRingData = null;
           if (!nextData) return;
-          ring(nextData);
-          lastRingPaintAt = Date.now();
+          paintRingNow(withCurrentPause(nextData));
         }, remaining);
       }
       return;
@@ -359,13 +388,50 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
     window.clearTimeout(ringRefreshTimer);
     ringRefreshTimer = null;
     queuedRingData = null;
-    ring(data);
-    lastRingPaintAt = Date.now();
+    paintRingNow(data);
+  }
+
+  function paintRingNow(data) {
+    observer?.disconnect();
+    try {
+      ring(data);
+      lastRingPaintAt = Date.now();
+    } finally {
+      if (!busy) observeSmokingScreen();
+    }
   }
 
   function refreshRing() {
     if (document.hidden || !$('#screen-smoking .smoke-ring')) return;
-    paintRing(metrics(readCurrentSnapshot()));
+    const previous = cachedMetrics;
+    const snapshot = cachedSnapshot || readCurrentSnapshot();
+    const data = metricsForSnapshot(snapshot);
+    if (previous !== cachedMetrics) render(snapshot, { data });
+    else paintRing(data);
+  }
+
+  function refreshTimedDisplay() {
+    const snapshot = readCurrentSnapshot();
+    const previous = cachedMetrics;
+    const data = metricsForSnapshot(snapshot);
+    // Reconcile silent data edits too, but unchanged history needs no full render.
+    if (previous !== cachedMetrics) return render(snapshot, { data });
+    if (busy) return;
+    observer?.disconnect();
+    busy = true;
+    try {
+      paintRing(data);
+      const root = $('#smokeHistory');
+      const focus = $('.hf-overview-row.is-focus .hf-overview-copy span', root);
+      const text = overviewFocus(data);
+      if (focus && focus.textContent !== text) {
+        focus.textContent = text;
+        if (root) delete root.dataset.hfSmokingOverviewMarkup;
+      }
+    } finally {
+      busy = false;
+      observeSmokingScreen();
+    }
   }
 
   function actions() {
@@ -400,6 +466,10 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
     if (open && open.textContent !== 'Coach öffnen') open.textContent = 'Coach öffnen';
   }
 
+  function overviewFocus(data) {
+    return data.pause == null ? 'Erste bewusste Pause setzen.' : data.pause >= data.next ? 'Pause halten und nicht verhandeln.' : `${duration(data.next)} als nächste saubere Marke.`;
+  }
+
   function overview(data) {
     const root = $('#smokeHistory');
     const panel = $(`${pane} .consumption-history-panel`);
@@ -408,7 +478,7 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
     if (title && title.textContent !== 'Heute im Überblick') title.textContent = 'Heute im Überblick';
     const badge = $('#lastSmokePoints', panel);
     if (badge) badge.textContent = 'Mehr';
-    const focus = data.pause == null ? 'Erste bewusste Pause setzen.' : data.pause >= data.next ? 'Pause halten und nicht verhandeln.' : `${duration(data.next)} als nächste saubere Marke.`;
+    const focus = overviewFocus(data);
     const recent = data.recent.length ? data.recent.map(item => {
       const points = Number(item.points || 0);
       const className = points < 0 ? 'is-danger' : points > 0 ? 'is-positive' : '';
@@ -449,14 +519,14 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
     observer.observe(observedTarget, { childList: true, subtree: true });
   }
 
-  function render(snapshot = null) {
+  function render(snapshot = null, { data = null, forceRing = false } = {}) {
     if (busy) return;
     observer?.disconnect();
     busy = true;
     try {
-      const data = metrics(snapshot || readCurrentSnapshot());
+      data = data || metricsForSnapshot(snapshot || readCurrentSnapshot());
       style();
-      paintRing(data);
+      paintRing(data, { force: forceRing });
       actions();
       coach();
       overview(data);
@@ -484,14 +554,16 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
       schedule(0);
       return Boolean(nextSnapshot);
     }
-    paintRing(metrics(currentSnapshot), { force: true });
-    render(currentSnapshot);
+    render(currentSnapshot, { forceRing: true });
     return Boolean(nextSnapshot);
   }
 
   function renderLiveUpdate(event) {
     applyLiveSnapshot(event?.detail?.snapshot);
   }
+
+  // Register immediately so live events before DOMContentLoaded are not lost.
+  window.addEventListener('habitflow:consumption-live-update', renderLiveUpdate);
 
   window.HabitFlowSmokingCircle = Object.freeze({
     update: applyLiveSnapshot,
@@ -504,14 +576,13 @@ body:not(.light) #screen-smoking .smoke-ring span,body:not(.light) #screen-smoki
     render();
     [150, 450, 1000, 2200].forEach(delay => window.setTimeout(render, delay));
     window.setInterval(refreshRing, RING_REFRESH_MS);
-    window.setInterval(render, 30000);
+    window.setInterval(refreshTimedDisplay, 30000);
     window.addEventListener('storage', event => {
       if (!event.key || event.key === STATE_KEY) {
         liveSnapshot = null;
         schedule();
       }
     });
-    window.addEventListener('habitflow:consumption-live-update', renderLiveUpdate);
     document.addEventListener('click', event => {
       const action = event.target?.closest?.('[data-action]')?.dataset?.action || '';
       if (action === 'rotate-craving-tip') $('#screen-smoking .craving-coach-card')?.classList.add('hf-show-coach-details');

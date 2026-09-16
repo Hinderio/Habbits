@@ -6381,7 +6381,6 @@ cacheEls();
   function notifyConsumptionLiveUpdate(reason = 'state') {
     const snapshot = consumptionLiveSnapshot();
     const at = Date.now();
-    window.HabitFlowSmokingCircle?.update?.(snapshot, { reason, at });
     window.dispatchEvent(new CustomEvent('habitflow:consumption-live-update', {
       detail: {
         reason,
