@@ -16,7 +16,7 @@ function setup() {
  isAlcoholPointsEntry:()=>false,
  };
  vm.createContext(c);
- for(const name of ['isWithinPauseAt','pausePeriodsOverlappingRange','intervalCrossesPause','smokeDailyBonusSourceId','isSmokeDailyBonusEntry','smokeDailyBonusDay','smokeBonusDayPaused','smokeDailyBonusPoints','smokeDailyBonusReason','recalculateSmokeDailyBonuses','addPoints','isSmokePauseLedgerEntry','reconcileSmokePausePoints','isPausedLedgerPoint','visibleLedgerPoints','remoteLedgerSourceId','isUuid','recalculateSmokeIntervals','migrateCigaretteScoring'])vm.runInContext(block(name),c);
+ for(const name of ['isWithinPauseAt','pausePeriodsOverlappingRange','intervalCrossesPause','smokeDailyBonusSourceId','isSmokeDailyBonusEntry','smokeDailyBonusDay','smokeBonusDayPaused','smokeDailyBonusPoints','smokeDailyBonusReason','recalculateSmokeDailyBonuses','addPoints','createPointsLedgerWriter','isSmokePauseLedgerEntry','reconcileSmokePausePoints','isPausedLedgerPoint','visibleLedgerPoints','remoteLedgerSourceId','isUuid','recalculateSmokeIntervals','migrateCigaretteScoring'])vm.runInContext(block(name),c);
  return {c,deleted};
 }
 const legacy=(id,source_id=null)=>({id,source_type:'bonus',source_id,points:140,reason:'Rauchziel: 1 Zigarette · +140 Tagesbonus',earned_at:'2026-09-01T23:59:00.000Z',synced:true});

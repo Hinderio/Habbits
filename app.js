@@ -3210,11 +3210,9 @@ cacheEls();
     }
   }
 
-  function saveState({ skipRender = false, skipSmokeRecalc = false } = {}) {
+  function saveState({ skipRender = false } = {}) {
     if (state?.deletedRemoteIds) state.deletedRemoteIds = combineDeletedRemoteIds(state.deletedRemoteIds, readRemoteDeleteArchive());
-    if (!skipSmokeRecalc && Array.isArray(state?.cigarettes) && state.cigarettes.length) {
-      recalculateSmokeIntervals({ markUpdated: false });
-    }
+    // Scoring belongs to domain mutations and explicit repairs, not persistence.
     writeRemoteDeleteArchive(state.deletedRemoteIds);
     const storedActivityIdeas = window.HabitFlowSyncIntegrity?.compactActivityIdeasForStorage
       ? window.HabitFlowSyncIntegrity.compactActivityIdeasForStorage(state.activityIdeas)
@@ -11344,7 +11342,7 @@ cacheEls();
 
       addPoints('cigarette', entry.id, points, cigarettePointReason(scoringContext.scoringInterval, scoringContext), smokedAt);
       recalculateSmokeDailyBonuses(new Set([todayKey]));
-      saveState({ skipRender: true, skipSmokeRecalc: true });
+      saveState({ skipRender: true });
       renderSmokingQuickCapture();
       notifyConsumptionLiveUpdate('cigarette-recorded-committed');
       scheduleConsumptionBackgroundRender();
@@ -11415,7 +11413,7 @@ cacheEls();
       committed = true;
       if (fallbackTimer) window.clearTimeout(fallbackTimer);
 
-      saveState({ skipRender: true, skipSmokeRecalc: true });
+      saveState({ skipRender: true });
       renderSmokingQuickCapture();
       notifyConsumptionLiveUpdate('trigger-saved-committed');
       scheduleConsumptionBackgroundRender();
@@ -11488,7 +11486,7 @@ cacheEls();
       if (fallbackTimer) window.clearTimeout(fallbackTimer);
 
       recalculateSmokeIntervals({ markUpdated: true });
-      saveState({ skipRender: true, skipSmokeRecalc: true });
+      saveState({ skipRender: true });
       renderHistoryModal();
       renderSmokingQuickCapture();
       notifyConsumptionLiveUpdate('smoke-time-updated-committed');
@@ -11539,7 +11537,7 @@ cacheEls();
       markRemoteDeleted('cigarette_events', id);
       markRemoteDeletedMany('points_ledger', removedLedgerIds);
       recalculateSmokeIntervals({ markUpdated: true });
-      saveState({ skipRender: true, skipSmokeRecalc: true });
+      saveState({ skipRender: true });
       renderHistoryModal();
       renderSmokingQuickCapture();
       notifyConsumptionLiveUpdate('smoke-deleted-committed');
@@ -11578,6 +11576,7 @@ cacheEls();
 
   function recalculateSmokeIntervals({ markUpdated = false } = {}) {
     const touchedAt = nowIso();
+    const writePoints = createPointsLedgerWriter();
     let changed = false;
     const sorted = [...visibleCigarettes()].sort((a, b) => new Date(a.smoked_at) - new Date(b.smoked_at));
     sorted.forEach((c, index) => {
@@ -11606,7 +11605,7 @@ cacheEls();
         c.synced = false;
         if (markUpdated) c.updated_at = touchedAt;
       }
-      if (addPoints('cigarette', c.id, c.points, cigarettePointReason(scoringInterval, scoringContext), c.smoked_at)) changed = true;
+      if (writePoints('cigarette', c.id, c.points, cigarettePointReason(scoringInterval, scoringContext), c.smoked_at)) changed = true;
     });
     if (recalculateSmokeDailyBonuses()) changed = true;
     return changed;
@@ -11781,6 +11780,7 @@ cacheEls();
     });
     const targetKeys = new Set([...(keys || byDay.keys()), ...groups.keys()]);
     const removedIds = new Set();
+    const pendingPoints = [];
     let changed = false;
     targetKeys.forEach(key => {
       const entries = groups.get(key) || [];
@@ -11803,16 +11803,16 @@ cacheEls();
         keep.updated_at = nowIso();
         changed = true;
       }
-      // Remove duplicates before addPoints, which otherwise discards them
-      // without registering remote deletions.
-      if (removedIds.size) state.pointsLedger = state.pointsLedger.filter(entry => !removedIds.has(entry.id));
-      if (addPoints('bonus', sourceId, points, smokeDailyBonusReason(count, points), `${key}T23:59:00.000Z`)) changed = true;
+      pendingPoints.push(['bonus', sourceId, points, smokeDailyBonusReason(count, points), `${key}T23:59:00.000Z`]);
     });
     if (removedIds.size) {
       state.pointsLedger = state.pointsLedger.filter(entry => !removedIds.has(entry.id));
       markRemoteDeletedMany('points_ledger', [...removedIds]);
       changed = true;
     }
+    // Canonicalize source IDs and remove duplicates before building the index.
+    const writePoints = createPointsLedgerWriter();
+    pendingPoints.forEach(args => { if (writePoints(...args)) changed = true; });
     return changed;
   }
 
@@ -13360,8 +13360,38 @@ async function deleteAlcoholLog(id) {
     renderCalendar();
   }
 
-  function addPoints(sourceType, sourceId, points, reason, earnedAt = nowIso()) {
-    const matches = state.pointsLedger.filter(p => p.source_type === sourceType && p.source_id === sourceId);
+  function createPointsLedgerWriter() {
+    let ledger = null;
+    let length = 0;
+    let byType;
+    // This index lives only for one synchronous scoring pass. Nested Maps keep
+    // source types/IDs distinct, including legacy null and numeric IDs.
+    return (sourceType, sourceId, points, reason, earnedAt = nowIso()) => {
+      if (ledger !== state.pointsLedger || length !== ledger.length) {
+        ledger = state.pointsLedger;
+        length = ledger.length;
+        byType = new Map();
+        ledger.forEach(entry => {
+          if (!byType.has(entry.source_type)) byType.set(entry.source_type, new Map());
+          const byId = byType.get(entry.source_type);
+          if (!byId.has(entry.source_id)) byId.set(entry.source_id, []);
+          byId.get(entry.source_id).push(entry);
+        });
+      }
+      if (!byType.has(sourceType)) byType.set(sourceType, new Map());
+      const byId = byType.get(sourceType);
+      const matches = byId.get(sourceId) || [];
+      const changed = addPoints(sourceType, sourceId, points, reason, earnedAt, matches);
+      if (!matches.length) {
+        byId.set(sourceId, [state.pointsLedger[state.pointsLedger.length - 1]]);
+        length = state.pointsLedger.length;
+      }
+      return changed;
+    };
+  }
+
+  function addPoints(sourceType, sourceId, points, reason, earnedAt = nowIso(), matches = null) {
+    matches = matches || state.pointsLedger.filter(p => p.source_type === sourceType && p.source_id === sourceId);
     const existing = matches[0] || null;
     if (existing) {
       const duplicateIds = new Set(matches.slice(1).map(p => p.id));
@@ -14098,7 +14128,7 @@ function initOngoingSync() {
       const after = cigaretteSnapshotFingerprint(state.cigarettes);
       if (after === before) return;
 
-      saveState({ skipRender: true, skipSmokeRecalc: true });
+      saveState({ skipRender: true });
       renderSmokingQuickCapture();
       notifyConsumptionLiveUpdate('mobile-remote-pull');
       scheduleConsumptionBackgroundRender();
@@ -15609,6 +15639,7 @@ function initOngoingSync() {
       try {
         const parsed = JSON.parse(String(reader.result || '{}'));
         state = normalizeState(parsed.state || parsed);
+        recalculateSmokeIntervals({ markUpdated: false });
         saveState();
         toast('Import abgeschlossen');
       } catch (error) {
