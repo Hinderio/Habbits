@@ -5,6 +5,7 @@ const MODULE_ASSETS = [
   './modules/points-details.js',
   './modules/points-details.css',
   './modules/module-registry.js',
+  './modules/state-persistence.js',
   './modules/points-domain.js',
   './modules/smoking-domain.js',
   './modules/alcohol-domain.js',

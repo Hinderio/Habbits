@@ -227,7 +227,8 @@
 
   function writeState(next) {
     const state = normalizeState(next);
-    window.localStorage?.setItem(STORAGE_KEY, JSON.stringify(state));
+    if (window.HabitFlowPersistence) window.HabitFlowPersistence.writeState(state);
+    else window.localStorage?.setItem(STORAGE_KEY, JSON.stringify(state));
     return state;
   }
 
@@ -240,22 +241,39 @@
     return Array.from(map.values());
   }
 
+  function mergePersistedProjectState(previous, next) {
+    const existing = normalizeState(previous);
+    const incoming = normalizeState(next);
+    incoming.projects = mergeById(existing.projects, incoming.projects);
+    incoming.projectPhases = mergeById(existing.projectPhases, incoming.projectPhases);
+    incoming.projectMilestones = mergeById(existing.projectMilestones, incoming.projectMilestones);
+    incoming.projectNotes = mergeById(existing.projectNotes, incoming.projectNotes);
+    const projectByTask = new Map(existing.tasks.filter(task => task.project_id).map(task => [task.id, task.project_id]));
+    incoming.tasks = incoming.tasks.map(task => projectByTask.has(task.id) && !task.project_id && !task.project_link_cleared_at ? { ...task, project_id: projectByTask.get(task.id) } : task);
+    return incoming;
+  }
+
   function patchStatePersistence() {
     if (window.__habitFlowProjectsStoragePatched) return;
     window.__habitFlowProjectsStoragePatched = true;
+    if (window.HabitFlowPersistence) {
+      window.HabitFlowPersistence.register('projects', {
+        write(state, context) {
+          const incoming = mergePersistedProjectState(context.previous(), state);
+          return { state: incoming, changed: true };
+        }
+      });
+      return;
+    }
     const originalSetItem = window.localStorage?.setItem?.bind(window.localStorage);
     if (!originalSetItem) return;
     window.localStorage.setItem = function patchedSetItem(key, value) {
       if (key !== STORAGE_KEY) return originalSetItem(key, value);
       try {
-        const existing = normalizeState(JSON.parse(window.localStorage.getItem(STORAGE_KEY) || '{}'));
-        const incoming = normalizeState(JSON.parse(String(value || '{}')));
-        incoming.projects = mergeById(existing.projects, incoming.projects);
-        incoming.projectPhases = mergeById(existing.projectPhases, incoming.projectPhases);
-        incoming.projectMilestones = mergeById(existing.projectMilestones, incoming.projectMilestones);
-        incoming.projectNotes = mergeById(existing.projectNotes, incoming.projectNotes);
-        const projectByTask = new Map(existing.tasks.filter(task => task.project_id).map(task => [task.id, task.project_id]));
-        incoming.tasks = incoming.tasks.map(task => projectByTask.has(task.id) && !task.project_id && !task.project_link_cleared_at ? { ...task, project_id: projectByTask.get(task.id) } : task);
+        const incoming = mergePersistedProjectState(
+          JSON.parse(window.localStorage.getItem(STORAGE_KEY) || '{}'),
+          JSON.parse(String(value || '{}'))
+        );
         return originalSetItem(key, JSON.stringify(incoming));
       } catch (error) {
         console.warn('[HabitFlow/projects] Projektfelder konnten beim Speichern nicht gemerged werden.', error);

@@ -3217,9 +3217,14 @@ cacheEls();
     const storedActivityIdeas = window.HabitFlowSyncIntegrity?.compactActivityIdeasForStorage
       ? window.HabitFlowSyncIntegrity.compactActivityIdeasForStorage(state.activityIdeas)
       : state.activityIdeas;
-    const serializedState = JSON.stringify({ ...state, activityIdeas: storedActivityIdeas });
-    window.HabitFlowRuntime?.skipNextSmokingDomainPersistenceNormalization?.();
-    localStorage.setItem(STORAGE_KEY, serializedState);
+    const persistedState = { ...state, activityIdeas: storedActivityIdeas };
+    if (window.HabitFlowPersistence) {
+      window.HabitFlowPersistence.writeState(persistedState, { skipSmokingNormalization: true });
+    } else {
+      const serializedState = JSON.stringify(persistedState);
+      window.HabitFlowRuntime?.skipNextSmokingDomainPersistenceNormalization?.();
+      localStorage.setItem(STORAGE_KEY, serializedState);
+    }
     window.HabitFlowCoach?.refresh();
     if (!skipRender) queueRender();
     queuePointEvolutionRefresh();

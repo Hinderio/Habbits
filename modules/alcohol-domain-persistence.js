@@ -15,14 +15,6 @@
     return nativeGetItem(DISABLE_KEY) === '1' || window.HABITFLOW_DISABLE_ALCOHOL_DOMAIN_PERSISTENCE === true;
   }
 
-  function clone(value) {
-    try {
-      return JSON.parse(JSON.stringify(value));
-    } catch (error) {
-      return value;
-    }
-  }
-
   function firstArray(candidates) {
     return candidates.find(Array.isArray) || [];
   }
@@ -72,7 +64,8 @@
 
     const todayUnits = Number(alcohol.countUnitsForDay(rows, new Date()) || 0);
     let changed = false;
-    const nextState = clone(state);
+    const nextState = { ...state };
+    if (state.consumption) nextState.consumption = { ...state.consumption };
     targets.forEach(path => {
       let current = nextState;
       path.slice(0, -1).forEach(key => { current = current?.[key]; });
@@ -95,15 +88,20 @@
     }
   }
 
-  window.localStorage.setItem = function setItemWithAlcoholDomain(key, value) {
-    const nextValue = key === STORAGE_KEY ? normalizeJsonString(value) : value;
-    return nativeSetItem(key, nextValue);
-  };
+  if (window.HabitFlowPersistence) {
+    window.HabitFlowPersistence.register('alcohol', { read: normalizeState, write: normalizeState });
+  } else {
+    window.localStorage.setItem = function setItemWithAlcoholDomain(key, value) {
+      const nextValue = key === STORAGE_KEY ? normalizeJsonString(value) : value;
+      return nativeSetItem(key, nextValue);
+    };
 
-  window.localStorage.getItem = function getItemWithAlcoholDomain(key) {
-    const value = nativeGetItem(key);
-    return key === STORAGE_KEY ? normalizeJsonString(value) : value;
-  };
+    window.localStorage.getItem = function getItemWithAlcoholDomain(key) {
+      const value = nativeGetItem(key);
+      return key === STORAGE_KEY ? normalizeJsonString(value) : value;
+    };
+
+  }
 
   window.HabitFlowRuntime = window.HabitFlowRuntime || {};
   window.HabitFlowRuntime.normalizeAlcoholStateWithDomain = function normalizeAlcoholStateWithDomain(state) {

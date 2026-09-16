@@ -12,18 +12,12 @@
   let cachedStorageValue = null;
   let cachedNormalizedValue = null;
   let skipNextWriteNormalization = false;
+  let cachedReadState = null;
+  let cachedReadResult = null;
   if (!nativeSetItem || !nativeGetItem) return;
 
   function isDisabled() {
     return nativeGetItem(DISABLE_KEY) === '1' || window.HABITFLOW_DISABLE_SMOKING_DOMAIN_PERSISTENCE === true;
-  }
-
-  function clone(value) {
-    try {
-      return JSON.parse(JSON.stringify(value));
-    } catch (error) {
-      return value;
-    }
   }
 
   function collectionPath(state) {
@@ -127,7 +121,12 @@
       return patched;
     });
 
-    const nextState = clone(state);
+    // Copy only branches that setAtPath may write; unrelated history is shared.
+    const nextState = { ...state };
+    const pointsPath = ledgerPath(state);
+    [path, pointsPath].filter(Boolean).forEach(target => {
+      if (target.length > 1) nextState[target[0]] = { ...state[target[0]] };
+    });
     setAtPath(nextState, path, nextRows);
     const ledgerChanged = normalizeLedger(state, nextState, nextRows);
     if (!changed && !ledgerChanged) return { state, changed: false };
@@ -149,19 +148,39 @@
     }
   }
 
-  window.localStorage.setItem = function setItemWithSmokingDomain(key, value) {
-    if (key !== STORAGE_KEY) return nativeSetItem(key, value);
-    const nextValue = skipNextWriteNormalization ? value : normalizeJsonString(value);
-    skipNextWriteNormalization = false;
-    cachedStorageValue = nextValue;
-    cachedNormalizedValue = nextValue;
-    return nativeSetItem(key, nextValue);
-  };
+  if (window.HabitFlowPersistence) {
+    window.HabitFlowPersistence.register('smoking', {
+      read(state, context) {
+        if (context.trustedSmoking) return { state, changed: false };
+        if (state !== cachedReadState) {
+          const result = normalizeState(state);
+          cachedReadState = state;
+          cachedReadResult = result;
+        }
+        return cachedReadResult;
+      },
+      write(state, context) {
+        const skip = context.skipSmokingNormalization || skipNextWriteNormalization;
+        skipNextWriteNormalization = false;
+        return skip ? { state, changed: false } : normalizeState(state);
+      }
+    });
+  } else {
+    window.localStorage.setItem = function setItemWithSmokingDomain(key, value) {
+      if (key !== STORAGE_KEY) return nativeSetItem(key, value);
+      const nextValue = skipNextWriteNormalization ? value : normalizeJsonString(value);
+      skipNextWriteNormalization = false;
+      cachedStorageValue = nextValue;
+      cachedNormalizedValue = nextValue;
+      return nativeSetItem(key, nextValue);
+    };
 
-  window.localStorage.getItem = function getItemWithSmokingDomain(key) {
-    const value = nativeGetItem(key);
-    return key === STORAGE_KEY ? normalizeJsonString(value) : value;
-  };
+    window.localStorage.getItem = function getItemWithSmokingDomain(key) {
+      const value = nativeGetItem(key);
+      return key === STORAGE_KEY ? normalizeJsonString(value) : value;
+    };
+
+  }
 
   window.HabitFlowRuntime = window.HabitFlowRuntime || {};
   window.HabitFlowRuntime.skipNextSmokingDomainPersistenceNormalization = function skipNextSmokingDomainPersistenceNormalization() {
@@ -171,6 +190,8 @@
     return normalizeState(state).state;
   };
   window.HabitFlowRuntime.setSmokingDomainPersistenceEnabled = function setSmokingDomainPersistenceEnabled(enabled) {
+    cachedReadState = null;
+    cachedReadResult = null;
     if (enabled && nativeRemoveItem) nativeRemoveItem(DISABLE_KEY);
     if (!enabled) nativeSetItem(DISABLE_KEY, '1');
     return !isDisabled();

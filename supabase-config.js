@@ -70,6 +70,7 @@ window.HABITFLOW_SUPABASE_CONFIG = Object.freeze({
 
   const scripts = [
     'modules/module-registry.js',
+    'modules/state-persistence.js',
     'modules/points-domain.js',
     'modules/smoking-domain.js',
     'modules/alcohol-domain.js',

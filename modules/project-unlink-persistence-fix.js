@@ -63,6 +63,8 @@
   function install() {
     const storage = window.localStorage;
     if (!storage?.setItem || !window.__habitFlowProjectsStoragePatched) return false;
+    // The object pipeline preserves explicit unlink markers in its single merge.
+    if (window.HabitFlowPersistence?.has('projects')) return true;
     if (storage.setItem === wrappedSetItem) return true;
 
     const previousSetItem = storage.setItem.bind(storage);

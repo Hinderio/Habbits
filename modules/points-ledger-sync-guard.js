@@ -94,15 +94,15 @@
 
   function canonicalLedgerRow(row = {}) {
     if (!row || typeof row !== 'object') return row;
-    const next = { ...row };
-    if (isSmokeDailyBonus(next)) {
-      const key = smokeDailyKey(next);
-      if (key) next.source_id = smokeDailyBonusSourceId(key);
-    } else if (isMorningRoutineBonus(next)) {
-      const key = dateKey(next.earned_at || next.earnedAt || next.created_at || next.createdAt);
-      if (key) next.source_id = morningRoutineSourceId(key);
+    let sourceId = row.source_id;
+    if (isSmokeDailyBonus(row)) {
+      const key = smokeDailyKey(row);
+      if (key) sourceId = smokeDailyBonusSourceId(key);
+    } else if (isMorningRoutineBonus(row)) {
+      const key = dateKey(row.earned_at || row.earnedAt || row.created_at || row.createdAt);
+      if (key) sourceId = morningRoutineSourceId(key);
     }
-    return next;
+    return sourceId === row.source_id ? row : { ...row, source_id: sourceId };
   }
 
   function shouldKeepLedgerCandidate(previous, current) {
@@ -233,6 +233,13 @@
   function installLocalStateGuard() {
     const storage = window.localStorage;
     if (!storage || storage.__habitFlowPointsLedgerGuard) return;
+    if (window.HabitFlowPersistence) {
+      window.HabitFlowPersistence.register('points-ledger', {
+        read: normalizeStateObject, write: normalizeStateObject, persistRead: true
+      });
+      storage.__habitFlowPointsLedgerGuard = true;
+      return;
+    }
     const nativeSetItem = storage.setItem.bind(storage);
     const nativeGetItem = storage.getItem.bind(storage);
     storage.setItem = function guardedSetItem(key, value) {

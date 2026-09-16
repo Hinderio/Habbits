@@ -92,6 +92,13 @@
   function patchStorage() {
     const storage = window.localStorage;
     if (!storage || storage.__habitFlowPointsLedgerRemoteAuthority) return;
+    if (window.HabitFlowPersistence) {
+      window.HabitFlowPersistence.register('points-ledger-remote-authority', {
+        read: applyAuthority, write: applyAuthority, persistRead: true
+      });
+      storage.__habitFlowPointsLedgerRemoteAuthority = true;
+      return;
+    }
     const getItem = storage.getItem.bind(storage);
     const setItem = storage.setItem.bind(storage);
     storage.getItem = function guardedGetItem(key) {
