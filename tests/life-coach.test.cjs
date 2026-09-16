@@ -351,3 +351,86 @@ test('grouped actions retain calendar navigation and escape user content',()=>{
   assert.equal(ui.calls[0].type,'calendar');
   assert.equal(ui.calls[0].day,key(1));
 });
+
+test('dated backlog tasks share existing deadline priorities and task detail navigation', () => {
+  const tasks = [-30, -1, 0, 1, 7, 8].map(offset => ({
+    id: `backlog-${offset}`, title: 'Backlog task', status: 'archived', due_at: at(offset),
+    steps: [{title:'Already done', done:true},{title:'Unterlagen prüfen'}]
+  }));
+  tasks.push({id:'board-today', status:'open', due_at:at(0)});
+  const before = JSON.stringify(tasks);
+  const m = analyze({tasks}, {}, now);
+  for (const offset of [-30, -1, 0, 1, 7]) {
+    const card = byId(m, `agenda:task:backlog-${offset}`);
+    assert.ok(card);
+    assert.equal(card.agendaGroup, 'tasks');
+    assert.deepEqual(card.action, {type:'task',id:`backlog-${offset}`});
+    assert.equal(card.label, 'Task öffnen');
+    assert.match(card.tag, /^Backlog · /);
+    assert.match(card.body, /ins Board/);
+    assert.match(card.body, /Unterlagen prüfen/);
+    assert.doesNotMatch(card.body, /Already done/);
+    const board = analyze({tasks:[{...tasks.find(t=>t.id===`backlog-${offset}`), status:'open'}]}, {}, now);
+    assert.equal(card.score, byId(board,card.id).score);
+  }
+  assert.ok(!byId(m,'agenda:task:backlog-8'));
+  assert.equal(m.cards[0].id,'agenda:task:backlog--30');
+  assert.match(byId(m,'agenda:task:backlog-0').tag,/Heute/);
+  assert.equal(JSON.stringify(tasks),before);
+});
+
+test('undated, invalid, deleted and completed backlog rows stay out of the coach', () => {
+  const tasks = [
+    {id:'undated', status:'archived'}, {id:'invalid',status:'archived',due_at:'invalid'},
+    {id:'impossible',status:'archived',due_at:'2026-02-31'},
+    {id:'deleted',status:'archived',due_at:at(-1),deleted_at:at(0)},
+    {id:'hidden',status:'archived',due_at:at(-1),is_archived:true},
+    {id:'done',status:'done',due_at:at(-1),done_archived_at:at(0)},
+    {id:'open',status:'open'}, {id:'progress',status:'in_progress'}
+  ];
+  const m=analyze({tasks},{},now);
+  assert.deepEqual(m.cards.filter(c=>c.category==='agenda').map(c=>c.id).sort(),['agenda:task:open','agenda:task:progress']);
+});
+
+test('moving a backlog task into the board retains one recommendation and removes the backlog prompt', () => {
+  const task={id:'move',title:'Planen',status:'archived',due_at:at(1)};
+  assert.match(byId(analyze({tasks:[task]}, {}, now),'agenda:task:move').tag,/Backlog/);
+  task.status='open';
+  const m=analyze({tasks:[task]}, {}, now);
+  assert.equal(m.cards.filter(c=>c.id==='agenda:task:move').length,1);
+  assert.doesNotMatch(byId(m,'agenda:task:move').tag,/Backlog/);
+  assert.doesNotMatch(byId(m,'agenda:task:move').body,/Backlog/);
+  task.status='done';
+  assert.ok(!byId(analyze({tasks:[task]}, {}, now),'agenda:task:move'));
+});
+
+test('backlog deadline horizon follows local dates over DST and New Year', () => {
+  for (const anchor of [new Date(2026,2,28,12),new Date(2026,9,24,12),new Date(2026,11,30,12)]) {
+    const relative = offset => new Date(anchor.getFullYear(),anchor.getMonth(),anchor.getDate()+offset,23).toISOString();
+    const m=analyze({tasks:[{id:'inside',status:'archived',due_at:relative(7)},{id:'outside',status:'archived',due_at:relative(8)}]}, {}, anchor);
+    assert.ok(byId(m,'agenda:task:inside'));
+    assert.ok(!byId(m,'agenda:task:outside'));
+  }
+});
+
+test('coach backlog status matches the task app and preserves its existing board action', () => {
+  const app=fs.readFileSync(path.join(__dirname,'../app.js'),'utf8');
+  assert.match(app,/const TASK_BACKLOG_STATUS = 'archived'/);
+  const detail=app.slice(app.indexOf('  function renderTaskDetailContent('),app.indexOf('  function openTaskDetail('));
+  assert.match(detail,/data-action="move-task" data-status="open"/);
+});
+
+test('backlog reminders reuse the existing overview, Agenda cards, dismiss and detail action', () => {
+  const ui=agendaUi({tasks:[{id:'dated-backlog',status:'archived',due_at:at(0),title:'<b>Unterlagen</b>'}]});
+  assert.match(ui.html(),/Backlog · Heute/);
+  ui.click({lcFilter:'agenda'});
+  assert.match(ui.group('tasks'),/&lt;b&gt;Unterlagen&lt;\/b&gt;/);
+  assert.match(ui.group('tasks'),/ins Board/);
+  ui.click({lcDismiss:'agenda:task:dated-backlog'});
+  assert.doesNotMatch(ui.group('tasks'),/data-lc-open="agenda:task:dated-backlog"/);
+  ui.click({lcRestore:''});
+  ui.click({lcOpen:'agenda:task:dated-backlog'});
+  assert.equal(ui.calls.length,1);
+  assert.equal(ui.calls[0].type,'task');
+  assert.equal(ui.calls[0].id,'dated-backlog');
+});

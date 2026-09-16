@@ -63,14 +63,19 @@
     };
     const add = (category, id, score, title, body, evidence, action, label, tag = '', agendaGroup = '') => cards.push({ category, id: `${category}:${id}`, score, title, body, evidence, action, label, tag, ...(agendaGroup ? { agendaGroup } : {}) });
     for (const t of array(state.tasks)) {
-      if (!alive(t) || !['open', 'in_progress'].includes(t.status || 'open')) continue;
+      if (!alive(t)) continue;
+      // The task app stores backlog rows as status 'archived'; completed archives
+      // remain status 'done'. Only dated backlog rows belong in the coach.
+      const isBacklog = t.status === 'archived';
+      if (!isBacklog && !['open', 'in_progress'].includes(t.status || 'open')) continue;
       const due = day(t.due_at), offset = due == null ? null : due - today;
+      if (isBacklog && due == null) continue;
       if (offset != null && offset > 7) continue;
       const next = array(t.steps).find(s => s && !s.is_done && !s.done && !s.completed);
       add('agenda', `task:${t.id}`, offset != null && offset < 0 ? 100 + Math.min(9, -offset / 10) : offset === 0 ? 92 : offset === 1 ? 82 : offset != null ? 60 - offset : t.status === 'in_progress' ? 52 : 28,
-        t.title || 'Offene Aufgabe', next?.title ? `Nächster Schritt: ${next.title}` : 'Reserviere fünf Minuten für den kleinsten nächsten Schritt.',
+        t.title || 'Offene Aufgabe', isBacklog ? `Noch im Backlog: Nimm diese Aufgabe rechtzeitig ins Board.${next?.title ? ` Nächster Schritt: ${next.title}` : ''}` : next?.title ? `Nächster Schritt: ${next.title}` : 'Reserviere fünf Minuten für den kleinsten nächsten Schritt.',
         offset == null ? 'Ohne Termin · bewusst einplanen oder zurückstellen.' : `Fällig ${shortDate(t.due_at)}${String(t.due_at).includes('T') ? `, ${shortTime(t.due_at)}` : ''}`,
-        { type: 'task', id: t.id }, 'Task öffnen', offset == null ? 'Offen' : when(offset), 'tasks');
+        { type: 'task', id: t.id }, 'Task öffnen', isBacklog ? `Backlog · ${when(offset)}` : offset == null ? 'Offen' : when(offset), 'tasks');
     }
     // Recurrences are materialized by the app. Do not invent extra birthday instances.
     for (const a of array(state.appointments).filter(alive)) {
