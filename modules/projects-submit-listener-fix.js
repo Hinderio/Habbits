@@ -84,7 +84,7 @@
     const left = Math.max(0, Math.min(96, ((phaseStart - start) / span) * 100));
     const width = Math.max(8, Math.min(100 - left, ((phaseEnd - phaseStart || 86400000) / span) * 100));
 
-    return `<article class="phase-card"><div><strong>${escapeHtml(phase.name)}</strong><span class="subtle">${phaseStatusLabel(phase.status)}</span></div><div class="phase-timeline"><div class="phase-timeline-track"><i style="margin-left:${left}%;width:${width}%"></i></div><div class="phase-timeline-dates"><span>${dateLabel(phase.start_date)}</span><span>${dateLabel(phase.end_date)}</span></div></div><div class="list-actions"><button class="mini-btn" type="button" data-action="edit-phase" data-id="${escapeHtml(phase.id)}">Bearbeiten</button><button class="mini-btn danger" type="button" data-action="delete-phase" data-id="${escapeHtml(phase.id)}">Loeschen</button></div></article>`;
+    return `<article class="phase-card"><div><strong>${escapeHtml(phase.name)}</strong><span class="subtle">${phaseStatusLabel(phase.status)}</span></div><div class="phase-timeline"><div class="phase-timeline-track"><i style="margin-left:${left}%;width:${width}%"></i></div><div class="phase-timeline-dates"><span>${dateLabel(phase.start_date)}</span><span>${dateLabel(phase.end_date)}</span></div></div><div class="list-actions"><button class="mini-btn" type="button" data-action="edit-phase" data-id="${escapeHtml(phase.id)}">Bearbeiten</button><button class="mini-btn danger" type="button" data-action="delete-phase" data-id="${escapeHtml(phase.id)}">Löschen</button></div></article>`;
   }
 
   function renderPhaseList(form, projectId, state) {
@@ -143,7 +143,7 @@
     const name = String(data.get('name') || '').trim();
     const start = validDate(data.get('start_date'));
     const end = validDate(data.get('end_date'));
-    if (!projectId) return toast('Projekt konnte fuer die Phase nicht gefunden werden.');
+    if (!projectId) return toast('Projekt konnte für die Phase nicht gefunden werden.');
     if (!name || !start || !end) return toast('Phase braucht Name, Start und Ende.');
     if (end < start) return toast('Phasenende darf nicht vor Start liegen.');
 

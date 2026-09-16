@@ -70,7 +70,7 @@
     });
     root.querySelectorAll?.('[data-action="delete-milestone"]').forEach(button => {
       if (button.dataset.polished === 'true') return;
-      polishIconButton(button, { label: 'Meilenstein loeschen', title: 'Loeschen', icon: ICONS.trash, deleteTone: true });
+      polishIconButton(button, { label: 'Meilenstein löschen', title: 'Löschen', icon: ICONS.trash, deleteTone: true });
     });
     root.querySelectorAll?.('[data-action="edit-phase"]').forEach(button => {
       if (button.dataset.polished === 'true') return;
@@ -78,7 +78,7 @@
     });
     root.querySelectorAll?.('[data-action="delete-phase"]').forEach(button => {
       if (button.dataset.polished === 'true') return;
-      polishIconButton(button, { label: 'Phase loeschen', title: 'Loeschen', icon: ICONS.trash, deleteTone: true });
+      polishIconButton(button, { label: 'Phase löschen', title: 'Löschen', icon: ICONS.trash, deleteTone: true });
     });
   }
 

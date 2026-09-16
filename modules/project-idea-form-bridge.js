@@ -494,14 +494,14 @@
         <label><span>Story Points</span><select name="story_points">
           ${[1, 2, 3, 5, 8].map(value => `<option value="${value}" ${clampStoryPoints(idea.story_points) === value ? 'selected' : ''}>${value}</option>`).join('')}
         </select></label>
-        <label><span>Prioritaet</span><select name="priority">${optionList(PRIORITIES, normalizePriority(idea.priority))}</select></label>
+        <label><span>Priorität</span><select name="priority">${optionList(PRIORITIES, normalizePriority(idea.priority))}</select></label>
         <label><span>Rating</span><select name="rating">
           ${[0, 1, 2, 3, 4, 5].map(value => `<option value="${value}" ${rating === value ? 'selected' : ''}>${value ? `${value}/5` : 'ohne Rating'}</option>`).join('')}
         </select></label>
         <label class="full"><span>Notiz</span><textarea name="description" rows="5">${escapeHtml(cleanDescription(idea.description || ''))}</textarea></label>
         <div class="form-actions full task-idea-detail-actions">
           <button class="pill primary" type="submit">Idee speichern</button>
-          ${status === 'open' ? `<button class="pill secondary" type="button" data-action="idea-to-task" data-id="${escapeHtml(idea.id)}">Als Task</button><button class="pill secondary" type="button" data-action="idea-to-backlog" data-id="${escapeHtml(idea.id)}">In Backlog</button><button class="pill secondary" type="button" data-action="dismiss-task-idea" data-id="${escapeHtml(idea.id)}">Verwerfen</button>` : `<button class="pill secondary" type="button" data-action="reopen-task-idea" data-id="${escapeHtml(idea.id)}">Wieder oeffnen</button>`}
+          ${status === 'open' ? `<button class="pill secondary" type="button" data-action="idea-to-task" data-id="${escapeHtml(idea.id)}">Als Task</button><button class="pill secondary" type="button" data-action="idea-to-backlog" data-id="${escapeHtml(idea.id)}">In Backlog</button><button class="pill secondary" type="button" data-action="dismiss-task-idea" data-id="${escapeHtml(idea.id)}">Verwerfen</button>` : `<button class="pill secondary" type="button" data-action="reopen-task-idea" data-id="${escapeHtml(idea.id)}">Wieder öffnen</button>`}
         </div>
       </form>
     </section>`;
@@ -685,7 +685,7 @@
       polishActionButton(button, { icon: ICONS.edit, label: 'Bearbeiten' });
     });
     deleteButtons.forEach(button => {
-      polishActionButton(button, { icon: ICONS.trash, label: 'Loeschen', deleteTone: true });
+      polishActionButton(button, { icon: ICONS.trash, label: 'Löschen', deleteTone: true });
     });
     alignActionIcons(root);
   }

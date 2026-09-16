@@ -288,7 +288,7 @@
     button.id = 'lineCalendarToggleBtn';
     button.className = 'line-calendar-btn';
     button.type = 'button';
-    button.setAttribute('aria-label', 'Linienkalender oeffnen');
+    button.setAttribute('aria-label', 'Linienkalender öffnen');
     button.setAttribute('title', 'Linienkalender');
     button.innerHTML = '<span aria-hidden="true"><i></i></span>';
     addButton.parentElement?.insertBefore(button, addButton);

@@ -341,7 +341,7 @@
     const color = normalizeColor(project.color);
     return `<article class="project-timeline-row" style="--project-color:${escapeHtml(color)};--timeline-width:${timelineWidth}px;--lane-count:${laneCount}">
       <div class="project-timeline-project">
-        <button class="project-timeline-dna" type="button" data-action="open-project-detail" data-id="${escapeHtml(project.id)}" aria-label="Projekt-DNA oeffnen: ${escapeHtml(project.title)}" title="Projekt-DNA oeffnen">
+        <button class="project-timeline-dna" type="button" data-action="open-project-detail" data-id="${escapeHtml(project.id)}" aria-label="Projekt-DNA öffnen: ${escapeHtml(project.title)}" title="Projekt-DNA öffnen">
           <span>${escapeHtml(projectInitials(project.title))}</span>
         </button>
         <div class="project-timeline-project-copy">

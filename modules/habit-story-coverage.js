@@ -71,7 +71,7 @@
     if (['jogging', 'hiking', 'walking', 'pushups', 'dumbbells', 'swimming', 'sport'].includes(key)) return 'Sport';
     if (key === 'standingDesk') return 'Ergonomie';
     if (key === 'meditation') return 'Mind';
-    if (['bread', 'weight'].includes(key)) return 'Ernaehrung';
+    if (['bread', 'weight'].includes(key)) return 'Ernährung';
     return 'Habit';
   }
 
@@ -157,12 +157,12 @@
     }
 
     if (habit.type === 'boolean') {
-      return { ...base, main: `${successDays} Check-ins`, detail: streak ? `Laufende Serie: ${streak} Tag${streak === 1 ? '' : 'e'}.` : 'Der naechste Check-in startet eine neue Serie.', meta: `${entries.length} Eintraege insgesamt.` };
+      return { ...base, main: `${successDays} Check-ins`, detail: streak ? `Laufende Serie: ${streak} Tag${streak === 1 ? '' : 'e'}.` : 'Der nächste Check-in startet eine neue Serie.', meta: `${entries.length} Einträge insgesamt.` };
     }
 
     const totalValue = sum(entries.map(entry => Number(entry.value_num || 0)));
     const averageValue = totalValue / Math.max(entries.length, 1);
-    return { ...base, main: `${formatMetricNumber(totalValue, 1)} ${unit}`.trim(), detail: `Ø ${formatMetricNumber(averageValue, 1)} ${unit} pro Log - aktuell ${streak ? `${streak} Tage am Stueck` : 'sauber dokumentiert'}.`, meta: `${entries.length} Logs · ${successDays} aktive Tage.` };
+    return { ...base, main: `${formatMetricNumber(totalValue, 1)} ${unit}`.trim(), detail: `Ø ${formatMetricNumber(averageValue, 1)} ${unit} pro Log - aktuell ${streak ? `${streak} Tage am Stück` : 'sauber dokumentiert'}.`, meta: `${entries.length} Logs · ${successDays} aktive Tage.` };
   }
 
   function iconMarkup(card) {

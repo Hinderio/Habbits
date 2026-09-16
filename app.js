@@ -465,7 +465,7 @@
   const PAUSE_SCOPE_META = {
     smoke: { label: 'Rauchen', eyebrow: 'Konsum-Pause', helper: 'Rauch-Logs im Zeitraum bleiben gespeichert, werden in Auswertungen aber pausiert betrachtet.' },
     alcohol: { label: 'Alkohol', eyebrow: 'Konsum-Pause', helper: 'Alkohol-Konsumtage im Zeitraum bleiben gespeichert, werden in Auswertungen aber pausiert betrachtet.' },
-    habit: { label: 'Habit', eyebrow: 'Habit-Pause', helper: 'Habit-Logs im Zeitraum bleiben gespeichert, werden fuer Ziele und Rhythmus pausiert betrachtet.' }
+    habit: { label: 'Habit', eyebrow: 'Habit-Pause', helper: 'Habit-Logs im Zeitraum bleiben gespeichert, werden für Ziele und Rhythmus pausiert betrachtet.' }
   };
 
   const TASK_COLUMNS = [
@@ -521,50 +521,50 @@
   const GAMIFICATION_BADGES = [
     { id: 'first-spark', title: 'Startfunke', icon: '✦', target: 1, unit: 'Aktion', description: 'Erster positiver Fortschritt im Ledger.', value: stats => stats.positivePointEvents },
     { id: 'first-task', title: 'Erster Haken', icon: '✓', target: 1, unit: 'Task', description: 'Eine Aufgabe sauber abgeschlossen.', value: stats => stats.completedTasks },
-    { id: 'task-finisher', title: 'Task Finisher', icon: '▣', target: 5, unit: 'Tasks', description: 'Fuenf Aufgaben abgeschlossen.', value: stats => stats.completedTasks },
+    { id: 'task-finisher', title: 'Task Finisher', icon: '▣', target: 5, unit: 'Tasks', description: 'Fünf Aufgaben abgeschlossen.', value: stats => stats.completedTasks },
     { id: 'task-closer-25', title: 'Closer 25', icon: '25', target: 25, unit: 'Tasks', description: '25 Aufgaben erledigt.', value: stats => stats.completedTasks },
     { id: 'task-closer-50', title: 'Closer 50', icon: '50', target: 50, unit: 'Tasks', description: '50 Aufgaben erledigt.', value: stats => stats.completedTasks },
     { id: 'today-triple', title: 'Tages-Triple', icon: 'III', target: 3, unit: 'Tasks', description: 'Drei Aufgaben an einem Tag erledigt.', value: stats => stats.todayCompletedTasks },
-    { id: 'overdue-rescuer', title: 'Verzug gerettet', icon: '↺', target: 3, unit: 'Tasks', description: 'Drei ueberfaellige Aufgaben abgeschlossen.', value: stats => stats.completedOverdueTasks },
+    { id: 'overdue-rescuer', title: 'Verzug gerettet', icon: '↺', target: 3, unit: 'Tasks', description: 'Drei überfällige Aufgaben abgeschlossen.', value: stats => stats.completedOverdueTasks },
     { id: 'clear-board', title: 'Klares Board', icon: '□', target: 1, unit: 'Tag', description: 'Aktive Aufgaben ohne offenen Verzug.', value: stats => stats.noOverdueSignal },
-    { id: 'priority-pilot', title: 'Prio-Pilot', icon: '▲', target: 5, unit: 'Tasks', description: 'Fuenf hohe oder kritische Aufgaben erledigt.', value: stats => stats.highPriorityDone },
-    { id: 'backlog-curator', title: 'Backlog Kurator', icon: '◇', target: 5, unit: 'Karten', description: 'Fuenf Ideen oder Aufgaben bewusst im Backlog.', value: stats => stats.backlogTasks },
-    { id: 'archive-keeper', title: 'Archiv-Hueter', icon: '▤', target: 5, unit: 'Tasks', description: 'Fuenf erledigte Aufgaben archiviert.', value: stats => stats.archivedDoneTasks },
+    { id: 'priority-pilot', title: 'Prio-Pilot', icon: '▲', target: 5, unit: 'Tasks', description: 'Fünf hohe oder kritische Aufgaben erledigt.', value: stats => stats.highPriorityDone },
+    { id: 'backlog-curator', title: 'Backlog Kurator', icon: '◇', target: 5, unit: 'Karten', description: 'Fünf Ideen oder Aufgaben bewusst im Backlog.', value: stats => stats.backlogTasks },
+    { id: 'archive-keeper', title: 'Archiv-Hüter', icon: '▤', target: 5, unit: 'Tasks', description: 'Fünf erledigte Aufgaben archiviert.', value: stats => stats.archivedDoneTasks },
     { id: 'weekly-planner', title: 'Wochenplaner', icon: '▦', target: 3, unit: 'geplant', description: 'Drei Aufgaben mit Datum geplant.', value: stats => stats.plannedTasks },
-    { id: 'weekly-architect', title: 'Wochen-Architekt', icon: '▥', target: 5, unit: 'Tasks', description: 'Fuenf Aufgaben in der aktuellen Woche geplant.', value: stats => stats.weeklyPlannedTasks },
-    { id: 'calendar-sense', title: 'Kalender-Sinn', icon: '◷', target: 5, unit: 'Termine', description: 'Fuenf Termine im Kalender gepflegt.', value: stats => stats.appointments },
+    { id: 'weekly-architect', title: 'Wochen-Architekt', icon: '▥', target: 5, unit: 'Tasks', description: 'Fünf Aufgaben in der aktuellen Woche geplant.', value: stats => stats.weeklyPlannedTasks },
+    { id: 'calendar-sense', title: 'Kalender-Sinn', icon: '◷', target: 5, unit: 'Termine', description: 'Fünf Termine im Kalender gepflegt.', value: stats => stats.appointments },
     { id: 'week-flow', title: 'Wochenfluss', icon: '≈', target: 3, unit: 'Termine', description: 'Drei Termine in den letzten sieben Tagen geplant.', value: stats => stats.appointments7 },
     { id: 'idea-spark', title: 'Ideenfunke', icon: '✧', target: 1, unit: 'Idee', description: 'Eine Idee im Ideenpool erfasst.', value: stats => stats.taskIdeasTotal },
     { id: 'idea-alchemist', title: 'Ideen-Alchemist', icon: '✺', target: 3, unit: 'Ideen', description: 'Drei Ideen in echte Tasks verwandelt.', value: stats => stats.acceptedIdeas },
     { id: 'idea-founder', title: 'Ideen-Gründer', icon: '✹', target: 10, unit: 'Ideen', description: 'Zehn Ideen umgesetzt oder in Tasks verwandelt.', value: stats => stats.acceptedIdeas },
-    { id: 'idea-cleaner', title: 'Ideen-Cleaner', icon: '⌫', target: 5, unit: 'Ideen', description: 'Fuenf Ideen bewusst verworfen.', value: stats => stats.dismissedIdeas },
-    { id: 'activity-hunter', title: 'Freizeit-Scout', icon: '⌖', target: 3, unit: 'Ideen', description: 'Drei Freizeit-Ideen als Task oder Idee uebernommen.', value: stats => stats.activityIdeasAccepted },
+    { id: 'idea-cleaner', title: 'Ideen-Cleaner', icon: '⌫', target: 5, unit: 'Ideen', description: 'Fünf Ideen bewusst verworfen.', value: stats => stats.dismissedIdeas },
+    { id: 'activity-hunter', title: 'Freizeit-Scout', icon: '⌖', target: 3, unit: 'Ideen', description: 'Drei Freizeit-Ideen als Task oder Idee übernommen.', value: stats => stats.activityIdeasAccepted },
     { id: 'routine-core', title: 'Routinen-Kern', icon: '☉', target: 1, unit: 'Routine', description: 'Eine Morgenroutine abgeschlossen.', value: stats => stats.routineDays },
-    { id: 'routine-five', title: 'Routine 5', icon: '⑤', target: 5, unit: 'Tage', description: 'Fuenf Routinen-Tage gesammelt.', value: stats => stats.routineDays },
+    { id: 'routine-five', title: 'Routine 5', icon: '⑤', target: 5, unit: 'Tage', description: 'Fünf Routinen-Tage gesammelt.', value: stats => stats.routineDays },
     { id: 'routine-twenty', title: 'Routine 20', icon: '⑳', target: 20, unit: 'Tage', description: '20 Routinen-Tage gesammelt.', value: stats => stats.routineDays },
-    { id: 'habit-gardener', title: 'Habit Gaertner', icon: '⌘', target: 14, unit: 'Logs', description: '14 Habit-Logs gesammelt.', value: stats => stats.habitLogs },
+    { id: 'habit-gardener', title: 'Habit Gärtner', icon: '⌘', target: 14, unit: 'Logs', description: '14 Habit-Logs gesammelt.', value: stats => stats.habitLogs },
     { id: 'habit-forest', title: 'Habit Wald', icon: '♢', target: 50, unit: 'Logs', description: '50 Habit-Logs gesammelt.', value: stats => stats.habitLogs },
     { id: 'habit-rhythm', title: 'Rhythmus', icon: '∿', target: 7, unit: 'Tage', description: 'An sieben Tagen Habit-Momentum gezeigt.', value: stats => stats.habitLogDays },
     { id: 'habit-builder', title: 'Builder', icon: '◫', target: 3, unit: 'Habits', description: 'Drei aktive Habits im System.', value: stats => stats.activeHabits },
-    { id: 'stable-day', title: 'Stabiler Tag', icon: '◌', target: 1, unit: 'Tag', description: 'Ein Tag mit Score 80 oder hoeher.', value: stats => stats.highScoreDays },
-    { id: 'stable-week', title: 'Stabile Woche', icon: '◍', target: 5, unit: 'Tage', description: 'Fuenf starke Score-Tage in 30 Tagen.', value: stats => stats.highScoreDays },
-    { id: 'perfect-day', title: 'Perfect Day', icon: '◎', target: 1, unit: 'Tag', description: 'Ein Tag mit Score 95 oder hoeher.', value: stats => stats.perfectScoreDays },
+    { id: 'stable-day', title: 'Stabiler Tag', icon: '◌', target: 1, unit: 'Tag', description: 'Ein Tag mit Score 80 oder höher.', value: stats => stats.highScoreDays },
+    { id: 'stable-week', title: 'Stabile Woche', icon: '◍', target: 5, unit: 'Tage', description: 'Fünf starke Score-Tage in 30 Tagen.', value: stats => stats.highScoreDays },
+    { id: 'perfect-day', title: 'Perfect Day', icon: '◎', target: 1, unit: 'Tag', description: 'Ein Tag mit Score 95 oder höher.', value: stats => stats.perfectScoreDays },
     { id: 'focus-pause-2h', title: '2h Fokus-Pause', icon: 'Ⅱ', target: 120, unit: 'Min.', description: 'Zwei Stunden Tagespause geschafft.', value: stats => stats.bestDaytimePause },
     { id: 'focus-pause-4h', title: '4h Fokus-Pause', icon: 'Ⅳ', target: 240, unit: 'Min.', description: 'Vier Stunden Tagespause geschafft.', value: stats => stats.bestDaytimePause },
     { id: 'focus-pause-8h', title: '8h Tagespause', icon: 'Ⅷ', target: 480, unit: 'Min.', description: 'Acht Stunden Tagespause als Highscore.', value: stats => stats.bestDaytimePause },
-    { id: 'full-reset-24h', title: '24h Reset', icon: '24', target: 1440, unit: 'Min.', description: '24 Stunden Abstand als persoenlicher Highscore.', value: stats => stats.bestPause },
+    { id: 'full-reset-24h', title: '24h Reset', icon: '24', target: 1440, unit: 'Min.', description: '24 Stunden Abstand als persönlicher Highscore.', value: stats => stats.bestPause },
     { id: 'aware-tracker', title: 'Konsum bewusst', icon: '⌁', target: 10, unit: 'Logs', description: 'Zehn Konsum-Momente bewusst erfasst.', value: stats => stats.consumptionLogs },
     { id: 'smoke-analyst', title: 'Rauch-Analyst', icon: '⌬', target: 20, unit: 'Logs', description: '20 Rauch-Momente sichtbar gemacht.', value: stats => stats.cigaretteLogs },
     { id: 'alcohol-aware', title: 'Alkohol-Aware', icon: '◒', target: 10, unit: 'Logs', description: 'Zehn Konsumtage bewusst eingeordnet.', value: stats => stats.alcoholLogs },
     { id: 'smoke-free-seven', title: 'Ruhige 7', icon: '7', target: 7, unit: 'Tage', description: 'Sieben aktive Tage ohne Rauch-Log.', value: stats => stats.smokeFreeActiveDays },
-    { id: 'clear-evenings', title: 'Klare Abende', icon: '☾', target: 5, unit: 'Tage', description: 'Fuenf aktive Tage ohne Konsum-Log.', value: stats => stats.noConsumptionActiveDays },
+    { id: 'clear-evenings', title: 'Klare Abende', icon: '☾', target: 5, unit: 'Tage', description: 'Fünf aktive Tage ohne Konsum-Log.', value: stats => stats.noConsumptionActiveDays },
     { id: 'coach-visitor', title: 'Coach Kontakt', icon: '☏', target: 3, unit: 'Events', description: 'Drei Coach-Momente genutzt.', value: stats => stats.coachEvents },
     { id: 'recovery-first', title: 'Recovery Start', icon: '♧', target: 1, unit: 'Session', description: 'Eine Recovery-Session gestartet.', value: stats => stats.recoverySessions },
-    { id: 'recovery-builder', title: 'Recovery Builder', icon: '♧+', target: 5, unit: 'Sessions', description: 'Fuenf Recovery-Sessions gesammelt.', value: stats => stats.recoverySessions },
+    { id: 'recovery-builder', title: 'Recovery Builder', icon: '♧+', target: 5, unit: 'Sessions', description: 'Fünf Recovery-Sessions gesammelt.', value: stats => stats.recoverySessions },
     { id: 'experimenter', title: 'Experimenter', icon: '⚗', target: 1, unit: 'Test', description: 'Ein Verhaltensexperiment gestartet.', value: stats => stats.experimentsTotal },
     { id: 'scientist', title: 'Scientist', icon: '⚙', target: 3, unit: 'Tests', description: 'Drei Experimente abgeschlossen.', value: stats => stats.experimentsCompleted },
     { id: 'party-planner', title: 'Party Planer', icon: '◐', target: 1, unit: 'Plan', description: 'Einen Abend bewusst vorgeplant.', value: stats => stats.partyPlansTotal },
-    { id: 'party-master', title: 'Party Master', icon: '◑', target: 3, unit: 'Plaene', description: 'Drei Party-Plaene abgeschlossen.', value: stats => stats.partyPlansCompleted },
+    { id: 'party-master', title: 'Party Master', icon: '◑', target: 3, unit: 'Pläne', description: 'Drei Party-Pläne abgeschlossen.', value: stats => stats.partyPlansCompleted },
     { id: 'focus-streak', title: 'Momentum-Serie', icon: '↗', target: 3, unit: 'Tage', description: 'Drei aktive Tage in Folge.', value: stats => stats.momentumStreak },
     { id: 'week-streak', title: '7-Tage Flow', icon: '↟', target: 7, unit: 'Tage', description: 'Sieben aktive Tage in Folge.', value: stats => stats.momentumStreak },
     { id: 'level-five', title: 'Companion Level 5', icon: '◆', target: 5, unit: 'Level', description: 'Companion auf Level 5 gebracht.', value: stats => stats.level },
@@ -4450,7 +4450,7 @@ cacheEls();
     const chapters = [
       { title: 'Erwachen', range: '1-4', detail: 'Fundament legen' },
       { title: 'Aufbau', range: '5-8', detail: 'Gewohnheiten formen' },
-      { title: 'Fokus', range: '9-12', detail: 'Disziplin staerken' },
+      { title: 'Fokus', range: '9-12', detail: 'Disziplin stärken' },
       { title: 'Mastery', range: '13-16', detail: 'Control meistern' },
       { title: 'Champ', range: '17-20', detail: 'Bestversion leben' }
     ];
@@ -4467,10 +4467,10 @@ cacheEls();
       ? `${stats.activeOverdue} Aufgabe(n) beruhigen.`
       : stats.momentumStreak >= 3
         ? `${stats.momentumStreak} Tage Momentum halten.`
-        : 'Ein kleiner Log reicht fuer Bindung.';
+        : 'Ein kleiner Log reicht für Bindung.';
     const bond = Math.min(100, 18 + stats.unlockedBadges * 3 + stats.momentumStreak * 10 + Math.min(25, stats.routineDays * 2));
     const charge = Math.min(100, Math.round((stats.levelProgress * 0.45) + (score * 0.35) + (bond * 0.2)));
-    const trait = stats.activeOverdue ? 'ordnet Verzug' : stats.momentumStreak >= 7 ? 'haelt Streak' : stats.unlockedBadges >= 20 ? 'sammelt Mastery' : 'baut Momentum';
+    const trait = stats.activeOverdue ? 'ordnet Verzug' : stats.momentumStreak >= 7 ? 'hält Streak' : stats.unlockedBadges >= 20 ? 'sammelt Mastery' : 'baut Momentum';
     return {
       stage,
       stageName: stageNames[stage - 1],
@@ -4629,7 +4629,7 @@ cacheEls();
       : `Noch ${nextPoints} bis Stufe ${Math.min(20, currentCompanion.stage + 1)}.`;
     const progressInsight = currentCompanion.stage >= 20
       ? 'Jetzt geht es darum, dieses Niveau ruhig und sauber zu halten.'
-      : `Die neue Kurve ist exponentiell: Diese Stufe braucht ${Number(currentCompanion.currentStageCost || 0).toLocaleString('de-CH')} Pkt. bis zum naechsten Poster.`;
+      : `Die neue Kurve ist exponentiell: Diese Stufe braucht ${Number(currentCompanion.currentStageCost || 0).toLocaleString('de-CH')} Pkt. bis zum nächsten Poster.`;
     const momentumInsight = stats.activeOverdue
       ? `${stats.activeOverdue} offene Aufgabe(n) ziehen Energie. Eine davon zu beruhigen wirkt sofort auf dein Momentum.`
       : stats.momentumStreak >= 3
@@ -4659,7 +4659,7 @@ cacheEls();
         <div class="fish-stats-grid">
           <article><small>Bindung</small><strong>${companion.bond}%</strong></article>
           <article><small>Energie</small><strong>${companion.charge}%</strong></article>
-          <article><small>Naechste Stufe</small><strong>${nextPoints}</strong></article>
+          <article><small>Nächste Stufe</small><strong>${nextPoints}</strong></article>
         </div>
         <div class="fish-stage-grid" aria-label="20 Companion-Stufen">${stageTiles}</div>
         <div class="fish-chapter-strip">${chapterTiles}</div>
@@ -6564,7 +6564,7 @@ cacheEls();
       ? 'Ersten ehrlichen Referenzpunkt setzen.'
       : pauseMinutes >= nextGoal
         ? 'Pause halten und nicht verhandeln.'
-        : `${formatDuration(nextGoal)} als naechste saubere Marke.`;
+        : `${formatDuration(nextGoal)} als nächste saubere Marke.`;
     els.smokeHistory.innerHTML = `<div class="history-launch-grid consumption-history-actions">
       <button class="history-open-card" type="button" data-action="open-smoke-history">
         <span class="history-open-icon">${svgIcon('smoke', 'ui-icon')}</span>
@@ -6579,9 +6579,9 @@ cacheEls();
     </div>
     <div class="consumption-side-dashboard" aria-label="Rauch-Kommando">
       <article class="consumption-focus-card">
-        <small>Naechste saubere Aktion</small>
+        <small>Nächste saubere Aktion</small>
         <strong>${escapeHtml(focusText)}</strong>
-        <span>${trigger ? `${escapeHtml(trigger.label)} ist dein haeufigster Trigger der letzten 14 Tage.` : 'Trigger nach dem naechsten Log erfassen und Muster schaerfen.'}</span>
+        <span>${trigger ? `${escapeHtml(trigger.label)} ist dein häufigster Trigger der letzten 14 Tage.` : 'Trigger nach dem nächsten Log erfassen und Muster schärfen.'}</span>
       </article>
       <div class="consumption-side-metrics">
         <article><small>Heute</small><strong>${todayCount}×</strong><span>erfasst</span></article>
@@ -6675,7 +6675,7 @@ cacheEls();
     </div>
     <div class="consumption-side-dashboard" aria-label="Alkohol-Kommando">
       <article class="consumption-focus-card is-warm">
-        <small>Naechste saubere Aktion</small>
+        <small>Nächste saubere Aktion</small>
         <strong>${todayCount ? 'Wasser-Puffer setzen und Fenster bewusst schliessen.' : 'Heute erst bewusst entscheiden, dann erfassen.'}</strong>
         <span>${units7 ? `${units7} Einheiten in 7 Tagen · Fokus auf Dichte und klare Konsumfenster.` : 'Noch kein Wochenmuster. Die ersten ehrlichen Logs reichen.'}</span>
       </article>
@@ -9731,7 +9731,7 @@ cacheEls();
         id: task.id,
         day: suggestWeeklyPlanningDay({ effort: task.effort, preferOffset: index }),
         tone: 'danger',
-        label: 'Ueberfaellig',
+        label: 'Überfällig',
         title: task.title,
         body: `${taskDueState(task).label}. Neu einplanen, damit die Karte wieder handhabbar wird.`,
         action: 'Neu planen'
@@ -9761,7 +9761,7 @@ cacheEls();
       tone: 'backlog',
       label: 'Backlog',
       title: task.title,
-      body: `Prioritaet ${taskPriorityMeta(task).label} · Aufwand ${task.effort}/5. Als aktive Aufgabe fuer diese Woche uebernehmen.`,
+      body: `Priorität ${taskPriorityMeta(task).label} · Aufwand ${task.effort}/5. Als aktive Aufgabe für diese Woche übernehmen.`,
       action: 'Aktivieren'
     }));
 
@@ -9815,7 +9815,7 @@ cacheEls();
       els.taskWeeklyTodayBtn.setAttribute('title', weekLabel === 'Diese Woche' ? 'Aktuelle Woche' : 'Zur aktuellen Woche springen');
     }
     if (els.taskWeeklyOverview) {
-      const focus = overdue.length ? `${overdue.length} ueberfaellige Karte(n) zuerst beruhigen` : unplanned.length ? `${unplanned.length} Aufgabe(n) brauchen noch ein Datum` : 'Woche ist sauber geplant';
+      const focus = overdue.length ? `${overdue.length} überfällige Karte(n) zuerst beruhigen` : unplanned.length ? `${unplanned.length} Aufgabe(n) brauchen noch ein Datum` : 'Woche ist sauber geplant';
       els.taskWeeklyOverview.innerHTML = `
         <article class="weekly-command-card">
           <small>Planbarkeit</small>
@@ -9824,13 +9824,13 @@ cacheEls();
         </article>
         <article><small>Geplant</small><strong>${plannedThisWeek.length}</strong><span>aktive Tasks diese Woche</span></article>
         <article><small>Offen ohne Datum</small><strong>${unplanned.length}</strong><span>direkt einplanbar</span></article>
-        <article><small>Backlog</small><strong>${backlogTasks().length}</strong><span>Kandidaten fuer Fokus</span></article>
+        <article><small>Backlog</small><strong>${backlogTasks().length}</strong><span>Kandidaten für Fokus</span></article>
         <article><small>Wochenlast</small><strong>${Math.round(weekLoad)}</strong><span>SP + Termin-Stunden</span></article>`;
     }
     if (els.taskWeeklySuggestions) {
       els.taskWeeklySuggestions.innerHTML = suggestions.length
         ? suggestions.map(renderWeeklyPlanningSuggestion).join('')
-        : '<div class="empty-state">Keine offenen Planungsvorschlaege. Die Woche wirkt ruhig und gut sortiert.</div>';
+        : '<div class="empty-state">Keine offenen Planungsvorschläge. Die Woche wirkt ruhig und gut sortiert.</div>';
     }
     if (els.taskWeeklyDays) {
       els.taskWeeklyDays.innerHTML = days.map(renderWeeklyPlanningDay).join('');
@@ -9901,7 +9901,7 @@ cacheEls();
     task.synced = false;
     compactBacklogRanks();
     saveState();
-    toast('Backlog-Task fuer die Woche aktiviert');
+    toast('Backlog-Task für die Woche aktiviert');
     syncWithSupabase({ silent: true });
   }
 
@@ -12068,7 +12068,7 @@ async function deleteAlcoholLog(id) {
       return;
     }
     if (scope === 'habit' && !state.habits.some(habit => habit.id === targetId)) {
-      toast('Habit fuer Pause nicht gefunden.');
+      toast('Habit für Pause nicht gefunden.');
       return;
     }
     if (endsAt && new Date(endsAt) < new Date(startsAt)) {
