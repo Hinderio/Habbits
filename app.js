@@ -100,6 +100,9 @@
     { file: 'stage-26.png', label: 'Bold Edition', minScore: 75 },
     { file: 'stage-29.png', label: 'High Point', minScore: 75 }
   ]);
+  // Read indices live only for one synchronous render, never across mutations.
+  let analyticsReadCache = null;
+  const monthlyMagazineReviewCache = new Map();
   let monthlyMagazineCovers = MONTHLY_MAGAZINE_COVERS;
   let monthlyMagazineCoversRequest = null;
   let monthlyMagazineCoversCheckedAt = 0;
@@ -4123,6 +4126,10 @@ cacheEls();
   }
 
   function renderDashboard() {
+    return withAnalyticsReadScope(renderDashboardContent);
+  }
+
+  function renderDashboardContent() {
     renderPointEvolutionSummary();
     const todayKey = toDateKey(new Date());
     const todayCount = cigarettesOnDate(todayKey).length;
@@ -5046,9 +5053,10 @@ cacheEls();
     let total = ledger
       .filter(point => keySet.has(toDateKey(point.earned_at)))
       .reduce((sum, point) => sum + Number(point.points || 0), 0);
+    const cigaretteIds = cigaretteLedgerSourceIds();
     cigarettes
       .filter(cigarette => keySet.has(toDateKey(cigarette.smoked_at)))
-      .filter(cigarette => !state.pointsLedger.some(point => point.source_type === 'cigarette' && point.source_id === cigarette.id))
+      .filter(cigarette => !cigaretteIds.has(cigarette.id))
       .forEach(cigarette => { total += Number(cigarette.points || 0); });
     return Math.round(total);
   }
@@ -5390,7 +5398,54 @@ cacheEls();
     reader.querySelector('[data-magazine-reader-action="close"]')?.focus({ preventScroll: true });
   }
 
+  function cachedMonthlyMagazineReviews(keys, source) {
+    // Compare content, not object identity: edits and sync mutate rows in place.
+    // Global derived dependencies are intentional: old issues also show today's
+    // weight goal progress and training focus. Visibility already includes pauses.
+    const byMonth = (rows, dateOf) => groupAnalyticsRows(rows, row => toDateKey(dateOf(row)).slice(0, 7));
+    const groups = [
+      byMonth(source.sessions.map(row => ({ date: row.entry?.occurred_at || row.date, type: row.type, distanceKm: row.distanceKm, ascent: row.ascent })), row => row.date),
+      byMonth(source.cigarettes.map(({ id, smoked_at, points }) => ({ id, smoked_at, points })), row => row.smoked_at),
+      byMonth(source.alcoholUnits.map(row => ({ date: row.occurred_at || row.created_at })), row => row.date),
+      byMonth(source.tasks.map(row => ({ status: row.status, date: row.completed_at || row.updated_at || row.created_at })), row => row.date),
+      byMonth(state.tasks.map(row => ({ status: row.status, title: row.title, description: row.description, date: row.completed_at || row.updated_at || row.created_at })), row => row.date),
+      byMonth(source.habitEntries.map(({ habit_id, occurred_at, created_at }) => ({ habit_id, occurred_at, created_at })), row => row.occurred_at || row.created_at),
+      byMonth(source.ledger.map(({ earned_at, points }) => ({ earned_at, points })), row => row.earned_at),
+      byMonth(state.morningRoutineLogs || [], row => row.date_key || row.completed_at),
+      byMonth(visibleAlcoholDays(), row => row.log_date),
+      groupAnalyticsRows((state.monthlyMissions || []).map(normalizeMonthlyMission), row => row.month_key)
+    ];
+    const common = JSON.stringify([
+      state.habits, monthlyMagazineCovers, source.compass?.weakest,
+      countMonthlyMissionProgress({ metric: 'weight_measurements' }),
+      new Date().getTimezoneOffset(), Intl.DateTimeFormat().resolvedOptions().timeZone
+    ]);
+    const cigaretteIds = cigaretteLedgerSourceIds();
+    const reviews = keys.map(monthKey => {
+      const signature = JSON.stringify([
+        common, monthMissionKeys(monthKey),
+        toDateKey(monthKeyRange(monthKey).end) < toDateKey(new Date()),
+        ...groups.map(group => group.get(monthKey) || []),
+        (groups[1].get(monthKey) || []).map(row => cigaretteIds.has(row.id))
+      ]);
+      const cached = monthlyMagazineReviewCache.get(monthKey);
+      if (cached?.signature === signature) return cached.review;
+      const review = buildMonthlyMagazineReview(monthKey, source);
+      monthlyMagazineReviewCache.set(monthKey, { signature, review });
+      return review;
+    });
+    // Bound memory even after imports or switching accounts.
+    for (const key of monthlyMagazineReviewCache.keys()) {
+      if (!keys.includes(key)) monthlyMagazineReviewCache.delete(key);
+    }
+    return reviews;
+  }
+
   function renderMonthlyMagazine() {
+    return withAnalyticsReadScope(renderMonthlyMagazineContent);
+  }
+
+  function renderMonthlyMagazineContent() {
     if (!els.monthlyMagazine) return;
     void refreshMonthlyMagazineCovers();
     const source = {
@@ -5402,8 +5457,8 @@ cacheEls();
       ledger: visibleLedgerPoints()
     };
     source.compass = buildTrainingCompassModel(source.sessions);
-    const magazine = buildMonthlyMagazineReview(currentMonthKey(), source);
-    const archive = monthlyMagazineArchiveKeys(12, source).map(key => key === magazine.monthKey ? magazine : buildMonthlyMagazineReview(key, source));
+    const archive = cachedMonthlyMagazineReviews(monthlyMagazineArchiveKeys(12, source), source);
+    const magazine = archive.find(item => item.monthKey === currentMonthKey());
     if (els.monthlyMagazineSummary) els.monthlyMagazineSummary.textContent = `${magazine.score}% · ${magazine.isComplete ? 'Monatsfinale' : 'Live-Ausgabe'}`;
     if (els.monthlyMagazineMobileSummary) els.monthlyMagazineMobileSummary.textContent = `${archive.length} Ausgabe${archive.length === 1 ? '' : 'n'} · ${magazine.score}%`;
     const coverStyle = `background-image:url('${escapeHtml(magazine.cover.url)}')`;
@@ -6355,6 +6410,10 @@ cacheEls();
   }
 
   function renderSmoking() {
+    return withAnalyticsReadScope(renderSmokingContent);
+  }
+
+  function renderSmokingContent() {
     const last = getLastCigarette();
     const smokeCount = visibleCigarettes().length;
     if (els.lastSmokePoints) els.lastSmokePoints.textContent = `${smokeCount} Eintrag${smokeCount === 1 ? '' : 'e'}`;
@@ -7735,6 +7794,10 @@ cacheEls();
   }
 
   function renderHabits() {
+    return withAnalyticsReadScope(renderHabitsContent);
+  }
+
+  function renderHabitsContent() {
     const activeInput = document.activeElement?.closest?.('#habitCards input[id^="habit-card-input-"]') || null;
     const activeInputId = activeInput?.id || '';
     const activeInputSelection = activeInput ? { start: activeInput.selectionStart, end: activeInput.selectionEnd } : null;
@@ -7742,14 +7805,15 @@ cacheEls();
     const activeHabits = state.habits.filter(h => !h.is_archived).map(normalizeHabit);
     syncHabitsExperienceUi();
     pruneExpandedHabitCardIds(activeHabits.map(habit => habit.id));
-    renderHabitDnaOverview(activeHabits);
+    const dnaPortfolio = buildHabitDnaPortfolio(activeHabits);
+    renderHabitDnaOverview(activeHabits, dnaPortfolio);
     renderHabitPlayfulStats(activeHabits);
     if (!activeHabits.length) {
       els.habitCards.innerHTML = '<div class="empty-state">Lege deine erste flexible Gewohnheit an. Unterstützt werden Gewicht, Zahlen, Ja/Nein und Dauer.</div>';
       return;
     }
 
-    els.habitCards.innerHTML = activeHabits.map(habit => {
+    els.habitCards.innerHTML = activeHabits.map((habit, index) => {
       const periodMeta = habitTargetPeriodMeta(habit);
       const periodValue = habitValueForPeriod(habit);
       const todayEntries = entriesForHabitOnDate(habit.id, toDateKey(new Date()));
@@ -7763,7 +7827,7 @@ cacheEls();
       const fulfilled = habitFulfillmentState(habit, { periodValue, todayEntries, todayValue });
       const progress = habitProgressPercent(habit, periodValue, todayEntries);
       const isSystemHabit = isSystemMeditationHabit(habit);
-      const dna = buildHabitDna(habit);
+      const dna = dnaPortfolio.profiles[index];
       const todayLabel = formatHabitValue(habit, todayValue);
       const targetLabel = habit.target ? `${periodMeta.short}: ${periodValue.label} / ${habit.target}${unit ? ` ${unit}` : ''}` : 'ohne Zielwert';
       const pauseLabel = habitPause ? (habitPause.ends_at ? `bis ${formatDateTimeCompact(habitPause.ends_at)}` : 'ohne Enddatum') : '';
@@ -7929,12 +7993,12 @@ cacheEls();
   }
 
   function habitCompletionRate(habit) {
-    if (!habit.target) return visibleHabitEntries(habit.id).some(entry => entry.habit_id === habit.id) ? 0.72 : 0;
+    if (!habit.target) return analyticsHabitEntries(habit.id).some(entry => entry.habit_id === habit.id) ? 0.72 : 0;
     const period = normalizeHabitTargetPeriod(habit.target_period);
     const windows = habitPeriodWindows(period, period === 'month' ? 3 : period === 'week' ? 5 : 10);
     if (!windows.length) return 0;
     const successes = windows.filter(window => {
-      const entries = visibleHabitEntries(habit.id).filter(entry => entry.habit_id === habit.id && new Date(entry.occurred_at) >= window.start && new Date(entry.occurred_at) <= window.end);
+      const entries = analyticsHabitEntries(habit.id).filter(entry => entry.habit_id === habit.id && new Date(entry.occurred_at) >= window.start && new Date(entry.occurred_at) <= window.end);
       return aggregateHabitEntriesValue(habit, entries) >= Number(habit.target || 0);
     }).length;
     return successes / windows.length;
@@ -7976,7 +8040,7 @@ cacheEls();
   }
 
   function buildHabitDna(habit) {
-    const entries = visibleHabitEntries(habit.id).filter(entry => entry.habit_id === habit.id).sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at));
+    const entries = analyticsHabitEntries(habit.id).filter(entry => entry.habit_id === habit.id).sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at));
     const recent = entries.filter(entry => Date.now() - new Date(entry.occurred_at).getTime() <= 45 * DAY_MS);
     const lastLoggedAt = entries[0]?.occurred_at || null;
     const daysSinceLog = lastLoggedAt ? Math.max(0, Math.floor((Date.now() - new Date(lastLoggedAt).getTime()) / DAY_MS)) : 999;
@@ -8051,13 +8115,13 @@ cacheEls();
     return { profiles, headline, summary, stableText, fragileText, strongest, weakest, coachStyle };
   }
 
-  function renderHabitDnaOverview(activeHabits = []) {
+  function renderHabitDnaOverview(activeHabits = [], preparedPortfolio = null) {
     if (!els.habitDnaOverview) return;
     if (!activeHabits.length) {
       els.habitDnaOverview.innerHTML = `<div class="empty-state">Noch keine Habit DNA. Lege einen Habit an, dann erscheinen Schwierigkeit, Energie, ideale Tageszeit und Abbruchrisiko automatisch hier.</div>`;
       return;
     }
-    const portfolio = buildHabitDnaPortfolio(activeHabits);
+    const portfolio = preparedPortfolio || buildHabitDnaPortfolio(activeHabits);
     const highRisk = portfolio.profiles.filter(profile => profile.riskMeta.tone === 'high').length;
     els.habitDnaOverview.innerHTML = `<div class="habit-dna-hero">
       <div>
@@ -11046,6 +11110,10 @@ cacheEls();
   }
 
   function renderCalendar() {
+    return withAnalyticsReadScope(renderCalendarContent);
+  }
+
+  function renderCalendarContent() {
     const year = calendarCursor.getFullYear();
     const month = calendarCursor.getMonth();
     els.calendarTitle.textContent = calendarCursor.toLocaleDateString('de-CH', { month: 'long', year: 'numeric' });
@@ -13578,27 +13646,77 @@ async function deleteAlcoholLog(id) {
     return sum(visibleLedgerPoints().map(p => Number(p.points || 0)));
   }
 
-  function pointsOnDate(key) {
-    return sum(visibleLedgerPoints().filter(p => toDateKey(p.earned_at) === key).map(p => Number(p.points || 0))) +
-      sum(visibleCigarettes().filter(c => toDateKey(c.smoked_at) === key && !state.pointsLedger.some(p => p.source_type === 'cigarette' && p.source_id === c.id)).map(c => Number(c.points || 0)));
+  function withAnalyticsReadScope(read) {
+    if (analyticsReadCache) return read();
+    analyticsReadCache = new Map();
+    try { return read(); }
+    finally { analyticsReadCache = null; }
   }
 
+  function analyticsRead(key, read) {
+    if (!analyticsReadCache) return read();
+    if (!analyticsReadCache.has(key)) analyticsReadCache.set(key, read());
+    return analyticsReadCache.get(key);
+  }
+
+  function groupAnalyticsRows(rows, keyOf) {
+    const groups = new Map();
+    for (const row of rows) {
+      const key = keyOf(row);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(row);
+    }
+    return groups;
+  }
+
+  function analyticsDayRows(name, read, keyOf, key) {
+    if (!analyticsReadCache) return read().filter(row => keyOf(row) === key);
+    const groups = analyticsRead(name, () => groupAnalyticsRows(read(), keyOf));
+    // Callers historically own their result array and may sort or splice it.
+    return (groups.get(key) || []).slice();
+  }
+
+  function analyticsHabitEntries(habitId) {
+    if (!habitId) return visibleHabitEntries(habitId);
+    return analyticsDayRows('habit-entries', visibleHabitEntries, entry => entry.habit_id, habitId);
+  }
+
+  function cigaretteLedgerSourceIds() {
+    return analyticsRead('cigarette-ledger-ids', () => new Set(state.pointsLedger
+      .filter(row => row.source_type === 'cigarette').map(row => row.source_id)));
+  }
+
+  function pointsOnDate(key) {
+    const ledger = analyticsDayRows('ledger-days', visibleLedgerPoints, p => toDateKey(p.earned_at), key);
+    const sourceIds = cigaretteLedgerSourceIds();
+    return sum(ledger.map(p => Number(p.points || 0))) +
+      sum(cigarettesOnDate(key).filter(c => !sourceIds.has(c.id)).map(c => Number(c.points || 0)));
+  }
 
   function calendarPointsOnDate(key) {
-    return sum(visibleLedgerPoints()
-      .filter(p => p.source_type !== 'habit' && toDateKey(p.earned_at) === key)
-      .map(p => Number(p.points || 0))) +
-      sum(visibleCigarettes()
-        .filter(c => toDateKey(c.smoked_at) === key && !state.pointsLedger.some(p => p.source_type === 'cigarette' && p.source_id === c.id))
-        .map(c => Number(c.points || 0)));
+    const ledger = analyticsDayRows('ledger-days', visibleLedgerPoints, p => toDateKey(p.earned_at), key);
+    const sourceIds = cigaretteLedgerSourceIds();
+    return sum(ledger.filter(p => p.source_type !== 'habit').map(p => Number(p.points || 0))) +
+      sum(cigarettesOnDate(key).filter(c => !sourceIds.has(c.id)).map(c => Number(c.points || 0)));
   }
 
   function getLastCigarette() {
-    return [...visibleCigarettes()].sort((a, b) => new Date(b.smoked_at) - new Date(a.smoked_at))[0] || null;
+    return analyticsRead('last-cigarette', () => {
+      const rows = visibleCigarettes();
+      let last = null;
+      let latest = -Infinity;
+      for (const row of rows) {
+        const time = new Date(row.smoked_at).getTime();
+        // Preserve the legacy ordering for malformed imported timestamps.
+        if (!Number.isFinite(time)) return rows.slice().sort((a, b) => new Date(b.smoked_at) - new Date(a.smoked_at))[0] || null;
+        if (time > latest) { latest = time; last = row; }
+      }
+      return last;
+    });
   }
 
   function cigarettesOnDate(key) {
-    return visibleCigarettes().filter(c => toDateKey(c.smoked_at) === key);
+    return analyticsDayRows('cigarette-days', visibleCigarettes, c => toDateKey(c.smoked_at), key);
   }
 
   function alcoholForDate(key) {
@@ -13609,7 +13727,7 @@ async function deleteAlcoholLog(id) {
     const meta = habitTargetPeriodMeta(habit);
     const endKey = toDateKey(endDate);
     const keys = meta.days === 1 ? [endKey] : daysBack(meta.days);
-    const entries = visibleHabitEntries(habit.id).filter(e => e.habit_id === habit.id && keys.includes(toDateKey(e.occurred_at)));
+    const entries = analyticsHabitEntries(habit.id).filter(e => e.habit_id === habit.id && keys.includes(toDateKey(e.occurred_at)));
     if (!entries.length) return { value: habit.type === 'boolean' && !isFitnessDistanceHabit(habit) ? 0 : 0, label: formatHabitValue(habit, 0), entries };
     if (habit.type === 'boolean' && !isFitnessDistanceHabit(habit)) {
       const value = new Set(entries.filter(e => e.value_bool).map(e => toDateKey(e.occurred_at))).size;
@@ -13620,7 +13738,7 @@ async function deleteAlcoholLog(id) {
   }
 
   function entriesForHabitOnDate(habitId, key) {
-    return visibleHabitEntries(habitId).filter(e => e.habit_id === habitId && toDateKey(e.occurred_at) === key);
+    return analyticsDayRows('habit-days', visibleHabitEntries, e => JSON.stringify([e.habit_id, toDateKey(e.occurred_at)]), JSON.stringify([habitId, key]));
   }
 
   function averagePauseText(days) {
