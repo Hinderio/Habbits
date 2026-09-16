@@ -25,6 +25,7 @@
 
   let editingProjectId = '';
   let selectedProjectId = '';
+  let projectTaskReturn = null;
   let syncing = false;
   let client = null;
   let taskBadgeRaf = 0;
@@ -502,9 +503,10 @@
       ? Array.from(new Intl.Segmenter('de', { granularity: 'grapheme' }).segment(body), part => part.segment)
       : Array.from(body);
     const fullText = escapeHtml(body).replace(/\n/g, '<br>');
+    const preview = escapeHtml(characters.slice(0, 100).join('').replace(/\s+/g, ' ').trim());
     const content = characters.length > 100
-      ? `<details class="project-note-disclosure"><summary aria-label="Notiz: ${escapeHtml(note.category)}"><span class="project-note-preview">${escapeHtml(characters.slice(0, 100).join('')).replace(/\n/g, '<br>')}…</span><span class="project-note-toggle"><span class="project-note-more">Mehr anzeigen</span><span class="project-note-less">Weniger anzeigen</span><span class="project-editor-chevron" aria-hidden="true">⌄</span></span></summary><p>${fullText}</p></details>`
-      : `<p>${fullText}</p>`;
+      ? `<details class="project-note-disclosure"><summary aria-label="Notiz: ${escapeHtml(note.category)}"><span class="project-note-preview">${preview}…</span><span class="project-note-toggle"><span class="project-note-more">Mehr anzeigen</span><span class="project-note-less">Weniger anzeigen</span><span class="project-editor-chevron" aria-hidden="true">⌄</span></span></summary><p tabindex="0" aria-label="Vollständige Notiz">${fullText}</p></details>`
+      : `<p class="project-note-preview">${fullText}</p>`;
     return `<article class="project-note-card"><div class="project-note-head"><span>${escapeHtml(note.category)}</span><div class="list-actions">${projectActionButton('edit-project-note', note.id, 'Notiz bearbeiten', 'edit')}${projectActionButton('delete-project-note', note.id, 'Notiz löschen', 'trash', true)}</div></div>${content}<small>${dateLabel(note.updated_at)}</small></article>`;
   }
 
@@ -922,7 +924,46 @@
     } catch (error) { toast(error.message || 'Projekt konnte nicht abgeschlossen werden.'); }
   }
 
+  function suspendProjectForTask(actionEl) {
+    const modal = document.getElementById('projectDetailModal');
+    const taskModal = document.getElementById('taskDetailModal');
+    if (!selectedProjectId || !modal || !taskModal || taskModal.classList.contains('hidden')) return;
+    const card = modal.querySelector('.project-detail-card');
+    const context = {
+      projectId: selectedProjectId,
+      taskId: actionEl.dataset.id,
+      trigger: actionEl,
+      modalScroll: modal.scrollTop,
+      cardScroll: card?.scrollTop || 0
+    };
+    context.observer = new MutationObserver(() => {
+      if (!taskModal.classList.contains('hidden')) return;
+      context.observer.disconnect();
+      if (projectTaskReturn !== context) return;
+      projectTaskReturn = null;
+      if (selectedProjectId !== context.projectId) return;
+      modal.classList.remove('hidden');
+      document.body.classList.add('project-modal-open');
+      modal.scrollTop = context.modalScroll;
+      if (card) card.scrollTop = context.cardScroll;
+      const trigger = context.trigger.isConnected ? context.trigger
+        : Array.from(modal.querySelectorAll('[data-action="open-task-detail"]')).find(button => button.dataset.id === context.taskId);
+      trigger?.focus({ preventScroll: true });
+    });
+    projectTaskReturn?.observer.disconnect();
+    projectTaskReturn = context;
+    context.observer.observe(taskModal, { attributes: true, attributeFilter: ['class'] });
+    modal.classList.add('hidden');
+    document.body.classList.remove('project-modal-open');
+  }
+
+  function clearProjectTaskReturn() {
+    projectTaskReturn?.observer.disconnect();
+    projectTaskReturn = null;
+  }
+
   async function openDetail(projectId) {
+    clearProjectTaskReturn();
     selectedProjectId = projectId;
     renderDetail(projectId);
     const modal = document.getElementById('projectDetailModal');
@@ -933,6 +974,7 @@
   }
 
   function closeDetail(options = {}) {
+    clearProjectTaskReturn();
     selectedProjectId = '';
     document.getElementById('projectDetailModal')?.classList.add('hidden');
     document.body.classList.remove('project-modal-open');
@@ -997,6 +1039,10 @@
   function bindEvents() {
     if (window.__habitFlowProjectsEventsBound) return;
     window.__habitFlowProjectsEventsBound = true;
+    document.addEventListener('click', event => {
+      // Editing intentionally navigates to the task form instead of returning to the project.
+      if (projectTaskReturn && event.target.closest?.('[data-action="edit-task"]')) closeDetail({ skipSync: true });
+    }, true);
     document.addEventListener('submit', event => {
       if (event.target?.id === 'projectForm') saveProject(event);
       if (event.target?.matches?.('[data-project-phase-form]')) savePhase(event);
@@ -1021,7 +1067,7 @@
       if (action === 'edit-project-note') editProjectNote(id);
       if (action === 'delete-project-note') deleteProjectNote(id);
       if (action === 'link-selected-task') linkTask(id, document.getElementById('projectTaskSelect')?.value || '');
-      if (action === 'open-task-detail' && actionEl.closest('.project-task-row')) closeDetail({ skipSync: true });
+      if (action === 'open-task-detail' && actionEl.closest('.project-task-row')) suspendProjectForTask(actionEl);
       if (action === 'unlink-task') unlinkTask(id);
       if (action === 'create-project-task') createProjectTask(id);
     });

@@ -33,3 +33,15 @@ body.light .project-editor-record{background:rgba(255,255,255,.72);border-color:
 .project-note-disclosure[open] .project-editor-chevron{transform:rotate(180deg)}
 .project-note-disclosure>summary:focus-visible,.project-task-actions .mini-btn:focus-visible{outline:3px solid var(--primary);outline-offset:3px}
 @media(max-width:760px){.project-task-row>.project-task-actions{justify-content:flex-start;width:100%}.project-task-actions .project-task-open{flex:1}}
+
+/* Equal note cards keep the overview stable, including while reading a full note. */
+.project-note-card{box-sizing:border-box;display:grid;grid-template-rows:44px minmax(0,1fr) auto;gap:10px;height:19rem}
+.project-note-head>span{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.project-note-card>.project-note-preview{min-height:0;margin:0;overflow:auto}
+.project-note-disclosure{position:relative;min-height:0;margin:0;overflow:hidden}
+.project-note-disclosure>summary{display:flex;flex-direction:column;min-height:0;height:100%;flex-shrink:0}
+.project-note-disclosure .project-note-preview{min-height:0;overflow:auto}
+.project-note-disclosure .project-note-toggle{flex-shrink:0;margin-top:auto;padding-top:6px}
+.project-note-disclosure[open]>summary{height:auto}
+.project-note-disclosure[open]>p{position:absolute;inset:52px 0 0;min-height:0;margin:0;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+.project-note-card>small{align-self:end}
