@@ -400,3 +400,28 @@ body.light .hf-weekly-archive section>button{background:rgba(255,255,255,.64);bo
   .hf-gift-row{grid-template-columns:34px minmax(0,1fr)}
   .hf-gift-actions{grid-column:2;justify-content:flex-start}
 }
+
+/* Saved web links: task link typography with List OS cards. */
+.hf-list-card-light-ink,.hf-list-card-light-ink button,.hf-list-card-light-ink .hf-list-card-art{color:#fff}
+.hf-weblink-row{grid-template-columns:minmax(0,1fr) auto;align-items:start}
+.hf-weblink-copy{min-width:0;display:grid;gap:7px}
+.hf-weblink-copy small{color:var(--muted);font-size:.74rem;font-weight:850;overflow-wrap:anywhere}
+.hf-weblink-copy strong,.hf-weblink-copy .task-inline-link{overflow-wrap:anywhere}
+.hf-weblink-copy .task-inline-link{justify-self:start;font-size:.9rem;max-width:100%}
+.hf-weblink-copy p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--muted);font-size:.86rem;line-height:1.45}
+.hf-weblink-actions{display:flex;gap:7px;flex-wrap:wrap}
+.hf-weblink-actions .is-favorite{background:rgba(246,179,63,.16);border-color:rgba(246,179,63,.36);color:var(--warning)}
+.hf-weblink-actions .is-favorite svg{fill:currentColor}
+.hf-weblink-toolbar{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) auto;gap:12px;align-items:end}
+.hf-weblink-toolbar label{display:grid;gap:7px;min-width:0}
+.hf-weblink-toolbar label>span{color:var(--muted);font-size:.78rem;font-weight:850}
+.hf-weblink-toolbar input,.hf-weblink-toolbar select{width:100%;min-width:0}
+.hf-weblink-toolbar .hf-weblink-favorites{display:flex;align-items:center;gap:8px;min-height:44px}
+.hf-weblink-favorites input{width:20px;height:20px;margin:0;accent-color:var(--primary)}
+.hf-weblink-message{margin:0;color:var(--muted);font-size:.84rem}
+#hfWeblinkMessage:empty{display:none}
+@media(max-width:720px){
+  .hf-weblink-row{grid-template-columns:minmax(0,1fr)}
+  .hf-weblink-toolbar{grid-template-columns:minmax(0,1fr)}
+  .hf-weblink-actions{justify-content:flex-end}
+}

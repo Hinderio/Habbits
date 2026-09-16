@@ -34,8 +34,8 @@ test('service worker caches weekly assets under a bumped version', () => {
   assert.match(workerSource, /weekly-habit-card-294/);
   assert.match(workerSource, /'\.\/modules\/lists\.js'/);
   assert.match(workerSource, /'\.\/modules\/lists\.css'/);
-  assert.match(indexSource, /modules\/lists\.css\?v=306/);
-  assert.match(indexSource, /modules\/lists\.js\?v=306/);
+  assert.match(indexSource, /modules\/lists\.css\?v=310/);
+  assert.match(indexSource, /modules\/lists\.js\?v=310/);
 });
 
 test('weekly notes use the habit-card surface and the pink list tone', () => {

@@ -8,6 +8,7 @@
   const APP_STATE_KEY = 'habitflow-state-v1';
   const WEEKLY_LIST_ID = 'weekly';
   const GIFT_LIST_ID = 'gifts';
+  const WEBLINK_LIST_ID = 'weblinks';
   const WEEKLY_PAST_WEEKS = 3;
   const WEEKLY_FUTURE_WEEKS = 3;
   const PHOTO_IMAGE_MAX_EDGE = 1280;
@@ -42,11 +43,14 @@
     { id: 'terms', slug: 'begriffe', title: 'Begriffe', type: 'generic', icon: 'book', color: '#ff8fa3', description: 'Begriffe nach Kategorien sammeln und mit Lernkarten festigen.' },
     { id: 'finance', slug: 'finanzen', title: 'Finanzen', type: 'generic', icon: 'wallet', color: '#6fd6a8', description: 'Investitionen, Guthaben und offene Schulden in einem ruhigen Finanzbild.' },
     { id: 'chatgpt', slug: 'chatgpt', title: 'ChatGPT', type: 'generic', icon: 'message', color: '#7f9fd4', description: 'Wichtige Projekte und Threads gruppiert sichern und direkt wieder öffnen.' },
-    { id: GIFT_LIST_ID, slug: 'geschenk', title: 'Geschenk', type: 'generic', icon: 'gift', color: '#E49767', description: 'Geschenkideen für deine Lieblingsmenschen sammeln und als Task umsetzen.' },
+    { id: WEBLINK_LIST_ID, slug: 'weblinks', title: 'Weblinks', type: 'generic', icon: 'external', color: '#AF4360', description: 'Wichtige Webseiten sammeln, kategorisieren und schnell wiederfinden.' },
+    { id: GIFT_LIST_ID, slug: 'geschenk', title: 'Geschenk', type: 'generic', icon: 'gift', color: '#587E99', description: 'Geschenkideen für deine Lieblingsmenschen sammeln und als Task umsetzen.' },
     { id: WEEKLY_LIST_ID, slug: 'wochenzettel', title: 'Wochenzettel', type: 'generic', icon: 'note', color: '#EDBDC3', description: 'Kleine Gedanken und Erinnerungen – Woche für Woche.' }
   ];
 
   const ICONS = {
+    star: '<path d="m12 3 2.8 5.7 6.3.9-4.5 4.4 1.1 6.2L12 17.3l-5.7 3 1.1-6.2L2.9 9.6l6.3-.9Z"/>',
+    copy: '<rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/>',
     gift: '<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M5 12v9h14v-9M12 8v13"/><path d="M12 8H8a3 3 0 1 1 3-3l1 3Zm0 0h4a3 3 0 1 0-3-3l-1 3Z"/>',
     list: '<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>',
     ticket: '<path d="M3 9a3 3 0 0 0 0 6v3h18v-3a3 3 0 0 0 0-6V6H3v3Z"/><path d="M13 6v12"/><path d="M8 10h2"/><path d="M8 14h2"/>',
@@ -84,6 +88,11 @@
   let editingSubscriptionId = '';
   let editingFinanceId = '';
   let editingChatgptId = '';
+  let editingWeblinkId = '';
+  let weblinkQuery = '';
+  let weblinkCategory = '';
+  let weblinkFavoritesOnly = false;
+  let weblinkMessage = '';
   let editingGiftId = '';
   let giftMessage = '';
   const promotingGiftIds = new Set();
@@ -228,6 +237,8 @@
       const merged = { ...listsById.get(list.id), ...list };
       if (list.id === 'subscriptions') merged.color = '#61CBF4';
       if (list.id === WEEKLY_LIST_ID) merged.color = '#EDBDC3';
+      if (list.id === GIFT_LIST_ID) merged.color = '#587E99';
+      if (list.id === WEBLINK_LIST_ID) merged.color = '#AF4360';
       listsById.set(list.id, merged);
     });
     return {
@@ -354,7 +365,7 @@
       const cardType = list.id === WEEKLY_LIST_ID ? 'Weekly Inbox' : list.type === 'photos' ? 'Touren & Orte' : list.id === 'terms' ? 'Lernkarten' : list.id === 'finance' ? 'Werte & Verpflichtungen' : list.id === 'chatgpt' ? 'Threads & Projekte' : 'Liste';
       const cardStat = list.id === WEEKLY_LIST_ID ? 'diese Woche' : list.type === 'photos' ? `${done} Touren` : list.id === 'terms' ? `${categories} ${categories === 1 ? 'Kategorie' : 'Kategorien'}` : list.id === 'finance' ? 'Positionen' : list.id === 'chatgpt' ? 'Threads' : 'Einträge';
       return `
-        <article class="hf-list-card ${list.id === activeListId ? 'is-active' : ''}" style="--hf-list-tone:${escapeHtml(list.color)}">
+        <article class="hf-list-card ${list.id === WEBLINK_LIST_ID ? 'hf-list-card-light-ink' : ''} ${list.id === activeListId ? 'is-active' : ''}" style="--hf-list-tone:${escapeHtml(list.color)}">
           <button type="button" data-list-open="${escapeHtml(list.id)}">
             <span class="hf-list-card-art">${icon(list.icon)}</span>
             <span class="hf-list-card-copy">
@@ -370,6 +381,10 @@
   }
 
   function renderDetail(target, list) {
+    if (list.id === WEBLINK_LIST_ID) {
+      target.innerHTML = renderWeblinksDetail(list);
+      return;
+    }
     if (list.id === GIFT_LIST_ID) {
       target.innerHTML = renderGiftsDetail(list);
       return;
@@ -422,6 +437,176 @@
     `;
   }
 
+
+
+  function validatedWeblinkUrl(value) {
+    const raw = String(value || '').trim();
+    if (!raw || /[\s\\]/.test(raw)) return '';
+    const normalized = normalizedExternalUrl(raw);
+    if (!normalized) return '';
+    const parsed = new URL(normalized);
+    return parsed.hostname && !parsed.username && !parsed.password ? parsed.href : '';
+  }
+
+  function webLinkCategories() {
+    return [...new Set(itemsFor(WEBLINK_LIST_ID).map(item => item.metadata?.category || 'Allgemein'))]
+      .sort((a, b) => a.localeCompare(b, 'de-CH'));
+  }
+
+  function filteredWeblinks() {
+    const query = weblinkQuery.trim().toLocaleLowerCase('de-CH');
+    return itemsFor(WEBLINK_LIST_ID).filter(item =>
+      (!weblinkCategory || (item.metadata?.category || 'Allgemein') === weblinkCategory)
+      && (!weblinkFavoritesOnly || item.metadata?.favorite)
+      && (!query || [item.title, item.metadata?.url, item.metadata?.category, item.note].join(' ').toLocaleLowerCase('de-CH').includes(query))
+    ).sort((a, b) => Number(!!b.metadata?.favorite) - Number(!!a.metadata?.favorite)
+      || String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+  }
+
+  function renderWeblinkResults() {
+    const items = filteredWeblinks();
+    if (!items.length) return '<div class="hf-list-items is-empty"><p>Keine Weblinks gefunden. Speichere einen Link oder passe die Filter an.</p></div>';
+    return `<div class="hf-list-items">${items.map(item => {
+      const url = validatedWeblinkUrl(item.metadata?.url);
+      const domain = url ? new URL(url).hostname : 'Ungültiger Link';
+      return `<article class="hf-list-row hf-weblink-row" data-weblink-id="${escapeHtml(item.id)}">
+        <div class="hf-weblink-copy">
+          <small>${escapeHtml(item.metadata?.category || 'Allgemein')} · ${escapeHtml(domain)}</small>
+          <strong>${escapeHtml(item.title)}</strong>
+          ${url ? `<a class="task-inline-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a>` : '<span>Bitte die URL bearbeiten.</span>'}
+          ${item.note ? `<p>${escapeHtml(item.note)}</p>` : ''}
+        </div>
+        <div class="hf-weblink-actions">
+          <button class="hf-list-icon-btn ${item.metadata?.favorite ? 'is-favorite' : ''}" type="button" data-action="favorite-weblink" aria-pressed="${!!item.metadata?.favorite}" aria-label="${item.metadata?.favorite ? 'Aus Favoriten entfernen' : 'Als Favorit merken'}">${icon('star')}</button>
+          <button class="hf-list-icon-btn" type="button" data-action="copy-weblink" aria-label="Link kopieren" ${url ? '' : 'disabled'}>${icon('copy')}</button>
+          <button class="hf-list-icon-btn" type="button" data-action="edit-weblink" aria-label="Weblink bearbeiten">${icon('edit')}</button>
+          <button class="hf-list-icon-btn danger" type="button" data-action="delete-weblink" aria-label="Weblink löschen">${icon('trash')}</button>
+        </div>
+      </article>`;
+    }).join('')}</div>`;
+  }
+
+  function renderWeblinksDetail(list) {
+    const items = itemsFor(WEBLINK_LIST_ID);
+    const editing = items.find(item => item.id === editingWeblinkId);
+    const categories = webLinkCategories();
+    if (weblinkCategory && !categories.includes(weblinkCategory)) weblinkCategory = '';
+    return `
+      <div class="panel-head">
+        <div><p class="eyebrow">${escapeHtml(list.title)}</p><h3>Deine wichtigsten Seiten an einem Ort</h3></div>
+        <span class="badge">${items.length} Links</span>
+      </div>
+      <form class="hf-list-form ${editing ? 'is-editing' : ''}" data-form="weblink" data-editing-id="${escapeHtml(editing?.id || '')}">
+        <label class="full"><span>Weblink</span><input name="url" inputmode="url" autocomplete="url" autocapitalize="none" spellcheck="false" maxlength="4000" value="${escapeHtml(editing?.metadata?.url || '')}" placeholder="https://example.com oder www.example.com" required></label>
+        <label><span>Titel</span><input name="title" maxlength="240" value="${escapeHtml(editing?.title || '')}" placeholder="Optional – sonst wird die Domain verwendet"></label>
+        <label><span>Kategorie</span><input name="category" list="hfWeblinkCategories" maxlength="80" value="${escapeHtml(editing?.metadata?.category || '')}" placeholder="Zum Beispiel Arbeit, Wissen oder Reisen"></label>
+        <datalist id="hfWeblinkCategories">${categories.map(category => `<option value="${escapeHtml(category)}"></option>`).join('')}</datalist>
+        <label class="full"><span>Notiz</span><textarea name="note" rows="2" maxlength="4000" placeholder="Wofür möchtest du diesen Link behalten?">${escapeHtml(editing?.note || '')}</textarea></label>
+        <div class="hf-list-form-actions full">
+          <button class="pill primary" type="submit">${icon(editing ? 'check' : 'plus')} ${editing ? 'Änderungen speichern' : 'Link speichern'}</button>
+          ${editing ? '<button class="pill secondary" type="button" data-action="cancel-weblink-edit">Abbrechen</button>' : ''}
+        </div>
+      </form>
+      <p id="hfWeblinkMessage" class="hf-weblink-message" role="status" aria-live="polite">${escapeHtml(weblinkMessage)}</p>
+      <div class="hf-weblink-toolbar">
+        <label><span>Suchen</span><input id="hfWeblinkSearch" type="search" value="${escapeHtml(weblinkQuery)}" placeholder="Titel, Domain oder Notiz …"></label>
+        <label><span>Kategorie</span><select id="hfWeblinkCategory"><option value="">Alle Kategorien</option>${categories.map(category => `<option value="${escapeHtml(category)}" ${category === weblinkCategory ? 'selected' : ''}>${escapeHtml(category)}</option>`).join('')}</select></label>
+        <label class="hf-weblink-favorites"><input id="hfWeblinkFavorites" type="checkbox" ${weblinkFavoritesOnly ? 'checked' : ''}><span>Nur Favoriten</span></label>
+      </div>
+      <p id="hfWeblinkCount" class="hf-weblink-message" role="status">${filteredWeblinks().length} von ${items.length} Links</p>
+      <div id="hfWeblinkResults">${renderWeblinkResults()}</div>
+    `;
+  }
+
+  function setWeblinkMessage(message) {
+    weblinkMessage = message;
+    const node = document.getElementById('hfWeblinkMessage');
+    if (node) node.textContent = message;
+  }
+
+  function refreshWeblinkResults() {
+    const target = document.getElementById('hfWeblinkResults');
+    if (target) target.innerHTML = renderWeblinkResults();
+    const count = document.getElementById('hfWeblinkCount');
+    if (count) count.textContent = `${filteredWeblinks().length} von ${itemsFor(WEBLINK_LIST_ID).length} Links`;
+  }
+
+  function saveWeblink(form) {
+    const data = new FormData(form);
+    const url = validatedWeblinkUrl(data.get('url'));
+    if (!url) {
+      setWeblinkMessage('Bitte einen gültigen HTTP- oder HTTPS-Link ohne Zugangsdaten eingeben.');
+      form.elements.url?.focus();
+      return;
+    }
+    const editingId = String(form.dataset.editingId || '');
+    if (itemsFor(WEBLINK_LIST_ID).some(item => item.id !== editingId && validatedWeblinkUrl(item.metadata?.url) === url)) {
+      setWeblinkMessage('Dieser Link ist bereits gespeichert. Du findest ihn über die Suche.');
+      return;
+    }
+    let item = state.items.find(entry => entry.id === editingId && entry.listId === WEBLINK_LIST_ID && !entry.isArchived);
+    if (editingId && !item) {
+      setWeblinkMessage('Dieser Link wurde inzwischen gelöscht. Bitte die Liste erneut öffnen.');
+      return;
+    }
+    const now = new Date().toISOString();
+    if (!item) {
+      item = { id: uid('weblink'), listId: WEBLINK_LIST_ID, isDone: false, isArchived: false, createdAt: now, sortRank: Date.now() };
+      state.items.push(item);
+    }
+    Object.assign(item, {
+      title: String(data.get('title') || '').trim() || new URL(url).hostname,
+      note: String(data.get('note') || '').trim(),
+      metadata: { ...item.metadata, url, category: String(data.get('category') || '').trim() || 'Allgemein' },
+      updatedAt: now
+    });
+    editingWeblinkId = '';
+    weblinkQuery = '';
+    weblinkCategory = '';
+    weblinkFavoritesOnly = false;
+    weblinkMessage = editingId ? 'Weblink aktualisiert.' : 'Weblink gespeichert.';
+    form.reset();
+    saveAndSync([item]);
+  }
+
+  async function handleWeblinkAction(action, id) {
+    const item = state.items.find(entry => entry.id === id && entry.listId === WEBLINK_LIST_ID && !entry.isArchived);
+    if (!item) return;
+    if (action === 'edit-weblink') {
+      editingWeblinkId = id;
+      weblinkMessage = '';
+      render();
+      window.requestAnimationFrame(() => document.querySelector('form[data-form="weblink"] input[name="url"]')?.focus());
+      return;
+    }
+    if (action === 'copy-weblink') {
+      const url = validatedWeblinkUrl(item.metadata?.url);
+      if (!url) return;
+      try {
+        await window.navigator.clipboard.writeText(url);
+        setWeblinkMessage('Link kopiert.');
+      } catch (_) {
+        setWeblinkMessage('Kopieren ist hier nicht verfügbar. Du kannst den angezeigten Link markieren und kopieren.');
+      }
+      return;
+    }
+    if (action === 'favorite-weblink') {
+      item.metadata = { ...item.metadata, favorite: !item.metadata?.favorite };
+      item.updatedAt = new Date().toISOString();
+      persist();
+      refreshWeblinkResults();
+      syncToSupabase([item]);
+      return;
+    }
+    if (action === 'delete-weblink') {
+      if (!window.confirm(`Weblink „${item.title}“ löschen?`)) return;
+      item.isArchived = true;
+      item.updatedAt = new Date().toISOString();
+      if (editingWeblinkId === id) editingWeblinkId = '';
+      weblinkMessage = 'Weblink gelöscht.';
+      saveAndSync([item]);
+    }
+  }
 
   function renderGiftsDetail(list) {
     const items = itemsFor(GIFT_LIST_ID);
@@ -1554,6 +1739,8 @@
         editingSubscriptionId = '';
         editingFinanceId = '';
         editingChatgptId = '';
+        editingWeblinkId = '';
+        weblinkMessage = '';
         editingGiftId = '';
         giftMessage = '';
         editingWeeklyId = '';
@@ -1713,6 +1900,17 @@
         return;
       }
 
+      if (action === 'cancel-weblink-edit') {
+        editingWeblinkId = '';
+        weblinkMessage = '';
+        render();
+        return;
+      }
+      const weblinkRow = event.target.closest('[data-weblink-id]');
+      if (weblinkRow && ['edit-weblink', 'delete-weblink', 'favorite-weblink', 'copy-weblink'].includes(action)) {
+        void handleWeblinkAction(action, weblinkRow.dataset.weblinkId);
+        return;
+      }
       if (action === 'cancel-gift-edit') {
         editingGiftId = '';
         giftMessage = '';
@@ -1780,6 +1978,7 @@
       event.preventDefault();
       if (form.dataset.form === 'weekly-capture') saveWeeklyThought(form);
       if (form.dataset.form === 'weekly-move') moveWeeklyItem(form);
+      if (form.dataset.form === 'weblink') saveWeblink(form);
       if (form.dataset.form === 'gift') saveGift(form);
       if (form.dataset.form === 'item') saveItem(form);
       if (form.dataset.form === 'term') saveTerm(form);
@@ -1791,7 +1990,23 @@
       if (form.dataset.form === 'spot') void saveSpot(form);
     });
 
+    document.addEventListener('input', event => {
+      if (event.target.matches?.('#hfWeblinkSearch')) {
+        weblinkQuery = event.target.value;
+        refreshWeblinkResults();
+      }
+    });
     document.addEventListener('change', event => {
+      if (event.target.matches?.('#hfWeblinkCategory')) {
+        weblinkCategory = event.target.value;
+        refreshWeblinkResults();
+        return;
+      }
+      if (event.target.matches?.('#hfWeblinkFavorites')) {
+        weblinkFavoritesOnly = event.target.checked;
+        refreshWeblinkResults();
+        return;
+      }
       const financeKindSelect = event.target.closest('#screen-lists [data-finance-kind]');
       if (financeKindSelect) {
         updateFinanceFormFields(financeKindSelect.closest('form[data-form="finance"]'));
