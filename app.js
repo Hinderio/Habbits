@@ -4928,10 +4928,12 @@ cacheEls();
         : 'lokal · SQL optional aktualisieren';
     if (els.monthlyMissionsSummary) els.monthlyMissionsSummary.textContent = missions.length ? `${summary.completed}/${summary.count} geschafft · ${summary.average}% Gesamt` : 'Noch keine Mission aktiv';
     if (els.monthlyMissionMobileSummary) els.monthlyMissionMobileSummary.textContent = missions.length ? `${summary.count} aktiv · ${summary.average}%` : 'Mission erstellen';
+    const previousOverflow = els.monthlyMissions.querySelector('.monthly-mission-overflow');
+    const overflowOpen = previousOverflow?.open && previousOverflow.dataset.month === monthKey;
     const visibleMissions = missions.slice(0, 3);
     const hiddenCount = Math.max(0, missions.length - visibleMissions.length);
     const missionCards = visibleMissions.length
-      ? `<div class="monthly-mission-grid">${visibleMissions.map(renderMonthlyMissionCard).join('')}</div>${hiddenCount ? `<div class="monthly-mission-more">${hiddenCount} weitere Mission${hiddenCount === 1 ? '' : 'en'} im Monatsfokus.</div>` : ''}`
+      ? `<div class="monthly-mission-grid">${visibleMissions.map(renderMonthlyMissionCard).join('')}</div>${hiddenCount ? `<details class="monthly-mission-overflow" data-month="${escapeHtml(monthKey)}" ${overflowOpen ? 'open' : ''}><summary class="monthly-mission-more"><span class="monthly-mission-more-closed">${hiddenCount} weitere Mission${hiddenCount === 1 ? '' : 'en'} im Monatsfokus.</span><span class="monthly-mission-more-open">Weniger anzeigen</span><svg class="monthly-mission-chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></summary><div class="monthly-mission-grid">${missions.slice(3).map(renderMonthlyMissionCard).join('')}</div></details>` : ''}`
       : `<div class="monthly-mission-empty"><strong>Starte deinen Monat mit 1–3 starken Missionen.</strong><p>Tippe auf „+ Mission“, wähle eine Vorlage oder formuliere ein eigenes Monatsziel. Die App berechnet automatische Missionen aus deinen bestehenden Fitness-, Konsum-, Routine- und Task-Daten.</p></div>`;
     const presetIds = new Set(missions.map(mission => `${mission.metric}:${mission.target}:${mission.title.toLowerCase()}`));
     const presetButtons = MONTHLY_MISSION_PRESETS.map(preset => {
