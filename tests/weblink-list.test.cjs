@@ -91,7 +91,7 @@ test('uses task link styling, escapes saved content and copies the validated URL
 test('gift color migration preserves the existing gift and its task link', () => {
   const gift = { id: 'gift-1', listId: 'gifts', title: 'Buch', metadata: { person: 'Anna', promotedTaskId: 'task-1' } };
   const { api } = harness({ lists: [{ id: 'gifts', color: '#E49767' }], items: [gift] });
-  assert.equal(api.getState().lists.find(list => list.id === 'gifts').color, '#587E99');
-  assert.equal(api.getState().lists.find(list => list.id === 'weblinks').color, '#AF4360');
+  assert.equal(api.getState().lists.find(list => list.id === 'gifts').color, '#8EB844');
+  assert.equal(api.getState().lists.find(list => list.id === 'weblinks').color, '#429F47');
   assert.equal(JSON.stringify(api.getState().items[0]), JSON.stringify(gift));
 });
