@@ -382,6 +382,8 @@
       const markup = document.createElement('div');
       markup.innerHTML = `<div data-project-badge-root data-project-id="${escapeHtml(project.id)}">${projectBadge(project, 'mark')}</div>`;
       const badge = markup.firstElementChild;
+      // Keep unchanged badges: replacing them retriggers the body observer every frame.
+      if (existing?.isEqualNode(badge)) return;
       if (existing) return existing.replaceWith(badge);
       const heading = card.querySelector('h1, h2, h3, h4, strong');
       if (heading?.parentElement) heading.insertAdjacentElement('afterend', badge); else card.prepend(badge);
