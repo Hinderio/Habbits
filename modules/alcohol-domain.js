@@ -151,11 +151,11 @@
 
   const stylesheet = document.createElement('link');
   stylesheet.rel = 'stylesheet';
-  stylesheet.href = 'modules/line-calendar.css';
+  stylesheet.href = 'modules/line-calendar.css?v=321';
   document.head.appendChild(stylesheet);
 
   const script = document.createElement('script');
-  script.src = 'modules/line-calendar.js';
+  script.src = 'modules/line-calendar.js?v=321';
   script.defer = true;
   document.head.appendChild(script);
 })(window, document);

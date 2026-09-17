@@ -4,7 +4,6 @@
   const STORAGE_KEY = 'habitflow-state-v1';
   const MONTHS_AHEAD = 12;
   const MONTHS_PER_SEGMENT = 1;
-  const TITLE_MAX_LENGTH = 10;
   const APPOINTMENT_COLOR = '#f7b84a';
   const APPOINTMENT_TYPES = {
     personal: { label: 'Privat', color: APPOINTMENT_COLOR },
@@ -17,6 +16,116 @@
 
   let modal = null;
   let remoteAppointmentCache = null;
+  let layoutObserver = null;
+  let layoutFrame = 0;
+  let layoutSizes = new WeakMap();
+
+  // Interval partitioning with an earliest-ending-lane heap: O(n log n).
+  // Fixed label boxes avoid measuring every title or repeated layout reads.
+  function layoutLabels(anchors, width, fontSize = 16) {
+    const labelWidth = Math.min(10 * fontSize, width);
+    const gap = .75 * fontSize;
+    const labelHeight = 2.8 * fontSize;
+    const rowHeight = 3.75 * fontSize;
+    const axisGap = 1.5 * fontSize;
+    const heap = [{ lane: 0, end: -Infinity }, { lane: 1, end: -Infinity }];
+    let laneCount = 2;
+    const labels = anchors.map((anchor, index) => {
+      const x = Math.max(0, Math.min(width, anchor * width / 100));
+      return { index, anchor: x, left: Math.max(0, Math.min(width - labelWidth, x - labelWidth / 2)) };
+    }).sort((a, b) => a.left - b.left || a.index - b.index);
+    const before = (a, b) => a.end < b.end || (a.end === b.end && a.lane < b.lane);
+    for (const label of labels) {
+      let entry;
+      if (heap[0].end <= label.left) {
+        entry = heap[0];
+        entry.end = label.left + labelWidth + gap;
+        let i = 0;
+        while (i * 2 + 1 < heap.length) {
+          let child = i * 2 + 1;
+          if (child + 1 < heap.length && before(heap[child + 1], heap[child])) child++;
+          if (!before(heap[child], heap[i])) break;
+          [heap[i], heap[child]] = [heap[child], heap[i]];
+          i = child;
+        }
+      } else {
+        entry = { lane: laneCount++, end: label.left + labelWidth + gap };
+        heap.push(entry);
+        let i = heap.length - 1;
+        while (i > 0) {
+          const parent = Math.floor((i - 1) / 2);
+          if (!before(heap[i], heap[parent])) break;
+          [heap[i], heap[parent]] = [heap[parent], heap[i]];
+          i = parent;
+        }
+      }
+      label.lane = entry.lane;
+    }
+    const axis = Math.ceil(laneCount / 2) * rowHeight + axisGap;
+    const height = axis + Math.floor(laneCount / 2) * rowHeight + axisGap;
+    labels.forEach(label => {
+      const top = label.lane % 2 === 0;
+      const offset = axisGap + Math.floor(label.lane / 2) * rowHeight;
+      label.top = top ? axis - offset - labelHeight : axis + offset;
+      label.edge = top ? label.top + labelHeight : label.top;
+      label.center = label.left + labelWidth / 2;
+    });
+    return { labels, axis, height, labelWidth, labelHeight };
+  }
+
+  function layoutTracks() {
+    layoutFrame = 0;
+    if (!modal || modal.classList.contains('hidden')) return;
+    const fontSize = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    // Batch all geometry reads before any DOM writes.
+    const tracks = Array.from(modal.querySelectorAll('.line-calendar-track')).map(track => ({
+      track, width: track.clientWidth,
+      labels: Array.from(track.querySelectorAll('.line-calendar-label'))
+    }));
+    for (const { track, width, labels } of tracks) {
+      if (!width) continue;
+      const previous = layoutSizes.get(track);
+      if (previous?.width === width && previous?.fontSize === fontSize) continue;
+      layoutSizes.set(track, { width, fontSize });
+      const layout = layoutLabels(labels.map(label => Number(label.dataset.anchor)), width, fontSize);
+      track.style.setProperty('--track-axis', `${layout.axis}px`);
+      track.style.height = `${layout.height}px`;
+      track.style.setProperty('--label-width', `${layout.labelWidth}px`);
+      track.style.setProperty('--label-height', `${layout.labelHeight}px`);
+      const paths = [];
+      layout.labels.forEach(position => {
+        const label = labels[position.index];
+        label.style.left = `${position.left}px`;
+        label.style.top = `${position.top}px`;
+        paths.push(`<path d="M${position.anchor},${layout.axis} L${position.center},${position.edge}"/>`);
+      });
+      track.querySelector('.line-calendar-leaders').innerHTML = paths.join('');
+      track.classList.add('is-laid-out');
+    }
+  }
+
+  function scheduleLayout() {
+    if (!layoutFrame) layoutFrame = requestAnimationFrame(layoutTracks);
+  }
+
+  function stopLayout() {
+    layoutObserver?.disconnect();
+    layoutObserver = null;
+    if (layoutFrame) cancelAnimationFrame(layoutFrame);
+    layoutFrame = 0;
+    window.removeEventListener('resize', scheduleLayout);
+    layoutSizes = new WeakMap();
+  }
+
+  function watchLayout() {
+    stopLayout();
+    if ('ResizeObserver' in window) {
+      layoutObserver = new ResizeObserver(scheduleLayout);
+      modal.querySelectorAll('.line-calendar-track').forEach(track => layoutObserver.observe(track));
+    }
+    window.addEventListener('resize', scheduleLayout, { passive: true });
+    scheduleLayout();
+  }
 
   function escapeHtml(value = '') {
     return String(value).replace(/[&<>"']/g, char => ({
@@ -26,11 +135,6 @@
       '"': '&quot;',
       "'": '&#39;'
     })[char]);
-  }
-
-  function shortTitle(value = '') {
-    const title = String(value || 'Termin').trim() || 'Termin';
-    return title.length > TITLE_MAX_LENGTH ? `${title.slice(0, TITLE_MAX_LENGTH - 1)}…` : title;
   }
 
   function readState() {
@@ -222,7 +326,7 @@
     });
   }
 
-  function renderEvent(appointment, segment, index) {
+  function renderEvent(appointment, segment) {
     const segmentStart = segment.start.getTime();
     const segmentEnd = segment.end.getTime();
     const range = Math.max(1, segmentEnd - segmentStart);
@@ -233,26 +337,25 @@
     const eventEndTime = Math.min(segmentEnd, endDate.getTime());
     const left = Math.max(0, Math.min(100, ((eventStart - segmentStart) / range) * 100));
     const right = Math.max(left, Math.min(100, ((eventEndTime - segmentStart) / range) * 100));
-    const width = Math.max(2.4, right - left);
+    const width = Math.min(100 - left, Math.max(2.4, right - left));
     const typeKey = normalizedType(appointment.appointment_type);
     const type = APPOINTMENT_TYPES[typeKey];
     const title = appointment.title || type.label || 'Termin';
-    const displayTitle = shortTitle(title);
     const dateLabel = formatDate(appointment._date, { day: '2-digit', month: 'short' });
     const timeLabel = formatTime(appointment._date);
     const endLabel = formatDate(endDate, { day: '2-digit', month: 'short' });
     const meta = `${dateLabel} · ${timeLabel}`;
     const titleMeta = isRange ? `${meta} - ${endLabel}` : meta;
-    const placement = index % 2 === 0 ? 'is-top' : 'is-bottom';
     const rangeClass = isRange ? ' is-range' : '';
     const continuedClass = isRange && !startsInSegment ? ' is-continued' : '';
     const openEndedClass = isRange && endDate.getTime() > segmentEnd ? ' is-open-ended' : '';
     const style = isRange
       ? `--event-left:${left.toFixed(2)}%;--event-width:${width.toFixed(2)}%;--event-color:${type.color}`
       : `--event-left:${left.toFixed(2)}%;--event-color:${type.color}`;
-    return `<span class="line-calendar-event ${placement}${rangeClass}${continuedClass}${openEndedClass}" style="${style}" title="${escapeHtml(`${title} · ${titleMeta}`)}">
-      <span class="line-calendar-label"><strong>${escapeHtml(displayTitle)}</strong><small>${escapeHtml(meta)}</small></span>
-    </span>`;
+    const anchor = isRange ? left + width / 2 : left;
+    const accessibleLabel = escapeHtml(`${title} · ${titleMeta}`);
+    return `<span class="line-calendar-event${rangeClass}${continuedClass}${openEndedClass}" style="${style}" title="${accessibleLabel}" aria-hidden="true"></span>
+      <span class="line-calendar-label" data-anchor="${anchor.toFixed(4)}" tabindex="0" title="${accessibleLabel}" aria-label="${accessibleLabel}"><strong>${escapeHtml(title)}</strong><small>${escapeHtml(meta)}</small></span>`;
   }
 
   function renderSegment(segment, appointments) {
@@ -268,7 +371,8 @@
           <span class="line-calendar-line"><i style="--segment-progress:${progress.toFixed(2)}%"></i></span>
           <span class="line-calendar-start" title="${escapeHtml(formatDate(segment.start, { day: '2-digit', month: 'long', year: 'numeric' }))}"></span>
           <span class="line-calendar-end" title="${escapeHtml(formatDate(segment.end, { day: '2-digit', month: 'long', year: 'numeric' }))}"></span>
-          ${rows.map((appointment, index) => renderEvent(appointment, segment, index)).join('')}
+          <svg class="line-calendar-leaders" aria-hidden="true" focusable="false"></svg>
+          ${rows.map(appointment => renderEvent(appointment, segment)).join('')}
         </div>
       </div>
     </section>`;
@@ -315,6 +419,7 @@
       modal.setAttribute('aria-label', 'Linienkalender');
       document.body.appendChild(modal);
     }
+    stopLayout();
     modal.innerHTML = renderModalBody({ isLoading: true });
     modal.classList.remove('hidden');
     document.body.classList.add('modal-open');
@@ -323,6 +428,7 @@
       const didRefresh = await refreshRemoteAppointments();
       if (modal && !modal.classList.contains('hidden')) {
         modal.innerHTML = renderModalBody({ appointments: didRefresh ? remoteAppointmentCache : null });
+        watchLayout();
       }
       return;
     } catch (error) {
@@ -330,11 +436,13 @@
     }
     if (modal && !modal.classList.contains('hidden')) {
       modal.innerHTML = renderModalBody();
+      watchLayout();
     }
   }
 
   function closeModal() {
     if (!modal) return;
+    stopLayout();
     modal.classList.add('hidden');
     modal.innerHTML = '';
     document.body.classList.remove('modal-open');
