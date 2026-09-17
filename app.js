@@ -11198,14 +11198,44 @@ cacheEls();
       </div>
     </article>`;
   }
+  function trendChartKeys() {
+    let dates;
+    if (selectedTrendMetric.startsWith('habit:')) {
+      dates = visibleHabitEntries(selectedTrendMetric.slice(6)).map(entry => entry.occurred_at);
+    } else if (selectedTrendMetric === 'cigarettes') {
+      dates = visibleCigarettes().map(entry => entry.smoked_at);
+    } else if (selectedTrendMetric === 'alcohol') {
+      dates = visibleAlcoholDays().map(entry => `${entry.log_date}T12:00:00`);
+    } else {
+      dates = [
+        ...visibleLedgerPoints().map(entry => entry.earned_at),
+        ...visibleCigarettes().map(entry => entry.smoked_at)
+      ];
+    }
+    const today = toDateKey(new Date());
+    const first = dates.reduce((earliest, value) => {
+      const key = toDateKey(value);
+      return key && key < earliest ? key : earliest;
+    }, today);
+    const keys = [];
+    const cursor = new Date(`${first}T12:00:00`);
+    for (let key = first; key <= today; key = toDateKey(cursor)) {
+      keys.push(key);
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return keys;
+  }
+
   function renderCharts(keys = dashboardChartKeys()) {
     syncDashboardChartControls(keys);
     if (!window.Chart) return;
     const labels = keys.map(k => new Date(`${k}T12:00:00`).toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' }));
-    const trend = getTrendMetricConfig(keys);
+    const trendKeys = trendChartKeys();
+    const trendLabels = trendKeys.map(k => new Date(`${k}T12:00:00`).toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' }));
+    const trend = getTrendMetricConfig(trendKeys);
     const pointsData = keys.map(k => pointsOnDate(k));
     if (els.trendChartTitle) els.trendChartTitle.textContent = trend.title;
-    charts.trend = drawChart(charts.trend, els.trendChart, labels, trend.data, trend.label, {
+    charts.trend = drawChart(charts.trend, els.trendChart, trendLabels, trend.data, trend.label, {
       beginAtZero: trend.beginAtZero,
       toneMode: trend.toneMode,
       toneScale: trend.toneScale,
