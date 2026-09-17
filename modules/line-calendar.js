@@ -19,6 +19,11 @@
   let layoutObserver = null;
   let layoutFrame = 0;
   let layoutSizes = new WeakMap();
+  let layoutNodes = new WeakMap();
+  const dateFormatters = new Map();
+  const timeFormatter = new Intl.DateTimeFormat('de-CH', { hour: '2-digit', minute: '2-digit' });
+  // Only normalized, immutable modal snapshots are cached, never live app rows.
+  const appointmentTimings = new WeakMap();
   let windowAnchor = new Date();
   let monthOffset = 0;
   let windowAppointments = [];
@@ -84,15 +89,21 @@
     const fontSize = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
     // Batch all geometry reads before any DOM writes.
     const tracks = Array.from(modal.querySelectorAll('.line-calendar-track')).map(track => ({
-      track, width: track.clientWidth,
-      labels: Array.from(track.querySelectorAll('.line-calendar-label'))
+      track, width: track.clientWidth
     }));
-    for (const { track, width, labels } of tracks) {
+    for (const { track, width } of tracks) {
       if (!width) continue;
       const previous = layoutSizes.get(track);
       if (previous?.width === width && previous?.fontSize === fontSize) continue;
       layoutSizes.set(track, { width, fontSize });
-      const layout = layoutLabels(labels.map(label => Number(label.dataset.anchor)), width, fontSize);
+      let nodes = layoutNodes.get(track);
+      if (!nodes) {
+        const labels = Array.from(track.querySelectorAll('.line-calendar-label'));
+        nodes = { labels, anchors: labels.map(label => Number(label.dataset.anchor)), leaders: track.querySelector('.line-calendar-leaders') };
+        layoutNodes.set(track, nodes);
+      }
+      const { labels, anchors, leaders } = nodes;
+      const layout = layoutLabels(anchors, width, fontSize);
       track.style.setProperty('--track-axis', `${layout.axis}px`);
       track.style.height = `${layout.height}px`;
       track.style.setProperty('--label-width', `${layout.labelWidth}px`);
@@ -104,7 +115,7 @@
         label.style.top = `${position.top}px`;
         paths.push(`<path d="M${position.anchor},${layout.axis} L${position.center},${position.edge}"/>`);
       });
-      track.querySelector('.line-calendar-leaders').innerHTML = paths.join('');
+      leaders.innerHTML = paths.join('');
       track.classList.add('is-laid-out');
     }
   }
@@ -120,6 +131,7 @@
     layoutFrame = 0;
     window.removeEventListener('resize', scheduleLayout);
     layoutSizes = new WeakMap();
+    layoutNodes = new WeakMap();
   }
 
   function watchLayout() {
@@ -257,13 +269,19 @@
   function formatDate(value, options = {}) {
     const date = toDate(value);
     if (!date) return '';
-    return date.toLocaleDateString('de-CH', options);
+    const key = JSON.stringify(options);
+    let formatter = dateFormatters.get(key);
+    if (!formatter) {
+      formatter = new Intl.DateTimeFormat('de-CH', options);
+      dateFormatters.set(key, formatter);
+    }
+    return formatter.format(date);
   }
 
   function formatTime(value) {
     const date = toDate(value);
     if (!date) return '';
-    return date.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' });
+    return timeFormatter.format(date);
   }
 
   function normalizedType(type) {
@@ -297,6 +315,17 @@
     return dayStamp(eventEnd(appointment)) > dayStamp(appointment._date || appointmentDate(appointment));
   }
 
+  function appointmentTiming(appointment) {
+    const cached = appointmentTimings.get(appointment);
+    if (cached) return cached;
+    const start = appointment._date || appointmentDate(appointment);
+    const end = eventEnd(appointment);
+    return {
+      start: start.getTime(), end: end.getTime(),
+      isRange: dayStamp(end) > dayStamp(start)
+    };
+  }
+
   // Normalize and sort once per opening; paging only filters this snapshot.
   function prepareAppointments(sourceAppointments = null) {
     const state = readState();
@@ -306,6 +335,10 @@
       .filter(appointment => appointment?.id && !appointment.is_birthday && !deletedIds.has(String(appointment.id)))
       .map(appointment => ({ ...appointment, _date: appointmentDate(appointment), _endDate: appointmentEndDate(appointment) }))
       .filter(appointment => appointment._date)
+      .map(appointment => {
+        appointmentTimings.set(appointment, appointmentTiming(appointment));
+        return appointment;
+      })
       .sort((a, b) => a._date.getTime() - b._date.getTime());
   }
 
@@ -323,11 +356,13 @@
   }
 
   function segmentAppointments(appointments, segment) {
+    const start = segment.start.getTime();
+    const end = segment.end.getTime();
     return appointments.filter(appointment => {
-      if (!isMultiDayAppointment(appointment)) {
-        return appointment._date >= segment.start && appointment._date < segment.end;
-      }
-      return appointment._date < segment.end && eventEnd(appointment) > segment.start;
+      const timing = appointmentTiming(appointment);
+      return timing.isRange
+        ? timing.start < end && timing.end > start
+        : timing.start >= start && timing.start < end;
     });
   }
 
@@ -335,7 +370,7 @@
     const segmentStart = segment.start.getTime();
     const segmentEnd = segment.end.getTime();
     const range = Math.max(1, segmentEnd - segmentStart);
-    const isRange = isMultiDayAppointment(appointment);
+    const isRange = appointmentTiming(appointment).isRange;
     const startsInSegment = appointment._date.getTime() >= segmentStart;
     const endDate = eventEnd(appointment);
     const eventStart = Math.max(segmentStart, appointment._date.getTime());

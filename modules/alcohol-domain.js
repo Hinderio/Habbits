@@ -155,7 +155,7 @@
   document.head.appendChild(stylesheet);
 
   const script = document.createElement('script');
-  script.src = 'modules/line-calendar.js?v=322';
+  script.src = 'modules/line-calendar.js?v=323';
   script.defer = true;
   document.head.appendChild(script);
 })(window, document);
