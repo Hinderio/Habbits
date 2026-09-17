@@ -900,7 +900,7 @@
     renderFitnessHub();
   }
 
-  const APPOINTMENT_EVENT_KIND_META_RE = /(?:\r?\n)?<!--hf:event-kind=(birthday|holiday|public_holiday)-->/gi;
+  const APPOINTMENT_EVENT_KIND_META_RE = /(?:\r?\n)?<!--hf:event-kind=(birthday|holiday|public_holiday|celebration|visit)-->/gi;
 
   var state = loadState();
   runLocalCacheRepair();
@@ -2722,6 +2722,8 @@ cacheEls();
     if (isBirthday || key === 'birthday') return 'birthday';
     if (key === 'holiday') return 'holiday';
     if (key === 'public_holiday') return 'public_holiday';
+    if (key === 'celebration') return 'celebration';
+    if (key === 'visit') return 'visit';
     return 'standard';
   }
 
@@ -2742,8 +2744,18 @@ cacheEls();
   function appointmentDescriptionForSync(appointment = {}) {
     const parsed = appointmentDescriptionMeta(appointment.description, appointment.is_birthday);
     const eventKind = normalizeAppointmentEventKind(appointment.event_kind || parsed.eventKind, appointment.is_birthday);
-    if (!['holiday', 'public_holiday'].includes(eventKind)) return parsed.description;
+    if (!['holiday', 'public_holiday', 'celebration', 'visit'].includes(eventKind)) return parsed.description;
     return `${parsed.description}${parsed.description ? '\n' : ''}<!--hf:event-kind=${eventKind}-->`;
+  }
+
+  function appointmentEventLabel(eventKind) {
+    return {
+      birthday: 'Geburtstag',
+      holiday: 'Ferientag',
+      public_holiday: 'Feiertag',
+      celebration: 'Feier',
+      visit: 'Einladung/Besuch',
+    }[eventKind] || '';
   }
 
   function appointmentInitials(title, fallback = 'FT') {
@@ -11071,8 +11083,8 @@ cacheEls();
       const type = appointmentTypeMeta(appointment.appointment_type);
       const eventKind = appointmentEventKind(appointment);
       if (eventKind !== 'standard') {
-        const specialLabel = eventKind === 'birthday' ? 'Geburtstag' : eventKind === 'holiday' ? 'Ferientag' : 'Feiertag';
-        const initials = appointmentInitials(appointment.title, eventKind === 'birthday' ? 'GB' : eventKind === 'holiday' ? 'FT' : 'FE');
+        const specialLabel = appointmentEventLabel(eventKind);
+        const initials = appointmentInitials(appointment.title, eventKind === 'birthday' ? 'GB' : eventKind === 'holiday' ? 'FT' : eventKind === 'visit' ? 'EB' : 'FE');
         const accessibleLabel = `${appointment.title || specialLabel}, ${specialLabel}`;
         return `<span class="day-chip appointment calendar-event-chip is-special-event is-${eventKind}" data-initials="${escapeHtml(initials)}" title="${escapeHtml(accessibleLabel)}" aria-label="${escapeHtml(accessibleLabel)}"><strong>${escapeHtml(initials)}</strong></span>`;
       }
@@ -11173,7 +11185,7 @@ cacheEls();
     const description = appointment.description ? `<br>${escapeHtml(appointment.description)}` : '';
     const recurrence = appointment.recurrence ? ` · ${escapeHtml(appointmentRecurrenceLabel(appointment.recurrence))}` : '';
     const eventKind = appointmentEventKind(appointment);
-    const eventLabel = eventKind === 'birthday' ? 'Geburtstag' : eventKind === 'holiday' ? 'Ferientag' : eventKind === 'public_holiday' ? 'Feiertag' : '';
+    const eventLabel = appointmentEventLabel(eventKind);
     const eventBadge = eventLabel ? `<span class="appointment-event-badge is-${eventKind}">${eventLabel}</span>` : '';
     return `<article class="list-card appointment-card ${editingAppointmentId === appointment.id ? 'is-editing' : ''}">
       <div class="list-card-main">
@@ -13346,7 +13358,7 @@ async function deleteAlcoholLog(id) {
         ? 'yearly'
         : normalizeAppointmentRecurrence(appointment.recurrence) || 'once';
     }
-    if (fields.event_kind) fields.event_kind.value = ['holiday', 'public_holiday'].includes(eventKind) ? eventKind : 'standard';
+    if (fields.event_kind) fields.event_kind.value = ['holiday', 'public_holiday', 'celebration', 'visit'].includes(eventKind) ? eventKind : 'standard';
     if (fields.is_birthday) fields.is_birthday.checked = eventKind === 'birthday';
     syncAppointmentBirthdayRecurrence();
     els.appointmentFormTitle.textContent = 'Termin bearbeiten';

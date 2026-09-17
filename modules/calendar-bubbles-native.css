@@ -170,3 +170,12 @@
     color: rgba(255, 255, 255, .62) !important;
   }
 }
+
+/* Preserve event colors over the mobile calendar's generic bubble background. */
+#screen-calendar .day-chip.calendar-event-chip.is-celebration {
+  background: #4bd7d1 !important;
+}
+
+#screen-calendar .day-chip.calendar-event-chip.is-visit {
+  background: #4bbbd8 !important;
+}
