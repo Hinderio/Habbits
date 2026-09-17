@@ -102,6 +102,7 @@
   ]);
   // Read indices live only for one synchronous render, never across mutations.
   let analyticsReadCache = null;
+  const calendarDateFormatters = new Map();
   const monthlyMagazineReviewCache = new Map();
   let monthlyMagazineCovers = MONTHLY_MAGAZINE_COVERS;
   let monthlyMagazineCoversRequest = null;
@@ -949,6 +950,7 @@
   let pointEvolutionRenderQueued = false;
   let lastRenderedPointsSignature = null;
   let deferredRenderPending = false;
+  let deferredRenderTimer = null;
   let consumptionBackgroundRenderQueued = false;
   let habitFormOpen = false;
   let taskFormOpen = false;
@@ -3294,9 +3296,10 @@ cacheEls();
   }
 
   function flushDeferredRender() {
-    if (!deferredRenderPending) return;
-    setTimeout(() => {
-      if (shouldDeferInteractiveRender()) return;
+    if (!deferredRenderPending || deferredRenderTimer !== null) return;
+    deferredRenderTimer = setTimeout(() => {
+      deferredRenderTimer = null;
+      if (!deferredRenderPending || shouldDeferInteractiveRender()) return;
       deferredRenderPending = false;
       render();
     }, 180);
@@ -3601,6 +3604,12 @@ cacheEls();
 
 
   function render() {
+    // Any full render consumes pending work; an old blur timer must not repeat it.
+    deferredRenderPending = false;
+    if (deferredRenderTimer !== null) {
+      clearTimeout(deferredRenderTimer);
+      deferredRenderTimer = null;
+    }
     renderSection('timers', renderTimers);
     renderSection('dashboard', renderDashboard);
     renderSection('smoking', renderSmoking);
@@ -11090,7 +11099,7 @@ cacheEls();
       }
       const startsAt = appointment?.starts_at ? new Date(appointment.starts_at) : null;
       const time = startsAt && !Number.isNaN(startsAt.getTime())
-        ? startsAt.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' })
+        ? formatCalendarValue(startsAt, { hour: '2-digit', minute: '2-digit' })
         : 'Zeit offen';
       const calendarAppointmentInitials = calendarBubbleInitials(appointment.title || type.label || 'Termin', type.short || type.label || 'TE');
       return `<span class="day-chip appointment calendar-event-chip type-${normalizeAppointmentType(appointment.appointment_type)}" data-initials="${escapeHtml(calendarAppointmentInitials)}">
@@ -11125,6 +11134,48 @@ cacheEls();
     return `<span class="calendar-task-dots" aria-label="${tasks.length} Aufgabe(n) an diesem Tag">${dots}${more}</span>`;
   }
 
+  function formatCalendarValue(value, options) {
+    const date = value instanceof Date ? value : new Date(value);
+    if (!value || Number.isNaN(date.getTime())) return '–';
+    const key = JSON.stringify(options);
+    let formatter = calendarDateFormatters.get(key);
+    if (!formatter) {
+      formatter = new Intl.DateTimeFormat('de-CH', options);
+      calendarDateFormatters.set(key, formatter);
+    }
+    return formatter.format(date);
+  }
+
+  // This index lives for one render only: edits, deletions and sync always use fresh rows.
+  function calendarRowsForDates(keys) {
+    const days = new Map(keys.map(key => [key, { appointments: [], tasks: [] }]));
+    if (!keys.length) return days;
+    for (const appointment of state.appointments) {
+      const startKey = toDateKey(appointment?.starts_at);
+      const endKey = toDateKey(appointment?.ends_at || appointment?.starts_at);
+      if (!startKey || !endKey || endKey < keys[0] || startKey > keys[keys.length - 1]) continue;
+      let low = 0, high = keys.length;
+      while (low < high) {
+        const middle = (low + high) >>> 1;
+        if (keys[middle] < startKey) low = middle + 1;
+        else high = middle;
+      }
+      for (let i = low; i < keys.length && keys[i] <= endKey; i++) {
+        days.get(keys[i]).appointments.push(appointment);
+      }
+    }
+    for (const row of state.tasks) {
+      const task = normalizeTask(row);
+      if (!isActiveTask(task)) continue;
+      days.get(toDateKey(task.due_at))?.tasks.push(task);
+    }
+    for (const day of days.values()) {
+      day.appointments.sort(compareAppointments);
+      day.tasks.sort((a, b) => taskPriorityMeta(b).rank - taskPriorityMeta(a).rank || compareTasks(a, b));
+    }
+    return days;
+  }
+
   function renderCalendar() {
     return withAnalyticsReadScope(renderCalendarContent);
   }
@@ -11132,23 +11183,26 @@ cacheEls();
   function renderCalendarContent() {
     const year = calendarCursor.getFullYear();
     const month = calendarCursor.getMonth();
-    els.calendarTitle.textContent = calendarCursor.toLocaleDateString('de-CH', { month: 'long', year: 'numeric' });
+    els.calendarTitle.textContent = formatCalendarValue(calendarCursor, { month: 'long', year: 'numeric' });
 
     const first = new Date(year, month, 1);
     const start = new Date(first);
     const day = first.getDay() || 7;
     start.setDate(first.getDate() - day + 1);
 
-    const cells = [];
-    for (let i = 0; i < 42; i++) {
+    const dates = Array.from({ length: 42 }, (_, i) => {
       const date = new Date(start);
       date.setDate(start.getDate() + i);
-      const key = toDateKey(date);
-      const appointments = appointmentsOnDate(key);
-      const tasks = calendarTasksOnDate(key);
+      return { date, key: toDateKey(date) };
+    });
+    const days = calendarRowsForDates(dates.map(({ key }) => key));
+    const todayKey = toDateKey(new Date());
+    const cells = [];
+    for (const { date, key } of dates) {
+      const { appointments, tasks } = days.get(key);
       const chips = renderCalendarAppointmentChips(appointments);
       const taskDots = renderCalendarTaskDots(tasks);
-      cells.push(`<button class="calendar-day ${date.getMonth() !== month ? 'is-muted' : ''} ${key === toDateKey(new Date()) ? 'is-today' : ''} ${key === selectedCalendarDate ? 'is-selected' : ''} ${appointments.length ? 'has-appointments' : ''} ${tasks.length ? 'has-task-dots' : ''}" type="button" data-action="select-day" data-day="${key}">
+      cells.push(`<button class="calendar-day ${date.getMonth() !== month ? 'is-muted' : ''} ${key === todayKey ? 'is-today' : ''} ${key === selectedCalendarDate ? 'is-selected' : ''} ${appointments.length ? 'has-appointments' : ''} ${tasks.length ? 'has-task-dots' : ''}" type="button" data-action="select-day" data-day="${key}">
         <span class="calendar-day-head"><strong>${date.getDate()}</strong>${appointments.length ? `<em class="day-appointment-count">${appointments.length}</em>` : ''}</span>
         <span class="day-chips">${chips}</span>
         ${taskDots}
@@ -11158,7 +11212,7 @@ cacheEls();
   }
   function renderDayDetails() {
     const key = selectedCalendarDate;
-    els.selectedDateTitle.textContent = new Date(`${key}T12:00:00`).toLocaleDateString('de-CH', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+    els.selectedDateTitle.textContent = formatCalendarValue(new Date(`${key}T12:00:00`), { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
     const details = [];
     const cigarettes = cigarettesOnDate(key);
     if (cigarettes.length) details.push(`<article class="list-card"><div><h4>Rauchen</h4><p class="meta">${cigarettes.length} Zigarette(n), ${sum(cigarettes.map(c => c.points))} Punkte</p></div></article>`);
@@ -13896,9 +13950,9 @@ async function deleteAlcoholLog(id) {
     if (!appointment?.starts_at) return 'ohne Zeit';
     const startKey = toDateKey(appointment.starts_at);
     const endKey = toDateKey(appointment.ends_at || appointment.starts_at);
-    if (appointment.ends_at && startKey !== endKey) return `${formatDateTime(appointment.starts_at)} – ${formatDateTime(appointment.ends_at)}`;
-    if (appointment.ends_at) return `${formatTime(appointment.starts_at)}–${formatTime(appointment.ends_at)}`;
-    return formatTime(appointment.starts_at);
+    if (appointment.ends_at && startKey !== endKey) return `${formatCalendarValue(appointment.starts_at, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} – ${formatCalendarValue(appointment.ends_at, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`;
+    if (appointment.ends_at) return `${formatCalendarValue(appointment.starts_at, { hour: '2-digit', minute: '2-digit' })}–${formatCalendarValue(appointment.ends_at, { hour: '2-digit', minute: '2-digit' })}`;
+    return formatCalendarValue(appointment.starts_at, { hour: '2-digit', minute: '2-digit' });
   }
 
   function toDateTimeLocalValue(value) {
