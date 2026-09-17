@@ -6,8 +6,8 @@
 .hf-list-hero .hf-list-icon{width:18px;height:18px}
 .hf-list-metrics .metric-card small{display:block;color:var(--muted);font-weight:850}
 .hf-list-card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(178px,1fr));gap:12px;align-items:stretch}
-.hf-list-card{aspect-ratio:1/1;border-radius:26px;overflow:hidden;background:linear-gradient(rgba(255,255,255,.1),rgba(255,255,255,.1)),var(--hf-list-tone);color:#000;box-shadow:none;isolation:isolate}
-.hf-list-card button{width:100%;height:100%;border:0;background:linear-gradient(rgba(255,255,255,.1),rgba(255,255,255,.1)),var(--hf-list-tone);color:#000;padding:18px;display:grid;grid-template-rows:auto 1fr auto;gap:12px;text-align:left}
+.hf-list-card{aspect-ratio:1/1;border-radius:26px;overflow:hidden;background:linear-gradient(rgba(255,255,255,.2),rgba(255,255,255,.2)),var(--hf-list-tone);color:#000;box-shadow:none;isolation:isolate}
+.hf-list-card button{width:100%;height:100%;border:0;background:linear-gradient(rgba(255,255,255,.2),rgba(255,255,255,.2)),var(--hf-list-tone);color:#000;padding:18px;display:grid;grid-template-rows:auto 1fr auto;gap:12px;text-align:left}
 .hf-list-card.is-active{box-shadow:inset 0 0 0 5px #fff}
 .hf-list-card button:hover{transform:none;box-shadow:inset 0 0 0 3px #fff}
 .hf-list-card-art{width:66px;height:66px;display:grid;place-items:center;color:#000}
