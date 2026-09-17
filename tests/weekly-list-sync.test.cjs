@@ -34,7 +34,7 @@ test('service worker caches weekly assets under a bumped version', () => {
   assert.match(workerSource, /weekly-habit-card-294/);
   assert.match(workerSource, /'\.\/modules\/lists\.js'/);
   assert.match(workerSource, /'\.\/modules\/lists\.css'/);
-  assert.match(indexSource, /modules\/lists\.css\?v=327/);
+  assert.match(indexSource, /modules\/lists\.css\?v=328/);
   assert.match(indexSource, /modules\/lists\.js\?v=312/);
 });
 
