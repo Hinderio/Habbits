@@ -1389,7 +1389,7 @@ cacheEls();
     els.trendMetricSelect.addEventListener('change', () => {
       selectedTrendMetric = els.trendMetricSelect.value;
       localStorage.setItem(TREND_METRIC_KEY, selectedTrendMetric);
-      renderCharts();
+      renderTrendChart();
     });
     if (els.chartPrevWindowBtn) els.chartPrevWindowBtn.addEventListener('click', () => moveDashboardChartWindow(14));
     if (els.chartNextWindowBtn) els.chartNextWindowBtn.addEventListener('click', () => moveDashboardChartWindow(-14));
@@ -6266,7 +6266,7 @@ cacheEls();
       return {
         title: 'Alkohol-Konsumtage',
         label: 'Tage',
-        data: keys.map(k => alcoholUnitsOnDate(k).length),
+        data: keys.map(k => analyticsDayRows('trend-alcohol-days', visibleAlcoholDays, day => day.log_date, k).length),
         beginAtZero: true,
         toneMode: 'lowerBetter',
         toneScale: 'alcohol'
@@ -11226,29 +11226,37 @@ cacheEls();
     return keys;
   }
 
+  function renderTrendChart() {
+    if (!window.Chart) return;
+    // Scope indices to this synchronous render so edits and sync never reuse stale data.
+    withAnalyticsReadScope(() => {
+      const keys = trendChartKeys();
+      const labels = keys.map(key => `${key.slice(8, 10)}.${key.slice(5, 7)}.`);
+      const trend = getTrendMetricConfig(keys);
+      if (els.trendChartTitle) els.trendChartTitle.textContent = trend.title;
+      charts.trend = drawChart(charts.trend, els.trendChart, labels, trend.data, trend.label, {
+        beginAtZero: trend.beginAtZero,
+        toneMode: trend.toneMode,
+        toneScale: trend.toneScale,
+        toneTarget: trend.toneTarget,
+        instant: true
+      });
+    });
+  }
+
   function renderCharts(keys = dashboardChartKeys()) {
     syncDashboardChartControls(keys);
     if (!window.Chart) return;
+    renderTrendChart();
     const labels = keys.map(k => new Date(`${k}T12:00:00`).toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' }));
-    const trendKeys = trendChartKeys();
-    const trendLabels = trendKeys.map(k => new Date(`${k}T12:00:00`).toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' }));
-    const trend = getTrendMetricConfig(trendKeys);
     const pointsData = keys.map(k => pointsOnDate(k));
-    if (els.trendChartTitle) els.trendChartTitle.textContent = trend.title;
-    charts.trend = drawChart(charts.trend, els.trendChart, trendLabels, trend.data, trend.label, {
-      beginAtZero: trend.beginAtZero,
-      toneMode: trend.toneMode,
-      toneScale: trend.toneScale,
-      toneTarget: trend.toneTarget
-    });
     charts.points = drawChart(charts.points, els.pointsChart, labels, pointsData, 'Punkte', { beginAtZero: true, toneMode: 'score' });
   }
 
   function chartToneForValue(value, options = {}) {
     const numeric = Number(value || 0);
     const mode = options.toneMode || 'score';
-    const absMax = Math.max(1, ...((options.data || []).map(v => Math.abs(Number(v || 0)))));
-    const maxPositive = Math.max(1, ...((options.data || []).map(v => Math.max(0, Number(v || 0)))));
+    const maxPositive = options.maxPositive ?? (options.data || []).reduce((max, value) => Math.max(max, Number(value || 0)), 1);
     const target = Number(options.toneTarget || 0) || null;
 
     if (mode === 'lowerBetter') {
@@ -11337,7 +11345,9 @@ cacheEls();
   }
 
   function buildChartDataset(label, data, options = {}) {
-    const toneOptions = { ...options, data };
+    // Compute the color scale once, not once per point and Chart.js callback.
+    const maxPositive = data.reduce((max, value) => Math.max(max, Number(value || 0)), 1);
+    const toneOptions = { ...options, maxPositive };
     const semanticPoints = (options.toneMode || 'score') === 'score';
     return {
       label,
@@ -11367,7 +11377,8 @@ cacheEls();
       Object.assign(existing.data.datasets[0], dataset);
       existing.options.scales.x.ticks.maxTicksLimit = mobileTicks;
       existing.options.scales.y.beginAtZero = options.beginAtZero !== false;
-      existing.update();
+      if (options.instant) existing.update('none');
+      else existing.update();
       return existing;
     }
     return new Chart(canvas, {
@@ -11376,7 +11387,7 @@ cacheEls();
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        animation: { duration: 220 },
+        animation: options.instant ? false : { duration: 220 },
         interaction: { intersect: false, mode: 'index' },
         plugins: {
           legend: { display: false },
