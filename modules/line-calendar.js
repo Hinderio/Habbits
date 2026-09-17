@@ -19,6 +19,11 @@
   let layoutObserver = null;
   let layoutFrame = 0;
   let layoutSizes = new WeakMap();
+  let windowAnchor = new Date();
+  let monthOffset = 0;
+  let windowAppointments = [];
+  let appointmentsLoading = false;
+  let openGeneration = 0;
 
   // Interval partitioning with an earliest-ending-lane heap: O(n log n).
   // Fixed label boxes avoid measuring every title or repeated layout reads.
@@ -292,23 +297,23 @@
     return dayStamp(eventEnd(appointment)) > dayStamp(appointment._date || appointmentDate(appointment));
   }
 
-  function futureAppointments(sourceAppointments = null) {
-    const now = new Date();
-    const windowEnd = addMonths(now, MONTHS_AHEAD);
+  // Normalize and sort once per opening; paging only filters this snapshot.
+  function prepareAppointments(sourceAppointments = null) {
     const state = readState();
     const deletedIds = deletedAppointmentIds(state);
     const appointments = Array.isArray(sourceAppointments) ? sourceAppointments : (state.appointments || []);
     return appointments
       .filter(appointment => appointment?.id && !appointment.is_birthday && !deletedIds.has(String(appointment.id)))
       .map(appointment => ({ ...appointment, _date: appointmentDate(appointment), _endDate: appointmentEndDate(appointment) }))
-      .filter(appointment => appointment._date && appointment._date < windowEnd && eventEnd(appointment) >= now)
+      .filter(appointment => appointment._date)
       .sort((a, b) => a._date.getTime() - b._date.getTime());
   }
 
-  function buildSegments(today = new Date()) {
+  function buildSegments(anchor = new Date(), offset = 0) {
     return Array.from({ length: MONTHS_AHEAD / MONTHS_PER_SEGMENT }, (_, index) => {
-      const start = addMonths(today, index * MONTHS_PER_SEGMENT);
-      const end = addMonths(today, (index + 1) * MONTHS_PER_SEGMENT);
+      // Always derive from the original date, avoiding leap-day/month-end drift.
+      const start = addMonths(anchor, offset + index * MONTHS_PER_SEGMENT);
+      const end = addMonths(anchor, offset + (index + 1) * MONTHS_PER_SEGMENT);
       return { index, start, end };
     });
   }
@@ -360,7 +365,7 @@
 
   function renderSegment(segment, appointments) {
     const rows = segmentAppointments(appointments, segment);
-    const progress = segment.index === 0 ? Math.min(100, Math.max(3, ((Date.now() - segment.start.getTime()) / Math.max(1, segment.end.getTime() - segment.start.getTime())) * 100)) : 0;
+    const progress = Math.min(100, Math.max(0, ((Date.now() - segment.start.getTime()) / Math.max(1, segment.end.getTime() - segment.start.getTime())) * 100));
     return `<section class="line-calendar-segment">
       <div class="line-calendar-segment-head">
         <span>${escapeHtml(rangeLabel(segment.start, segment.end))}</span>
@@ -379,34 +384,63 @@
   }
 
   function renderModalBody(options = {}) {
-    const today = new Date();
-    const appointments = futureAppointments(options.appointments || null);
-    const segments = buildSegments(today);
+    const segments = buildSegments(windowAnchor, monthOffset);
+    const windowStart = segments[0].start;
+    const windowEnd = segments[segments.length - 1].end;
+    const appointments = segmentAppointments(windowAppointments, { start: windowStart, end: windowEnd });
+    const isHistory = monthOffset < 0;
+    const disabled = options.isLoading ? ' disabled' : '';
+    const periodLabel = `${formatDate(windowStart, { day: '2-digit', month: 'short', year: 'numeric' })} – ${formatDate(windowEnd, { day: '2-digit', month: 'short', year: 'numeric' })}`;
     const next = appointments[0] || null;
     const last = appointments[appointments.length - 1] || null;
     const body = options.isLoading
       ? '<div class="line-calendar-empty">Termine werden aktualisiert…</div>'
       : appointments.length
         ? segments.map(segment => renderSegment(segment, appointments)).join('')
-        : '<div class="line-calendar-empty">In den kommenden 12 Monaten sind noch keine Termine eingetragen. Sobald du Termine im bestehenden Kalender speicherst, erscheinen sie automatisch auf dieser Linie.</div>';
+        : '<div class="line-calendar-empty">In diesem Zeitraum sind keine Termine eingetragen. Sobald du Termine im bestehenden Kalender speicherst, erscheinen sie automatisch auf dieser Linie.</div>';
 
     return `<section class="line-calendar-card" role="document">
       <div class="line-calendar-head">
         <div>
           <p class="eyebrow">Linienkalender</p>
-          <h2>12 Monate voraus</h2>
-          <p>Zwölf ruhige Linien, jeweils ein Monat ab heute. Deine bestehenden Kalendertermine werden automatisch als Meilensteine angezeigt.</p>
+          <h2>${isHistory ? '12 Monate Rückblick' : '12 Monate voraus'}</h2>
+          <p>Zwölf ruhige Linien, jeweils ein Monat ${isHistory ? 'im gewählten Zeitraum' : 'ab heute'}. Deine bestehenden Kalendertermine werden automatisch als Meilensteine angezeigt.</p>
         </div>
         <button class="icon-btn line-calendar-close" type="button" data-line-calendar-close aria-label="Linienkalender schliessen">x</button>
       </div>
+      <nav class="line-calendar-navigation" aria-label="Zeitraum wählen">
+        <button type="button" data-line-calendar-page="-12" aria-label="12 Monate zurück" title="12 Monate zurück"${disabled}>‹</button>
+        <span class="line-calendar-period" role="status" aria-live="polite">${escapeHtml(periodLabel)}</span>
+        <button type="button" data-line-calendar-page="12" aria-label="12 Monate vor" title="12 Monate vor"${options.isLoading || !isHistory ? ' disabled' : ''}>›</button>
+        ${isHistory ? `<button type="button" class="line-calendar-today" data-line-calendar-page="today"${disabled}>Heute</button>` : ''}
+      </nav>
       <div class="line-calendar-summary" aria-label="Linienkalender Zusammenfassung">
-        <article><small>Fenster</small><strong>${escapeHtml(formatDate(today, { day: '2-digit', month: 'long', year: 'numeric' }))}</strong></article>
+        <article><small>Fenster</small><strong>${escapeHtml(formatDate(windowStart, { day: '2-digit', month: 'long', year: 'numeric' }))}</strong></article>
         <article><small>Termine</small><strong>${options.isLoading ? '…' : appointments.length}</strong></article>
-        <article><small>Nächster Termin</small><strong>${!options.isLoading && next ? escapeHtml(formatDate(next._date, { day: '2-digit', month: 'short' })) : '-'}</strong></article>
+        <article><small>${isHistory ? 'Erster Termin' : 'Nächster Termin'}</small><strong>${!options.isLoading && next ? escapeHtml(formatDate(next._date, { day: '2-digit', month: 'short' })) : '-'}</strong></article>
       </div>
       <div class="line-calendar-track-list">${body}</div>
       ${!options.isLoading && last ? `<p class="meta">Letzter sichtbarer Termin: ${escapeHtml(last.title || 'Termin')} am ${escapeHtml(formatDate(last._date, { day: '2-digit', month: 'long', year: 'numeric' }))}.</p>` : ''}
     </section>`;
+  }
+
+  function showWindow(focusPage = null) {
+    stopLayout();
+    modal.innerHTML = renderModalBody();
+    watchLayout();
+    const selector = focusPage === null ? '[data-line-calendar-close]'
+      : `[data-line-calendar-page="${focusPage}"]:not(:disabled)`;
+    const focusTarget = modal.querySelector(selector) || modal.querySelector('[data-line-calendar-page="-12"]');
+    focusTarget?.focus({ preventScroll: true });
+  }
+
+  function changeWindow(page) {
+    if (appointmentsLoading || !modal || modal.classList.contains('hidden')) return;
+    if (!['-12', '12', 'today'].includes(page)) return;
+    const nextOffset = page === 'today' ? 0 : Math.min(0, monthOffset + Number(page));
+    if (nextOffset === monthOffset || !Number.isFinite(addMonths(windowAnchor, nextOffset).getTime())) return;
+    monthOffset = nextOffset;
+    showWindow(page);
   }
 
   async function openModal() {
@@ -419,29 +453,34 @@
       modal.setAttribute('aria-label', 'Linienkalender');
       document.body.appendChild(modal);
     }
+    const generation = ++openGeneration;
+    windowAnchor = new Date();
+    monthOffset = 0;
+    windowAppointments = [];
+    appointmentsLoading = true;
     stopLayout();
     modal.innerHTML = renderModalBody({ isLoading: true });
     modal.classList.remove('hidden');
     document.body.classList.add('modal-open');
-    requestAnimationFrame(() => modal.querySelector('[data-line-calendar-close]')?.focus({ preventScroll: true }));
+    modal.querySelector('[data-line-calendar-close]')?.focus({ preventScroll: true });
+    let sourceAppointments = null;
     try {
       const didRefresh = await refreshRemoteAppointments();
-      if (modal && !modal.classList.contains('hidden')) {
-        modal.innerHTML = renderModalBody({ appointments: didRefresh ? remoteAppointmentCache : null });
-        watchLayout();
-      }
-      return;
+      if (didRefresh) sourceAppointments = remoteAppointmentCache;
     } catch (error) {
       console.warn('[HabitFlow/line-calendar] Termine konnten nicht aus Supabase aktualisiert werden.', error);
     }
-    if (modal && !modal.classList.contains('hidden')) {
-      modal.innerHTML = renderModalBody();
-      watchLayout();
-    }
+    if (generation !== openGeneration || !modal || modal.classList.contains('hidden')) return;
+    windowAppointments = prepareAppointments(sourceAppointments);
+    appointmentsLoading = false;
+    showWindow();
   }
 
   function closeModal() {
     if (!modal) return;
+    openGeneration++;
+    appointmentsLoading = false;
+    windowAppointments = [];
     stopLayout();
     modal.classList.add('hidden');
     modal.innerHTML = '';
@@ -489,6 +528,11 @@
       if (!(target instanceof Element)) return;
       if (target.closest('#lineCalendarToggleBtn')) {
         openModal();
+        return;
+      }
+      const pageButton = target.closest('[data-line-calendar-page]');
+      if (pageButton && !pageButton.disabled && modal?.contains(pageButton)) {
+        changeWindow(pageButton.dataset.lineCalendarPage);
         return;
       }
       if (target.closest('[data-line-calendar-close]') || (target === modal && modal && !modal.classList.contains('hidden'))) {

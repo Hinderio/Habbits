@@ -368,3 +368,56 @@ body.light .line-calendar-event {
   }
 
 }
+
+.line-calendar-navigation {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: -4px 0 18px;
+}
+
+.line-calendar-navigation button {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 4px 9px;
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.line-calendar-navigation button:disabled {
+  opacity: .3;
+  cursor: default;
+}
+
+.line-calendar-navigation button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.line-calendar-period {
+  flex: 1 1 140px;
+  color: var(--muted);
+  font-size: .78rem;
+  text-align: center;
+}
+
+.line-calendar-navigation .line-calendar-today {
+  font-size: .78rem;
+}
+
+@media (pointer: coarse) {
+  .line-calendar-navigation button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
