@@ -3539,7 +3539,7 @@ cacheEls();
     appointmentFormOpen = true;
     if (forceNew || !editingAppointmentId) resetAppointmentFormMode({ clearForm: true, dateKey });
     syncAppointmentFormPanel();
-    showScreen('calendar');
+    if (document.body.dataset.activeScreen !== 'calendar') showScreen('calendar');
     requestAnimationFrame(() => els.appointmentForm?.elements?.title?.focus({ preventScroll: true }));
   }
 
@@ -13245,6 +13245,7 @@ async function deleteAlcoholLog(id) {
   async function persistAppointmentEdit(rows, deleteIds = []) {
     if (!supabaseClient || !isAuthenticated()) return false;
     const payloadRows = rows.map(appointmentRowForSync);
+    const expectedById = new Map(payloadRows.map(row => [row.id, row]));
     const confirmedIds = new Set();
     suppressRemotePullUntil = Date.now() + SELF_WRITE_ECHO_GRACE_MS;
 
@@ -13255,7 +13256,7 @@ async function deleteAlcoholLog(id) {
         .select('id, starts_at, ends_at, updated_at');
       if (error) throw error;
       (data || []).forEach(remoteRow => {
-        const expected = payloadRows.find(row => row.id === remoteRow.id);
+        const expected = expectedById.get(remoteRow.id);
         if (!expected) return;
         const sameStart = validIsoOrNull(remoteRow.starts_at) === validIsoOrNull(expected.starts_at);
         const sameEnd = validIsoOrNull(remoteRow.ends_at) === validIsoOrNull(expected.ends_at);
@@ -13381,6 +13382,12 @@ async function deleteAlcoholLog(id) {
     syncWithSupabase({ silent: true, pullFirst: false, pullAfter: true });
   }
 
+  function syncAppointmentEditHighlight() {
+    els.dayDetails?.querySelectorAll('[data-action="edit-appointment"]').forEach(button => {
+      button.closest('.appointment-card')?.classList.toggle('is-editing', button.dataset.id === editingAppointmentId);
+    });
+  }
+
   function editAppointment(id) {
     const appointment = state.appointments.find(item => item.id === id);
     if (!appointment || !els.appointmentForm) return;
@@ -13406,10 +13413,14 @@ async function deleteAlcoholLog(id) {
     els.appointmentSubmitBtn.textContent = 'Änderungen speichern';
     els.cancelAppointmentEditBtn.classList.remove('hidden');
     syncAppointmentFormPanel();
-    showScreen('calendar');
-    els.appointmentForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    renderCalendar();
-    renderDayDetails();
+    if (document.body.dataset.activeScreen !== 'calendar') showScreen('calendar');
+    syncAppointmentEditHighlight();
+    els.appointmentForm.elements.title.focus({ preventScroll: true });
+    requestAnimationFrame(() => {
+      if (editingAppointmentId === id && appointmentFormOpen) {
+        els.appointmentForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
   }
 
   function resetAppointmentFormMode({ clearForm = true, dateKey = selectedCalendarDate } = {}) {
@@ -13428,8 +13439,7 @@ async function deleteAlcoholLog(id) {
     if (els.appointmentSubmitBtn) els.appointmentSubmitBtn.textContent = 'Termin speichern';
     els.cancelAppointmentEditBtn?.classList.add('hidden');
     syncAppointmentFormPanel();
-    renderCalendar();
-    renderDayDetails();
+    syncAppointmentEditHighlight();
   }
 
   async function deleteAppointment(id) {
