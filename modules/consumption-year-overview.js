@@ -4,6 +4,7 @@
   const STORAGE_KEY = 'habitflow-state-v1';
   const TARGETS = Object.freeze({ smoke: 'cigaretteHeatmapVisual', alcohol: 'alcoholHeatmapVisual' });
   const MONTHS = 12;
+  const ALCOHOL_LABELS = ['', 'Leicht', 'Moderat', 'Erhöht', 'Stark'];
   const observedTargets = new WeakSet();
   let renderTimer = null;
   let isRendering = false;
@@ -60,7 +61,7 @@
 
   function modeMeta(mode) {
     return mode === 'alcohol'
-      ? { label: 'Alkohol', unit: 'Einheit', unitPlural: 'Einheiten' }
+      ? { label: 'Alkohol', unit: 'Intensitätspunkt', unitPlural: 'Intensitätspunkte' }
       : { label: 'Rauchen', unit: 'Zigarette', unitPlural: 'Zigaretten' };
   }
 
@@ -80,6 +81,13 @@
     return counts;
   }
 
+  function alcoholDailyRatings(year) {
+    // Reuse the matrix domain: one rating per day, pause filtering and legacy fallback.
+    const days = window.HabitFlowConsumptionLive?.alcoholDays?.() || [];
+    return new Map(days.filter(day => day.log_date.startsWith(`${year}-`))
+      .map(day => [day.log_date, day.consumption_level]));
+  }
+
   function buildMonth(monthIndex, year, dailyCounts, maxDayCount, mode) {
     const meta = modeMeta(mode);
     const dayCount = daysInMonth(year, monthIndex);
@@ -89,18 +97,20 @@
       const date = new Date(year, monthIndex, index + 1, 12);
       const key = toLocalDateKey(date);
       const count = dailyCounts.get(key) || 0;
-      const level = levelForCount(count, maxDayCount);
+      const level = mode === 'alcohol' ? count : levelForCount(count, maxDayCount);
       return { key, day: index + 1, count, level };
     });
     const total = days.reduce((sum, day) => sum + day.count, 0);
     const activeDays = days.filter(day => day.count > 0).length;
     const dotMarkup = days.map(day => {
-      const title = `${day.key} · ${day.count} ${day.count === 1 ? meta.unit : meta.unitPlural}`;
+      const title = mode === 'alcohol'
+        ? `${day.key} · ${day.count ? `Stufe ${day.count} · ${ALCOHOL_LABELS[day.count]}` : (day.key < '2026-07-27' ? 'Vor Auswertungsbeginn' : day.key > toLocalDateKey(today) ? 'Zukünftiger Tag' : 'Kein Konsumtag')}`
+        : `${day.key} · ${day.count} ${day.count === 1 ? meta.unit : meta.unitPlural}`;
       return `<span class="hf-year-dot level-${day.level}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"></span>`;
     }).join('');
 
     return `<article class="hf-consumption-month ${isCurrentMonth ? 'is-current' : ''}" title="${escapeHtml(`${monthLabel(monthIndex)} ${year}: ${total} ${total === 1 ? meta.unit : meta.unitPlural}`)}">
-      <div class="hf-consumption-month-head"><strong>${escapeHtml(monthLabel(monthIndex))}</strong><small>${total}×</small></div>
+      <div class="hf-consumption-month-head"><strong>${escapeHtml(monthLabel(monthIndex))}</strong><small>${total}${mode === 'alcohol' ? ' Pkt.' : '×'}</small></div>
       <div class="hf-consumption-month-dots" style="--hf-days:${dayCount}">${dotMarkup}</div>
       <span>${activeDays ? `${activeDays} aktive Tage` : 'ruhig'}</span>
     </article>`;
@@ -110,16 +120,18 @@
     const meta = modeMeta(mode);
     const year = new Date().getFullYear();
     const events = eventsForMode(state, mode);
-    const dailyCounts = buildDailyCounts(events, year);
+    const dailyCounts = mode === 'alcohol' ? alcoholDailyRatings(year) : buildDailyCounts(events, year);
     const dayValues = Array.from(dailyCounts.values());
     const maxDayCount = Math.max(...dayValues, 1);
     const total = dayValues.reduce((sum, count) => sum + count, 0);
     const activeDays = dayValues.length;
     const averagePerActiveDay = activeDays ? (total / activeDays).toFixed(1).replace('.', ',') : '0';
     const peak = Array.from(dailyCounts.entries()).sort((a, b) => b[1] - a[1])[0] || null;
-    const peakLabel = peak ? `${peak[0].slice(8, 10)}.${peak[0].slice(5, 7)} · ${peak[1]}×` : '–';
+    const peakLabel = peak ? `${peak[0].slice(8, 10)}.${peak[0].slice(5, 7)} · ${mode === 'alcohol' ? `Stufe ${peak[1]}` : `${peak[1]}×`}` : '–';
     const months = Array.from({ length: MONTHS }, (_, monthIndex) => buildMonth(monthIndex, year, dailyCounts, maxDayCount, mode)).join('');
-    const emptyCopy = total
+    const emptyCopy = mode === 'alcohol'
+      ? 'Tagesbewertungen ab 27.07.2026: 1 Leicht · 2 Moderat · 3 Erhöht · 4 Stark. Monatssummen addieren die Intensitätswerte.'
+      : total
       ? `Jeder Dot ist ein Kalendertag. Je stärker die Farbe, desto mehr ${meta.unitPlural.toLowerCase()} an diesem Tag.`
       : `Noch keine ${meta.unitPlural.toLowerCase()} im laufenden Jahr. Die Übersicht füllt sich automatisch mit jedem Log.`;
 
@@ -129,9 +141,9 @@
         <span class="badge muted">${total} ${total === 1 ? meta.unit : meta.unitPlural}</span>
       </div>
       <div class="hf-consumption-year-stats">
-        <article><small>Gesamt</small><strong>${total}×</strong></article>
+        <article><small>${mode === 'alcohol' ? 'Intensitätssumme' : 'Gesamt'}</small><strong>${total}${mode === 'alcohol' ? '' : '×'}</strong></article>
         <article><small>Aktive Tage</small><strong>${activeDays}</strong></article>
-        <article><small>Ø aktiv</small><strong>${averagePerActiveDay}</strong></article>
+        <article><small>${mode === 'alcohol' ? 'Ø Intensität' : 'Ø aktiv'}</small><strong>${averagePerActiveDay}</strong></article>
         <article><small>Peak</small><strong>${escapeHtml(peakLabel)}</strong></article>
       </div>
       <div class="hf-consumption-year-grid" aria-label="${escapeHtml(`${meta.label} Jahresübersicht nach Monaten und Tagen`)}">${months}</div>
@@ -141,6 +153,7 @@
 
   function signatureFor(mode, state) {
     const year = new Date().getFullYear();
+    if (mode === 'alcohol') return `${mode}:${toLocalDateKey(new Date())}:${JSON.stringify([...alcoholDailyRatings(year)])}`;
     const events = eventsForMode(state, mode).filter(date => date.getFullYear() === year);
     const last = events.length ? events[events.length - 1].getTime() : 0;
     return `${mode}:${year}:${events.length}:${last}`;
@@ -235,6 +248,10 @@
       body.light .hf-consumption-year-card,body.light .hf-consumption-year-stats article,body.light .hf-consumption-month{background:rgba(255,255,255,.72);border-color:rgba(17,36,58,.08);}
       body.light .hf-year-dot{background:#e4eaf0;opacity:1;}
       body.light .hf-year-dot.level-1{background:#bff1cc;}body.light .hf-year-dot.level-2{background:#94e6e2;}body.light .hf-year-dot.level-3{background:#b9c9d6;}body.light .hf-year-dot.level-4{background:#ffd083;}body.light .hf-year-dot.level-5{background:#ff9999;}
+      #hfConsumptionYear-alcohol .hf-year-dot.level-1{background:#b8e8ca;}
+      #hfConsumptionYear-alcohol .hf-year-dot.level-2{background:#f8d58d;}
+      #hfConsumptionYear-alcohol .hf-year-dot.level-3{background:#f3ae8d;}
+      #hfConsumptionYear-alcohol .hf-year-dot.level-4{background:#dd5966;}
       @media (max-width:980px){.hf-consumption-year-grid{width:min(100%,560px);}.hf-consumption-year-stats{grid-template-columns:repeat(2,minmax(0,1fr));}}
       @media (max-width:520px){.hf-consumption-year-card{padding:12px;border-radius:22px;}.hf-consumption-year-grid{width:100%;gap:7px;}.hf-consumption-month{padding:8px;border-radius:16px;gap:5px;}.hf-consumption-month-dots{grid-template-columns:repeat(7,4px);grid-auto-rows:4px;gap:3px;}.hf-year-dot{width:4px;height:4px;}.hf-consumption-year-head{flex-direction:column;}.hf-consumption-year-head .badge{align-self:flex-start;}}
     `;
@@ -244,12 +261,13 @@
   function start() {
     injectStyle(document);
     [220, 800, 1800, 3600].forEach(delay => window.setTimeout(renderYearOverviews, delay));
+    window.addEventListener('habitflow:consumption-live-update', () => scheduleRender(120));
     window.addEventListener('focus', () => scheduleRender(120));
     window.addEventListener('storage', event => { if (event.key === STORAGE_KEY) scheduleRender(160); });
     document.addEventListener('visibilitychange', () => { if (!document.hidden) scheduleRender(120); });
     document.addEventListener('click', event => {
       const action = event.target?.closest?.('[data-action]')?.dataset?.action || '';
-      if (action.includes('record') || action.includes('log') || action.includes('delete') || action.includes('switch-consumption-mode')) scheduleRender(520);
+      if (action.includes('alcohol') || action.includes('pause') || action.includes('record') || action.includes('log') || action.includes('delete') || action.includes('switch-consumption-mode')) scheduleRender(520);
     }, true);
     window.setInterval(() => scheduleRender(0), 45000);
   }

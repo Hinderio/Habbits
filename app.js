@@ -6459,7 +6459,8 @@ cacheEls();
   }
 
   window.HabitFlowConsumptionLive = Object.freeze({
-    snapshot: consumptionLiveSnapshot
+    snapshot: consumptionLiveSnapshot,
+    alcoholDays: () => alcoholAnalysisDays().map(day => ({ ...day }))
   });
 
   function notifyConsumptionLiveUpdate(reason = 'state') {
