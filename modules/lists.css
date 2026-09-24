@@ -287,7 +287,7 @@ body.light .hf-finance-groups.is-empty{border-color:rgba(17,36,58,.1)}
 .hf-weekly-archive-button .hf-list-icon,.hf-weekly-head>.pill .hf-list-icon{width:17px;height:17px}
 .hf-weekly-archive-button>span{min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:rgba(74,215,209,.14);display:inline-grid;place-items:center;font-size:.68rem}
 .hf-weekly-rail{display:flex;gap:18px;width:100%;overflow-x:auto;overflow-y:hidden;padding:10px max(18px,calc((100% - min(420px,72vw))/2)) 24px;scroll-padding-inline:max(18px,calc((100% - min(420px,72vw))/2));scroll-snap-type:x mandatory;overscroll-behavior-x:contain;scrollbar-width:thin;scrollbar-color:rgba(74,215,209,.28) transparent}
-.hf-weekly-card{position:relative;flex:0 0 min(420px,72vw);min-height:510px;padding:24px;border:1px solid rgba(255,255,255,.06);border-radius:24px;background:rgba(255,255,255,.055);box-shadow:none;display:flex;flex-direction:column;gap:18px;scroll-snap-align:center;scroll-snap-stop:always;transition:opacity .2s ease,transform .2s ease,border-color .2s ease,box-shadow .2s ease}
+.hf-weekly-card{position:relative;flex:0 0 min(420px,72vw);box-sizing:border-box;min-height:0;height:clamp(380px,65vh,560px);height:clamp(380px,65svh,560px);padding:24px;border:1px solid rgba(255,255,255,.06);border-radius:24px;background:rgba(255,255,255,.055);box-shadow:none;display:flex;flex-direction:column;gap:18px;scroll-snap-align:center;scroll-snap-stop:always;transition:opacity .2s ease,transform .2s ease,border-color .2s ease,box-shadow .2s ease}
 .hf-weekly-card.is-current{border-color:rgba(237,189,195,.34);box-shadow:0 16px 34px rgba(11,31,44,.12)}
 .hf-weekly-card[data-week-offset="-1"]{opacity:.5}
 .hf-weekly-card[data-week-offset="-2"]{opacity:.45}
@@ -303,7 +303,12 @@ body.light .hf-finance-groups.is-empty{border-color:rgba(17,36,58,.1)}
 .hf-weekly-card-head small{display:block;color:#EDBDC3;font-size:.69rem;font-weight:900;text-transform:uppercase;letter-spacing:.14em}
 .hf-weekly-card-head h4{margin-top:6px;font-size:1.12rem;line-height:1.2;letter-spacing:-.02em}
 .hf-weekly-card-status{align-self:start;flex:0 0 auto;padding:8px 10px;border:1px solid rgba(237,189,195,.16);border-radius:13px;background:rgba(237,189,195,.11);color:var(--muted);font-size:.69rem;font-weight:850}
-.hf-weekly-items{display:flex;flex:1;flex-direction:column;gap:7px;min-height:190px}
+.hf-weekly-card-head,.hf-weekly-capture,.hf-weekly-card>footer{flex-shrink:0}
+.hf-weekly-body{display:flex;flex:1;flex-direction:column;gap:18px;min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:rgba(237,189,195,.45) transparent;scrollbar-gutter:stable}
+.hf-weekly-body:focus-visible{outline:2px solid rgba(237,189,195,.7);outline-offset:2px;border-radius:8px}
+.hf-weekly-body>.hf-weekly-carry-prompt{flex-shrink:0}
+.hf-weekly-items{display:flex;flex:1 0 auto;flex-direction:column;gap:7px;min-height:190px}
+.hf-weekly-items>.hf-weekly-row{flex-shrink:0}
 .hf-weekly-items.is-empty{justify-content:center;align-items:center;padding:22px;border:1px dashed rgba(237,189,195,.22);border-radius:20px;color:var(--muted);font-size:.84rem;font-weight:780;text-align:center}
 .hf-weekly-row{position:relative;display:grid;grid-template-columns:30px minmax(0,1fr) 34px;align-items:start;gap:9px;padding:9px 8px;border-radius:14px;animation:hfWeeklyRowIn .18s ease both}
 .hf-weekly-row:hover,.hf-weekly-row:focus-within{background:rgba(237,189,195,.075)}
@@ -369,7 +374,7 @@ body.light .hf-weekly-archive section>button{background:rgba(255,255,255,.64);bo
   .hf-weekly-head-actions{justify-content:space-between}
   .hf-weekly-nav{display:none}
   .hf-weekly-rail{gap:11px;margin-inline:-14px;width:calc(100% + 28px);padding-inline:max(14px,calc((100% - min(360px,86vw))/2));scroll-padding-inline:max(14px,calc((100% - min(360px,86vw))/2))}
-  .hf-weekly-card{flex-basis:min(360px,86vw);min-height:480px;padding:20px}
+  .hf-weekly-card{flex-basis:min(360px,86vw);height:clamp(380px,65vh,480px);height:clamp(380px,65svh,480px);padding:20px}
 }
 @media (max-width:420px){
   .hf-weekly-card{flex-basis:88vw;padding:18px}

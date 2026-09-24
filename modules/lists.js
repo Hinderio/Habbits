@@ -388,7 +388,12 @@
       return;
     }
     if (list.id === WEEKLY_LIST_ID) {
+      const scrollPositions = new Map(Array.from(target.querySelectorAll('[data-weekly-scroll]'),
+        body => [body.dataset.weeklyScroll, body.scrollTop]));
       target.innerHTML = renderWeeklyDetail(list);
+      target.querySelectorAll('[data-weekly-scroll]').forEach(body => {
+        body.scrollTop = scrollPositions.get(body.dataset.weeklyScroll) || 0;
+      });
       scheduleWeeklyRailPosition();
       return;
     }
@@ -808,9 +813,11 @@
           <div class="hf-weekly-card-heading"><small>${escapeHtml(weeklyRelationLabel(offset))} · KW ${info.week}</small><h4>${escapeHtml(formatWeekRange(weekStart))}</h4></div>
           <span class="hf-weekly-card-status">${open} offen</span>
         </header>
-        ${previousOpen.length ? renderWeeklyCarryPrompt(previousOpen) : ''}
-        <div class="hf-weekly-items ${items.length ? '' : 'is-empty'}">
-          ${items.length ? items.map(item => renderWeeklyRow(item, weekStart)).join('') : '<p>Noch ist dieser Zettel leer.</p>'}
+        <div class="hf-weekly-body" data-weekly-scroll="${escapeHtml(weekStart)}" tabindex="0" role="region" aria-label="Notizen für ${escapeHtml(formatWeekRange(weekStart))}">
+          ${previousOpen.length ? renderWeeklyCarryPrompt(previousOpen) : ''}
+          <div class="hf-weekly-items ${items.length ? '' : 'is-empty'}">
+            ${items.length ? items.map(item => renderWeeklyRow(item, weekStart)).join('') : '<p>Noch ist dieser Zettel leer.</p>'}
+          </div>
         </div>
         ${canCapture ? `
           <form class="hf-weekly-capture" data-form="weekly-capture" data-week-start="${escapeHtml(weekStart)}">
@@ -2055,7 +2062,7 @@
     });
 
     document.addEventListener('scroll', event => {
-      const rail = event.target.closest?.('[data-weekly-rail]');
+      const rail = event.target.matches?.('[data-weekly-rail]') ? event.target : null;
       if (!rail) return;
       window.clearTimeout(weeklyRailScrollTimer);
       weeklyRailScrollTimer = window.setTimeout(() => {
