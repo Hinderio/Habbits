@@ -4,14 +4,21 @@
   const MAX_IMAGE_LENGTH = 180000;
   const FONTS = { sans: 'Modern', serif: 'Editorial', mono: 'Mono' };
   const STYLES = { poster: 'Plakat', editorial: 'Editorial', minimal: 'Minimal' };
-  const TONES = { white: 'Weiß', red: 'Rot', gold: 'Gold' };
+  const TONES = { white: '#ffffff', red: '#ff6759', gold: '#ffce70' };
   const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
   const pick = (options, value, fallback) => Object.hasOwn(options, value) ? value : fallback;
+  function normalizeColor(value, fallback) {
+    if (typeof value !== 'string' || !/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(value)) return fallback;
+    const color = value.toLowerCase();
+    return color.length === 4 ? '#' + [...color.slice(1)].map(char => char + char).join('') : color;
+  }
   function normalize(input = {}) {
     return {
       font: pick(FONTS, input.font, 'sans'),
       style: pick(STYLES, input.style, 'poster'),
       tone: pick(TONES, input.tone, 'white'),
+      color: normalizeColor(input.color, TONES[pick(TONES, input.tone, 'white')]),
+      brightness: typeof input.brightness === 'number' && Number.isFinite(input.brightness) ? Math.min(150, Math.max(50, Math.round(input.brightness))) : 100,
       monochrome: input.monochrome === true
     };
   }
@@ -22,8 +29,8 @@
   function poster(item, preview = false) {
     const settings = normalize(item.metadata);
     const image = safeImage(item.metadata?.image);
-    return '<div class="hf-ex-poster ex-font-' + settings.font + ' ex-style-' + settings.style + ' ex-tone-' + settings.tone + (settings.monochrome ? ' ex-mono' : '') + '">' +
-      (image ? '<img src="' + image + '" alt="" width="1200" height="1500" loading="' + (preview ? 'eager' : 'lazy') + '" decoding="async">' : '<div class="hf-ex-placeholder">Dein nächster Blickfang</div>') +
+    return '<div class="hf-ex-poster ex-font-' + settings.font + ' ex-style-' + settings.style + (settings.monochrome ? ' ex-mono' : '') + (image ? '' : ' ex-empty') + '" style="--ex-text-color:' + settings.color + ';--ex-brightness:' + settings.brightness / 100 + '">' +
+      (image ? '<img src="' + image + '" alt="" width="1200" height="1500" loading="' + (preview ? 'eager' : 'lazy') + '" decoding="async">' : '<div class="hf-ex-placeholder" aria-hidden="true"></div>') +
       '<div class="hf-ex-overlay"><small>IDEEN / EXHIBITION</small><h4>' + escape(item.title || 'Eine neue Perspektive') + '</h4><p>' + escape(item.note || '') + '</p></div></div>';
   }
   function options(values, selected) {
@@ -81,8 +88,9 @@
       '<label class="full"><span>Kurzbeschreibung auf dem Bild</span><textarea name="note" maxlength="280" rows="2" placeholder="Was inspiriert dich daran?"></textarea></label>' +
       '<label><span>Überschriftenstil</span><select name="style">' + options(STYLES, 'poster') + '</select></label>' +
       '<label><span>Schriftart</span><select name="font">' + options(FONTS, 'sans') + '</select></label>' +
-      '<label><span>Schriftfarbe</span><select name="tone">' + options(TONES, 'white') + '</select></label>' +
+      '<label><span>Schriftfarbe</span><input name="color" type="color" value="#ffffff"></label>' +
       '<label><span>Foto-Look</span><select name="look"><option value="color">Originalfarben</option><option value="mono">Schwarz-Weiß</option></select></label>' +
+      '<label class="full hf-ex-brightness"><span>Bildhelligkeit · <output data-ex-brightness>100 %</output></span><input name="brightness" type="range" min="50" max="150" step="1" value="100"><small>Nur das Bild wird angepasst, nicht die Schrift. 100 % = keine zusätzliche Helligkeitsänderung.</small></label>' +
       '<div class="full hf-ex-form-actions"><button class="pill primary" type="submit">Exponat speichern</button><button class="pill secondary" type="button" data-ex-cancel hidden>Abbrechen</button></div>' +
       '<p class="full hf-ex-status" role="status" aria-live="polite" data-ex-status></p></form><div class="hf-ex-preview"><p class="eyebrow">LIVE-VORSCHAU</p><div data-ex-preview></div></div></div>' +
       '<div class="hf-ex-gallery" data-ex-gallery></div><nav class="hf-ex-pagination" aria-label="Galerieseiten"><button class="pill secondary" type="button" data-ex-prev>Zurück</button><span data-ex-page></span><button class="pill secondary" type="button" data-ex-next>Weiter</button></nav></section>';
@@ -92,8 +100,27 @@
     const status = root.querySelector('[data-ex-status]');
     let image = '', editingId = '', page = 0, busy = false, operation = 0;
     const say = message => { status.textContent = message; };
-    const draft = () => ({ title: form.elements.title.value.trim(), note: form.elements.note.value.trim(), metadata: { image, style: form.elements.style.value, font: form.elements.font.value, tone: form.elements.tone.value, monochrome: form.elements.look.value === 'mono' } });
-    const preview = () => { root.querySelector('[data-ex-preview]').innerHTML = poster(draft(), true); };
+    const draft = () => ({ title: form.elements.title.value.trim(), note: form.elements.note.value.trim(), metadata: { image, style: form.elements.style.value, font: form.elements.font.value, color: form.elements.color.value, brightness: Number(form.elements.brightness.value), monochrome: form.elements.look.value === 'mono' } });
+    let previewImage = null;
+    const preview = () => {
+      const item = draft();
+      const host = root.querySelector('[data-ex-preview]');
+      if (previewImage !== image || !host.firstElementChild) {
+        host.innerHTML = poster(item, true);
+        previewImage = image;
+      } else {
+        // Keep the decoded image and DOM in place while adjusting typography or brightness.
+        const settings = normalize(item.metadata);
+        const card = host.firstElementChild;
+        card.className = 'hf-ex-poster ex-font-' + settings.font + ' ex-style-' + settings.style +
+          (settings.monochrome ? ' ex-mono' : '') + (image ? '' : ' ex-empty');
+        card.style.setProperty('--ex-text-color', settings.color);
+        card.style.setProperty('--ex-brightness', settings.brightness / 100);
+        card.querySelector('h4').textContent = item.title || 'Eine neue Perspektive';
+        card.querySelector('p').textContent = item.note;
+      }
+      root.querySelector('[data-ex-brightness]').textContent = form.elements.brightness.value + ' %';
+    };
     function setBusy(value) {
       busy = value;
       form.querySelectorAll('input, textarea, select, button').forEach(control => { control.disabled = value; });
@@ -169,7 +196,7 @@
       const settings = normalize(item.metadata);
       form.elements.title.value = item.title;
       form.elements.note.value = item.note || '';
-      for (const key of ['font', 'style', 'tone']) form.elements[key].value = settings[key];
+      for (const key of ['font', 'style', 'color', 'brightness']) form.elements[key].value = settings[key];
       form.elements.look.value = settings.monochrome ? 'mono' : 'color';
       root.querySelector('[data-ex-cancel]').hidden = false;
       root.querySelector('[data-ex-form-title]').textContent = 'Exponat bearbeiten';

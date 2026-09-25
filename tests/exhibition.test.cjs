@@ -30,7 +30,7 @@ const input = () => ({ title: 'Barcelona', note: 'Neue Perspektiven', metadata: 
 
 test('unknown typography values fall back to whitelisted classes', () => {
   const { api } = harness();
-  assert.deepEqual({ ...api.normalize({ font: '__proto__', style: '<script>', tone: 'constructor' }) }, { font: 'sans', style: 'poster', tone: 'white', monochrome: false });
+  assert.deepEqual({ ...api.normalize({ font: '__proto__', style: '<script>', tone: 'constructor' }) }, { font: 'sans', style: 'poster', tone: 'white', color: '#ffffff', brightness: 100, monochrome: false });
 });
 test('poster escapes text and rejects external or executable image sources', () => {
   const { api } = harness();
@@ -110,4 +110,66 @@ test('missing image, empty title, and nonexistent edits are rejected', () => {
   assert.throws(() => integration.saveExhibition({ ...input(), metadata: {} }));
   assert.throws(() => integration.saveExhibition({ ...input(), id: 'unknown' }));
   assert.equal(integration.getState().items.length, 0);
+});
+
+test('custom colors are validated and legacy tones retain their colors', () => {
+  const { api } = harness();
+  assert.equal(api.normalize({ tone: 'red' }).color, '#ff6759');
+  assert.equal(api.normalize({ tone: 'gold' }).color, '#ffce70');
+  assert.equal(api.normalize({ color: '#AbC' }).color, '#aabbcc');
+  assert.equal(api.normalize({ color: '#123456' }).color, '#123456');
+  assert.equal(api.normalize({ color: 'red;position:fixed' }).color, '#ffffff');
+});
+test('brightness defaults safely and clamps to the slider bounds', () => {
+  const { api } = harness();
+  for (const value of [undefined, null, NaN, Infinity, '120']) assert.equal(api.normalize({ brightness: value }).brightness, 100);
+  assert.equal(api.normalize({ brightness: 0 }).brightness, 50);
+  assert.equal(api.normalize({ brightness: 900 }).brightness, 150);
+  assert.equal(api.normalize({ brightness: 124.6 }).brightness, 125);
+});
+test('color and brightness survive save, edit and persisted reload', () => {
+  const { integration, storage } = harness();
+  const entry = input();
+  entry.metadata.color = '#102030';
+  entry.metadata.brightness = 125;
+  integration.saveExhibition(entry);
+  const saved = integration.getState().items[0];
+  integration.saveExhibition({ ...saved, title: 'Adjusted' });
+  const restored = integration.normalizeState(JSON.parse(storage.get('habitflow-lists-v1'))).items[0];
+  assert.equal(restored.metadata.color, '#102030');
+  assert.equal(restored.metadata.brightness, 125);
+  assert.equal(restored.metadata.monochrome, true);
+  assert.equal(restored.metadata.image, validImage);
+});
+test('empty preview gets a flat background while image posters keep the photo', () => {
+  const { api } = harness();
+  const empty = api.poster({ title: 'Test', metadata: {} }, true);
+  assert.match(empty, /ex-empty/);
+  assert.doesNotMatch(empty, /Dein nächster Blickfang|<img/);
+  const photo = api.poster({ ...input(), metadata: { image: validImage, color: '#123456', brightness: 75, monochrome: true } });
+  assert.match(photo, /ex-mono/);
+  assert.match(photo, /--ex-text-color:#123456;--ex-brightness:0.75/);
+  assert.doesNotMatch(photo, /ex-empty/);
+});
+test('live brightness changes reuse the preview DOM and never re-encode images', () => {
+  const { api } = harness();
+  const start = source.indexOf('    const preview = () => {');
+  const end = source.indexOf('    function setBusy', start);
+  const properties = {};
+  const heading = {}, description = {}, output = {};
+  const card = { style: { setProperty: (key, value) => { properties[key] = value; } }, querySelector: selector => selector === 'h4' ? heading : description };
+  const host = { firstElementChild: card, set innerHTML(_) { throw new Error('Preview DOM must not be replaced'); } };
+  const context = {
+    image: validImage, previewImage: validImage,
+    draft: () => ({ title: 'Updated', note: 'Description', metadata: { color: '#123456', brightness: 140, monochrome: true } }),
+    normalize: api.normalize,
+    root: { querySelector: selector => selector === '[data-ex-preview]' ? host : output },
+    form: { elements: { brightness: { value: '140' } } }
+  };
+  vm.runInNewContext(source.slice(start, end) + '\npreview();', context);
+  assert.equal(properties['--ex-brightness'], 1.4);
+  assert.equal(properties['--ex-text-color'], '#123456');
+  assert.equal(heading.textContent, 'Updated');
+  assert.equal(output.textContent, '140 %');
+  assert.match(card.className, /ex-mono/);
 });
