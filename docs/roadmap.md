@@ -8,7 +8,15 @@ horizontal durch die Zeitachse. Jede Quelle hat eine eigene Zeile.
 ## Quellen und Ziele
 
 - Projekte und Projektmeilensteine über die bestehende Projektverwaltung.
-- Aufgaben nach Fälligkeit, Termine nach Beginn/Ende. Undatierte Arbeit bleibt
+  Jedes Projekt hat eine zusammenhängende Swimlane mit Projektzeitraum,
+  eingerückten Meilensteinen und seinen hoch priorisierten Aufgaben. Diese
+  Aufgaben erscheinen nicht erneut unter freien Aufgaben. Der Projektfilter
+  enthält auch zugehörige Tasks; aktuelle Projektverknüpfungen und gelöste
+  Zuordnungen kommen aus der Projektverwaltung. Gleiche Projektnamen werden
+  anhand ihrer IDs getrennt. Liegt ein sichtbarer Task ausserhalb des
+  Projektzeitraums, bleibt die Projektzeile als beschrifteter Kontext erhalten.
+- Ausschliesslich Aufgaben mit Priorität `high` (Hoch), nach Fälligkeit.
+  Termine nach Beginn/Ende, ohne Geburtstage (inklusive älterer Metadaten). Undatierte Arbeit bleibt
   als solche sichtbar; es werden keine Planungsdaten erfunden oder geschrieben.
 - Persönliche Ziele mit frei wählbarer Kategorie, Start und Zieldatum.
 - Manuelle Meilensteine, numerische Messwerte (höchstens/mindestens) oder die

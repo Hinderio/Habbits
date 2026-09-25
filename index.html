@@ -10,7 +10,7 @@
   <meta name="apple-mobile-web-app-title" content="HabitFlow" />
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="style.css?v=330" />
+  <link rel="stylesheet" href="style.css?v=331" />
   <link rel="stylesheet" href="modules/life-coach.css?v=305" />
   <link rel="stylesheet" href="modules/habit-card-typography.css" />
   <link rel="stylesheet" href="modules/habit-personal-best.css?v=296" />
@@ -733,8 +733,10 @@
       <section id="screen-calendar" class="screen" data-screen="calendar" hidden aria-hidden="true">
         <div class="section-toolbar glass">
           <div><p class="eyebrow">Kalender</p><h3>Termine & Tagesplanung</h3></div>
+          <div class="calendar-view-actions" role="group" aria-label="Kalenderansichten und neuer Termin">
           <button id="roadmapToggleBtn" class="bubble-add-btn" type="button" aria-label="Roadmap öffnen" title="Roadmap"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18" opacity=".4"/><circle cx="7" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><path d="m10 15 3 3-3 3-3-3z"/></svg></button>
           <button id="appointmentFormToggleBtn" class="bubble-add-btn" type="button" aria-label="Termin-Formular öffnen"><span data-icon="plus"></span></button>
+          </div>
         </div>
         <section id="appointmentFormPanel" class="panel glass drawer-form-panel hidden">
           <div class="panel-head"><div><p class="eyebrow">Termin</p><h3 id="appointmentFormTitle">Termin erfassen</h3></div><button id="appointmentFormCloseBtn" class="icon-btn" type="button" aria-label="Termin-Formular schliessen">×</button></div>
@@ -825,7 +827,7 @@
   <script src="modules/projects-milestone-edit.js?v=183"></script>
 
   <script src="modules/life-coach.js?v=305"></script>
-  <script src="app.js?v=330"></script>
+  <script src="app.js?v=331"></script>
   <script src="modules/points-details.js?v=297"></script>
   <script src="modules/habit-story-coverage.js?v=295"></script>
   <script src="modules/ghost-arena.js?v=288"></script>
@@ -837,6 +839,6 @@
   <script src="modules/pause-period-edit.js?v=204"></script>
   <script src="modules/smoking-top-cards-polish.js?v=283"></script>
   <script src="modules/task-swimlane-view.js?v=234"></script>
-  <script src="modules/roadmap-loader.js?v=330"></script>
+  <script src="modules/roadmap-loader.js?v=331"></script>
 </body>
 </html>

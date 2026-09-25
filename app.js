@@ -1311,7 +1311,7 @@ cacheEls();
   function bindEvents() {
     window.HabitFlowRoadmapBridge = Object.freeze({
       snapshot: () => ({
-        tasks: state.tasks, appointments: state.appointments,
+        tasks: state.tasks, appointments: state.appointments.map(appointment => ({ ...appointment, event_kind: appointmentEventKind(appointment) })),
         habits: state.habits.filter(h => !h.is_archived).map(h => ({ id: h.id, name: h.name, type: h.type, unit: h.unit || '', fitnessType: isFitnessDistanceHabit(h) ? fitnessHabitType(h) : '' })),
         entries: visibleHabitEntries()
       }),

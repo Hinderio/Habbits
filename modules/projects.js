@@ -1091,7 +1091,7 @@
   }
 
   window.HabitFlowRoadmapProjects = Object.freeze({
-    snapshot: () => { const current = readState(); return { projects: current.projects, milestones: current.projectMilestones }; },
+    snapshot: () => { const current = readState(); return { projects: current.projects, milestones: current.projectMilestones, taskLinks: current.tasks.map(task => ({ id: task.id, projectId: task.project_id })) }; },
     open: id => { if (readState().projects.some(project => project.id === id && !project.is_archived)) openDetail(id); }
   });
 

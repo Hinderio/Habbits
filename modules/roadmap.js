@@ -7,7 +7,7 @@
   const dateAt=(y,m)=>D.key(new Date(y,m,1,12).toISOString());
   function refresh(){
     snapshot={...window.HabitFlowRoadmapBridge.snapshot(),...window.HabitFlowRoadmapProjects?.snapshot()};
-    goals=window.HabitFlowRoadmapGoals.snapshot().goals;rows=D.build(snapshot,goals,today()).sort((a,b)=>a.group.localeCompare(b.group)||String(a.start||a.end||'9999').localeCompare(String(b.start||b.end||'9999'))||a.title.localeCompare(b.title)).map((row,index)=>({...row,index}));limit=100;
+    goals=window.HabitFlowRoadmapGoals.snapshot().goals;rows=D.build(snapshot,goals,today());limit=100;
   }
   function close(){dialog.close();}
   function shell(){
@@ -29,10 +29,10 @@
     dialog.querySelector('#roadmapSummary').innerHTML=`<div><strong>${allGoals.length}</strong><span>Persönliche Ziele</span></div><div><strong>${allGoals.filter(r=>r.ratio>=1).length}</strong><span>Erreicht</span></div><div><strong>${visible.length}</strong><span>Einträge im Zeitraum</span></div><p>Deine Themen links. Dein Weg auf der Zeitachse.<br><small>Ziele öffnen zum Bearbeiten · Einträge öffnen ihre Quelle</small></p>`;
     let html=`<div class="roadmap-axis-label">KATEGORIE / THEMA</div><div class="roadmap-axis" style="--months:${span}">${Array.from({length:span},(_,i)=>`<span>${esc(months.format(new Date(year,month+i,1,12)))}</span>`).join('')}</div>`, group='';
     for(const r of shown){
-      const rowIndex=r.index, hasDate=Boolean(r.start||r.end), startDay=D.day(r.start||r.end), endDay=D.day(r.end||r.start), left=Math.max(0,Math.min(100,(startDay-a)/width*100)), right=Math.max(left,Math.min(100,(endDay-a)/width*100));
-      if(group!==r.group){group=r.group;html+=`<div class="roadmap-group">${esc(group)}</div><div class="roadmap-group-line"></div>`;}
+      const rowIndex=r.index, hasDate=Boolean(r.start||r.end)&&(!r.start||r.start<=end)&&(!r.end||r.end>=start), startDay=D.day(r.start||r.end), endDay=D.day(r.end||r.start), left=Math.max(0,Math.min(100,(startDay-a)/width*100)), right=Math.max(left,Math.min(100,(endDay-a)/width*100));
+      if(group!==r.groupKey){group=r.groupKey;html+=`<div class="roadmap-group ${r.projectId?'roadmap-lane-heading':''}">${r.projectId?'<small>PROJEKT</small>':''}${esc(r.group)}</div><div class="roadmap-group-line ${r.projectId?'roadmap-lane-heading':''}"></div>`;}
       const desc=`${r.title} · ${r.label||''} · ${dateText(r.end||r.start)}`;
-      html+=`<button type="button" class="roadmap-topic" data-row="${rowIndex}" title="${esc(desc)}"><strong>${esc(r.title)}</strong><small>${esc(r.label)}${hasDate?' · '+esc(dateText(r.end||r.start)):''}</small></button><div class="roadmap-track roadmap-${r.source}" style="--months:${span}">${now>=0&&now<=100?`<i class="roadmap-today" style="left:${now}%" aria-hidden="true"></i>`:''}${hasDate?`<button type="button" class="roadmap-mark ${r.source==='goal'?'is-goal':''}" data-row="${rowIndex}" style="left:${left}%;width:${Math.max(0,right-left)}%" aria-label="${esc(desc)}" title="${esc(desc)}"><span class="roadmap-fill" style="width:${Math.round((r.ratio||0)*100)}%"></span><span class="roadmap-dot"></span></button>`:'<span class="roadmap-undated">Noch ohne Datum · Quelle öffnen zum Planen</span>'}</div>`;
+      html+=`<button type="button" class="roadmap-topic${r.projectId?' roadmap-lane-topic':''}${r.laneRole&&r.laneRole!=='summary'?' roadmap-lane-child':''}" data-row="${rowIndex}" title="${esc(desc)}"><strong>${esc(r.title)}</strong><small>${esc(r.label)}${hasDate?' · '+esc(dateText(r.end||r.start)):''}</small></button><div class="roadmap-track roadmap-${r.source}${r.projectId?' roadmap-lane-track':''}" style="--months:${span}">${now>=0&&now<=100?`<i class="roadmap-today" style="left:${now}%" aria-hidden="true"></i>`:''}${hasDate?`<button type="button" class="roadmap-mark ${r.source==='goal'||r.laneRole==='milestone'?'is-goal':''}" data-row="${rowIndex}" style="left:${left}%;width:${Math.max(0,right-left)}%" aria-label="${esc(desc)}" title="${esc(desc)}"><span class="roadmap-fill" style="width:${Math.round((r.ratio||0)*100)}%"></span><span class="roadmap-dot"></span></button>`:`<span class="roadmap-undated">${r.start||r.end?'Projektzeitraum ausserhalb der Ansicht':'Noch ohne Datum · Quelle öffnen zum Planen'}</span>`}</div>`;
     }
     if(!shown.length)html+='<p class="roadmap-empty">Hier ist Platz für deinen nächsten Schritt. Setze ein Ziel oder wähle einen anderen Zeitraum.</p>';
     const grid=dialog.querySelector('#roadmapGrid');grid.innerHTML=html;grid.style.setProperty('--months',span);

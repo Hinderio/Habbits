@@ -4957,7 +4957,10 @@ body.light #consumptionPauseList .pause-card { background: #fff; border-color: #
   #consumptionPauseList .pause-card-log-list { grid-template-columns: minmax(0, 1fr); padding: 16px 0 0; border-left: 0; border-top: 1px solid var(--line); }
 }
 
-/* Calendar view launchers share the existing toolbar. */
-#roadmapToggleBtn { margin-left: auto; flex-shrink: 0; background: rgba(71,206,202,.12); color: var(--text); border: 1px solid rgba(71,206,202,.4); }
-#screen-calendar .section-toolbar:has(#roadmapToggleBtn) { flex-wrap: wrap; gap: 12px; }
-#screen-calendar .section-toolbar #roadmapToggleBtn ~ button { margin-left: 0; }
+/* One dedicated action row, scoped to the calendar's own toolbar. */
+#screen-calendar > .section-toolbar { display:flex; flex-direction:column; align-items:stretch; gap:18px; }
+#screen-calendar > .section-toolbar > div:first-child { min-width:0; }
+#screen-calendar .calendar-view-actions { display:flex; flex-flow:row nowrap; align-items:center; justify-content:flex-end; gap:12px; width:100%; }
+#screen-calendar .calendar-view-actions > button { flex:0 0 auto; margin:0; }
+#screen-calendar .calendar-view-actions #roadmapToggleBtn { background:rgba(71,206,202,.12); color:var(--text); border:1px solid rgba(71,206,202,.4); }
+#screen-calendar .calendar-view-actions #appointmentFormToggleBtn { margin-left:auto; }
