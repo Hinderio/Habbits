@@ -86,6 +86,10 @@
 
   let state = readState();
   let activeListId = state.activeListId || 'photos';
+  try {
+    const preferred = window.localStorage.getItem(STORAGE_KEY + '-active-list');
+    if (state.lists.some(list => list.id === preferred)) activeListId = preferred;
+  } catch (_) { /* Navigation also works when browser storage is unavailable. */ }
   let editingSpotId = '';
   let editingTourId = '';
   let editingTermId = '';
@@ -1790,7 +1794,10 @@
         termStudyIndex = 0;
         termStudyOrder = [];
         document.body.classList.remove('hf-term-study-open');
-        persist();
+        state.activeListId = activeListId;
+        // Navigation must not rewrite image data or depend on available storage.
+        try { window.localStorage.setItem(STORAGE_KEY + '-active-list', activeListId); }
+        catch (_) { /* The selected list remains usable for this session. */ }
         render();
         document.getElementById('hfListDetail')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         return;

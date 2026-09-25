@@ -30,7 +30,7 @@ const input = () => ({ title: 'Barcelona', note: 'Neue Perspektiven', metadata: 
 
 test('unknown typography values fall back to whitelisted classes', () => {
   const { api } = harness();
-  assert.deepEqual({ ...api.normalize({ font: '__proto__', style: '<script>', tone: 'constructor' }) }, { font: 'sans', style: 'poster', tone: 'white', color: '#ffffff', brightness: 100, monochrome: false });
+  assert.deepEqual({ ...api.normalize({ font: '__proto__', style: '<script>', tone: 'constructor' }) }, { font: 'sans', style: 'poster', tone: 'white', color: '#ffffff', brightness: 100, look: 'color', monochrome: false });
 });
 test('poster escapes text and rejects external or executable image sources', () => {
   const { api } = harness();
@@ -172,4 +172,46 @@ test('live brightness changes reuse the preview DOM and never re-encode images',
   assert.equal(heading.textContent, 'Updated');
   assert.equal(output.textContent, '140 %');
   assert.match(card.className, /ex-mono/);
+});
+
+test('Modern stays unchanged and legacy alternatives migrate to Soft and Display', () => {
+  const { api } = harness();
+  assert.equal(api.normalize({ font: 'sans' }).font, 'sans');
+  assert.equal(api.normalize({ font: 'serif' }).font, 'rounded');
+  assert.equal(api.normalize({ font: 'mono' }).font, 'condensed');
+});
+test('warm look survives edits and legacy monochrome remains supported', () => {
+  const { api, integration, storage } = harness();
+  assert.equal(api.normalize({ monochrome: true }).look, 'mono');
+  assert.equal(api.normalize({ monochrome: true, look: 'color' }).look, 'color');
+  const item = input(); item.metadata.look = 'warm';
+  integration.saveExhibition(item);
+  const saved = JSON.parse(storage.get('habitflow-lists-v1')).items[0];
+  assert.equal(saved.metadata.look, 'warm');
+  assert.match(api.poster(saved), /ex-warm/);
+});
+test('list navigation works when storage is full and never rewrites image data', () => {
+  const listeners = {};
+  const writes = [];
+  const document = {
+    querySelector: () => null, getElementById: () => null,
+    addEventListener: (name, callback) => { (listeners[name] ||= []).push(callback); },
+    body: { classList: { add() {}, remove() {} } }
+  };
+  const window = {
+    localStorage: {
+      getItem: key => key === 'habitflow-lists-v1' ? JSON.stringify({ activeListId: 'weekly' }) : null,
+      setItem: (key, value) => { writes.push([key, value]); throw new Error('QuotaExceeded'); }
+    },
+    addEventListener() {}, setTimeout, clearTimeout
+  };
+  vm.runInNewContext(lists.replace('})(window, document);', 'window.currentListTest = currentList;\n})(window, document);'),
+    { window, document, console, Date, Intl, Map, Set, Math, URL, Event, setTimeout, clearTimeout });
+  assert.equal(window.currentListTest().id, 'weekly');
+  for (const id of ['exhibition', 'gifts', 'weblinks', 'photos', 'weekly']) {
+    listeners.click[0]({ target: { closest: selector => selector === '[data-list-open]' ? { dataset: { listOpen: id } } : null } });
+    assert.equal(window.currentListTest().id, id);
+  }
+  assert.equal(writes.length, 5);
+  assert.ok(writes.every(([key, value]) => key === 'habitflow-lists-v1-active-list' && value.length < 20));
 });

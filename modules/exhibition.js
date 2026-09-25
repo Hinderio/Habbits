@@ -2,7 +2,7 @@
   'use strict';
   const PAGE_SIZE = 12;
   const MAX_IMAGE_LENGTH = 180000;
-  const FONTS = { sans: 'Modern', serif: 'Editorial', mono: 'Mono' };
+  const FONTS = { sans: 'Modern', rounded: 'Soft', condensed: 'Display' };
   const STYLES = { poster: 'Plakat', editorial: 'Editorial', minimal: 'Minimal' };
   const TONES = { white: '#ffffff', red: '#ff6759', gold: '#ffce70' };
   const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
@@ -14,12 +14,13 @@
   }
   function normalize(input = {}) {
     return {
-      font: pick(FONTS, input.font, 'sans'),
+      font: pick(FONTS, input.font === 'serif' ? 'rounded' : input.font === 'mono' ? 'condensed' : input.font, 'sans'),
       style: pick(STYLES, input.style, 'poster'),
       tone: pick(TONES, input.tone, 'white'),
       color: normalizeColor(input.color, TONES[pick(TONES, input.tone, 'white')]),
       brightness: typeof input.brightness === 'number' && Number.isFinite(input.brightness) ? Math.min(150, Math.max(50, Math.round(input.brightness))) : 100,
-      monochrome: input.monochrome === true
+      look: pick({ color: 1, mono: 1, warm: 1 }, input.look, input.monochrome === true ? 'mono' : 'color'),
+      monochrome: input.look ? input.look === 'mono' : input.monochrome === true
     };
   }
   function safeImage(value) {
@@ -29,7 +30,7 @@
   function poster(item, preview = false) {
     const settings = normalize(item.metadata);
     const image = safeImage(item.metadata?.image);
-    return '<div class="hf-ex-poster ex-font-' + settings.font + ' ex-style-' + settings.style + (settings.monochrome ? ' ex-mono' : '') + (image ? '' : ' ex-empty') + '" style="--ex-text-color:' + settings.color + ';--ex-brightness:' + settings.brightness / 100 + '">' +
+    return '<div class="hf-ex-poster ex-font-' + settings.font + ' ex-style-' + settings.style + (settings.look === 'mono' ? ' ex-mono' : settings.look === 'warm' ? ' ex-warm' : '') + (image ? '' : ' ex-empty') + '" style="--ex-text-color:' + settings.color + ';--ex-brightness:' + settings.brightness / 100 + '">' +
       (image ? '<img src="' + image + '" alt="" width="1200" height="1500" loading="' + (preview ? 'eager' : 'lazy') + '" decoding="async">' : '<div class="hf-ex-placeholder" aria-hidden="true"></div>') +
       '<div class="hf-ex-overlay"><small>IDEEN / EXHIBITION</small><h4>' + escape(item.title || 'Eine neue Perspektive') + '</h4><p>' + escape(item.note || '') + '</p></div></div>';
   }
@@ -89,7 +90,7 @@
       '<label><span>Überschriftenstil</span><select name="style">' + options(STYLES, 'poster') + '</select></label>' +
       '<label><span>Schriftart</span><select name="font">' + options(FONTS, 'sans') + '</select></label>' +
       '<label><span>Schriftfarbe</span><input name="color" type="color" value="#ffffff"></label>' +
-      '<label><span>Foto-Look</span><select name="look"><option value="color">Originalfarben</option><option value="mono">Schwarz-Weiß</option></select></label>' +
+      '<label><span>Foto-Look</span><select name="look"><option value="color">Originalfarben</option><option value="mono">Schwarz-Weiß</option><option value="warm">Warm / Film</option></select></label>' +
       '<label class="full hf-ex-brightness"><span>Bildhelligkeit · <output data-ex-brightness>100 %</output></span><input name="brightness" type="range" min="50" max="150" step="1" value="100"><small>Nur das Bild wird angepasst, nicht die Schrift. 100 % = keine zusätzliche Helligkeitsänderung.</small></label>' +
       '<div class="full hf-ex-form-actions"><button class="pill primary" type="submit">Exponat speichern</button><button class="pill secondary" type="button" data-ex-cancel hidden>Abbrechen</button></div>' +
       '<p class="full hf-ex-status" role="status" aria-live="polite" data-ex-status></p></form><div class="hf-ex-preview"><p class="eyebrow">LIVE-VORSCHAU</p><div data-ex-preview></div></div></div>' +
@@ -100,7 +101,7 @@
     const status = root.querySelector('[data-ex-status]');
     let image = '', editingId = '', page = 0, busy = false, operation = 0;
     const say = message => { status.textContent = message; };
-    const draft = () => ({ title: form.elements.title.value.trim(), note: form.elements.note.value.trim(), metadata: { image, style: form.elements.style.value, font: form.elements.font.value, color: form.elements.color.value, brightness: Number(form.elements.brightness.value), monochrome: form.elements.look.value === 'mono' } });
+    const draft = () => ({ title: form.elements.title.value.trim(), note: form.elements.note.value.trim(), metadata: { image, style: form.elements.style.value, font: form.elements.font.value, color: form.elements.color.value, brightness: Number(form.elements.brightness.value), look: form.elements.look.value, monochrome: form.elements.look.value === 'mono' } });
     let previewImage = null;
     const preview = () => {
       const item = draft();
@@ -113,7 +114,7 @@
         const settings = normalize(item.metadata);
         const card = host.firstElementChild;
         card.className = 'hf-ex-poster ex-font-' + settings.font + ' ex-style-' + settings.style +
-          (settings.monochrome ? ' ex-mono' : '') + (image ? '' : ' ex-empty');
+          (settings.look === 'mono' ? ' ex-mono' : settings.look === 'warm' ? ' ex-warm' : '') + (image ? '' : ' ex-empty');
         card.style.setProperty('--ex-text-color', settings.color);
         card.style.setProperty('--ex-brightness', settings.brightness / 100);
         card.querySelector('h4').textContent = item.title || 'Eine neue Perspektive';
@@ -139,7 +140,7 @@
       page = Math.min(page, pages - 1);
       root.querySelector('[data-ex-count]').textContent = items.length + ' Exponate';
       root.querySelector('[data-ex-gallery]').innerHTML = items.length ? items.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map(item =>
-        '<article class="hf-ex-piece">' + poster(item) + '<div class="hf-ex-piece-actions"><button type="button" class="pill secondary" data-ex-edit="' + escape(item.id) + '"' + (busy ? ' disabled' : '') + '>Bearbeiten<span class="hf-ex-sr">: ' + escape(item.title) + '</span></button><button type="button" class="pill secondary" data-ex-delete="' + escape(item.id) + '"' + (busy ? ' disabled' : '') + '>Entfernen<span class="hf-ex-sr">: ' + escape(item.title) + '</span></button></div></article>'
+        '<article class="hf-ex-piece">' + poster(item) + '<div class="hf-ex-piece-actions"><button type="button" class="pill secondary" data-ex-edit="' + escape(item.id) + '"' + (busy ? ' disabled' : '') + '>Bearbeiten<span class="hf-ex-sr">: ' + escape(item.title) + '</span></button><button type="button" class="pill secondary" data-ex-delete="' + escape(item.id) + '"' + (busy ? ' disabled' : '') + '>Entfernen<span class="hf-ex-sr">: ' + escape(item.title) + '</span></button><button type="button" class="pill secondary" data-ex-export="' + escape(item.id) + '">Exportieren<span class="hf-ex-sr">: ' + escape(item.title) + '</span></button></div></article>'
       ).join('') : '<p class="hf-ex-empty">Deine Ausstellung beginnt mit einem Bild. Füge dein erstes Foto oben ein.</p>';
       root.querySelector('[data-ex-page]').textContent = 'Seite ' + (page + 1) + ' / ' + pages;
       root.querySelector('[data-ex-prev]').disabled = page === 0;
@@ -182,10 +183,14 @@
       if (button.hasAttribute('data-ex-prev') || button.hasAttribute('data-ex-next')) {
         page += button.hasAttribute('data-ex-next') ? 1 : -1; root.exRefresh(); return;
       }
-      const id = button.dataset.exEdit || button.dataset.exDelete;
+      const id = button.dataset.exEdit || button.dataset.exDelete || button.dataset.exExport;
       if (!id) return;
       const item = root.exApi.items.find(entry => entry.id === id);
       if (!item) return;
+      if (button.hasAttribute('data-ex-export')) {
+        window.HabitFlowExhibitionExport.open(item);
+        return;
+      }
       if (button.hasAttribute('data-ex-delete')) {
         if (!window.confirm('Exponat „' + item.title + '“ entfernen?')) return;
         try { root.exApi.save({ ...item, isArchived: true }); if (editingId === id) reset(); root.exRefresh(); say('Exponat entfernt.'); }
@@ -197,7 +202,7 @@
       form.elements.title.value = item.title;
       form.elements.note.value = item.note || '';
       for (const key of ['font', 'style', 'color', 'brightness']) form.elements[key].value = settings[key];
-      form.elements.look.value = settings.monochrome ? 'mono' : 'color';
+      form.elements.look.value = settings.look;
       root.querySelector('[data-ex-cancel]').hidden = false;
       root.querySelector('[data-ex-form-title]').textContent = 'Exponat bearbeiten';
       preview(); say(''); form.elements.title.focus();
