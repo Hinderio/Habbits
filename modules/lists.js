@@ -9,6 +9,7 @@
   const WEEKLY_LIST_ID = 'weekly';
   const GIFT_LIST_ID = 'gifts';
   const WEBLINK_LIST_ID = 'weblinks';
+  const EXHIBITION_LIST_ID = 'exhibition';
   const WEEKLY_PAST_WEEKS = 3;
   const WEEKLY_FUTURE_WEEKS = 3;
   const PHOTO_IMAGE_MAX_EDGE = 1280;
@@ -47,10 +48,12 @@
     { id: WEBLINK_LIST_ID, slug: 'weblinks', title: 'Weblinks', type: 'generic', icon: 'external', color: '#587E99', description: 'Wichtige Webseiten sammeln, kategorisieren und schnell wiederfinden.' },
     { id: GIFT_LIST_ID, slug: 'geschenk', title: 'Geschenk', type: 'generic', icon: 'gift', color: '#6EBBBE', description: 'Geschenkideen für deine Lieblingsmenschen sammeln und als Task umsetzen.' },
     { id: WEEKLY_LIST_ID, slug: 'wochenzettel', title: 'Wochenzettel', type: 'generic', icon: 'note', color: '#4AA885', description: 'Kleine Gedanken und Erinnerungen – Woche für Woche.' },
+    { id: EXHIBITION_LIST_ID, slug: 'exhibition', title: 'Exhibition', type: 'generic', icon: 'gallery', color: '#75A56A', description: 'Fotos und Ideen als persönliche Ausstellung – mit deiner Typografie direkt auf dem Bild.' },
     { id: ROADMAP_LIST_ID, slug: 'roadmap-goals', title: 'Roadmap-Ziele', type: 'generic', icon: 'star', color: '#47ceca', description: 'Persönliche Ziele der Kalender-Roadmap.' }
   ];
 
   const ICONS = {
+    gallery: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8" cy="9" r="1.5"/><path d="m3 17 6-5 4 3 3-4 5 6"/>',
     star: '<path d="m12 3 2.8 5.7 6.3.9-4.5 4.4 1.1 6.2L12 17.3l-5.7 3 1.1-6.2L2.9 9.6l6.3-.9Z"/>',
     copy: '<rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/>',
     gift: '<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M5 12v9h14v-9M12 8v13"/><path d="M12 8H8a3 3 0 1 1 3-3l1 3Zm0 0h4a3 3 0 1 0-3-3l-1 3Z"/>',
@@ -380,7 +383,34 @@
     }).join('');
   }
 
+  function saveExhibition(input) {
+    const existing = input.id ? state.items.find(item => item.id === input.id && item.listId === EXHIBITION_LIST_ID && !item.isArchived) : null;
+    if (input.id && !existing) throw new Error('Dieses Exponat ist nicht mehr verfügbar. Bitte die Liste erneut öffnen.');
+    const archived = input.isArchived === true;
+    const title = String(input.title || '').trim().slice(0, 100);
+    const image = window.HabitFlowExhibition.safeImage(input.metadata?.image);
+    if (!archived && (!title || !image)) throw new Error('Bitte eine Überschrift und ein gültiges Foto angeben.');
+    const now = new Date().toISOString();
+    const item = {
+      ...existing, id: existing?.id || uid('exhibition'), listId: EXHIBITION_LIST_ID,
+      title, note: String(input.note || '').trim().slice(0, 280),
+      metadata: { ...window.HabitFlowExhibition.normalize(input.metadata), image: archived ? '' : image },
+      isDone: false, isArchived: archived, sortRank: existing?.sortRank ?? -Date.now(),
+      createdAt: existing?.createdAt || now, updatedAt: now
+    };
+    const items = existing ? state.items.map(row => row.id === item.id ? item : row) : [...state.items, item];
+    // Commit locally before publishing in memory; quota failures retain the draft and old data.
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, items, activeListId }));
+    state = { ...state, items };
+    render();
+    void syncToSupabase([item]);
+  }
+
   function renderDetail(target, list) {
+    if (list.id === EXHIBITION_LIST_ID) {
+      window.HabitFlowExhibition.mount(target, { items: itemsFor(EXHIBITION_LIST_ID), save: saveExhibition });
+      return;
+    }
     if (list.id === WEBLINK_LIST_ID) {
       target.innerHTML = renderWeblinksDetail(list);
       return;

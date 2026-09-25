@@ -35,7 +35,7 @@ test('service worker caches weekly assets under a bumped version', () => {
   assert.match(workerSource, /'\.\/modules\/lists\.js'/);
   assert.match(workerSource, /'\.\/modules\/lists\.css'/);
   assert.match(indexSource, /modules\/lists\.css\?v=329/);
-  assert.match(indexSource, /modules\/lists\.js\?v=330/);
+  assert.match(indexSource, /modules\/lists\.js\?v=340/);
 });
 
 test('weekly notes keep the habit-card surface with the updated list tone', () => {
@@ -60,6 +60,7 @@ test('weekly rerenders preserve each card scroll position without affecting new 
   let scheduled = 0;
   const renderDetail = vm.runInNewContext('(' + listSource.slice(start, end).trim() + ')', {
     WEEKLY_LIST_ID: 'weekly',
+    EXHIBITION_LIST_ID: 'exhibition',
     WEBLINK_LIST_ID: 'weblinks',
     GIFT_LIST_ID: 'gifts',
     renderWeeklyDetail: () => '<weekly>',
