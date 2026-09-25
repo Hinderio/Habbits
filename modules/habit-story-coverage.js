@@ -43,6 +43,8 @@
   function iconKey(habit = {}) {
     const raw = String(habit.icon || habit.system_key || '').trim().toLowerCase();
     const name = String(habit.name || '').trim().toLowerCase();
+    if (name === 'morgenroutine') return 'sunrise';
+    if (name === 'engagement') return 'engagement';
     if (name.includes('wander')) return 'hiking';
     if (name.includes('jogg') || name.includes('lauf')) return 'jogging';
     if (name.includes('spazier')) return 'walking';
@@ -69,6 +71,8 @@
   function categoryLabel(habit = {}) {
     const key = iconKey(habit);
     if (['jogging', 'hiking', 'walking', 'pushups', 'dumbbells', 'swimming', 'sport'].includes(key)) return 'Sport';
+    if (key === 'sunrise') return 'Routine';
+    if (key === 'engagement') return 'Mind';
     if (key === 'standingDesk') return 'Ergonomie';
     if (key === 'meditation') return 'Mind';
     if (['bread', 'weight'].includes(key)) return 'Ernährung';
@@ -129,6 +133,8 @@
       detail: 'Sobald du startest, erscheinen hier kleine Story-Stats.',
       meta: habit.target ? `Ziel: ${habit.target} ${unit}` : 'Jeder Log baut Momentum auf.'
     };
+    if (key === 'sunrise') return { ...base, main: successDays ? `${successDays} Tage` : 'Bereit für heute', detail: 'Morgenroutine erledigt? Ein Ja zählt 30 Punkte.', meta: `${successDays} Morgenroutinen abgeschlossen.` };
+    if (key === 'engagement') return { ...base, main: entries.length ? formatDuration(sum(entries.map(entry => entry.value_num))) : '15 Min. helfen', detail: 'Ungeplant etwas Hilfreiches tun. 15 Minuten ergeben 30 Punkte.', meta: `${successDays} aktive Tage · Tagesziel 15 Min.` };
     if (!entries.length) return base;
 
     if (key === 'bread' || String(habit.name || '').toLowerCase().includes('brot')) {

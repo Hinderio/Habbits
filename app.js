@@ -634,6 +634,8 @@
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
   const ICON_PATHS = {
+    sunrise: '<path d="M3 17h18M5 21h14M7 17a5 5 0 0 1 10 0M12 3v3M4.2 7.2l2.1 2.1M19.8 7.2l-2.1 2.1M2 12h3M19 12h3"/>',
+    engagement: '<path d="M3 16h4l3 3h6l5-5a2 2 0 0 0-3-2l-3 3h-4M7 16v-5h5a2 2 0 0 1 0 4M3 11v9M15 9l-4-4a2.5 2.5 0 0 1 4-3 2.5 2.5 0 0 1 4 3l-4 4Z"/>',
     dashboard: '<path d="M4 13h7V4H4v9Z"/><path d="M13 20h7V4h-7v16Z"/><path d="M4 20h7v-5H4v5Z"/>',
     smoke: '<path d="M4 15h11"/><path d="M17 15h3"/><path d="M6 18h12"/><path d="M15 8c1.8-1.6 1.8-3.3 0-4.8"/><path d="M19 10c1.2-1.1 1.2-2.4 0-3.5"/>',
     coach: '<path d="M12 4 19 8v5c0 4-2.8 6.7-7 8-4.2-1.3-7-4-7-8V8l7-4Z"/><path d="M9 12h6"/><path d="M12 9v6"/>',
@@ -697,6 +699,8 @@
     const nameRaw = String(habit.name || '').trim().toLowerCase();
     const raw = normalizeIconSearch(iconRaw);
     const name = normalizeIconSearch(nameRaw);
+    if (name === 'morgenroutine') return 'sunrise';
+    if (name === 'engagement') return 'engagement';
     if (iconRaw.includes('💧') || name.includes('wasser')) return 'water';
     if (iconRaw.includes('⚖') || name.includes('gewicht')) return 'weight';
     if (iconRaw.includes('🧘') || name.includes('meditation')) return 'meditation';
@@ -743,6 +747,8 @@
       || name.includes('arbeitsplatz')
       || name.includes('schreibtisch')
       || name.includes('desk');
+    if (icon === 'sunrise') return HABIT_CATEGORY_META.routine;
+    if (icon === 'engagement') return HABIT_CATEGORY_META.mind;
     if (isSystemMeditationHabit(habit) || icon === 'meditation' || name.includes('meditation') || name.includes('atem')) return HABIT_CATEGORY_META.mind;
     if (isErgonomic) return HABIT_CATEGORY_META.ergonomics;
     if (['sport', 'jogging', 'hiking', 'walking', 'pushups'].includes(icon) || name.includes('sport') || name.includes('fitness') || name.includes('spazieren') || name.includes('wandern')) return HABIT_CATEGORY_META.sport;
@@ -1912,7 +1918,35 @@ cacheEls();
     };
   }
 
+  function migrateRoutineHabits(nextState = state) {
+    let changed = false;
+    const replacements = [
+      { legacy: 'brotfreier tag', id: '00000000-0000-4000-8000-000000000107', name: 'Morgenroutine', type: 'boolean', unit: 'x', target: 1, icon: 'sunrise', color: '#e09060' },
+      { legacy: 'stehpult', id: '00000000-0000-4000-8000-000000000108', name: 'Engagement', type: 'duration', unit: 'Min.', target: 15, icon: 'engagement', color: '#e8b850' }
+    ];
+    for (const replacement of replacements) {
+      const retired = nextState.habits.filter(habit => String(habit.name || '').trim().toLowerCase() === replacement.legacy);
+      if (!retired.length) continue;
+      for (const habit of retired) {
+        if (habit.is_archived) continue;
+        habit.is_archived = true;
+        habit.updated_at = nowIso();
+        habit.synced = false;
+        changed = true;
+      }
+      const exists = nextState.habits.some(habit => habit.id === replacement.id || String(habit.name || '').trim().toLowerCase() === replacement.name.toLowerCase());
+      // Honour explicit deletion and keep historical entries attached to their original habit.
+      if (exists || nextState.deletedRemoteIds?.habit_definitions?.[replacement.id]) continue;
+      const { legacy, ...definition } = replacement;
+      const created = nowIso();
+      nextState.habits.push({ ...definition, direction: 'increase', target_period: 'day', is_archived: false, created_at: created, updated_at: created, synced: false });
+      changed = true;
+    }
+    return changed;
+  }
+
   function ensureSystemHabits(nextState = state) {
+    migrateRoutineHabits(nextState);
     const meditationHabit = nextState.habits.find(h => h.system_key === 'meditation' || String(h.name || '').trim().toLowerCase() === 'meditation');
     if (!meditationHabit) {
       nextState.habits.push(createSystemMeditationHabit());
@@ -3737,8 +3771,10 @@ cacheEls();
   }
 
   function morningRoutineCompletedLog(key = toDateKey(new Date())) {
+    const habitIds = new Set(state.habits.filter(habit => habit.type === 'boolean' && (habit.icon === 'sunrise' || String(habit.name || '').trim().toLowerCase() === 'morgenroutine')).map(habit => habit.id));
     return state.morningRoutineLogs.find(log => log.date_key === key) ||
       state.pointsLedger.find(point => isMorningRoutinePoint(point, key)) ||
+      state.habitEntries.find(entry => habitIds.has(entry.habit_id) && entry.value_bool && toDateKey(entry.occurred_at) === key) ||
       null;
   }
 
@@ -3766,7 +3802,7 @@ cacheEls();
     const cta = completed
       ? `<button class="pill secondary" type="button" data-action="shuffle-morning-routine">Morgen variieren</button>`
       : active
-        ? `<button class="pill primary" type="button" data-action="${stepIndex >= routine.steps.length - 1 ? 'finish-morning-routine' : 'next-morning-step'}">${stepIndex >= routine.steps.length - 1 ? 'Abschliessen · +50' : 'Nächster Schritt'}</button><button class="pill secondary" type="button" data-action="reset-morning-routine">Neu starten</button>`
+        ? `<button class="pill primary" type="button" data-action="${stepIndex >= routine.steps.length - 1 ? 'finish-morning-routine' : 'next-morning-step'}">${stepIndex >= routine.steps.length - 1 ? 'Abschliessen · +30' : 'Nächster Schritt'}</button><button class="pill secondary" type="button" data-action="reset-morning-routine">Neu starten</button>`
         : `<button class="pill primary" type="button" data-action="start-morning-routine">15 Min. starten</button><button class="pill secondary" type="button" data-action="shuffle-morning-routine">Andere Routine</button>`;
 
     els.morningRoutineCard.innerHTML = `<div class="morning-routine-shell ${active ? 'is-active' : ''} ${completed ? 'is-complete' : ''}">
@@ -3778,11 +3814,11 @@ cacheEls();
           <div class="morning-routine-meta">
             <span>${escapeHtml(routine.mood)}</span>
             <span>${totalMinutes} Minuten</span>
-            <span>${completed ? '+50 Punkte geholt' : '+50 Punkte bei Abschluss'}</span>
+            <span>${completed ? 'Punkte gespeichert' : '+30 Punkte bei Abschluss'}</span>
           </div>
         </div>
         <div class="morning-routine-score">
-          <strong>${completed ? '+50' : '15m'}</strong>
+          <strong>${completed ? '✓' : '15m'}</strong>
           <span>${completed ? 'erledigt' : 'Routine'}</span>
         </div>
       </div>
@@ -3794,7 +3830,7 @@ cacheEls();
         <div>
           <small>${completed ? 'Heute abgeschlossen' : active ? `Schritt ${stepIndex + 1}/${routine.steps.length} · ${currentStep.minutes} Min.` : 'Bereit zum Start'}</small>
           <strong>${completed ? 'Starker Start. Körper und Fokus aktiviert.' : active ? escapeHtml(currentStep.title) : 'Eine kurze Routine, die jeden Tag frisch variiert.'}</strong>
-          <p>${completed ? 'Die 50 Punkte sind gespeichert. Morgen kommt automatisch wieder eine andere Variante.' : active ? escapeHtml(currentStep.body) : 'Wasser, Mobility, Mini-Fitness, Fokus und Abschluss – bewusst klein, aber wirksam.'}</p>
+          <p>${completed ? 'Dein Abschluss ist gespeichert. Morgen kommt automatisch wieder eine andere Variante.' : active ? escapeHtml(currentStep.body) : 'Wasser, Mobility, Mini-Fitness, Fokus und Abschluss – bewusst klein, aber wirksam.'}</p>
         </div>
       </div>
 
@@ -3862,11 +3898,18 @@ cacheEls();
       updated_at: completedAt,
       synced: false
     });
-    addPoints('bonus', todayMorningRoutineSourceId(todayKey), 50, `Morgenroutine: ${routine.title}`, completedAt);
+    const habit = state.habits.find(item => !item.is_archived && item.type === 'boolean' && (item.icon === 'sunrise' || String(item.name || '').trim().toLowerCase() === 'morgenroutine'));
+    if (habit) {
+      const entry = { id: uid(), habit_id: habit.id, value_num: null, value_bool: true, occurred_at: completedAt, note: `Morgenroutine: ${routine.title}`, created_at: completedAt, updated_at: completedAt, synced: false };
+      state.habitEntries.push(entry);
+      addPoints('habit', entry.id, habitPoints(habit, entry), habitPointReason(habit, entry), completedAt);
+    } else {
+      addPoints('bonus', todayMorningRoutineSourceId(todayKey), 30, `Morgenroutine: ${routine.title}`, completedAt);
+    }
     morningRoutineSession.currentStep = routine.steps.length;
     saveMorningRoutineSession();
     saveState();
-    toast('Morgenroutine abgeschlossen · +50 Punkte');
+    toast('Morgenroutine abgeschlossen · +30 Punkte');
     syncWithSupabase({ silent: true, pullFirst: false });
   }
 
@@ -8401,6 +8444,8 @@ cacheEls();
       detail: 'Sobald du startest, erscheinen hier kleine Story-Stats.',
       meta: habit.target ? `Ziel: ${habit.target} ${unit}` : 'Jeder Log baut Momentum auf.'
     };
+    if (iconKey === 'sunrise') return { ...base, main: successDays ? `${successDays} Tage` : 'Bereit für heute', detail: 'Morgenroutine erledigt? Ein Ja zählt 30 Punkte.', meta: `${successDays} Morgenroutinen abgeschlossen.` };
+    if (iconKey === 'engagement') return { ...base, main: entries.length ? formatDuration(sum(entries.map(entry => entry.value_num))) : '15 Min. helfen', detail: 'Ungeplant etwas Hilfreiches tun. 15 Minuten ergeben 30 Punkte.', meta: `${successDays} aktive Tage · Tagesziel 15 Min.` };
     if (!entries.length) return base;
 
     if (iconKey === 'bread' || String(habit.name || '').toLowerCase().includes('brot')) {
@@ -12427,6 +12472,10 @@ async function deleteAlcoholLog(id) {
   function logHabit(habitId, inputId = '', timeInputId = '', timeSecondsInputId = '', ascentInputId = '') {
     const habit = state.habits.find(h => h.id === habitId);
     if (!habit) return;
+    if (habit.type === 'boolean' && (habit.icon === 'sunrise' || String(habit.name || '').trim().toLowerCase() === 'morgenroutine') && morningRoutineCompletedLog()) {
+      toast('Morgenroutine heute bereits abgeschlossen.');
+      return;
+    }
     const pause = activePauseNow('habit', habit.id);
     if (pause && !confirm(`${habit.name} ist gerade pausiert. Trotzdem loggen?`)) return;
     let valueNum = null;
@@ -13767,6 +13816,13 @@ async function deleteAlcoholLog(id) {
   }
 
   function habitPoints(habit, entry) {
+    const name = String(habit.name || '').trim().toLowerCase();
+    if (habit.type === 'weight') return 5;
+    if (habit.type === 'boolean' && (name === 'morgenroutine' || habit.icon === 'sunrise')) return entry.value_bool ? 30 : 0;
+    if (habit.type === 'duration' && (name === 'engagement' || habit.icon === 'engagement')) {
+      const minutes = Number(entry.value_num || 0);
+      return Number.isFinite(minutes) && minutes > 0 ? Math.min(30, Math.round(minutes * 2)) : 0;
+    }
     if (isSwimmingHabit(habit)) return swimmingPoints(entry);
     if (habit.type === 'boolean' && !isFitnessDistanceHabit(habit)) return 12;
     if (isFitnessDistanceHabit(habit) && fitnessHabitType(habit) === 'hiking') return Math.max(HIKING_POINTS_BASE, hikingPoints(entry));
@@ -14598,7 +14654,7 @@ function initOngoingSync() {
         // A pull can reveal a recently deleted row that is still present remotely.
         // In that case remoteRows() keeps it hidden locally and reopens the tombstone
         // so this same sync cycle can delete it again instead of treating the pull as read-only.
-        if (effectivePullOnly && hasPendingRemoteDeletes()) effectivePullOnly = false;
+        if (effectivePullOnly && hasPendingSyncWork()) effectivePullOnly = false;
       }
 
       if (!effectivePullOnly) {
@@ -15560,6 +15616,9 @@ function initOngoingSync() {
       );
     }
     dedupeStateCollections(state);
+    if (remoteHabitRows) migrateRoutineHabits(state);
+    // Reconcile only complete snapshots; never delete ledger rows after a failed entries pull.
+    if (remoteHabitRows && remoteEntryRows && remoteLedgerRows) migrateHabitScoring({ markUpdated: false });
     migrateCigaretteScoring();
 
     if (failedTables.length) {

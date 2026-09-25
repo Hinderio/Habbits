@@ -16,7 +16,7 @@ assert.match(moduleSource, /r="\$\{dotRadius\.toFixed\(2\)\}"/);
 assert.match(moduleSource, /if \(\['hiking', 'jogging', 'walking'\]\.includes\(key\)\) return 'km'/);
 assert.match(moduleSource, /const isDistanceHabit = \['hiking', 'jogging', 'walking'\]\.includes\(key\)/);
 assert.match(moduleSource, /const value = isDistanceHabit[\s\S]*?Number\(entry\.value_num \|\| 0\)[\s\S]*?habit\.type === 'boolean'/);
-assert.match(indexSource, /modules\/habit-story-coverage\.js\?v=295/);
+assert.match(indexSource, /modules\/habit-story-coverage\.js\?v=333/);
 assert.match(workerSource, /\.\/modules\/habit-story-coverage\.js/);
 assert.match(workerSource, /habitflow-v288-ghost-arena-production/);
 
