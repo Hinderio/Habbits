@@ -1,7 +1,9 @@
-.hf-exhibition{--ex-accent:#75a56a}
+.hf-exhibition{--ex-accent:#9ccfd2}
 .hf-ex-workspace{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:28px;margin:24px 0 36px;align-items:start}
 .hf-ex-form{margin:0;min-width:0}
-.hf-ex-drop{padding:18px;border:1px dashed var(--ex-accent);border-radius:18px;background:rgba(117,165,106,.07)}
+.hf-ex-drop{padding:18px;border:1px dashed var(--ex-accent);border-radius:18px;background:rgba(156,207,210,.14)}
+.hf-ex-drop input[type="file"]{background:rgba(156,207,210,.18);border-color:var(--ex-accent)}
+.hf-ex-drop input[type="file"]::file-selector-button{background:var(--ex-accent);color:#142b2e;border:1px solid var(--ex-accent);border-radius:10px;padding:8px 12px;margin-right:10px;font:inherit;cursor:pointer}
 .hf-ex-drop small{font-size:.76rem;line-height:1.5;color:var(--muted)}
 .hf-ex-form-actions{display:flex;flex-wrap:wrap;gap:10px}
 .hf-ex-status{min-height:1.5em;color:var(--muted);font-size:.82rem;line-height:1.5}
