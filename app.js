@@ -1311,20 +1311,14 @@ cacheEls();
   function bindEvents() {
     window.HabitFlowRoadmapBridge = Object.freeze({
       snapshot: () => ({
-        tasks: state.tasks, appointments: state.appointments.map(appointment => ({ ...appointment, event_kind: appointmentEventKind(appointment) })),
+        tasks: state.tasks,
         habits: state.habits.filter(h => !h.is_archived).map(h => ({ id: h.id, name: h.name, type: h.type, unit: h.unit || '', fitnessType: isFitnessDistanceHabit(h) ? fitnessHabitType(h) : '' })),
         entries: visibleHabitEntries()
       }),
       open: (source, id) => {
         if (source === 'weekly') { showScreen('lists'); window.HabitFlowListsCoach?.open('weekly', ''); }
         if (source === 'task' && state.tasks.some(t => t.id === id && !t.is_archived)) { showScreen('tasks'); openTaskDetail(id); }
-        if (source === 'appointment') {
-          const appointment = state.appointments.find(a => a.id === id && !a.is_archived);
-          if (!appointment) return;
-          selectedCalendarDate = toDateKey(appointment.starts_at);
-          calendarCursor = new Date(selectedCalendarDate + 'T12:00:00');
-          showScreen('calendar'); renderCalendar();
-        }
+
       }
     });
     window.HabitFlowGiftTasks = Object.freeze({ create: createTaskFromGift });

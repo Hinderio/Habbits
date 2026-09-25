@@ -54,10 +54,6 @@
       const p = projects.get(projectId);
       out.push({ id: t.id, source: 'task', ...(p ? lane(p) : { group: 'Aufgaben', groupKey: 'tasks' }), laneRole: p ? 'task' : '', title: t.title, start: key(t.due_at), end: key(t.due_at), label: t.status === 'done' ? 'Hoch · Erledigt' : 'Hoch · Aufgabe' });
     }
-    for (const a of snapshot.appointments || []) {
-      if (a.is_archived || a.is_birthday || a.event_kind === 'birthday') continue;
-      out.push({ id: a.id, source: 'appointment', group: 'Termine', groupKey: 'appointments', title: a.title, start: key(a.starts_at), end: key(a.ends_at) || key(a.starts_at), label: 'Termin' });
-    }
     // Keep project summaries and children together, even for equal project titles.
     return out.sort((a, b) =>
       (a.section || a.group).localeCompare(b.section || b.group) ||

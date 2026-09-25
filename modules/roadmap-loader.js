@@ -5,7 +5,7 @@
   async function open(){
     const button=document.getElementById('roadmapToggleBtn');button.disabled=true;
     try{
-      if(!pending)pending=(async()=>{let css=document.getElementById('roadmapStyles');if(!css){css=document.createElement('link');css.id='roadmapStyles';css.rel='stylesheet';css.href='modules/roadmap.css?v=331';await new Promise((resolve,reject)=>{css.onload=resolve;css.onerror=()=>{css.remove();reject(new Error('Roadmap-Design konnte nicht geladen werden.'));};document.head.append(css);});}if(!window.HabitFlowRoadmapDomain)await script('modules/roadmap-domain.js?v=331');if(!window.HabitFlowRoadmap)await script('modules/roadmap.js?v=331');})();
+      if(!pending)pending=(async()=>{let css=document.getElementById('roadmapStyles');if(!css){css=document.createElement('link');css.id='roadmapStyles';css.rel='stylesheet';css.href='modules/roadmap.css?v=332';await new Promise((resolve,reject)=>{css.onload=resolve;css.onerror=()=>{css.remove();reject(new Error('Roadmap-Design konnte nicht geladen werden.'));};document.head.append(css);});}if(!window.HabitFlowRoadmapDomain)await script('modules/roadmap-domain.js?v=332');if(!window.HabitFlowRoadmap)await script('modules/roadmap.js?v=332');})();
       await pending;window.HabitFlowRoadmap.open();
     }catch(error){pending=null;window.alert(error.message);}finally{button.disabled=false;}
   }

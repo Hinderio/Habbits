@@ -1,7 +1,9 @@
 # Kalender-Roadmap
 
 Die zusätzliche Kalender-Schaltfläche öffnet eine eigenständige native Dialogansicht.
-3, 6 oder 12 Monate, Vor-/Zurückblättern, Heute, Quellenfilter und ein direkter
+Standard: sechs Monate ab dem aktuellen Monat (aktueller Monat plus fünf weitere),
+auch beim erneuten Öffnen. 3, 6 oder 12 Monate sind weiterhin wählbar.
+Vor-/Zurückblättern, Heute, Quellenfilter und ein direkter
 Absprung zur Wochenliste. Mobile Geräte behalten links die Themen und scrollen
 horizontal durch die Zeitachse. Jede Quelle hat eine eigene Zeile.
 
@@ -16,7 +18,8 @@ horizontal durch die Zeitachse. Jede Quelle hat eine eigene Zeile.
   anhand ihrer IDs getrennt. Liegt ein sichtbarer Task ausserhalb des
   Projektzeitraums, bleibt die Projektzeile als beschrifteter Kontext erhalten.
 - Ausschliesslich Aufgaben mit Priorität `high` (Hoch), nach Fälligkeit.
-  Termine nach Beginn/Ende, ohne Geburtstage (inklusive älterer Metadaten). Undatierte Arbeit bleibt
+  Termine und Geburtstage sind nicht Teil der Roadmap; der normale Kalender
+  bleibt unverändert. Undatierte Arbeit bleibt
   als solche sichtbar; es werden keine Planungsdaten erfunden oder geschrieben.
 - Persönliche Ziele mit frei wählbarer Kategorie, Start und Zieldatum.
 - Manuelle Meilensteine, numerische Messwerte (höchstens/mindestens) oder die

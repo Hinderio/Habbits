@@ -2,7 +2,7 @@
   'use strict';
   const D=window.HabitFlowRoadmapDomain, esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const months=new Intl.DateTimeFormat('de-CH',{month:'short',year:'2-digit'}), dates=new Intl.DateTimeFormat('de-CH',{day:'numeric',month:'short',year:'numeric'});
-  let dialog,snapshot,goals=[],rows=[],year,month,span=12,filter='all',limit=100,editing=null,opener;
+  let dialog,snapshot,goals=[],rows=[],year,month,span=6,filter='all',limit=100,editing=null,opener;
   const today=()=>D.key(new Date().toISOString()), dateText=v=>v?dates.format(new Date(v+'T12:00:00')):'Ohne Datum';
   const dateAt=(y,m)=>D.key(new Date(y,m,1,12).toISOString());
   function refresh(){
@@ -13,8 +13,8 @@
   function shell(){
     dialog=document.createElement('dialog');dialog.className='roadmap-dialog';dialog.setAttribute('aria-labelledby','roadmapTitle');
     dialog.innerHTML=`<header class="roadmap-header"><div><p class="eyebrow">DEIN WEG NACH VORN</p><h2 id="roadmapTitle">Roadmap</h2><p>Ziele setzen. Fortschritt sehen. Zusammenhänge entdecken.</p></div><button type="button" data-action="close" aria-label="Roadmap schliessen">✕</button></header>
-      <div class="roadmap-controls"><div class="roadmap-period"><button type="button" data-action="prev" aria-label="Vorheriger Zeitraum">‹</button><strong id="roadmapPeriod"></strong><button type="button" data-action="next" aria-label="Nächster Zeitraum">›</button><button type="button" data-action="today">Heute</button></div><label>Zeitraum<select id="roadmapSpan"><option value="3">3 Monate</option><option value="6">6 Monate</option><option value="12" selected>12 Monate</option></select></label><label>Ansicht<select id="roadmapFilter"><option value="all">Alles</option><option value="goal">Meine Ziele</option><option value="project">Projekte</option><option value="task">Aufgaben</option><option value="appointment">Termine</option></select></label><button type="button" data-action="refresh" aria-label="Roadmap aktualisieren">↻</button><button type="button" data-action="weekly">Wochenliste ↗</button><button type="button" class="roadmap-primary" data-action="new">＋ Ziel setzen</button></div>
-      <div id="roadmapEditor" hidden></div><p id="roadmapMessage" role="status" class="roadmap-message"></p><div class="roadmap-summary" id="roadmapSummary"></div><div class="roadmap-scroll" tabindex="0" role="region" aria-label="Roadmap-Zeitachse, horizontal scrollbar"><div id="roadmapGrid" class="roadmap-grid"></div></div><footer class="roadmap-footer"><span>◆ Ziel · ━ Projekt · ● Termin / Aufgabe</span><button type="button" data-action="more" hidden>Weitere 100 anzeigen</button><span id="roadmapCount"></span></footer>`;
+      <div class="roadmap-controls"><div class="roadmap-period"><button type="button" data-action="prev" aria-label="Vorheriger Zeitraum">‹</button><strong id="roadmapPeriod"></strong><button type="button" data-action="next" aria-label="Nächster Zeitraum">›</button><button type="button" data-action="today">Heute</button></div><label>Zeitraum<select id="roadmapSpan"><option value="3">3 Monate</option><option value="6" selected>6 Monate</option><option value="12">12 Monate</option></select></label><label>Ansicht<select id="roadmapFilter"><option value="all">Alles</option><option value="goal">Meine Ziele</option><option value="project">Projekte</option><option value="task">Aufgaben</option></select></label><button type="button" data-action="refresh" aria-label="Roadmap aktualisieren">↻</button><button type="button" data-action="weekly">Wochenliste ↗</button><button type="button" class="roadmap-primary" data-action="new">＋ Ziel setzen</button></div>
+      <div id="roadmapEditor" hidden></div><p id="roadmapMessage" role="status" class="roadmap-message"></p><div class="roadmap-summary" id="roadmapSummary"></div><div class="roadmap-scroll" tabindex="0" role="region" aria-label="Roadmap-Zeitachse, horizontal scrollbar"><div id="roadmapGrid" class="roadmap-grid"></div></div><footer class="roadmap-footer"><span>◆ Ziel · ━ Projekt · ● Aufgabe</span><button type="button" data-action="more" hidden>Weitere 100 anzeigen</button><span id="roadmapCount"></span></footer>`;
     document.body.append(dialog);
     dialog.addEventListener('click',handle);
     dialog.addEventListener('change',e=>{if(e.target.id==='roadmapSpan'){span=Number(e.target.value);limit=100;render();}if(e.target.id==='roadmapFilter'){filter=e.target.value;limit=100;render();}if(e.target.name==='kind')updateHabitOptions();});
@@ -61,7 +61,7 @@
     switch(button.dataset.action){
       case 'close':close();break;
       case 'prev':month-=span;render();break;case 'next':month+=span;render();break;
-      case 'today':year=new Date().getFullYear();month=span===12?0:new Date().getMonth();render();break;
+      case 'today':year=new Date().getFullYear();month=new Date().getMonth();render();break;
       case 'refresh':refresh();render();message('Ansicht mit den aktuell verfügbaren App-Daten aktualisiert.');break;
       case 'more':limit+=100;render();break;
       case 'weekly':opener=null;close();window.HabitFlowRoadmapBridge.open('weekly');break;
@@ -70,5 +70,5 @@
       case 'delete':if(editing&&window.confirm('Dieses Ziel löschen?')){try{window.HabitFlowRoadmapGoals.save({...editing,isArchived:true});dialog.querySelector('#roadmapEditor').hidden=true;refresh();render();message('Ziel gelöscht.');}catch(error){message(error.message);}}break;
     }
   }
-  window.HabitFlowRoadmap=Object.freeze({open(){if(!dialog)shell();if(dialog.open)return;opener=document.activeElement;year=new Date().getFullYear();month=0;refresh();dialog.querySelector('#roadmapEditor').hidden=true;message('');render();dialog.showModal();}});
+  window.HabitFlowRoadmap=Object.freeze({open(){if(!dialog)shell();if(dialog.open)return;opener=document.activeElement;year=new Date().getFullYear();month=new Date().getMonth();span=6;dialog.querySelector('#roadmapSpan').value='6';refresh();dialog.querySelector('#roadmapEditor').hidden=true;message('');render();dialog.showModal();}});
 })(window,document);

@@ -9,7 +9,7 @@ test('weight supports decreasing and increasing goals and surpassed targets',()=
 test('old values do not masquerade as measurements in a new goal period',()=>{const index=D.indexEntries([entry('2025-12-31',80)],[habit],today);assert.equal(D.progress(goal('weight',{target:80}),index,today).label,'Noch kein Messwert');});
 test('latest measurement is chosen by timestamp within the same day',()=>{const index=D.indexEntries([{...entry(today,82),occurred_at:today+'T19:00:00'}, {...entry(today,84),occurred_at:today+'T08:00:00'}],[habit],today);assert.match(D.progress(goal('weight',{target:80}),index,today).label,/^82/);});
 test('manual goals preserve explicit completion',()=>assert.equal(D.progress({...goal('manual'),isDone:true},new Map(),today).ratio,1));
-test('sources preserve originals and include undated work and project milestones',()=>{const source={projects:[{id:'p',title:'Projekt',start_date:'2026-01-01',end_date:'2026-12-31'}],milestones:[{id:'m',project_id:'p',title:'Launch',milestone_date:today}],tasks:[{id:'t',title:'Task',priority:'high'},{id:'gone',title:'X',is_archived:true}],appointments:[{id:'a',title:'Termin',starts_at:today}],habits:[],entries:[]};const before=JSON.stringify(source),rows=D.build(source,[],today);assert.equal(rows.length,4);assert.equal(D.windowRows(rows,'2026-09-01','2026-09-30').length,4);assert.equal(D.windowRows(rows,'2027-01-01','2027-02-01').length,1);assert.equal(JSON.stringify(source),before);assert.equal(rows[1].id,'p');});
+test('sources preserve originals and include undated work and project milestones',()=>{const source={projects:[{id:'p',title:'Projekt',start_date:'2026-01-01',end_date:'2026-12-31'}],milestones:[{id:'m',project_id:'p',title:'Launch',milestone_date:today}],tasks:[{id:'t',title:'Task',priority:'high'},{id:'gone',title:'X',is_archived:true}],appointments:[{id:'a',title:'Termin',starts_at:today}],habits:[],entries:[]};const before=JSON.stringify(source),rows=D.build(source,[],today);assert.equal(rows.length,3);assert.equal(D.windowRows(rows,'2026-09-01','2026-09-30').length,3);assert.equal(D.windowRows(rows,'2027-01-01','2027-02-01').length,1);assert.equal(JSON.stringify(source),before);assert.equal(rows[1].id,'p');});
 function storageBridge(){
  const source=fs.readFileSync(path.join(root,'modules/lists.js'),'utf8'),start=source.indexOf('  window.HabitFlowRoadmapGoals ='),end=source.indexOf('  window.HabitFlowListsCoach =',start);
  const state={items:[{id:'unrelated',listId:'weekly',title:'Keep'}],lists:[]},calls=[],stored=[];let fail=false;
@@ -27,7 +27,7 @@ function uiHarness(count=2,extra={}){
  const snapshot={habits:[],entries:[],tasks:Array.from({length:count},(_,i)=>({id:String(i),priority:'high',title:i===0?'<img src=x onerror=alert(1)>':'Task '+i})),...extra};
  const window={HabitFlowRoadmapDomain:D,HabitFlowRoadmapBridge:{snapshot:()=>{calls.push('snapshot');return snapshot;},open:(...args)=>calls.push(args)},HabitFlowRoadmapGoals:{snapshot:()=>({goals:[]})}};
  vm.runInNewContext(fs.readFileSync(path.join(root,'modules/roadmap.js'),'utf8'),{window,document,Intl,Date,Map,Number,String,Math});
- return {window,dialog,nodes,calls,click:dataset=>listeners.click({target:{closest:()=>({dataset})}})};
+ return {window,dialog,nodes,calls,change:target=>listeners.change({target}),click:dataset=>listeners.click({target:{closest:()=>({dataset})}})};
 }
 test('view is dormant until opened, bounds rows and escapes imported titles',()=>{const h=uiHarness(150);assert.equal(h.calls.length,0);h.window.HabitFlowRoadmap.open();assert.equal(h.calls.length,1);const html=h.nodes.get('#roadmapGrid').innerHTML;assert.equal((html.match(/class="roadmap-topic"/g)||[]).length,100);assert.ok(!html.includes('<img'));assert.ok(html.includes('&lt;img'));h.click({action:'more'});assert.equal((h.nodes.get('#roadmapGrid').innerHTML.match(/class="roadmap-topic"/g)||[]).length,150);assert.equal(h.calls.length,1);});
 test('closing releases rendered rows and reopening reads fresh data',()=>{const h=uiHarness();h.window.HabitFlowRoadmap.open();h.click({action:'close'});assert.equal(h.nodes.get('#roadmapGrid').innerHTML,'');h.window.HabitFlowRoadmap.open();assert.equal(h.calls.length,2);});
@@ -40,17 +40,9 @@ test('only high priority tasks are included, including within projects',()=>{
  const rows=D.build({projects:[{id:'p',title:'Project'}],tasks},[],today);
  assert.deepEqual(rows.filter(r=>r.source==='task').map(r=>r.id).sort(),['free2','linked2']);
 });
-test('birthday flags and normalized birthday kinds are excluded without filtering names',()=>{
- const rows=D.build({appointments:[{id:'flag',title:'A',is_birthday:true},{id:'kind',title:'B',event_kind:'birthday'},{id:'normal',title:'Geburtstagsgeschenk kaufen',event_kind:'standard'},{id:'party',title:'Feier',event_kind:'celebration'}]},[],today);
- assert.deepEqual(rows.map(r=>r.id).sort(),['normal','party']);
-});
-test('legacy birthday metadata uses the calendar normalization at the snapshot boundary',()=>{
- const app=fs.readFileSync(path.join(root,'app.js'),'utf8');
- const start=app.indexOf('  function normalizeAppointmentEventKind('),end=app.indexOf('\n  function ',app.indexOf('  function appointmentEventKind(')+5);
- const context={APPOINTMENT_EVENT_KIND_META_RE:/(?:\r?\n)?<!--hf:event-kind=(birthday|holiday|public_holiday|celebration|visit)-->/gi};
- vm.runInNewContext(app.slice(start,end),context);
- assert.equal(context.appointmentEventKind({description:'<!--hf:event-kind=birthday-->'}),'birthday');
- assert.match(app,/appointments: state\.appointments\.map\(appointment => \(\{ \.\.\.appointment, event_kind: appointmentEventKind\(appointment\) \}\)\)/);
+test('all appointments are excluded from the roadmap',()=>{
+ const rows=D.build({appointments:[{id:'birthday',title:'A',is_birthday:true},{id:'normal',title:'B',event_kind:'standard'},{id:'party',title:'C',event_kind:'celebration'}]},[],today);
+ assert.equal(rows.length,0);
 });
 test('each project forms a contiguous lane with summary, milestones and tasks exactly once',()=>{
  const snapshot={projects:[{id:'p1',title:'Same',start_date:'2026-01-01',end_date:'2026-12-31'},{id:'p2',title:'Same',start_date:'2026-01-01',end_date:'2026-12-31'}],milestones:[{project_id:'p1',title:'Launch',milestone_date:'2026-08-01'}],tasks:[{id:'task1',title:'First',priority:'high',project_id:'p1',due_at:'2026-07-01'},{id:'task2',title:'Second',priority:'high',project_id:'p2',due_at:'2026-02-01'},{id:'free',title:'Free',priority:'high'}]};
@@ -90,4 +82,19 @@ test('project lane renders nested tasks and keeps task navigation intact',()=>{
  assert.equal((html.match(/roadmap-lane-track/g)||[]).length,2);
  assert.ok(!html.includes('>Aufgaben</div>'));
  h.click({row:'1'});assert.deepEqual(h.calls.at(-1),['task','linked']);
+});
+
+test('opening and reopening defaults to six months starting with the current month',()=>{
+ const h=uiHarness(),now=new Date(),format=new Intl.DateTimeFormat('de-CH',{month:'short',year:'2-digit'});
+ const expected=format.format(new Date(now.getFullYear(),now.getMonth(),1,12))+' – '+format.format(new Date(now.getFullYear(),now.getMonth()+6,0,12));
+ h.window.HabitFlowRoadmap.open();
+ assert.equal(h.nodes.get('#roadmapSpan').value,'6');
+ assert.equal(h.nodes.get('#roadmapPeriod').textContent,expected);
+ assert.ok(!h.dialog.innerHTML.includes('value="appointment"'));
+ h.change({id:'roadmapSpan',value:'12'});h.click({action:'next'});h.click({action:'close'});
+ h.window.HabitFlowRoadmap.open();
+ assert.equal(h.nodes.get('#roadmapSpan').value,'6');
+ assert.equal(h.nodes.get('#roadmapPeriod').textContent,expected);
+ h.click({action:'prev'});h.click({action:'today'});
+ assert.equal(h.nodes.get('#roadmapPeriod').textContent,expected);
 });
