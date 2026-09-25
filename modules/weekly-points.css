@@ -4,8 +4,8 @@
 .weekly-points-intro { color: var(--muted); margin: 8px 0 18px; max-width: 76ch; font-size: .9rem; line-height: 1.55; }
 .weekly-points-nav { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .weekly-points-legend { display: flex; align-items: center; gap: 10px; justify-content: flex-end; margin: 12px 0 8px; font-size: .75rem; color: var(--muted); }
-.weekly-points-legend i { display: block; width: min(220px, 35vw); height: 13px; background: linear-gradient(90deg,#ab292e,#ea713c,#fbc977,#fee6bb,#dcecc8,#8cc66b,#2b8746,#12663d); border-radius: 3px; }
-.weekly-points-scroll { overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; padding-bottom: 8px; }
+.weekly-points-legend i { opacity: .8; display: block; width: min(220px, 35vw); height: 13px; background: linear-gradient(90deg,#ab292e,#ea713c,#fbc977,#fee6bb,#dcecc8,#8cc66b,#2b8746,#12663d); border-radius: 3px; }
+.weekly-points-scroll { min-width: 0; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; padding-bottom: 8px; }
 .weekly-points-scroll canvas { display: block; max-width: none; touch-action: pan-x pan-y; }
 .weekly-points-scroll canvas:focus-visible { outline: 2px solid var(--accent, #4ad7d1); outline-offset: -2px; }
 .weekly-points-weeks { box-sizing: border-box; display: grid; grid-template-columns: repeat(52,minmax(0,1fr)); padding-right: 14px; gap: 0; }

@@ -91,9 +91,9 @@ test('heatmap is moved once to Habits, retaining its original structure and inde
   assert.ok(move.includes('renderCharts(keys)'));
 });
 test('canvas rendering is coalesced, signed, keyboard-accessible and escapes labels', () => {
-  const frames = [], rectangles = [], nodes = new Map();
-  let builds = 0, fills = '', width = 960;
-  const ctx = { scale() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, fillText() {},
+  const frames = [], rectangles = [], labels = [], nodes = new Map();
+  let builds = 0, fills = '', width = 960, mobile = false;
+  const ctx = { scale() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, fillText(text, x, y) { labels.push({ text, x, y }); },
     set fillStyle(value) { fills = value; }, fillRect(x, y, w, h) { rectangles.push({ x, y, w, h, color: fills }); } };
   function node(id) {
     if (!nodes.has(id)) nodes.set(id, { style: {}, listeners: {}, attrs: {}, hidden: false, clientWidth: width,
@@ -105,7 +105,7 @@ test('canvas rendering is coalesced, signed, keyboard-accessible and escapes lab
   }
   const root = node('root');
   root.querySelector = selector => node(selector.slice(1));
-  const window = { devicePixelRatio: 2, HabitFlowWeeklyPointsDomain: { ...domain, build(data) { builds++; return domain.build({ ...data, now }); } } };
+  const window = { matchMedia: () => ({ matches: mobile }), devicePixelRatio: 2, HabitFlowWeeklyPointsDomain: { ...domain, build(data) { builds++; return domain.build({ ...data, now }); } } };
   const sandbox = { window, document: { getElementById: () => root }, requestAnimationFrame(fn) { frames.push(fn); return frames.length; },
     getComputedStyle() { return { getPropertyValue: () => '#607080' }; }, ResizeObserver: class { observe() {} }, console };
   vm.runInNewContext(renderer, sandbox);
@@ -120,8 +120,26 @@ test('canvas rendering is coalesced, signed, keyboard-accessible and escapes lab
   assert.ok(green.y < 235);
   assert.ok(red.y > 235);
   assert.equal(green.w, green.h);
-  assert.equal(node('weeklyPointsCanvas').width, 1920);
+  assert.equal(node('weeklyPointsCanvas').width, 1916);
   assert.equal(node('weeklyPointsCanvas').height, 920);
+  const positiveLabel = labels.find(label => label.text === 'Positiv');
+  const yearLabel = labels.find(label => label.text === '2025');
+  assert.ok(yearLabel.y - positiveLabel.y >= 14, 'year and positive label have separate baselines');
+  assert.ok(yearLabel.x - positiveLabel.x >= 30, 'year is also horizontally separated');
+  for (const nextWidth of [1180, 849.5, 780, 640]) {
+    width = nextWidth;
+    window.HabitFlowWeeklyPoints.render(data);
+    frames.shift()();
+    assert.ok(parseFloat(node('weeklyPointsCanvas').style.width) < width, 'desktop canvas fits without overflow');
+    assert.equal(node('weeklyPointsWeeks').style.width, node('weeklyPointsCanvas').style.width);
+  }
+  mobile = true;
+  width = 360;
+  window.HabitFlowWeeklyPoints.render(data);
+  frames.shift()();
+  assert.equal(node('weeklyPointsCanvas').style.width, '850px', 'mobile keeps readable swipe navigation');
+  mobile = false;
+  width = 960;
   assert.ok(node('weeklyPointsItems').innerHTML.includes('&lt;img onerror=bad&gt;'));
   assert.ok(!node('weeklyPointsItems').innerHTML.includes('<img'));
   node('weeklyPointsCanvas').listeners.keydown({ key: 'Home', target: node('weeklyPointsCanvas'), preventDefault() {} });
@@ -139,4 +157,11 @@ test('canvas rendering is coalesced, signed, keyboard-accessible and escapes lab
   window.HabitFlowWeeklyPoints.render({ ledger: [] });
   frames.shift()();
   assert.ok(node('weeklyPointsItems').innerHTML.includes('Keine Punktebuchungen'));
+});
+
+test('only the legend ramp gets twenty percent transparency', () => {
+  const css = fs.readFileSync(path.join(__dirname, '../modules/weekly-points.css'), 'utf8');
+  const ramp = css.match(/\.weekly-points-legend i \{([^}]+)\}/)[1];
+  assert.ok(ramp.includes('opacity: .8'));
+  assert.ok(!renderer.includes('globalAlpha'));
 });

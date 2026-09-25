@@ -32,7 +32,10 @@
   }
   function draw() {
     if (!model || !root.getBoundingClientRect().width) return;
-    const width = Math.max(850, find('weeklyPointsScroll').clientWidth);
+    const scroll = find('weeklyPointsScroll');
+    // Leave a small rounding gutter at browser zoom levels; desktop fits all KWs.
+    const availableWidth = Math.max(1, Math.floor(scroll.getBoundingClientRect().width) - 2);
+    const width = window.matchMedia('(max-width: 760px)').matches ? Math.max(850, availableWidth) : availableWidth;
     const height = 460, left = 46, top = 30, bottom = 410, zero = 235;
     const column = (width - left - 14) / model.weeks.length;
     const maxPositive = Math.max(6, ...model.weeks.map(w => w.positive.length));
@@ -68,12 +71,12 @@
       }
     }
     ctx.fillText('0', left - 10, zero + 4);
-    ctx.textAlign = 'left'; ctx.fillText('Positiv', left, 14); ctx.fillText('Negativ', left, height - 8);
+    ctx.textAlign = 'left'; ctx.fillText('Positiv', 4, 14); ctx.fillText('Negativ', left, height - 8);
     const hits = model.weeks.map(() => []);
     model.weeks.forEach((week, index) => {
       const x = left + index * column + column / 2;
       if (week.number === 1 || index === 0) {
-        ctx.fillStyle = ink; ctx.fillText(String(week.year), x - 8, top - 12);
+        ctx.fillStyle = ink; ctx.fillText(String(week.year), x - 8, top - 2);
       }
       for (const sign of [1, -1]) {
         (sign > 0 ? week.positive : week.negative).forEach((item, rank) => {
