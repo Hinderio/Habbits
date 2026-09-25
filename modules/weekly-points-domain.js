@@ -37,6 +37,7 @@
     const habitById = new Map(habits.map(h => [h.id, h]));
     const entryById = new Map(entries.map(e => [e.id, e]));
     const taskById = new Map(tasks.map(t => [t.id, t]));
+    const smoking = weeks.map(() => new Map());
     let sequence = 0;
     const seen = new Set();
     const nowTime = new Date(now).getTime();
@@ -56,10 +57,21 @@
       } else if (point.source_type === 'task') {
         label = taskById.get(point.source_id)?.title || label;
       }
-      // Each booking is its own square, even for the same source, habit or reason.
-      const item = { key, label: String(label), points: value, logs: 1, type: point.source_type || 'other' };
       const week = weeks[index];
-      (value > 0 ? week.positive : week.negative).push(item);
+      const sign = value > 0 ? 'positive' : 'negative';
+      if (point.source_type === 'cigarette') {
+        // Only smoking is grouped; keep gains and losses separate instead of netting them.
+        let item = smoking[index].get(sign);
+        if (!item) {
+          item = { key: 'smoking:' + sign, label: 'Rauchen · Wochenwert', points: 0, logs: 0, type: 'cigarette' };
+          smoking[index].set(sign, item);
+          week[sign].push(item);
+        }
+        item.points += value;
+        item.logs++;
+      } else {
+        week[sign].push({ key, label: String(label), points: value, logs: 1, type: point.source_type || 'other' });
+      }
       if (value > 0) week.positivePoints += value;
       else week.negativePoints += value;
     }

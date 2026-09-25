@@ -35,7 +35,7 @@ test('keeps every habit log and task in a separate square with signs unnetted', 
   assert.equal(week.positivePoints, 110);
   assert.equal(week.negativePoints, -5);
 });
-test('every consumption booking gets a square without weekly aggregation', () => {
+test('alcohol bookings stay separate while smoking gains and losses stay visible', () => {
   const week = latest({ ledger: [point('s1', 5, { source_type: 'cigarette' }), point('s2', -10, { source_type: 'cigarette' }),
     point('a1', -20, { reason: 'Alkohol: Bier' }), point('a2', -50, { reason: 'Alkohol-Tag: hoch' })] });
   assert.equal(week.positive.length, 1);
@@ -77,8 +77,10 @@ test('100k ledger rows are scanned once and use bounded week buckets', () => {
   assert.equal(model.weeks.length, 52);
   assert.equal(model.weeks.at(-1).positivePoints, 50000);
   assert.equal(model.weeks.at(-1).negativePoints, -50000);
-  assert.equal(model.weeks.at(-1).positive.length, 50000);
-  assert.equal(model.weeks.at(-1).negative.length, 50000);
+  assert.equal(model.weeks.at(-1).positive.length, 1);
+  assert.equal(model.weeks.at(-1).positive[0].logs, 50000);
+  assert.equal(model.weeks.at(-1).negative.length, 1);
+  assert.equal(model.weeks.at(-1).negative[0].logs, 50000);
   console.log('100k rows: ' + Math.round(performance.now() - begin) + ' ms');
 });
 test('heatmap is moved once to Habits, retaining its original structure and independent controls', () => {
@@ -128,6 +130,8 @@ test('canvas rendering is coalesced, signed, keyboard-accessible and escapes lab
   assert.equal(node('weeklyPointsCanvas').width, 1916);
   assert.equal(node('weeklyPointsCanvas').height, 920);
   const positiveLabel = labels.find(label => label.text === 'Positiv');
+  const negativeLabel = labels.find(label => label.text === 'Negativ');
+  assert.equal(positiveLabel.x, negativeLabel.x, 'positive and negative labels share the left edge');
   const yearLabel = labels.find(label => label.text === '2025');
   assert.ok(yearLabel.y - positiveLabel.y >= 14, 'year and positive label have separate baselines');
   assert.ok(yearLabel.x - positiveLabel.x >= 30, 'year is also horizontally separated');
@@ -173,13 +177,33 @@ test('only the legend ramp gets twenty percent transparency', () => {
 
 test('identical sources and reasons stay separate, only repeated ledger IDs are ignored', () => {
   const week = latest({ ledger: [
-    point('one', 5, { source_type: 'cigarette', source_id: 'same', reason: 'same' }),
-    point('two', 5, { source_type: 'cigarette', source_id: 'same', reason: 'same' }),
-    point('two', 5, { source_type: 'cigarette', source_id: 'same', reason: 'same' }),
+    point('one', 5, { source_type: 'task', source_id: 'same', reason: 'same' }),
+    point('two', 5, { source_type: 'task', source_id: 'same', reason: 'same' }),
+    point('two', 5, { source_type: 'task', source_id: 'same', reason: 'same' }),
     point(null, 5, { source_type: 'bonus', source_id: 'same', reason: 'same' }),
     point(null, 5, { source_type: 'bonus', source_id: 'same', reason: 'same' })
   ] });
   assert.equal(week.positive.length, 4);
   assert.equal(week.positivePoints, 20);
   assert.equal(new Set(week.positive.map(item => item.key)).size, 4);
+});
+
+test('only smoking is grouped by week and sign, with original totals and duplicate protection', () => {
+  const ledger = [
+    point('a', 5, { source_type: 'cigarette' }), point('b', 10, { source_type: 'cigarette' }),
+    point('b', 10, { source_type: 'cigarette' }), point('c', -10, { source_type: 'cigarette' }),
+    point('d', -20, { source_type: 'cigarette' }),
+    point('previous', 50, { source_type: 'cigarette', earned_at: '2026-09-15T12:00:00Z' }),
+    point('alcohol1', -10, { reason: 'Alkohol: Bier' }), point('alcohol2', -10, { reason: 'Alkohol: Bier' })
+  ];
+  const model = domain.build({ now, ledger });
+  const week = model.weeks.at(-1);
+  assert.equal(week.positive.length, 1);
+  assert.equal(week.positive[0].points, 15);
+  assert.equal(week.positive[0].logs, 2);
+  assert.equal(week.negative.length, 3);
+  assert.equal(week.negative.at(-1).points, -30);
+  assert.equal(week.negative.at(-1).logs, 2);
+  assert.equal(week.negativePoints, -50);
+  assert.equal(model.weeks.at(-2).positive[0].points, 50);
 });

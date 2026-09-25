@@ -71,7 +71,7 @@
       }
     }
     ctx.fillText('0', left - 10, zero + 4);
-    ctx.textAlign = 'left'; ctx.fillText('Positiv', 4, 14); ctx.fillText('Negativ', left, height - 8);
+    ctx.textAlign = 'left'; ctx.fillText('Positiv', 4, 14); ctx.fillText('Negativ', 4, height - 8);
     const hits = model.weeks.map(() => []);
     model.weeks.forEach((week, index) => {
       const x = left + index * column + column / 2;
