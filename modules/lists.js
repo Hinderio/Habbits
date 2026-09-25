@@ -34,6 +34,7 @@
     { value: 'days', label: 'Tage' }
   ];
   const FINANCE_COLORS = ['#35c9a5', '#61cbf4', '#f6b33f'];
+  const ROADMAP_LIST_ID = 'roadmap-goals';
   const DEFAULT_LISTS = [
     { id: 'lists', slug: 'listen', title: 'Listen', type: 'generic', icon: 'list', color: '#EDAF36', description: 'Freie Listen für kleine Sammlungen, Ideen und Dinge, die nicht in Tasks gehören.' },
     { id: 'vouchers', slug: 'gutscheine', title: 'Gutscheine', type: 'voucher', icon: 'ticket', color: '#E08230', description: 'Gutscheine, Codes und Fristen ruhig im Blick behalten.' },
@@ -45,7 +46,8 @@
     { id: 'chatgpt', slug: 'chatgpt', title: 'ChatGPT', type: 'generic', icon: 'message', color: '#8C9DD8', description: 'Wichtige Projekte und Threads gruppiert sichern und direkt wieder öffnen.' },
     { id: WEBLINK_LIST_ID, slug: 'weblinks', title: 'Weblinks', type: 'generic', icon: 'external', color: '#587E99', description: 'Wichtige Webseiten sammeln, kategorisieren und schnell wiederfinden.' },
     { id: GIFT_LIST_ID, slug: 'geschenk', title: 'Geschenk', type: 'generic', icon: 'gift', color: '#6EBBBE', description: 'Geschenkideen für deine Lieblingsmenschen sammeln und als Task umsetzen.' },
-    { id: WEEKLY_LIST_ID, slug: 'wochenzettel', title: 'Wochenzettel', type: 'generic', icon: 'note', color: '#4AA885', description: 'Kleine Gedanken und Erinnerungen – Woche für Woche.' }
+    { id: WEEKLY_LIST_ID, slug: 'wochenzettel', title: 'Wochenzettel', type: 'generic', icon: 'note', color: '#4AA885', description: 'Kleine Gedanken und Erinnerungen – Woche für Woche.' },
+    { id: ROADMAP_LIST_ID, slug: 'roadmap-goals', title: 'Roadmap-Ziele', type: 'generic', icon: 'star', color: '#47ceca', description: 'Persönliche Ziele der Kalender-Roadmap.' }
   ];
 
   const ICONS = {
@@ -281,7 +283,7 @@
   function metricValue(kind) {
     if (kind === 'open') {
       const currentWeek = currentWeekStartKey();
-      return state.items.filter(item => item.listId !== 'terms' && item.listId !== WEEKLY_LIST_ID && !item.isDone && !item.isArchived).length
+      return state.items.filter(item => item.listId !== ROADMAP_LIST_ID && item.listId !== 'terms' && item.listId !== WEEKLY_LIST_ID && !item.isDone && !item.isArchived).length
         + weeklyOpenItems(currentWeek).length;
     }
     if (kind === 'vouchers') return itemsFor('vouchers').length;
@@ -354,7 +356,7 @@
   }
 
   function renderCards(target) {
-    target.innerHTML = state.lists.map(list => {
+    target.innerHTML = state.lists.filter(list => list.id !== ROADMAP_LIST_ID).map(list => {
       const count = list.id === WEEKLY_LIST_ID
         ? weeklyOpenItems(currentWeekStartKey()).length
         : list.type === 'photos' ? state.stops.filter(stop => !stop.isArchived).length : itemsFor(list.id).length;
@@ -3017,8 +3019,29 @@
   }
 
   // The dashboard coach uses live memory and the existing list navigation path.
+  window.HabitFlowRoadmapGoals = Object.freeze({
+    snapshot: () => ({ goals: state.items.filter(item => item.listId === ROADMAP_LIST_ID && !item.isArchived).map(item => ({ ...item, metadata: { ...item.metadata } })), status: syncLabel }),
+    save: (input) => {
+      const existing = input.id ? state.items.find(item => item.id === input.id && item.listId === ROADMAP_LIST_ID && !item.isArchived) : null;
+      if (input.id && !existing) throw new Error('Dieses Ziel ist nicht mehr verfügbar. Bitte aktualisieren.');
+      const metadata = { ...existing?.metadata, ...input.metadata, version: 1 };
+      const validDate = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
+      if (!String(input.title || '').trim() || !validDate(metadata.startDate) || !validDate(metadata.dueDate) || metadata.startDate > metadata.dueDate) throw new Error('Bitte Titel und einen gültigen Zeitraum angeben.');
+      if (!['manual', 'weight', 'count'].includes(metadata.kind)) throw new Error('Ungültiger Zieltyp.');
+      if (metadata.kind !== 'manual' && (!metadata.habitId || !Number.isFinite(Number(metadata.target)) || Number(metadata.target) <= 0 || (metadata.kind === 'count' && !Number.isInteger(Number(metadata.target))))) throw new Error('Bitte ein Habit und einen gültigen Zielwert wählen.');
+      const now = new Date().toISOString();
+      const item = { ...existing, id: existing?.id || 'goal-' + crypto.randomUUID(), listId: ROADMAP_LIST_ID, title: String(input.title).trim().slice(0, 160), note: existing?.note || '', metadata, isDone: metadata.kind === 'manual' && Boolean(input.isDone), isArchived: Boolean(input.isArchived), sortRank: existing?.sortRank || 0, createdAt: existing?.createdAt || now, updatedAt: now };
+      const items = existing ? state.items.map(row => row.id === item.id ? item : row) : [...state.items, item];
+      // Persist before publishing the change; failed local writes must never look saved.
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, items, activeListId }));
+      state = { ...state, items };
+      void syncToSupabase([item]);
+      return { ...item, metadata: { ...metadata } };
+    }
+  });
+
   window.HabitFlowListsCoach = Object.freeze({
-    snapshot: () => ({ lists: state.lists, items: state.items }),
+    snapshot: () => ({ lists: state.lists.filter(list => list.id !== ROADMAP_LIST_ID), items: state.items.filter(item => item.listId !== ROADMAP_LIST_ID) }),
     open: (listId, itemId) => {
       const button = Array.from(document.querySelectorAll('[data-list-open]')).find(node => node.dataset.listOpen === listId);
       if (!button) return;

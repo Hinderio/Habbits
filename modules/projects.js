@@ -1090,6 +1090,11 @@
     setTimeout(() => scheduleTaskBadgePaint(), 900);
   }
 
+  window.HabitFlowRoadmapProjects = Object.freeze({
+    snapshot: () => { const current = readState(); return { projects: current.projects, milestones: current.projectMilestones }; },
+    open: id => { if (readState().projects.some(project => project.id === id && !project.is_archived)) openDetail(id); }
+  });
+
   patchStatePersistence();
   if (document.readyState === 'loading') {
     injectShell();

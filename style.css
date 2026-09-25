@@ -4956,3 +4956,8 @@ body.light #consumptionPauseList .pause-card { background: #fff; border-color: #
   #consumptionPauseList .pause-card { grid-template-columns: minmax(0, 1fr); padding: 18px; gap: 20px; }
   #consumptionPauseList .pause-card-log-list { grid-template-columns: minmax(0, 1fr); padding: 16px 0 0; border-left: 0; border-top: 1px solid var(--line); }
 }
+
+/* Calendar view launchers share the existing toolbar. */
+#roadmapToggleBtn { margin-left: auto; flex-shrink: 0; background: rgba(71,206,202,.12); color: var(--text); border: 1px solid rgba(71,206,202,.4); }
+#screen-calendar .section-toolbar:has(#roadmapToggleBtn) { flex-wrap: wrap; gap: 12px; }
+#screen-calendar .section-toolbar #roadmapToggleBtn ~ button { margin-left: 0; }
