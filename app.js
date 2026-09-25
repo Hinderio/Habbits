@@ -939,6 +939,7 @@
   let charts = { trend: null, points: null };
   let selectedTrendMetric = localStorage.getItem(TREND_METRIC_KEY) || 'points';
   let dashboardChartOffsetDays = normalizeDashboardChartOffset(localStorage.getItem(DASHBOARD_CHART_WINDOW_KEY));
+  let habitChartOffsetDays = normalizeDashboardChartOffset(localStorage.getItem('habitflow-habit-chart-window-v1'));
   let activeSmokingTipIndex = 0;
   let coachSession = loadCoachSession();
   let morningRoutineSession = loadMorningRoutineSession();
@@ -1141,6 +1142,10 @@ cacheEls();
       monthlyMagazineSummary: $('#monthlyMagazineSummary'),
       monthlyMagazineMobileSummary: $('#monthlyMagazineMobileSummary'),
       habitHeatmap: $('#habitHeatmap'),
+      habitChartRangeLabel: $('#habitChartRangeLabel'),
+      habitChartPrevWindowBtn: $('#habitChartPrevWindowBtn'),
+      habitChartNextWindowBtn: $('#habitChartNextWindowBtn'),
+      habitChartTodayWindowBtn: $('#habitChartTodayWindowBtn'),
       habitHeatmapRangeBadge: $('#habitHeatmapRangeBadge'),
       trendMetricSelect: $('#trendMetricSelect'),
       trendChartTitle: $('#trendChartTitle'),
@@ -1411,6 +1416,9 @@ cacheEls();
       localStorage.setItem(TREND_METRIC_KEY, selectedTrendMetric);
       renderTrendChart();
     });
+    if (els.habitChartPrevWindowBtn) els.habitChartPrevWindowBtn.addEventListener('click', () => moveHabitChartWindow(14));
+    if (els.habitChartNextWindowBtn) els.habitChartNextWindowBtn.addEventListener('click', () => moveHabitChartWindow(-14));
+    if (els.habitChartTodayWindowBtn) els.habitChartTodayWindowBtn.addEventListener('click', () => moveHabitChartWindow(0, { reset: true }));
     if (els.chartPrevWindowBtn) els.chartPrevWindowBtn.addEventListener('click', () => moveDashboardChartWindow(14));
     if (els.chartNextWindowBtn) els.chartNextWindowBtn.addEventListener('click', () => moveDashboardChartWindow(-14));
     if (els.chartTodayWindowBtn) els.chartTodayWindowBtn.addEventListener('click', () => moveDashboardChartWindow(0, { reset: true }));
@@ -3965,7 +3973,6 @@ cacheEls();
     dashboardChartOffsetDays = reset ? 0 : normalizeDashboardChartOffset(dashboardChartOffsetDays + Number(deltaDays || 0));
     localStorage.setItem(DASHBOARD_CHART_WINDOW_KEY, String(dashboardChartOffsetDays));
     const keys = dashboardChartKeys();
-    renderHabitHeatmap(keys);
     renderCharts(keys);
   }
 
@@ -3987,7 +3994,7 @@ cacheEls();
     const label = dashboardChartRangeLabel(keys);
     if (els.chartRangeLabel) els.chartRangeLabel.textContent = label;
     if (els.pointsChartRangeBadge) els.pointsChartRangeBadge.textContent = dashboardChartOffsetDays ? 'historisch' : '14 Tage';
-    if (els.habitHeatmapRangeBadge) els.habitHeatmapRangeBadge.textContent = dashboardChartOffsetDays ? 'historisch' : '14 Tage';
+
     if (els.chartNextWindowBtn) {
       els.chartNextWindowBtn.disabled = dashboardChartOffsetDays <= 0;
       els.chartNextWindowBtn.setAttribute('aria-disabled', String(dashboardChartOffsetDays <= 0));
@@ -4232,7 +4239,7 @@ cacheEls();
     renderMonthlyMissions();
     renderMonthlyMagazine();
     renderBehaviorIntelligence();
-    renderHabitHeatmap();
+    window.HabitFlowWeeklyPoints?.render({ ledger: visibleLedgerPoints(), habits: state.habits, entries: state.habitEntries, tasks: state.tasks });
     renderCharts();
   }
 
@@ -6355,7 +6362,26 @@ cacheEls();
     return { title: 'Punkteentwicklung', label: 'Punkte', data: keys.map(k => pointsOnDate(k)), beginAtZero: true, toneMode: 'score' };
   }
 
-  function renderHabitHeatmap(keys = dashboardChartKeys()) {
+  function moveHabitChartWindow(deltaDays = 0, { reset = false } = {}) {
+    habitChartOffsetDays = reset ? 0 : normalizeDashboardChartOffset(habitChartOffsetDays + Number(deltaDays || 0));
+    localStorage.setItem('habitflow-habit-chart-window-v1', String(habitChartOffsetDays));
+    withAnalyticsReadScope(() => renderHabitHeatmap());
+  }
+
+  function syncHabitChartControls(keys) {
+    const format = key => new Date(key + 'T12:00:00').toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' });
+    const range = format(keys[0]) + ' – ' + format(keys[keys.length - 1]);
+    if (els.habitChartRangeLabel) els.habitChartRangeLabel.textContent = habitChartOffsetDays ? range + ' · ' + habitChartOffsetDays + ' Tage zurück' : 'Letzte 14 Tage · ' + range;
+    if (els.habitHeatmapRangeBadge) els.habitHeatmapRangeBadge.textContent = habitChartOffsetDays ? 'historisch' : '14 Tage';
+    for (const button of [els.habitChartTodayWindowBtn, els.habitChartNextWindowBtn]) {
+      if (!button) continue;
+      button.disabled = habitChartOffsetDays <= 0;
+      button.setAttribute('aria-disabled', String(button.disabled));
+    }
+  }
+
+  function renderHabitHeatmap(keys = daysBack(14, habitChartOffsetDays)) {
+    syncHabitChartControls(keys);
     if (!els.habitHeatmap) return;
     const activeHabits = state.habits.filter(h => !h.is_archived);
     if (!activeHabits.length) {
@@ -7879,6 +7905,7 @@ cacheEls();
   }
 
   function renderHabitsContent() {
+    renderHabitHeatmap();
     const activeInput = document.activeElement?.closest?.('#habitCards input[id^="habit-card-input-"]') || null;
     const activeInputId = activeInput?.id || '';
     const activeInputSelection = activeInput ? { start: activeInput.selectionStart, end: activeInput.selectionEnd } : null;

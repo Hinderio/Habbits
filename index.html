@@ -21,6 +21,7 @@
   <link rel="stylesheet" href="modules/fitness-detail-mobile.css?v=275" />
   <link rel="stylesheet" href="modules/smoke-ring-premium.css?v=281" />
   <link rel="stylesheet" href="modules/points-details.css?v=297" />
+  <link rel="stylesheet" href="modules/weekly-points.css?v=334" />
 </head>
 <body>
   <div id="toast" class="save-toast hidden" role="status" aria-live="polite"></div>
@@ -160,17 +161,39 @@
         </details>
 
         <details class="mobile-dashboard-section" open>
-          <summary><span>Habit-Rhythmus & Trends</span><small>14 Tage synchron</small></summary>
+          <summary><span>Wochenbilanz & Trends</span><small>Punkte und Entwicklung</small></summary>
+        <section id="weeklyPointsPanel" class="panel glass weekly-points-panel" aria-labelledby="weeklyPointsTitle">
+          <div class="panel-head">
+            <div><p class="eyebrow">Wochenbilanz</p><h3 id="weeklyPointsTitle">Was dich voranbringt</h3><span id="weeklyPointsRange" class="subtle">52 Kalenderwochen</span></div>
+            <nav class="weekly-points-nav" aria-label="Zeitraum der Wochenbilanz">
+              <button id="weeklyPointsPrev" class="mini-btn" type="button">← Früher</button>
+              <button id="weeklyPointsToday" class="mini-btn primary" type="button">Heute</button>
+              <button id="weeklyPointsNext" class="mini-btn" type="button">Später →</button>
+            </nav>
+          </div>
+          <p class="weekly-points-intro">Eine Spalte pro KW. Habits, erledigte Tasks und weitere Punktequellen: Positives wächst nach oben, Negatives nach unten. Je mehr Punkte, desto kräftiger die Farbe und weiter aussen das Quadrat.</p>
+          <div class="weekly-points-legend" aria-label="Farben: kräftiges Rot für hohe negative Punkte, blass nahe null, kräftiges Grün für hohe positive Punkte"><span>−300+</span><i aria-hidden="true"></i><span>+300+</span></div>
+          <div id="weeklyPointsScroll" class="weekly-points-scroll">
+            <canvas id="weeklyPointsCanvas" tabindex="0" role="img" aria-label="Wochenbilanz der Punkte"></canvas>
+            <div id="weeklyPointsWeeks" class="weekly-points-weeks" role="group" aria-label="Kalenderwoche auswählen"></div>
+          </div>
+          <p class="weekly-points-note">Ein Quadrat pro Habit und Woche bzw. erledigter Task; Rauch- und Alkoholpunkte werden je Woche gebündelt. Höhe = Rang nach Punktwert, Achse = Anzahl Quadrate, keine Punkteskala. Ohne Punkte kein Quadrat. Wischen, antippen oder Pfeiltasten nutzen.</p>
+          <p id="weeklyPointsTooltip" class="weekly-points-tooltip" role="tooltip" hidden></p>
+          <label class="weekly-points-picker"><span>Woche auswählen</span><select id="weeklyPointsSelect" aria-label="Woche für die Punktedetails auswählen"></select></label>
+          <details id="weeklyPointsDetail" class="weekly-points-detail">
+            <summary><span id="weeklyPointsSelection">Aktuelle Woche</span><small id="weeklyPointsTotals"></small></summary>
+            <ul id="weeklyPointsItems" class="weekly-points-items"></ul>
+            <button id="weeklyPointsMore" class="mini-btn" type="button" hidden>Weitere Einträge</button>
+          </details>
+        </section>
+
         <div class="dashboard-chart-toolbar glass" aria-label="Zeitraum der Dashboard-Diagramme">
           <button id="chartPrevWindowBtn" class="mini-btn" type="button">← Früher</button>
           <span id="chartRangeLabel" class="chart-range-label">Letzte 14 Tage</span>
           <button id="chartTodayWindowBtn" class="mini-btn primary" type="button">Heute</button>
           <button id="chartNextWindowBtn" class="mini-btn" type="button">Später →</button>
         </div>
-        <section class="panel glass dashboard-history-heatmap">
-          <div class="panel-head"><div><p class="eyebrow">Heatmap</p><h3>Habit-Rhythmus</h3></div><span id="habitHeatmapRangeBadge" class="subtle">14 Tage</span></div>
-          <div id="habitHeatmap" class="habit-heatmap"></div>
-        </section>
+
         <div class="grid two-columns">
           <section class="panel glass dashboard-chart-panel">
             <div class="panel-head chart-head">
@@ -516,6 +539,16 @@
             <div class="panel-head"><div><p class="eyebrow">Heute</p><h3>Solide Kategorie-Tiles</h3></div><span class="subtle">antippen öffnet Details</span></div>
             <div id="habitCards" class="habit-card-grid"></div>
           </section>
+        <div class="dashboard-chart-toolbar glass" aria-label="Zeitraum des Habit-Rhythmus">
+          <button id="habitChartPrevWindowBtn" class="mini-btn" type="button">← Früher</button>
+          <span id="habitChartRangeLabel" class="chart-range-label">Letzte 14 Tage</span>
+          <button id="habitChartTodayWindowBtn" class="mini-btn primary" type="button">Heute</button>
+          <button id="habitChartNextWindowBtn" class="mini-btn" type="button">Später →</button>
+        </div>
+        <section class="panel glass dashboard-history-heatmap">
+          <div class="panel-head"><div><p class="eyebrow">Heatmap</p><h3>Habit-Rhythmus</h3></div><span id="habitHeatmapRangeBadge" class="subtle">14 Tage</span></div>
+          <div id="habitHeatmap" class="habit-heatmap"></div>
+        </section>
           <section class="panel glass habit-story-panel">
             <div class="panel-head"><div><p class="eyebrow">Spielerische Stats</p><h3>Habits mit Story statt nur Zahlen</h3></div><span class="subtle">automatisch berechnet</span></div>
             <div id="habitPlayfulStats" class="habit-playful-grid"></div>
@@ -827,7 +860,9 @@
   <script src="modules/projects-milestone-edit.js?v=183"></script>
 
   <script src="modules/life-coach.js?v=305"></script>
-  <script src="app.js?v=333"></script>
+  <script src="modules/weekly-points-domain.js?v=334"></script>
+  <script src="modules/weekly-points.js?v=334"></script>
+  <script src="app.js?v=334"></script>
   <script src="modules/points-details.js?v=297"></script>
   <script src="modules/habit-story-coverage.js?v=333"></script>
   <script src="modules/ghost-arena.js?v=288"></script>

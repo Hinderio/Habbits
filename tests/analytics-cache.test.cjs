@@ -125,7 +125,7 @@ test('habit render retains card and overview markup with one DNA calculation per
   const {c,state}=setup();state.habits=[{id:'a',name:'A',type:'number'},{id:'b',name:'B',type:'boolean'}];
   let calls=0;
   Object.assign(c,{document:{activeElement:null},els:{habitCards:{},habitDnaOverview:{}},editingHabitId:null,
-    collectHabitInputDrafts:()=>[],syncHabitsExperienceUi(){},pruneExpandedHabitCardIds(){},renderHabitPlayfulStats(){},
+    collectHabitInputDrafts:()=>[],renderHabitHeatmap(){},syncHabitsExperienceUi(){},pruneExpandedHabitCardIds(){},renderHabitPlayfulStats(){},
     habitTargetPeriodMeta:()=>({short:'Tag'}),habitValueForPeriod:()=>({label:'0'}),effectiveHabitUnit:()=>'',
     habitCategoryMeta:()=>({label:'Habit'}),habitCategoryStyle:()=>'',habitIconKey:()=>'',activePauseNow:()=>null,
     habitFulfillmentState:()=>false,habitProgressPercent:()=>0,isSystemMeditationHabit:()=>false,isFitnessDistanceHabit:()=>false,
