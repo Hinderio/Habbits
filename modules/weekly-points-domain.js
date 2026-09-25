@@ -37,7 +37,8 @@
     const habitById = new Map(habits.map(h => [h.id, h]));
     const entryById = new Map(entries.map(e => [e.id, e]));
     const taskById = new Map(tasks.map(t => [t.id, t]));
-    const smoking = weeks.map(() => new Map());
+    const weeklyGroups = weeks.map(() => new Map());
+    const groupedHabitNames = new Set(['brotfreier tag', 'spazieren', 'stehpult', 'meditation']);
     let sequence = 0;
     const seen = new Set();
     const nowTime = new Date(now).getTime();
@@ -51,20 +52,25 @@
       if (index < 0 || index >= count) continue;
       const key = point.id || 'row:' + sequence++;
       let label = point.reason || 'Punktebuchung';
+      let groupKey = point.source_type === 'cigarette' ? 'smoking' : null;
       if (point.source_type === 'habit') {
         const entry = entryById.get(point.source_id);
-        label = habitById.get(entry?.habit_id)?.name || label;
+        const habit = habitById.get(entry?.habit_id);
+        label = habit?.name || label;
+        const name = String(habit?.name || '').trim().toLocaleLowerCase('de-CH').replace(/\s+/g, ' ');
+        if (habit && groupedHabitNames.has(name)) groupKey = 'habit:' + habit.id;
       } else if (point.source_type === 'task') {
         label = taskById.get(point.source_id)?.title || label;
       }
       const week = weeks[index];
       const sign = value > 0 ? 'positive' : 'negative';
-      if (point.source_type === 'cigarette') {
-        // Only smoking is grouped; keep gains and losses separate instead of netting them.
-        let item = smoking[index].get(sign);
+      if (groupKey) {
+        // Group only selected sources, retaining separate gains/losses and original totals.
+        const signedKey = groupKey + ':' + sign;
+        let item = weeklyGroups[index].get(signedKey);
         if (!item) {
-          item = { key: 'smoking:' + sign, label: 'Rauchen · Wochenwert', points: 0, logs: 0, type: 'cigarette' };
-          smoking[index].set(sign, item);
+          item = { key: signedKey, label: (point.source_type === 'cigarette' ? 'Rauchen' : String(label)) + ' · Wochenwert', points: 0, logs: 0, type: point.source_type };
+          weeklyGroups[index].set(signedKey, item);
           week[sign].push(item);
         }
         item.points += value;

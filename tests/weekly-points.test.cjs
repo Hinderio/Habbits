@@ -17,7 +17,7 @@ test('ISO weeks use Monday and preserve ISO year across January', () => {
   const monday = domain.monday('2026-03-30T12:00:00Z');
   assert.equal(monday - sunday, 7 * 86400000);
 });
-test('keeps every habit log and task in a separate square with signs unnetted', () => {
+test('keeps other habit logs and tasks separate with signs unnetted', () => {
   const week = latest({
     habits: [{ id: 'habit', name: 'Engagement', is_archived: true }],
     entries: [{ id: 'a', habit_id: 'habit' }, { id: 'b', habit_id: 'habit' }, { id: 'c', habit_id: 'habit' }],
@@ -188,7 +188,7 @@ test('identical sources and reasons stay separate, only repeated ledger IDs are 
   assert.equal(new Set(week.positive.map(item => item.key)).size, 4);
 });
 
-test('only smoking is grouped by week and sign, with original totals and duplicate protection', () => {
+test('smoking groups by week and sign with original totals and duplicate protection', () => {
   const ledger = [
     point('a', 5, { source_type: 'cigarette' }), point('b', 10, { source_type: 'cigarette' }),
     point('b', 10, { source_type: 'cigarette' }), point('c', -10, { source_type: 'cigarette' }),
@@ -206,4 +206,45 @@ test('only smoking is grouped by week and sign, with original totals and duplica
   assert.equal(week.negative.at(-1).logs, 2);
   assert.equal(week.negativePoints, -50);
   assert.equal(model.weeks.at(-2).positive[0].points, 50);
+});
+
+test('the four selected habits group individually per week, including archived history', () => {
+  const names = ['Brotfreier Tag', 'Spazieren', 'Stehpult', 'Meditation'];
+  const habits = names.map((name, i) => ({ id: 'h' + i, name, is_archived: i < 3 }));
+  const entries = [], ledger = [];
+  habits.forEach(habit => {
+    for (let i = 0; i < 2; i++) {
+      const id = habit.id + '-' + i;
+      entries.push({ id, habit_id: habit.id });
+      ledger.push(point(id, 12, { source_type: 'habit', source_id: id }));
+    }
+  });
+  entries.push({ id: 'previous', habit_id: 'h0' }, { id: 'minus', habit_id: 'h0' });
+  ledger.push(point('previous', 12, { source_type: 'habit', source_id: 'previous', earned_at: '2026-09-15T12:00:00Z' }),
+    point('minus', -5, { source_type: 'habit', source_id: 'minus' }));
+  const original = JSON.stringify({ habits, entries, ledger });
+  const model = domain.build({ now, habits, entries, ledger });
+  const week = model.weeks.at(-1);
+  assert.equal(week.positive.length, 4);
+  assert.ok(week.positive.every(item => item.points === 24 && item.logs === 2));
+  assert.equal(new Set(week.positive.map(item => item.key)).size, 4);
+  assert.equal(week.positivePoints, 96);
+  assert.equal(week.negativePoints, -5);
+  assert.equal(week.negative[0].logs, 1);
+  assert.equal(model.weeks.at(-2).positive[0].points, 12);
+  assert.equal(JSON.stringify({ habits, entries, ledger }), original);
+});
+test('habit grouping uses exact normalized names, not reused icons or related names', () => {
+  const habits = [
+    { id: 'selected', name: '  BROTFREIER   TAG  ' },
+    { id: 'other', name: 'Morgenroutine', icon: 'bread' },
+    { id: 'engagement', name: 'Engagement', icon: 'standingDesk' },
+    { id: 'custom', name: 'Meditation Spezial', icon: 'meditation' }
+  ];
+  const entries = habits.flatMap(habit => [0, 1].map(i => ({ id: habit.id + i, habit_id: habit.id })));
+  const ledger = entries.map(entry => point(entry.id, 10, { source_type: 'habit', source_id: entry.id }));
+  const week = latest({ habits, entries, ledger });
+  assert.equal(week.positive.length, 7);
+  assert.equal(week.positive.filter(item => item.logs === 2).length, 1);
+  assert.equal(week.positivePoints, 80);
 });
