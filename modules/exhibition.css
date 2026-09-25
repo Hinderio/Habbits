@@ -15,7 +15,7 @@
 .hf-ex-poster>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;filter:brightness(var(--ex-brightness,1))}
 .hf-ex-poster.ex-mono>img{filter:grayscale(1) brightness(var(--ex-brightness,1))}
 .hf-ex-poster.ex-warm>img{filter:sepia(.35) saturate(.85) brightness(var(--ex-brightness,1))}
-.hf-ex-poster:after{content:"";position:absolute;inset:0;z-index:1;background:linear-gradient(180deg,rgba(0,0,0,.24),rgba(0,0,0,.12) 30%,rgba(0,0,0,.86))}
+.hf-ex-poster:after{content:"";opacity:var(--ex-overlay,1);position:absolute;inset:0;z-index:1;background:linear-gradient(180deg,rgba(0,0,0,.24),rgba(0,0,0,.12) 30%,rgba(0,0,0,.86))}
 .hf-ex-overlay{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;justify-content:flex-end;padding:clamp(18px,2vw,32px);overflow:auto;overflow-wrap:anywhere}
 .hf-ex-overlay small{font-family:system-ui,sans-serif;font-size:.6rem;font-weight:750;letter-spacing:.2em;color:inherit;margin-bottom:auto;padding-bottom:24px}
 .hf-ex-overlay h4{font-family:inherit;font-size:clamp(1.6rem,3vw,3.3rem);line-height:.98;letter-spacing:-.05em;font-weight:900;color:inherit;margin:0}

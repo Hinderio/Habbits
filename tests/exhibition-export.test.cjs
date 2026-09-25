@@ -9,7 +9,7 @@ function harness(fail = false) {
   const calls = [], revoked = [];
   const context2d = {
     fillRect() {}, drawImage(...args) { calls.push(['image', ...args.slice(1)]); },
-    createLinearGradient: () => ({ addColorStop() {} }),
+    createLinearGradient: () => { calls.push(['gradient']); return { addColorStop: (position, color) => calls.push(['stop', position, color]) }; },
     measureText: text => ({ width: text.length * 25 }),
     fillText: text => calls.push(['text', text]),
     getImageData: () => ({ data: new Uint8ClampedArray([100, 150, 200, 255]) }),
@@ -62,4 +62,19 @@ test('long words and explicit line breaks wrap without losing text', () => {
   const { api } = harness();
   const lines = api.wrap({ measureText: text => ({ width: text.length }) }, 'abcdefghijkl\nnext', 4);
   assert.deepEqual(Array.from(lines), ['abcd', 'efgh', 'ijkl', 'next']);
+});
+
+test('zero overlay exports with no gradient at all', async () => {
+  const { api, calls } = harness();
+  const entry = item(); entry.metadata.overlay = 0;
+  await api.createPoster(entry);
+  assert.ok(!calls.some(call => call[0] === 'gradient'));
+  assert.ok(calls.some(call => call[0] === 'image'));
+  assert.ok(calls.some(call => call[0] === 'text'));
+});
+test('partial overlay scales every gradient stop in the export', async () => {
+  const { api, calls } = harness();
+  const entry = item(); entry.metadata.overlay = 50;
+  await api.createPoster(entry);
+  assert.deepEqual(calls.filter(call => call[0] === 'stop').map(call => call[2]), ['rgba(0,0,0,0.12)', 'rgba(0,0,0,0.06)', 'rgba(0,0,0,0.43)']);
 });

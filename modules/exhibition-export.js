@@ -75,11 +75,14 @@
       const scale = Math.max(WIDTH / image.width, HEIGHT / image.height);
       context.drawImage(image, (WIDTH - image.width * scale) / 2, (HEIGHT - image.height * scale) / 2, image.width * scale, image.height * scale);
       if (settings.look !== 'color' || settings.brightness !== 100) await applyLook(context, settings);
-      const gradient = context.createLinearGradient(0, 0, 0, HEIGHT);
-      gradient.addColorStop(0, 'rgba(0,0,0,.24)');
-      gradient.addColorStop(.3, 'rgba(0,0,0,.12)');
-      gradient.addColorStop(1, 'rgba(0,0,0,.86)');
-      context.fillStyle = gradient; context.fillRect(0, 0, WIDTH, HEIGHT);
+      if (settings.overlay > 0) {
+        const strength = settings.overlay / 100;
+        const gradient = context.createLinearGradient(0, 0, 0, HEIGHT);
+        gradient.addColorStop(0, 'rgba(0,0,0,' + .24 * strength + ')');
+        gradient.addColorStop(.3, 'rgba(0,0,0,' + .12 * strength + ')');
+        gradient.addColorStop(1, 'rgba(0,0,0,' + .86 * strength + ')');
+        context.fillStyle = gradient; context.fillRect(0, 0, WIDTH, HEIGHT);
+      }
       const padding = 100, maxWidth = WIDTH - padding * 2;
       const family = FAMILIES[settings.font];
       context.fillStyle = settings.color; context.textBaseline = 'top';

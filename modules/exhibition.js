@@ -19,6 +19,7 @@
       tone: pick(TONES, input.tone, 'white'),
       color: normalizeColor(input.color, TONES[pick(TONES, input.tone, 'white')]),
       brightness: typeof input.brightness === 'number' && Number.isFinite(input.brightness) ? Math.min(150, Math.max(50, Math.round(input.brightness))) : 100,
+      overlay: typeof input.overlay === 'number' && Number.isFinite(input.overlay) ? Math.min(100, Math.max(0, Math.round(input.overlay))) : 100,
       look: pick({ color: 1, mono: 1, warm: 1 }, input.look, input.monochrome === true ? 'mono' : 'color'),
       monochrome: input.look ? input.look === 'mono' : input.monochrome === true
     };
@@ -30,7 +31,7 @@
   function poster(item, preview = false) {
     const settings = normalize(item.metadata);
     const image = safeImage(item.metadata?.image);
-    return '<div class="hf-ex-poster ex-font-' + settings.font + ' ex-style-' + settings.style + (settings.look === 'mono' ? ' ex-mono' : settings.look === 'warm' ? ' ex-warm' : '') + (image ? '' : ' ex-empty') + '" style="--ex-text-color:' + settings.color + ';--ex-brightness:' + settings.brightness / 100 + '">' +
+    return '<div class="hf-ex-poster ex-font-' + settings.font + ' ex-style-' + settings.style + (settings.look === 'mono' ? ' ex-mono' : settings.look === 'warm' ? ' ex-warm' : '') + (image ? '' : ' ex-empty') + '" style="--ex-text-color:' + settings.color + ';--ex-brightness:' + settings.brightness / 100 + ';--ex-overlay:' + settings.overlay / 100 + '">' +
       (image ? '<img src="' + image + '" alt="" width="1200" height="1500" loading="' + (preview ? 'eager' : 'lazy') + '" decoding="async">' : '<div class="hf-ex-placeholder" aria-hidden="true"></div>') +
       '<div class="hf-ex-overlay"><small>IDEEN / EXHIBITION</small><h4>' + escape(item.title || 'Eine neue Perspektive') + '</h4><p>' + escape(item.note || '') + '</p></div></div>';
   }
@@ -92,6 +93,7 @@
       '<label><span>Schriftfarbe</span><input name="color" type="color" value="#ffffff"></label>' +
       '<label><span>Foto-Look</span><select name="look"><option value="color">Originalfarben</option><option value="mono">Schwarz-Weiß</option><option value="warm">Warm / Film</option></select></label>' +
       '<label class="full hf-ex-brightness"><span>Bildhelligkeit · <output data-ex-brightness>100 %</output></span><input name="brightness" type="range" min="50" max="150" step="1" value="100"><small>Nur das Bild wird angepasst, nicht die Schrift. 100 % = keine zusätzliche Helligkeitsänderung.</small></label>' +
+      '<label class="full hf-ex-brightness"><span>Verlauf · <output data-ex-overlay>100 %</output></span><input name="overlay" type="range" min="0" max="100" step="1" value="100"><small>0 % = ohne Overlay · 100 % = voller Verlauf. Foto-Look und Helligkeit bleiben unabhängig.</small></label>' +
       '<div class="full hf-ex-form-actions"><button class="pill primary" type="submit">Exponat speichern</button><button class="pill secondary" type="button" data-ex-cancel hidden>Abbrechen</button></div>' +
       '<p class="full hf-ex-status" role="status" aria-live="polite" data-ex-status></p></form><div class="hf-ex-preview"><p class="eyebrow">LIVE-VORSCHAU</p><div data-ex-preview></div></div></div>' +
       '<div class="hf-ex-gallery" data-ex-gallery></div><nav class="hf-ex-pagination" aria-label="Galerieseiten"><button class="pill secondary" type="button" data-ex-prev>Zurück</button><span data-ex-page></span><button class="pill secondary" type="button" data-ex-next>Weiter</button></nav></section>';
@@ -101,7 +103,7 @@
     const status = root.querySelector('[data-ex-status]');
     let image = '', editingId = '', page = 0, busy = false, operation = 0;
     const say = message => { status.textContent = message; };
-    const draft = () => ({ title: form.elements.title.value.trim(), note: form.elements.note.value.trim(), metadata: { image, style: form.elements.style.value, font: form.elements.font.value, color: form.elements.color.value, brightness: Number(form.elements.brightness.value), look: form.elements.look.value, monochrome: form.elements.look.value === 'mono' } });
+    const draft = () => ({ title: form.elements.title.value.trim(), note: form.elements.note.value.trim(), metadata: { image, style: form.elements.style.value, font: form.elements.font.value, color: form.elements.color.value, brightness: Number(form.elements.brightness.value), overlay: Number(form.elements.overlay.value), look: form.elements.look.value, monochrome: form.elements.look.value === 'mono' } });
     let previewImage = null;
     const preview = () => {
       const item = draft();
@@ -117,10 +119,12 @@
           (settings.look === 'mono' ? ' ex-mono' : settings.look === 'warm' ? ' ex-warm' : '') + (image ? '' : ' ex-empty');
         card.style.setProperty('--ex-text-color', settings.color);
         card.style.setProperty('--ex-brightness', settings.brightness / 100);
+        card.style.setProperty('--ex-overlay', settings.overlay / 100);
         card.querySelector('h4').textContent = item.title || 'Eine neue Perspektive';
         card.querySelector('p').textContent = item.note;
       }
       root.querySelector('[data-ex-brightness]').textContent = form.elements.brightness.value + ' %';
+      root.querySelector('[data-ex-overlay]').textContent = form.elements.overlay.value === '0' ? 'Aus' : form.elements.overlay.value + ' %';
     };
     function setBusy(value) {
       busy = value;
@@ -201,7 +205,7 @@
       const settings = normalize(item.metadata);
       form.elements.title.value = item.title;
       form.elements.note.value = item.note || '';
-      for (const key of ['font', 'style', 'color', 'brightness']) form.elements[key].value = settings[key];
+      for (const key of ['font', 'style', 'color', 'brightness', 'overlay']) form.elements[key].value = settings[key];
       form.elements.look.value = settings.look;
       root.querySelector('[data-ex-cancel]').hidden = false;
       root.querySelector('[data-ex-form-title]').textContent = 'Exponat bearbeiten';

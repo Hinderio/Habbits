@@ -30,7 +30,7 @@ const input = () => ({ title: 'Barcelona', note: 'Neue Perspektiven', metadata: 
 
 test('unknown typography values fall back to whitelisted classes', () => {
   const { api } = harness();
-  assert.deepEqual({ ...api.normalize({ font: '__proto__', style: '<script>', tone: 'constructor' }) }, { font: 'sans', style: 'poster', tone: 'white', color: '#ffffff', brightness: 100, look: 'color', monochrome: false });
+  assert.deepEqual({ ...api.normalize({ font: '__proto__', style: '<script>', tone: 'constructor' }) }, { font: 'sans', style: 'poster', tone: 'white', color: '#ffffff', brightness: 100, overlay: 100, look: 'color', monochrome: false });
 });
 test('poster escapes text and rejects external or executable image sources', () => {
   const { api } = harness();
@@ -156,18 +156,20 @@ test('live brightness changes reuse the preview DOM and never re-encode images',
   const start = source.indexOf('    const preview = () => {');
   const end = source.indexOf('    function setBusy', start);
   const properties = {};
-  const heading = {}, description = {}, output = {};
+  const heading = {}, description = {}, output = {}, overlayOutput = {};
   const card = { style: { setProperty: (key, value) => { properties[key] = value; } }, querySelector: selector => selector === 'h4' ? heading : description };
   const host = { firstElementChild: card, set innerHTML(_) { throw new Error('Preview DOM must not be replaced'); } };
   const context = {
     image: validImage, previewImage: validImage,
-    draft: () => ({ title: 'Updated', note: 'Description', metadata: { color: '#123456', brightness: 140, monochrome: true } }),
+    draft: () => ({ title: 'Updated', note: 'Description', metadata: { color: '#123456', brightness: 140, overlay: 0, monochrome: true } }),
     normalize: api.normalize,
-    root: { querySelector: selector => selector === '[data-ex-preview]' ? host : output },
-    form: { elements: { brightness: { value: '140' } } }
+    root: { querySelector: selector => selector === '[data-ex-preview]' ? host : selector === '[data-ex-overlay]' ? overlayOutput : output },
+    form: { elements: { brightness: { value: '140' }, overlay: { value: '0' } } }
   };
   vm.runInNewContext(source.slice(start, end) + '\npreview();', context);
   assert.equal(properties['--ex-brightness'], 1.4);
+  assert.equal(properties['--ex-overlay'], 0);
+  assert.equal(overlayOutput.textContent, 'Aus');
   assert.equal(properties['--ex-text-color'], '#123456');
   assert.equal(heading.textContent, 'Updated');
   assert.equal(output.textContent, '140 %');
@@ -214,4 +216,24 @@ test('list navigation works when storage is full and never rewrites image data',
   }
   assert.equal(writes.length, 5);
   assert.ok(writes.every(([key, value]) => key === 'habitflow-lists-v1-active-list' && value.length < 20));
+});
+
+test('overlay keeps legacy appearance and clamps invalid values', () => {
+  const { api } = harness();
+  for (const value of [undefined, null, NaN, Infinity, '0']) assert.equal(api.normalize({ overlay: value }).overlay, 100);
+  assert.equal(api.normalize({ overlay: 0 }).overlay, 0);
+  assert.equal(api.normalize({ overlay: -5 }).overlay, 0);
+  assert.equal(api.normalize({ overlay: 101 }).overlay, 100);
+  assert.equal(api.normalize({ overlay: 45.4 }).overlay, 45);
+});
+test('zero overlay persists through edit and reload and renders without changing image', () => {
+  const { integration, storage, api } = harness();
+  const entry = input();
+  entry.metadata.overlay = 0;
+  integration.saveExhibition(entry);
+  integration.saveExhibition({ ...integration.getState().items[0], title: 'Without gradient' });
+  const restored = JSON.parse(storage.get('habitflow-lists-v1')).items[0];
+  assert.equal(restored.metadata.overlay, 0);
+  assert.equal(restored.metadata.image, validImage);
+  assert.match(api.poster(restored), /--ex-overlay:0/);
 });
