@@ -17,7 +17,7 @@ test('ISO weeks use Monday and preserve ISO year across January', () => {
   const monday = domain.monday('2026-03-30T12:00:00Z');
   assert.equal(monday - sunday, 7 * 86400000);
 });
-test('groups habit logs per week while keeping tasks separate and signs unnetted', () => {
+test('keeps every habit log and task in a separate square with signs unnetted', () => {
   const week = latest({
     habits: [{ id: 'habit', name: 'Engagement', is_archived: true }],
     entries: [{ id: 'a', habit_id: 'habit' }, { id: 'b', habit_id: 'habit' }, { id: 'c', habit_id: 'habit' }],
@@ -26,21 +26,24 @@ test('groups habit logs per week while keeping tasks separate and signs unnetted
       point('p3', -5, { source_type: 'habit', source_id: 'c' }), point('p4', 20, { source_type: 'task', source_id: 'task1' }),
       point('p5', 50, { source_type: 'task', source_id: 'task2' })]
   });
-  assert.equal(week.positive.length, 3);
-  assert.deepEqual(week.positive.map(item => item.points), [20, 40, 50]);
-  assert.equal(week.positive[1].label, 'Engagement');
-  assert.equal(week.positive[1].logs, 2);
+  assert.equal(week.positive.length, 4);
+  assert.deepEqual(week.positive.map(item => item.points), [10, 20, 30, 50]);
+  assert.equal(week.positive[0].label, 'Engagement');
+  assert.equal(week.positive[2].label, 'Engagement');
+  assert.ok(week.positive.every(item => item.logs === 1));
   assert.equal(week.negative[0].points, -5);
   assert.equal(week.positivePoints, 110);
   assert.equal(week.negativePoints, -5);
 });
-test('smoking and alcohol use separate signed weekly squares', () => {
+test('every consumption booking gets a square without weekly aggregation', () => {
   const week = latest({ ledger: [point('s1', 5, { source_type: 'cigarette' }), point('s2', -10, { source_type: 'cigarette' }),
     point('a1', -20, { reason: 'Alkohol: Bier' }), point('a2', -50, { reason: 'Alkohol-Tag: hoch' })] });
   assert.equal(week.positive.length, 1);
-  assert.equal(week.negative.length, 2);
-  assert.equal(week.negative[1].label, 'Alkohol');
-  assert.equal(week.negative[1].points, -70);
+  assert.equal(week.negative.length, 3);
+  assert.equal(week.negative[1].label, 'Alkohol: Bier');
+  assert.equal(week.negative[1].points, -20);
+  assert.equal(week.negative[2].points, -50);
+  assert.equal(week.negativePoints, -80);
 });
 test('skips zero, invalid, future, out-of-range and duplicate ledger IDs', () => {
   const ledger = [point('valid', 30), point('valid', 30), point('zero', 0), point('nan', 'bad'), point('infinite', Infinity),
@@ -74,6 +77,8 @@ test('100k ledger rows are scanned once and use bounded week buckets', () => {
   assert.equal(model.weeks.length, 52);
   assert.equal(model.weeks.at(-1).positivePoints, 50000);
   assert.equal(model.weeks.at(-1).negativePoints, -50000);
+  assert.equal(model.weeks.at(-1).positive.length, 50000);
+  assert.equal(model.weeks.at(-1).negative.length, 50000);
   console.log('100k rows: ' + Math.round(performance.now() - begin) + ' ms');
 });
 test('heatmap is moved once to Habits, retaining its original structure and independent controls', () => {
@@ -164,4 +169,17 @@ test('only the legend ramp gets twenty percent transparency', () => {
   const ramp = css.match(/\.weekly-points-legend i \{([^}]+)\}/)[1];
   assert.ok(ramp.includes('opacity: .8'));
   assert.ok(!renderer.includes('globalAlpha'));
+});
+
+test('identical sources and reasons stay separate, only repeated ledger IDs are ignored', () => {
+  const week = latest({ ledger: [
+    point('one', 5, { source_type: 'cigarette', source_id: 'same', reason: 'same' }),
+    point('two', 5, { source_type: 'cigarette', source_id: 'same', reason: 'same' }),
+    point('two', 5, { source_type: 'cigarette', source_id: 'same', reason: 'same' }),
+    point(null, 5, { source_type: 'bonus', source_id: 'same', reason: 'same' }),
+    point(null, 5, { source_type: 'bonus', source_id: 'same', reason: 'same' })
+  ] });
+  assert.equal(week.positive.length, 4);
+  assert.equal(week.positivePoints, 20);
+  assert.equal(new Set(week.positive.map(item => item.key)).size, 4);
 });

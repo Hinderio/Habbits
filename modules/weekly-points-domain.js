@@ -37,7 +37,7 @@
     const habitById = new Map(habits.map(h => [h.id, h]));
     const entryById = new Map(entries.map(e => [e.id, e]));
     const taskById = new Map(tasks.map(t => [t.id, t]));
-    const buckets = weeks.map(() => new Map());
+    let sequence = 0;
     const seen = new Set();
     const nowTime = new Date(now).getTime();
     for (const point of ledger) {
@@ -48,37 +48,22 @@
       if (point.id) seen.add(point.id);
       const index = Math.round((monday(date) - first) / (7 * DAY));
       if (index < 0 || index >= count) continue;
-      let key = point.source_type + ':' + (point.source_id || point.id || point.reason);
+      const key = point.id || 'row:' + sequence++;
       let label = point.reason || 'Punktebuchung';
       if (point.source_type === 'habit') {
         const entry = entryById.get(point.source_id);
-        const habit = habitById.get(entry?.habit_id);
-        key = entry?.habit_id ? 'habit:' + entry.habit_id : key;
-        label = habit?.name || label;
+        label = habitById.get(entry?.habit_id)?.name || label;
       } else if (point.source_type === 'task') {
         label = taskById.get(point.source_id)?.title || label;
-      } else if (point.source_type === 'cigarette') {
-        key = 'cigarette';
-        label = 'Rauchverhalten';
-      } else if (/^Alkohol[:\s-]/i.test(label)) {
-        key = 'alcohol';
-        label = 'Alkohol';
       }
-      key += value > 0 ? ':positive' : ':negative';
-      let item = buckets[index].get(key);
-      if (!item) {
-        item = { key, label: String(label), points: 0, logs: 0, type: point.source_type || 'other' };
-        buckets[index].set(key, item);
-      }
-      item.points += value;
-      item.logs++;
+      // Each booking is its own square, even for the same source, habit or reason.
+      const item = { key, label: String(label), points: value, logs: 1, type: point.source_type || 'other' };
+      const week = weeks[index];
+      (value > 0 ? week.positive : week.negative).push(item);
+      if (value > 0) week.positivePoints += value;
+      else week.negativePoints += value;
     }
-    weeks.forEach((week, index) => {
-      for (const item of buckets[index].values()) {
-        (item.points > 0 ? week.positive : week.negative).push(item);
-        if (item.points > 0) week.positivePoints += item.points;
-        else week.negativePoints += item.points;
-      }
+    weeks.forEach(week => {
       const order = (a, b) => Math.abs(a.points) - Math.abs(b.points) || a.key.localeCompare(b.key);
       week.positive.sort(order);
       week.negative.sort(order);
