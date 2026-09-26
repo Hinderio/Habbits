@@ -366,3 +366,42 @@ body:not(.light) :where(.pill.primary, .mini-btn.primary, .craving-actions .mini
     align-content: start;
   }
 }
+
+/* Keep the wide rhythm table inside its scroller, not the pane's intrinsic grid width. */
+#screen-habits,
+#screen-habits .habits-pane,
+#screen-habits .habits-pane > *,
+#screen-habits .habit-heatmap,
+#screen-habits .heatmap-scroll {
+  min-width: 0;
+  max-width: 100%;
+}
+
+#screen-habits .habits-pane {
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+#screen-habits .heatmap-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+@media (max-width: 760px) {
+  #screen-habits .habit-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #screen-habits .dashboard-chart-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #screen-habits .chart-range-label {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  #habitChartPrevWindowBtn { grid-column: 1; grid-row: 2; }
+  #habitChartNextWindowBtn { grid-column: 2; grid-row: 2; }
+  #habitChartTodayWindowBtn { grid-column: 1 / -1; grid-row: 3; }
+}
