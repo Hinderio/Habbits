@@ -1,4 +1,10 @@
-.project-view-pane{display:grid;gap:18px;min-width:0}.project-view-pane[hidden],.dossier-dialog [hidden]{display:none!important}
+/* Preserve the screen's vertical layout. An implicit grid track inherits the
+   timeline's minimum width and can expand the entire mobile viewport. */
+.project-view-pane{display:flex;flex-direction:column;gap:18px;min-width:0;width:100%;max-width:100%}
+.project-view-pane>*{min-width:0}
+#projectViewProjects .project-grid{min-width:0}
+#projectViewProjects .project-card{min-width:0;overflow-wrap:anywhere}
+#projectViewProjects #projectTimelineViewMount{width:100%;max-width:100%;min-width:0}.project-view-pane[hidden],.dossier-dialog [hidden]{display:none!important}
 .project-view-switch{display:flex;gap:6px;padding:5px;width:min(100%,360px);border:1px solid var(--card-border);border-radius:999px;background:var(--card-strong)}
 .project-view-switch button{flex:1;min-height:44px;border:0;border-radius:999px;background:transparent;color:var(--muted);font:inherit;font-weight:800;cursor:pointer}.project-view-switch button[aria-selected=true]{background:var(--primary);color:#0e1726}
 .project-view-switch button:focus-visible,.dossier-dialog :focus-visible{outline:3px solid var(--primary);outline-offset:3px}.dossier-search{display:grid;gap:6px;margin-bottom:18px}.dossier-search span{color:var(--muted);font-size:.85rem}.dossier-card{cursor:pointer}.dossier-card p{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}.dossier-card h3{overflow-wrap:anywhere}
