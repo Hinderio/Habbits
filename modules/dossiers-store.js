@@ -12,7 +12,7 @@
   let inFlight = null, queued = false, activeDossier = '', status = 'lokal', timer = 0;
   const listeners = new Set(), signed = new Map();
   const normalizedCollections = new WeakMap();
-  let snapshotCache = null, localRevision = 0, flightRequest = null;
+  let snapshotCache = null, localRevision = 0, flightRequest = null, syncFailure = null;
   function featureState() {
     return window.HabitFlowPersistence?.readCollections
       ? window.HabitFlowPersistence.readCollections(['dossiers', 'dossierEntries', 'projects']) : read();
@@ -51,6 +51,13 @@
       const row = normalize(value, entry);
       if (!row) continue;
       const old = rows.get(row.id);
+      // A server acknowledgment describes the same version, not a new edit.
+      // Legacy storage wrappers can lose dossierWrite context and reverse the
+      // merge order. Never turn an identical acknowledged version pending again.
+      if (old && old.synced !== row.synced && sameRow({ ...old, synced: false }, { ...row, synced: false })) {
+        rows.set(row.id, old.synced ? old : row);
+        continue;
+      }
       if (!old || (row.is_archived && !old.is_archived) || (!old.is_archived || row.is_archived) && row.updated_at >= old.updated_at) rows.set(row.id, row);
     }
     return [...rows.values()];
@@ -129,6 +136,8 @@
   async function runSync(request) {
     const owner = request.owner;
     const received = { dossiers: [], dossierEntries: [] };
+    let syncTable = 'dossiers';
+    syncFailure = null;
     if (!owner || !client()) { status = 'Bitte anmelden'; publish(); return; }
     status = 'synchronisiert …'; publish();
     try {
@@ -144,6 +153,7 @@
         const pending = merge([], current[key], entry).filter(row => row.user_id === owner && !row.synced).map(row => entry && archived.has(row.dossier_id) ? { ...row, is_archived: true } : row);
         for (let offset = 0; offset < pending.length; offset += 100) {
           const batch = pending.slice(offset, offset + 100);
+          syncTable = table;
           const result = await client().from(table).upsert(batch.map(({ synced, ...row }) => row), { onConflict: 'id' }).select('*');
           if (result.error) throw result.error;
           stillOwner(owner);
@@ -152,6 +162,7 @@
       }
       const dossierId = request.dossierId;
       if (dossierId) {
+        syncTable = 'dossier_entries';
         const entries = await pages('dossier_entries', owner, dossierId);
         stillOwner(owner);
         received.dossierEntries.push(...entries);
@@ -162,6 +173,8 @@
       status = Object.keys(FIELDS).some(key => (latest[key] || []).some(row => row.user_id === owner && !row.synced)) ? 'lokal · Sync ausstehend' : 'synchronisiert';
     } catch (error) {
       if (user() !== owner) { queued = Boolean(user()); return; }
+      // Retain only a diagnostic code, never server details containing user content.
+      syncFailure = { owner, table: syncTable, code: /^[A-Z0-9]{3,12}$/.test(String(error.code || '')) ? String(error.code) : '' };
       // Keep successful earlier batches acknowledged even if a later request fails.
       try { commitRemote(received); } catch (_) { /* Pending local rows stay durable. */ }
       status = /42P01|PGRST205/.test(error.code || '') ? 'Dossier-Sync noch nicht eingerichtet' : 'lokal · Sync ausstehend';
@@ -189,9 +202,10 @@
     await sync(dossierId);
     stillOwner(owner);
     if (!(read().dossiers || []).some(row => row.id === dossierId && row.user_id === owner && row.synced && !row.is_archived)) {
+      const detail = syncFailure?.owner === owner && syncFailure.code ? ` (Sync: ${syncFailure.table}, ${syncFailure.code})` : '';
       throw new Error(status === 'Dossier-Sync noch nicht eingerichtet'
         ? 'Die Dossier-Synchronisierung ist noch nicht eingerichtet. Der Bild-Upload ist deshalb nicht möglich. Dein Entwurf bleibt erhalten.'
-        : 'Das Dossier konnte noch nicht synchronisiert werden. Bitte Verbindung und Anmeldung prüfen und erneut speichern. Dein Entwurf bleibt erhalten.');
+        : 'Das Dossier konnte noch nicht synchronisiert werden' + detail + '. Bitte erneut speichern. Dein Entwurf bleibt erhalten.');
     }
     const path = owner + '/' + dossierId + '/' + window.crypto.randomUUID() + (blob.type === 'image/webp' ? '.webp' : '.jpg');
     const result = await client().storage.from(BUCKET).upload(path, blob, { contentType: blob.type, upsert: false, cacheControl: '3600' });

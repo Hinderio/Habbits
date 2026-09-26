@@ -200,3 +200,41 @@ test('image upload distinguishes missing setup and denied storage while preservi
   app.uploadError({statusCode:'403',message:'new row violates row-level security policy'});await assert.rejects(app.api.upload(blob,dossier.id),/Upload abgelehnt/);
   app.uploadError(null);assert.match(await app.api.upload(blob,dossier.id),/webp$/);
 });
+
+test('image upload remains possible through a legacy storage wrapper',async()=>{
+  const app=harness();const native=app.storage.setItem.bind(app.storage);
+  app.storage.setItem=(key,value)=>native(key,value);
+  assert.equal(app.window.HabitFlowPersistence.isReady(),false);
+  const dossier=app.api.saveDossier({title:'Photo dossier'});
+  await app.api.sync(dossier.id);
+  assert.equal(app.remote.dossiers.length,1);
+  assert.equal(app.read().dossiers[0].synced,true,'remote acknowledgment must survive the legacy writer');
+  const path=await app.api.upload(new Blob(['abc'],{type:'image/webp'}),dossier.id);
+  assert.ok(path.endsWith('.webp'));
+});
+
+test('acknowledgments win only for identical versions regardless of merge direction',()=>{
+  const app=harness();const pending=app.api.saveDossier({title:'Original'}),ack={...pending,synced:true};
+  for(const rows of [[pending,ack],[ack,pending]])assert.equal(app.api.merge([rows[0]],[rows[1]])[0].synced,true);
+  const newer={...pending,title:'Edited',updated_at:new Date(Date.parse(pending.updated_at)+1).toISOString()};
+  for(const rows of [[newer,ack],[ack,newer]]){const merged=app.api.merge([rows[0]],[rows[1]])[0];assert.equal(merged.title,'Edited');assert.equal(merged.synced,false);}
+  const different={...pending,title:'Different content at same timestamp'};
+  assert.equal(app.api.merge([ack],[different])[0].synced,false);
+});
+test('legacy writes cannot revert an acknowledged entry but newer edits remain pending',async()=>{
+  const app=harness();const original=app.storage.setItem.bind(app.storage);app.storage.setItem=(key,value)=>original(key,value);
+  const dossier=app.api.saveDossier({title:'Photos'});const entry=app.api.saveEntry({dossier_id:dossier.id,body:'Initial'});
+  const stale=app.read();await app.api.sync(dossier.id);assert.equal(app.read().dossierEntries[0].synced,true);
+  app.window.HabitFlowPersistence.writeState(stale);assert.equal(app.read().dossierEntries[0].synced,true);
+  app.api.saveEntry({...entry,body:'Updated offline'});assert.equal(app.read().dossierEntries[0].synced,false);
+  await app.api.sync(dossier.id);assert.equal(app.remote.dossier_entries[0].body,'Updated offline');assert.equal(app.read().dossierEntries[0].synced,true);
+});
+
+test('a real server failure exposes its code without leaking record contents',async()=>{
+  const app=harness();const dossier=app.api.saveDossier({title:'Private title'});
+  app.beforeRequest(query=>{if(query.rows)throw Object.assign(new Error('Private database record'),{code:'23503'});});
+  await assert.rejects(app.api.upload(new Blob(['abc'],{type:'image/webp'}),dossier.id),error=>{
+    assert.match(error.message,/dossiers, 23503/);assert.ok(!error.message.includes('Private'));return true;
+  });
+  assert.equal(app.uploads(),0);assert.equal(app.read().dossiers[0].synced,false);
+});
