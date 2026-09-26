@@ -9,6 +9,7 @@
       fetch('./supabase.sql', { cache: 'no-store' }).then(response => response.ok ? response.text() : ''),
       fetch('./sql/add-appointment-series.sql', { cache: 'no-store' }).then(response => response.ok ? response.text() : ''),
       fetch('./sql/add-projects.sql', { cache: 'no-store' }).then(response => response.ok ? response.text() : ''),
+      fetch('./sql/add-dossiers.sql', { cache: 'no-store' }).then(response => response.ok ? response.text() : ''),
       fetch('./sql/add-task-steps.sql', { cache: 'no-store' }).then(response => response.ok ? response.text() : ''),
       fetch('./sql/add-alcohol-daily-intensity.sql', { cache: 'no-store' }).then(response => response.ok ? response.text() : '')
     ]).then(parts => {

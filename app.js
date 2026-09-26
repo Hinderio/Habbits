@@ -14181,9 +14181,14 @@ async function deleteAlcoholLog(id) {
     }
   }
 
+  // Feature modules share the existing authenticated client and session.
+  window.HabitFlowRemote = Object.freeze({ getClient: () => supabaseClient, getUserId: currentUserId });
+
   function setAuthSession(session) {
+    const previousUserId = currentUserId();
     authSession = session || null;
     currentUser = authSession?.user || null;
+    if (previousUserId !== currentUserId()) window.dispatchEvent(new CustomEvent('habitflow:auth-change'));
     if (settings && currentUser?.email) {
       settings.email = currentUser.email;
       saveSettingsToStorage();
@@ -15991,7 +15996,8 @@ function initOngoingSync() {
   });
 
   function exportJson() {
-    const blob = new Blob([JSON.stringify({ state, settings: { email: settings.email || '' } }, null, 2)], { type: 'application/json' });
+    const dossierState = window.HabitFlowDossiersStore?.backup() || {};
+    const blob = new Blob([JSON.stringify({ state: { ...state, ...dossierState }, settings: { email: settings.email || '' } }, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;

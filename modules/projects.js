@@ -963,6 +963,7 @@
   }
 
   async function openDetail(projectId) {
+    window.HabitFlowDossiers?.showProjects();
     clearProjectTaskReturn();
     selectedProjectId = projectId;
     renderDetail(projectId);
