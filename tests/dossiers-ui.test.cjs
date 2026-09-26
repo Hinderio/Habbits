@@ -65,7 +65,7 @@ test('hidden dossier screen performs no snapshot reads or scheduled renders',()=
 
 function uploadHarness(failure) {
   const nodes=new Map(),saved=[];let uploaded=0,revoked=0;
-  const node=key=>{if(!nodes.has(key))nodes.set(key,{textContent:'',value:'',replaceChildren(){this.innerHTML='';}});return nodes.get(key);};
+  const node=key=>{if(!nodes.has(key))nodes.set(key,{textContent:'',value:'',focus(){},replaceChildren(){this.innerHTML='';}});return nodes.get(key);};
   const elements={title:{value:'Photo title'},body:{value:'A photo',focus(){}},link:{value:''},is_pinned:{checked:false},image_alt:{value:'Photo'}};
   const form={elements,reportValidity:()=>true,setAttribute(){},removeAttribute(){},querySelector:node,querySelectorAll:()=>Object.values(elements),reset(){elements.body.value='';}};
   const messages=[node('inline'),node('footer')];
