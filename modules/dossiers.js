@@ -11,6 +11,7 @@
   let editing = '', blob = null, previewUrl = '', busy = false, imageOperation = 0, renderFrame = 0, imageGeneration = 0;
   let overviewSignature = '', entrySignature = '', titleSignature = '', returnFocus = null;
   let lastRender = null;
+  const expandedEntries = new Set();
   const presented = ({ synced, ...row }) => row;
   function setText(node, value) { if (node.textContent !== value) node.textContent = value; }
   function visible() { return view === 'dossiers' && !pane?.closest?.('[data-screen]')?.hidden; }
@@ -41,7 +42,7 @@
   function entryHasDraft() {
     const form = dialog.querySelector('[data-entry-form]');
     const original = store.snapshot().entries.find(row => row.id === editing);
-    return Boolean(blob || form.elements.body.value.trim() !== (original?.body || '') || form.elements.link.value.trim() !== (original?.link || '') || form.elements.image_alt.value.trim() !== (original?.image_alt || '') || form.elements.is_pinned.checked !== Boolean(original?.is_pinned));
+    return Boolean(blob || form.elements.title.value.trim() !== (original?.title || '') || form.elements.body.value.trim() !== (original?.body || '') || form.elements.link.value.trim() !== (original?.link || '') || form.elements.image_alt.value.trim() !== (original?.image_alt || '') || form.elements.is_pinned.checked !== Boolean(original?.is_pinned));
   }
   function headerHasDraft() {
     const form = dialog.querySelector('[data-dossier-form]');
@@ -57,6 +58,7 @@
   }
   function open(id = '', trigger) {
     returnFocus = trigger || document.activeElement;
+    expandedEntries.clear();
     active = id; page = 0; order = 'newest'; editing = '';
     entrySignature = ''; titleSignature = ''; lastRender = null;
     resetEntry();
@@ -75,11 +77,12 @@
   }
   function entryCard(row) {
     const link = store.safeLink(row.link);
-    return `<article class="dossier-entry project-detail-box" data-entry-id="${escape(row.id)}"><header><time datetime="${escape(row.created_at)}">${escape(date(row.created_at))}</time><button class="mini-btn secondary dossier-pin" type="button" data-dossier-action="pin" data-id="${escape(row.id)}" aria-pressed="${row.is_pinned}" aria-label="${row.is_pinned ? 'Eintrag lösen' : 'Eintrag anpinnen'}">${row.is_pinned ? '★ Angepinnt' : '☆ Anpinnen'}</button></header>${row.body ? `<p class="dossier-entry-text">${escape(row.body)}</p>` : ''}${link ? `<a class="dossier-link" href="${escape(link)}" target="_blank" rel="noopener noreferrer">↗ ${escape(new URL(link).hostname)}<span>${escape(link)}</span></a>` : ''}${row.image_path ? `<div class="dossier-image" data-image-path="${escape(row.image_path)}"><span>Bild wird geladen …</span><img alt="${escape(row.image_alt || 'Bild zum Dossier-Eintrag')}" loading="lazy" decoding="async" referrerpolicy="no-referrer" hidden></div>` : ''}<footer>${button('edit-entry', 'Bearbeiten', row.id)}${button('delete-entry', 'Entfernen', row.id)}</footer></article>`;
+    const heading = row.title || Array.from(String(row.body || '').replace(/\s+/g, ' ').trim()).slice(0, 100).join('') || (link ? new URL(link).hostname : 'Bild');
+    return `<article class="dossier-entry project-detail-box" data-entry-id="${escape(row.id)}"><header><time datetime="${escape(row.created_at)}">${escape(date(row.created_at))}</time><button class="mini-btn secondary dossier-pin" type="button" data-dossier-action="pin" data-id="${escape(row.id)}" aria-pressed="${row.is_pinned}" aria-label="${row.is_pinned ? 'Eintrag lösen' : 'Eintrag anpinnen'}">${row.is_pinned ? '★ Angepinnt' : '☆ Anpinnen'}</button></header><details class="dossier-entry-disclosure" data-entry-disclosure="${escape(row.id)}"${expandedEntries.has(row.id) ? ' open' : ''}><summary><strong>${escape(heading)}</strong><span class="project-note-toggle"><span class="dossier-entry-more">Mehr anzeigen</span><span class="dossier-entry-less">Weniger anzeigen</span><span class="project-editor-chevron" aria-hidden="true">⌄</span></span></summary><div class="dossier-entry-content">${row.body ? `<p class="dossier-entry-text">${escape(row.body)}</p>` : ''}${link ? `<a class="dossier-link" href="${escape(link)}" target="_blank" rel="noopener noreferrer">↗ ${escape(new URL(link).hostname)}<span>${escape(link)}</span></a>` : ''}${row.image_path ? `<div class="dossier-image" data-image-path="${escape(row.image_path)}"><span>Bild wird geladen …</span><img alt="${escape(row.image_alt || 'Bild zum Dossier-Eintrag')}" loading="lazy" decoding="async" referrerpolicy="no-referrer" hidden></div>` : ''}</div></details><footer>${button('edit-entry', 'Bearbeiten', row.id)}${button('delete-entry', 'Entfernen', row.id)}</footer></article>`;
   }
   async function loadImages() {
     const generation = ++imageGeneration;
-    const nodes = Array.from(dialog.querySelectorAll('[data-image-path]'));
+    const nodes = Array.from(dialog.querySelectorAll('[data-entry-disclosure][open] [data-image-path]'));
     if (!nodes.length) return;
     try {
       const urls = await store.imageUrls(nodes.map(node => node.dataset.imagePath));
@@ -88,7 +91,7 @@
         const url = urls.get(node.dataset.imagePath), image = node.querySelector('img'), hint = node.querySelector('span');
         if (!url) { hint.textContent = 'Bild gerade nicht verfügbar. Bitte online aktualisieren.'; continue; }
         image.onerror = () => { image.hidden = true; hint.hidden = false; hint.textContent = 'Bild gerade nicht verfügbar. Bitte aktualisieren.'; };
-        image.src = url; image.hidden = false; hint.hidden = true;
+        if (image.getAttribute('src') !== url) image.src = url; image.hidden = false; hint.hidden = true;
       }
     } catch (_) { if (generation === imageGeneration) nodes.forEach(node => { node.querySelector('span').textContent = 'Bild gerade nicht verfügbar.'; }); }
   }
@@ -158,7 +161,7 @@
     event.preventDefault(); if (busy) return;
     const form = event.target; if (!form.reportValidity()) return;
     const existing = store.snapshot().entries.find(row => row.id === editing);
-    const input = { id: editing || undefined, dossier_id: active, body: form.elements.body.value, link: form.elements.link.value.trim(), is_pinned: form.elements.is_pinned.checked, image_path: existing?.image_path || '', image_alt: form.elements.image_alt.value };
+    const input = { id: editing || undefined, dossier_id: active, title: form.elements.title.value.trim(), body: form.elements.body.value, link: form.elements.link.value.trim(), is_pinned: form.elements.is_pinned.checked, image_path: existing?.image_path || '', image_alt: form.elements.image_alt.value };
     if (input.link && !store.safeLink(input.link)) { status('Bitte einen gültigen http- oder https-Link eingeben.'); return; }
     if (!input.body.trim() && !input.link && !blob && !input.image_path) { status('Bitte Text, Link oder Bild hinzufügen.'); return; }
     busy = true; form.setAttribute('aria-busy', 'true'); form.querySelectorAll('input,textarea,select,button').forEach(control => { control.disabled = true; }); let uploaded = '';
@@ -192,11 +195,19 @@
         if (entryHasDraft() && !window.confirm('Ungespeicherten Entwurf ersetzen?')) return;
         resetEntry(); editing = row.id;
         const form = dialog.querySelector('[data-entry-form]');
-        form.elements.body.value = row.body; form.elements.link.value = row.link; form.elements.is_pinned.checked = row.is_pinned; form.elements.image_alt.value = row.image_alt;
+        form.elements.title.value = row.title || ''; form.elements.body.value = row.body; form.elements.link.value = row.link; form.elements.is_pinned.checked = row.is_pinned; form.elements.image_alt.value = row.image_alt;
         form.querySelector('[data-entry-submit]').textContent = 'Änderungen speichern'; form.querySelector('[data-dossier-action="cancel-entry"]').hidden = false;
         status(row.image_path ? 'Das vorhandene Bild bleibt erhalten. Ein neues Bild ersetzt es.' : ''); form.elements.body.focus();
       }
     } catch (error) { status(error.message || 'Aktion fehlgeschlagen.'); }
+  }
+  function toggleEntry(event) {
+    const details = event.target;
+    if (!details.matches?.('[data-entry-disclosure]') || !details.isConnected) return;
+    const id = details.dataset.entryDisclosure;
+    const wasOpen = expandedEntries.has(id);
+    if (details.open) expandedEntries.add(id); else expandedEntries.delete(id);
+    if (details.open && !wasOpen) void loadImages();
   }
   function mount() {
     const screen = document.getElementById('screen-projects'); if (!screen || screen.querySelector('[data-project-switch]')) return;
@@ -210,12 +221,13 @@
     pane.innerHTML = `<section class="projects-hero glass"><div><p class="eyebrow">Wissen & Inspiration</p><h2>Gedanken sammeln. Zusammenhänge entdecken.</h2><p>Dein Ort für Notizen, Links und Bilder – von der nächsten Reise bis zur grossen Recherche.</p></div><button class="pill primary" type="button" data-dossier-action="create">Dossier erstellen</button></section><section class="panel glass"><div class="panel-head"><div><p class="eyebrow">Sammlungen</p><h3>Dossier-Übersicht</h3></div><span class="badge muted" data-dossier-sync>lokal</span></div><label class="dossier-search"><span>Dossiers suchen</span><input type="search" placeholder="Titel oder Beschreibung" data-dossier-search></label><div class="project-grid" data-dossier-grid></div><nav class="dossier-pagination" aria-label="Dossierseiten">${button('overview-prev','Zurück')}<span data-overview-page></span>${button('overview-next','Weiter')}</nav></section>`;
     screen.appendChild(pane);
     dialog = document.createElement('dialog'); dialog.className = 'dossier-dialog'; dialog.setAttribute('aria-labelledby','dossierTitle');
-    dialog.innerHTML = `<div class="dossier-dialog-body"><header class="dossier-dialog-head"><div><p class="eyebrow">Dossier</p><h2 id="dossierTitle">Dossier erstellen</h2></div><button type="button" class="icon-btn" data-dossier-action="close" aria-label="Dossier schliessen">×</button></header><p data-dossier-description class="subtle"></p><div data-project-link></div><details class="project-editor-toggle" data-dossier-editor><summary>Dossier bearbeiten <span aria-hidden="true">⌄</span></summary><form data-dossier-form class="project-form-grid dossier-form"><label class="full"><span>Titel</span><input name="title" maxlength="120" required placeholder="z. B. Konferenz Zürich"></label><label class="full"><span>Beschreibung</span><textarea name="description" maxlength="600" rows="2" placeholder="Worum geht es?"></textarea></label><label class="full"><span>Projekt (optional)</span><select name="project_id"></select></label><div class="full dossier-actions"><button type="submit" class="pill primary">Dossier speichern</button>${button('delete-dossier','Dossier entfernen')}</div></form></details><div data-dossier-content><form data-entry-form class="dossier-composer"><h3>Gedanken festhalten</h3><label><span>Text</span><textarea name="body" maxlength="10000" rows="3" placeholder="Was möchtest du festhalten?"></textarea></label><label><span>Link (optional)</span><input name="link" type="url" maxlength="4000" placeholder="https://…"></label><div class="dossier-composer-options"><label class="dossier-file"><span>Bild hinzufügen</span><input name="image" type="file" accept="image/jpeg,image/png,image/webp"></label><label class="dossier-check"><input name="is_pinned" type="checkbox"><span>Anpinnen</span></label></div><div data-draft-image class="dossier-draft-image"></div><label><span>Bildbeschreibung (optional)</span><input name="image_alt" maxlength="200" placeholder="Was zeigt das Bild?"></label><p data-entry-message class="dossier-message" role="status" aria-live="polite"></p><div class="dossier-actions"><button type="submit" class="pill primary" data-entry-submit>Eintrag hinzufügen</button><button type="button" class="mini-btn secondary" data-dossier-action="cancel-entry" hidden>Abbrechen</button></div></form><div class="dossier-history-head"><h3>Einträge</h3><label><span>Reihenfolge</span><select data-entry-order><option value="newest">Neueste zuerst</option><option value="oldest">Älteste zuerst</option></select></label></div><p class="subtle">Angepinnte Einträge stehen oben.</p><div data-entry-list class="dossier-entries"></div><nav class="dossier-pagination" aria-label="Eintragsseiten">${button('entry-prev','Zurück')}<span data-entry-page></span>${button('entry-next','Weiter')}</nav></div><footer class="dossier-sync-footer"><span class="subtle" data-detail-sync></span>${button('refresh','Aktualisieren')}</footer><p data-dossier-message class="dossier-message" role="status" aria-live="polite"></p></div>`;
+    dialog.innerHTML = `<div class="dossier-dialog-body"><header class="dossier-dialog-head"><div><p class="eyebrow">Dossier</p><h2 id="dossierTitle">Dossier erstellen</h2></div><button type="button" class="icon-btn" data-dossier-action="close" aria-label="Dossier schliessen">×</button></header><p data-dossier-description class="subtle"></p><div data-project-link></div><details class="project-editor-toggle" data-dossier-editor><summary>Dossier bearbeiten <span aria-hidden="true">⌄</span></summary><form data-dossier-form class="project-form-grid dossier-form"><label class="full"><span>Titel</span><input name="title" maxlength="120" required placeholder="z. B. Konferenz Zürich"></label><label class="full"><span>Beschreibung</span><textarea name="description" maxlength="600" rows="2" placeholder="Worum geht es?"></textarea></label><label class="full"><span>Projekt (optional)</span><select name="project_id"></select></label><div class="full dossier-actions"><button type="submit" class="pill primary">Dossier speichern</button>${button('delete-dossier','Dossier entfernen')}</div></form></details><div data-dossier-content><form data-entry-form class="dossier-composer"><h3>Gedanken festhalten</h3><label><span>Titel (optional)</span><input name="title" maxlength="120" placeholder="Worum geht es in diesem Eintrag?"></label><label><span>Text</span><textarea name="body" maxlength="10000" rows="3" placeholder="Was möchtest du festhalten?"></textarea></label><label><span>Link (optional)</span><input name="link" type="url" maxlength="4000" placeholder="https://…"></label><div class="dossier-composer-options"><label class="dossier-file"><span>Bild hinzufügen</span><input name="image" type="file" accept="image/jpeg,image/png,image/webp"></label><label class="dossier-check"><input name="is_pinned" type="checkbox"><span>Anpinnen</span></label></div><div data-draft-image class="dossier-draft-image"></div><label><span>Bildbeschreibung (optional)</span><input name="image_alt" maxlength="200" placeholder="Was zeigt das Bild?"></label><p data-entry-message class="dossier-message" role="status" aria-live="polite"></p><div class="dossier-actions"><button type="submit" class="pill primary" data-entry-submit>Eintrag hinzufügen</button><button type="button" class="mini-btn secondary" data-dossier-action="cancel-entry" hidden>Abbrechen</button></div></form><div class="dossier-history-head"><h3>Einträge</h3><label><span>Reihenfolge</span><select data-entry-order><option value="newest">Neueste zuerst</option><option value="oldest">Älteste zuerst</option></select></label></div><p class="subtle">Angepinnte Einträge stehen oben.</p><div data-entry-list class="dossier-entries"></div><nav class="dossier-pagination" aria-label="Eintragsseiten">${button('entry-prev','Zurück')}<span data-entry-page></span>${button('entry-next','Weiter')}</nav></div><footer class="dossier-sync-footer"><span class="subtle" data-detail-sync></span>${button('refresh','Aktualisieren')}</footer><p data-dossier-message class="dossier-message" role="status" aria-live="polite"></p></div>`;
     document.body.appendChild(dialog);
     tabs.addEventListener('click', event => { const tab = event.target.closest('[data-project-view]'); if (tab) show(tab.dataset.projectView); });
     tabs.addEventListener('keydown', event => { if (['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) { event.preventDefault(); const next = event.key === 'Home' ? 'projects' : event.key === 'End' ? 'dossiers' : view === 'projects' ? 'dossiers' : 'projects'; show(next); tabs.querySelector(`[data-project-view="${next}"]`).focus(); } });
     pane.addEventListener('click', action); dialog.addEventListener('click', action);
     pane.querySelector('[data-dossier-search]').addEventListener('input', event => { query = event.target.value.trim().toLocaleLowerCase('de'); overviewPage = 0; queueRefresh(); });
+    dialog.addEventListener('toggle', toggleEntry, true);
     dialog.addEventListener('cancel', event => { event.preventDefault(); close(); });
     dialog.querySelector('[data-entry-order]').addEventListener('change', event => { order = event.target.value; page = 0; refresh(); });
     dialog.querySelector('[data-entry-form]').addEventListener('submit', submitEntry);

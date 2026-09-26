@@ -28,6 +28,11 @@ create table if not exists public.dossier_entries (
   check (is_archived or length(trim(body)) > 0 or link <> '' or image_path <> ''),
   check (image_path = '' or (length(image_path) <= 160 and image_path like user_id::text || '/' || dossier_id::text || '/%' and image_path ~ '^[0-9a-f/-]+\.(webp|jpg)$'))
 );
+-- Optional dossier entry titles; existing entries retain an empty title.
+alter table public.dossier_entries
+  add column if not exists title text not null default '' check (length(title) <= 120);
+notify pgrst, 'reload schema';
+
 create index if not exists dossiers_owner_updated on public.dossiers(user_id, updated_at, id);
 create index if not exists dossier_entries_owner_dossier on public.dossier_entries(user_id, dossier_id, id);
 alter table public.dossiers enable row level security;

@@ -66,7 +66,7 @@ test('hidden dossier screen performs no snapshot reads or scheduled renders',()=
 function uploadHarness(failure) {
   const nodes=new Map(),saved=[];let uploaded=0,revoked=0;
   const node=key=>{if(!nodes.has(key))nodes.set(key,{textContent:'',value:'',replaceChildren(){this.innerHTML='';}});return nodes.get(key);};
-  const elements={body:{value:'A photo',focus(){}},link:{value:''},is_pinned:{checked:false},image_alt:{value:'Photo'}};
+  const elements={title:{value:'Photo title'},body:{value:'A photo',focus(){}},link:{value:''},is_pinned:{checked:false},image_alt:{value:'Photo'}};
   const form={elements,reportValidity:()=>true,setAttribute(){},removeAttribute(){},querySelector:node,querySelectorAll:()=>Object.values(elements),reset(){elements.body.value='';}};
   const messages=[node('inline'),node('footer')];
   const dialog={querySelector:selector=>selector==='[data-entry-form]'?form:node(selector),querySelectorAll:()=>messages};
@@ -79,7 +79,7 @@ function uploadHarness(failure) {
 }
 test('image selection previews a blob and submit saves its uploaded path, then releases the preview',async()=>{
   const h=uploadHarness();await h.api.receive({});assert.match(h.node('[data-draft-image]').innerHTML,/blob:preview/);
-  await h.api.submitEntry({preventDefault(){},target:h.form});assert.equal(h.uploaded(),1);assert.equal(h.saved[0].image_path,'owner/dossier/photo.webp');assert.equal(h.revoked(),1);
+  await h.api.submitEntry({preventDefault(){},target:h.form});assert.equal(h.uploaded(),1);assert.equal(h.saved[0].image_path,'owner/dossier/photo.webp');assert.equal(h.saved[0].title,'Photo title');assert.equal(h.revoked(),1);
   assert.match(h.messages[0].textContent,/gespeichert/);assert.equal(h.node('[data-entry-submit]').textContent,'Eintrag hinzufügen');
 });
 test('upload failure is visible beside the button and preserves image and text for retry',async()=>{
@@ -87,4 +87,27 @@ test('upload failure is visible beside the button and preserves image and text f
   assert.equal(h.saved.length,0);assert.equal(h.revoked(),0);assert.equal(h.form.elements.body.value,'A photo');assert.match(h.messages[0].textContent,/Bildspeicher fehlt/);
   assert.equal(h.node('[data-entry-submit]').textContent,'Eintrag hinzufügen');assert.equal(h.form.elements.body.disabled,false);
   await h.api.submitEntry({preventDefault(){},target:h.form});assert.equal(h.uploaded(),2,'retry retains the blob');
+});
+
+test('entries use a closed native disclosure with an escaped optional title',()=>{
+  const {api}=harness();const html=api.entryCard({id:'e',title:'<b>My title</b>',body:'Full content',created_at:'2026-09-26T12:00:00Z'});
+  assert.match(html,/<details[^>]*data-entry-disclosure="e">/);assert.match(html,/<summary><strong>&lt;b&gt;My title&lt;\/b&gt;<\/strong>/);
+  assert.match(html,/Mehr anzeigen/);assert.match(html,/Weniger anzeigen/);assert.ok(html.indexOf('Full content')>html.indexOf('</summary>'));
+});
+test('older untitled entries have a compact content or link heading',()=>{
+  const {api}=harness();assert.match(api.entryCard({id:'e',body:'First\nthought',created_at:'2026-09-26'}),/<summary><strong>First thought/);
+  assert.match(api.entryCard({id:'e',link:'https://example.org/a',created_at:'2026-09-26'}),/<summary><strong>example.org/);
+});
+
+test('disclosure state survives rendering and images are requested only when opening',async()=>{
+  let queries=0;const window={HabitFlowDossiersStore:{safeLink:()=>''}};
+  const document={readyState:'loading',addEventListener(){}};
+  vm.runInNewContext(source.replace('  function mount() {','  window.disclosureTest={entryCard,toggleEntry,setDialog(d){dialog=d;}};\n  function mount() {'),{window,document,URL,Date});
+  window.disclosureTest.setDialog({querySelectorAll(selector){assert.equal(selector,"[data-entry-disclosure][open] [data-image-path]");queries++;return [];}});
+  const details={matches:()=>true,isConnected:true,open:true,dataset:{entryDisclosure:'e'}};
+  window.disclosureTest.toggleEntry({target:details});assert.equal(queries,1);
+  assert.match(window.disclosureTest.entryCard({id:'e',body:'Text',created_at:'2026-09-26'}),/data-entry-disclosure="e" open/);
+  window.disclosureTest.toggleEntry({target:details});assert.equal(queries,1,'DOM rebuild toggle must not duplicate signing requests');
+  details.open=false;window.disclosureTest.toggleEntry({target:details});assert.equal(queries,1);
+  assert.doesNotMatch(window.disclosureTest.entryCard({id:'e',body:'Text',created_at:'2026-09-26'}),/data-entry-disclosure="e" open/);
 });

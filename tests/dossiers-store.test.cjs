@@ -12,7 +12,7 @@ const stamp = '2026-09-26T12:00:00.000Z';
 function harness({ legacy = false } = {}) {
   const counts = { writes: 0, parses: 0, serializes: 0 };
   const values = new Map(), events = new EventTarget(), remote = { dossiers: [], dossier_entries: [] }, requests = [];
-  let owner = OWNER, failWrite = false, failRemote = false, gate = null, uploads = 0, beforeRequest = null, uploadError = null;
+  let owner = OWNER, failWrite = false, failRemote = false, gate = null, uploads = 0, beforeRequest = null, uploadError = null, titleColumn = true;
   const storage = { getItem: key => values.get(key) || null, setItem(key,value) { if (failWrite) throw new Error('quota'); counts.writes++; values.set(key,value); } };
   const client = {
     from(table) {
@@ -24,6 +24,7 @@ function harness({ legacy = false } = {}) {
           if (gate) { const wait=gate;gate=null;await wait; }
           if (failRemote) return { error:{code:'42P01',message:'missing'},data:null };
           if (query.rows) {
+            if(!titleColumn && table==='dossier_entries' && query.rows.some(row=>Object.hasOwn(row,'title')))return {data:null,error:{code:'PGRST204',message:'title column missing'}};
             const result=[];
             for (const row of query.rows) {
               const old=remote[table].find(item=>item.id===row.id);
@@ -47,7 +48,7 @@ function harness({ legacy = false } = {}) {
   return { counts, resetCounts() { counts.writes=counts.parses=counts.serializes=0; }, api:window.HabitFlowDossiersStore, window, values, remote, requests, storage,
     read:()=>JSON.parse(storage.getItem('habitflow-state-v1')||'{}'),
     owner(value){owner=value;events.dispatchEvent(new Event('habitflow:auth-change'));},
-    uploadError(value){uploadError=value;},beforeRequest(callback){beforeRequest=callback;},failWrite(value){failWrite=value;},failRemote(value){failRemote=value;},
+    titleColumn(value){titleColumn=value;},uploadError(value){uploadError=value;},beforeRequest(callback){beforeRequest=callback;},failWrite(value){failWrite=value;},failRemote(value){failRemote=value;},
     pause(){let release;gate=new Promise(resolve=>release=resolve);return release;},uploads:()=>uploads
   };
 }
@@ -237,4 +238,21 @@ test('a real server failure exposes its code without leaking record contents',as
     assert.match(error.message,/dossiers, 23503/);assert.ok(!error.message.includes('Private'));return true;
   });
   assert.equal(app.uploads(),0);assert.equal(app.read().dossiers[0].synced,false);
+});
+
+test('entry titles survive edits, sync, reload and explicit clearing',async()=>{
+  const app=harness();const dossier=app.api.saveDossier({title:'Research'});
+  let entry=app.api.saveEntry({dossier_id:dossier.id,title:'Summary',body:'Content'});await app.api.sync(dossier.id);
+  assert.equal(app.remote.dossier_entries[0].title,'Summary');assert.equal(app.api.snapshot().entries[0].title,'Summary');
+  entry=app.api.saveEntry({...entry,title:''});await app.api.sync(dossier.id);assert.equal(app.remote.dossier_entries[0].title,'');
+  assert.equal(app.api.normalize({...entry,title:undefined},true).title,'');
+  assert.equal(app.api.normalize({...entry,title:'a'.repeat(200)},true).title.length,120);
+});
+
+test('before title migration, untitled entries sync and titled entries stay pending without losing their title',async()=>{
+  const app=harness();app.titleColumn(false);const dossier=app.api.saveDossier({title:'Old schema'});
+  app.api.saveEntry({dossier_id:dossier.id,body:'Untitled'});await app.api.sync(dossier.id);assert.equal(app.read().dossierEntries[0].synced,true);
+  const titled=app.api.saveEntry({dossier_id:dossier.id,title:'Keep me',body:'Content'});await app.api.sync(dossier.id);
+  assert.equal(app.read().dossierEntries.find(r=>r.id===titled.id).synced,false);assert.match(app.api.snapshot().status,/Datenbank-Update/);
+  app.titleColumn(true);await app.api.sync(dossier.id);assert.equal(app.remote.dossier_entries.find(r=>r.id===titled.id).title,'Keep me');
 });

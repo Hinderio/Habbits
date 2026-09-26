@@ -43,7 +43,7 @@
     if (!uuid(row.dossier_id)) return null;
     const prefix = row.user_id + '/' + row.dossier_id + '/';
     const imagePath = typeof row.image_path === 'string' && row.image_path.length <= 160 && row.image_path.startsWith(prefix) && /^[0-9a-f/-]+\.(webp|jpg)$/.test(row.image_path) ? row.image_path : '';
-    return { ...base, dossier_id: row.dossier_id, body: text(row.body, 10000), link: safeLink(row.link), image_path: imagePath, image_alt: text(row.image_alt, 200), is_pinned: row.is_pinned === true };
+    return { ...base, dossier_id: row.dossier_id, title: text(row.title, 120), body: text(row.body, 10000), link: safeLink(row.link), image_path: imagePath, image_alt: text(row.image_alt, 200), is_pinned: row.is_pinned === true };
   }
   function merge(a = [], b = [], entry = false) {
     const rows = new Map();
@@ -154,7 +154,13 @@
         for (let offset = 0; offset < pending.length; offset += 100) {
           const batch = pending.slice(offset, offset + 100);
           syncTable = table;
-          const result = await client().from(table).upsert(batch.map(({ synced, ...row }) => row), { onConflict: 'id' }).select('*');
+          const payload = batch.map(({ synced, ...row }) => row);
+          let result = await client().from(table).upsert(payload, { onConflict: 'id' }).select('*');
+          // Keep untitled entries working before the additive title migration.
+          // Never omit a non-empty title or silently acknowledge its loss.
+          if (entry && batch.every(row => !row.title) && /PGRST204|42703/.test(result.error?.code || '') && /title/i.test(result.error?.message || '')) {
+            result = await client().from(table).upsert(payload.map(({ title, ...row }) => row), { onConflict: 'id' }).select('*');
+          }
           if (result.error) throw result.error;
           stillOwner(owner);
           received[key].push(...(result.data || []).map(row => ({ ...row, synced: true })));
@@ -177,7 +183,7 @@
       syncFailure = { owner, table: syncTable, code: /^[A-Z0-9]{3,12}$/.test(String(error.code || '')) ? String(error.code) : '' };
       // Keep successful earlier batches acknowledged even if a later request fails.
       try { commitRemote(received); } catch (_) { /* Pending local rows stay durable. */ }
-      status = /42P01|PGRST205/.test(error.code || '') ? 'Dossier-Sync noch nicht eingerichtet' : 'lokal · Sync ausstehend';
+      status = /PGRST204|42703/.test(error.code || '') && /title/i.test(error.message || '') ? 'Für Eintragstitel ist noch das Datenbank-Update erforderlich; lokal gespeichert.' : /42P01|PGRST205/.test(error.code || '') ? 'Dossier-Sync noch nicht eingerichtet' : 'lokal · Sync ausstehend';
       console.warn('[HabitFlow/dossiers] Sync bleibt ausstehend.', error.message || error);
       queued = false;
     } finally { publish(); }
