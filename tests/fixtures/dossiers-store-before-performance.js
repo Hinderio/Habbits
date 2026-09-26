@@ -11,26 +11,6 @@
   const client = () => window.HabitFlowRemote?.getClient();
   let inFlight = null, queued = false, activeDossier = '', status = 'lokal', timer = 0;
   const listeners = new Set(), signed = new Map();
-  const normalizedCollections = new WeakMap();
-  let snapshotCache = null, localRevision = 0, flightRequest = null;
-  function featureState() {
-    return window.HabitFlowPersistence?.readCollections
-      ? window.HabitFlowPersistence.readCollections(['dossiers', 'dossierEntries', 'projects']) : read();
-  }
-  function sameRow(a, b) {
-    if (a === b) return true;
-    const keys = Object.keys(a || {});
-    return Boolean(b) && keys.length === Object.keys(b).length && keys.every(key => a[key] === b[key]);
-  }
-  function sameRows(a = [], b = []) {
-    return a.length === b.length && a.every((row, index) => sameRow(row, b[index]));
-  }
-  function cachedRows(rows, entry) {
-    if (!Array.isArray(rows)) return Object.freeze([]);
-    let result = normalizedCollections.get(rows);
-    if (!result) { result = Object.freeze(merge([], rows, entry).map(Object.freeze)); normalizedCollections.set(rows, result); }
-    return result;
-  }
   function safeLink(value) {
     if (!value || String(value).length > 4000) return '';
     try { const url = new URL(String(value)); return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password ? url.href : ''; }
@@ -66,34 +46,22 @@
   window.HabitFlowPersistence?.register('dossiers', {
     write(next, context) {
       const previous = context.previous();
-      const first = context.dossierWrite ? previous : next;
-      const second = context.dossierWrite ? next : previous;
       return { changed: true, state: { ...next,
-        dossiers: merge(first.dossiers, second.dossiers),
-        dossierEntries: merge(first.dossierEntries, second.dossierEntries, true)
+        dossiers: merge(next.dossiers, previous.dossiers),
+        dossierEntries: merge(next.dossierEntries, previous.dossierEntries, true),
+        // Explicit feature writes win timestamp ties (e.g. synced acknowledgement).
+        ...(context.dossierWrite ? {
+          dossiers: merge(previous.dossiers, next.dossiers),
+          dossierEntries: merge(previous.dossierEntries, next.dossierEntries, true)
+        } : {})
       } };
     }
   });
   function snapshot() {
-    const state = featureState(), owner = user();
-    if (!snapshotCache || snapshotCache.owner !== owner || snapshotCache.sourceDossiers !== state.dossiers || snapshotCache.sourceEntries !== state.dossierEntries || snapshotCache.sourceProjects !== state.projects) {
-      snapshotCache = { owner, sourceDossiers: state.dossiers, sourceEntries: state.dossierEntries, sourceProjects: state.projects,
-        dossiers: Object.freeze(cachedRows(state.dossiers, false).filter(row => row.user_id === owner && !row.is_archived)),
-        entries: Object.freeze(cachedRows(state.dossierEntries, true).filter(row => row.user_id === owner && !row.is_archived)),
-        projects: Object.freeze((state.projects || []).filter(row => !row.is_archived && (!row.user_id || row.user_id === owner)).map(row => Object.freeze({ ...row }))) };
-    }
-    return { dossiers: snapshotCache.dossiers, entries: snapshotCache.entries, projects: snapshotCache.projects, status };
-  }
-  // Reconcile against the latest durable state, not the snapshot sent over the network.
-  // Only changed results traverse the expensive whole-app write pipeline.
-  function commitRemote(received) {
-    const current = featureState(), changes = {};
-    for (const key of Object.keys(FIELDS)) {
-      if (!received[key]?.length) continue;
-      const next = merge(current[key], received[key], key === 'dossierEntries');
-      if (!sameRows(current[key] || [], next)) changes[key] = next;
-    }
-    if (Object.keys(changes).length) write({ ...read(), ...changes });
+    const state = read(), owner = user();
+    return { dossiers: merge([], state.dossiers).filter(row => row.user_id === owner && !row.is_archived),
+      entries: merge([], state.dossierEntries, true).filter(row => row.user_id === owner && !row.is_archived),
+      projects: (state.projects || []).filter(row => !row.is_archived && (!row.user_id || row.user_id === owner)), status };
   }
   function save(input, entry = false) {
     const owner = user();
@@ -111,7 +79,7 @@
     if (!entry && row.project_id && !(state.projects || []).some(project => project.id === row.project_id && !project.is_archived)) throw new Error('Das verknüpfte Projekt ist nicht mehr verfügbar.');
     state[key] = merge(rows, [row], entry);
     write(state);
-    localRevision++; status = 'lokal · Sync ausstehend'; publish(); schedule();
+    status = 'lokal · Sync ausstehend'; publish(); schedule();
     return row;
   }
   async function pages(table, owner, dossierId) {
@@ -126,20 +94,18 @@
     }
   }
   function stillOwner(owner) { if (user() !== owner) throw new Error('Anmeldung hat sich geändert.'); }
-  async function runSync(request) {
-    const owner = request.owner;
-    const received = { dossiers: [], dossierEntries: [] };
+  async function runSync() {
+    const owner = user();
     if (!owner || !client()) { status = 'Bitte anmelden'; publish(); return; }
     status = 'synchronisiert …'; publish();
     try {
       // Fetch headers before pushing, so newer remote archives cannot be resurrected.
       const remote = await pages('dossiers', owner);
       stillOwner(owner);
-      received.dossiers = remote;
+      let state = read(); state.dossiers = merge(state.dossiers, remote); write(state);
       for (const [key, table] of Object.entries(FIELDS)) {
         const entry = key === 'dossierEntries';
-        const current = featureState();
-        current.dossiers = merge(current.dossiers, received.dossiers);
+        const current = read();
         const archived = new Set((current.dossiers || []).filter(row => row.is_archived).map(row => row.id));
         const pending = merge([], current[key], entry).filter(row => row.user_id === owner && !row.synced).map(row => entry && archived.has(row.dossier_id) ? { ...row, is_archived: true } : row);
         for (let offset = 0; offset < pending.length; offset += 100) {
@@ -147,23 +113,19 @@
           const result = await client().from(table).upsert(batch.map(({ synced, ...row }) => row), { onConflict: 'id' }).select('*');
           if (result.error) throw result.error;
           stillOwner(owner);
-          received[key].push(...(result.data || []).map(row => ({ ...row, synced: true })));
+          state = read(); state[key] = merge(state[key], (result.data || []).map(row => ({ ...row, synced: true })), entry); write(state);
         }
       }
-      const dossierId = request.dossierId;
+      const dossierId = activeDossier;
       if (dossierId) {
         const entries = await pages('dossier_entries', owner, dossierId);
         stillOwner(owner);
-        received.dossierEntries.push(...entries);
+        state = read(); state.dossierEntries = merge(state.dossierEntries, entries, true); write(state);
       }
-      commitRemote(received);
-      received.dossiers = []; received.dossierEntries = [];
-      const latest = featureState();
+      const latest = read();
       status = Object.keys(FIELDS).some(key => (latest[key] || []).some(row => row.user_id === owner && !row.synced)) ? 'lokal · Sync ausstehend' : 'synchronisiert';
     } catch (error) {
       if (user() !== owner) { queued = Boolean(user()); return; }
-      // Keep successful earlier batches acknowledged even if a later request fails.
-      try { commitRemote(received); } catch (_) { /* Pending local rows stay durable. */ }
       status = /42P01|PGRST205/.test(error.code || '') ? 'Dossier-Sync noch nicht eingerichtet' : 'lokal · Sync ausstehend';
       console.warn('[HabitFlow/dossiers] Sync bleibt ausstehend.', error.message || error);
       queued = false;
@@ -172,13 +134,8 @@
   function sync(dossierId) {
     window.clearTimeout(timer);
     if (dossierId !== undefined) activeDossier = dossierId;
-    if (inFlight) {
-      if (flightRequest.owner !== user() || flightRequest.dossierId !== activeDossier || flightRequest.revision !== localRevision) queued = true;
-      return inFlight;
-    }
-    inFlight = (async () => {
-      do { queued = false; flightRequest = { owner: user(), dossierId: activeDossier, revision: localRevision }; await runSync(flightRequest); } while (queued);
-    })().finally(() => { inFlight = null; flightRequest = null; });
+    if (inFlight) { queued = true; return inFlight; }
+    inFlight = (async () => { do { queued = false; await runSync(); } while (queued); })().finally(() => { inFlight = null; });
     return inFlight;
   }
   function schedule() { window.clearTimeout(timer); timer = window.setTimeout(() => { void sync(); }, 300); }

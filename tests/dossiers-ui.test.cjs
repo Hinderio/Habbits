@@ -49,6 +49,16 @@ test('large dossiers render 20 entries per page; status changes preserve entry D
   assert.match(node('[data-entry-list]').innerHTML,/data-entry-id="e0"/);
   assert.ok(node('[data-entry-list]').innerHTML.indexOf('data-entry-id="e0"')<node('[data-entry-list]').innerHTML.indexOf('data-entry-id="e1000"'));
   const writes=entryWrites;data.status='synchronisiert';window.testRefresh(pane,dialog);assert.equal(entryWrites,writes);
+  data.entries=data.entries.map(row=>({...row,synced:true}));data.dossiers=data.dossiers.map(row=>({...row,synced:true}));
+  window.testRefresh(pane,dialog);assert.equal(entryWrites,writes,'acknowledgments must preserve cards and image nodes');
   assert.ok(!nodes.has('[data-entry-form]'),'refresh must not replace or touch the composer');
   window.testRefresh(pane,dialog,50);assert.equal((node('[data-entry-list]').innerHTML.match(/data-entry-id=/g)||[]).length,1);
+});
+
+test('hidden dossier screen performs no snapshot reads or scheduled renders',()=>{
+  let reads=0,frames=0;
+  const window={HabitFlowDossiersStore:{snapshot(){reads++;}},requestAnimationFrame(){frames++;}};
+  const document={readyState:'loading',addEventListener(){}};
+  vm.runInNewContext(source.replace('  function mount() {','  window.hiddenRefresh=()=>{view="dossiers";pane={closest:()=>({hidden:true})};dialog={open:false};queueRefresh();refresh();};\n  function mount() {'),{window,document,URL,Date});
+  window.hiddenRefresh();assert.equal(reads,0);assert.equal(frames,0);
 });

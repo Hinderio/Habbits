@@ -412,7 +412,12 @@
   function bindTaskBadgeObserver() {
     if (window.__habitFlowProjectBadgeObserverBound) return;
     window.__habitFlowProjectBadgeObserverBound = true;
-    new MutationObserver(() => scheduleTaskBadgePaint()).observe(document.body, { childList: true, subtree: true });
+    new MutationObserver(mutations => {
+      // Dossier cards/status never change task badges. Avoid scanning and
+      // normalizing the entire task state for every dossier DOM update.
+      if (mutations.length && mutations.every(mutation => mutation.target?.closest?.('#projectViewDossiers, .dossier-dialog'))) return;
+      scheduleTaskBadgePaint();
+    }).observe(document.body, { childList: true, subtree: true });
   }
 
   function ensureCss() {

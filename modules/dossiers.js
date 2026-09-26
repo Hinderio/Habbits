@@ -4,11 +4,16 @@
   const store = window.HabitFlowDossiersStore;
   if (!store) return;
   const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
-  const date = value => new Date(value).toLocaleString('de-CH', { dateStyle: 'medium', timeStyle: 'short' });
+  const dateFormatter = new Intl.DateTimeFormat('de-CH', { dateStyle: 'medium', timeStyle: 'short' });
+  const date = value => dateFormatter.format(new Date(value));
   const PAGE_SIZE = 20;
   let pane, projects, dialog, active = '', view = 'projects', page = 0, overviewPage = 0, query = '', order = 'newest';
   let editing = '', blob = null, previewUrl = '', busy = false, imageOperation = 0, renderFrame = 0, imageGeneration = 0;
   let overviewSignature = '', entrySignature = '', titleSignature = '', returnFocus = null;
+  let lastRender = null;
+  const presented = ({ synced, ...row }) => row;
+  function setText(node, value) { if (node.textContent !== value) node.textContent = value; }
+  function visible() { return view === 'dossiers' && !pane?.closest?.('[data-screen]')?.hidden; }
   const button = (action, label, id = '', primary = false) => `<button type="button" class="mini-btn ${primary ? 'primary' : 'secondary'}" data-dossier-action="${action}" data-id="${escape(id)}">${label}</button>`;
   function status(message) { dialog.querySelector('[data-dossier-message]').textContent = message; }
   function projectOptions(selected = '') {
@@ -16,10 +21,11 @@
     return '<option value="">Ohne Projektverknüpfung</option>' + rows.map(project => `<option value="${escape(project.id)}" ${project.id === selected ? 'selected' : ''}>${escape(project.title)}</option>`).join('');
   }
   function show(next) {
+    const previousView = view;
     view = next === 'dossiers' ? 'dossiers' : 'projects';
     projects.hidden = view !== 'projects'; pane.hidden = view !== 'dossiers';
     document.querySelectorAll('[data-project-view]').forEach(tab => { const selected = tab.dataset.projectView === view; tab.setAttribute('aria-selected', String(selected)); tab.tabIndex = selected ? 0 : -1; });
-    if (view === 'dossiers') { refresh(); void store.sync(''); }
+    if (view === 'dossiers') { refresh(); if (previousView !== view) void store.sync(''); }
   }
   function resetEntry() {
     imageOperation++; editing = ''; blob = null;
@@ -50,7 +56,7 @@
   function open(id = '', trigger) {
     returnFocus = trigger || document.activeElement;
     active = id; page = 0; order = 'newest'; editing = '';
-    entrySignature = ''; titleSignature = '';
+    entrySignature = ''; titleSignature = ''; lastRender = null;
     resetEntry();
     const dossier = store.snapshot().dossiers.find(row => row.id === id);
     const form = dialog.querySelector('[data-dossier-form]');
@@ -61,7 +67,7 @@
     dialog.querySelector('[data-dossier-content]').hidden = !dossier;
     dialog.querySelector('[data-dossier-action="delete-dossier"]').hidden = !dossier;
     dialog.querySelector('[data-entry-order]').value = order;
-    status(''); refresh(); dialog.showModal();
+    status(''); dialog.showModal(); refresh();
     (dossier ? dialog.querySelector('[name="body"]') : form.elements.title).focus();
     if (id) void store.sync(id);
   }
@@ -85,13 +91,16 @@
     } catch (_) { if (generation === imageGeneration) nodes.forEach(node => { node.querySelector('span').textContent = 'Bild gerade nicht verfügbar.'; }); }
   }
   function refresh() {
-    if (!pane || (view !== 'dossiers' && !dialog.open)) return;
+    if (!pane || (!visible() && !dialog.open)) return;
     const snapshot = store.snapshot();
-    pane.querySelector('[data-dossier-sync]').textContent = snapshot.status;
-    dialog.querySelector('[data-detail-sync]').textContent = snapshot.status;
+    setText(pane.querySelector('[data-dossier-sync]'), snapshot.status);
+    setText(dialog.querySelector('[data-detail-sync]'), snapshot.status);
+    const renderKey = [snapshot.dossiers, snapshot.entries, snapshot.projects, active, query, order, page, overviewPage, dialog.open];
+    if (lastRender && renderKey.every((value, index) => value === lastRender[index])) return;
+    lastRender = renderKey;
     const dossiers = snapshot.dossiers.filter(row => (row.title + ' ' + row.description).toLocaleLowerCase('de').includes(query)).sort((a,b) => b.updated_at.localeCompare(a.updated_at));
     const pages = Math.max(1, Math.ceil(dossiers.length / PAGE_SIZE)); overviewPage = Math.min(overviewPage, pages - 1);
-    const signature = JSON.stringify([dossiers, snapshot.projects.map(row => [row.id, row.title]), overviewPage]);
+    const signature = JSON.stringify([dossiers.map(presented), snapshot.projects.map(row => [row.id, row.title]), overviewPage]);
     if (signature !== overviewSignature) {
       overviewSignature = signature;
       pane.querySelector('[data-dossier-grid]').innerHTML = dossiers.length ? dossiers.slice(overviewPage * PAGE_SIZE, (overviewPage + 1) * PAGE_SIZE).map(row => {
@@ -102,11 +111,12 @@
       pane.querySelector('[data-dossier-action="overview-prev"]').disabled = overviewPage === 0;
       pane.querySelector('[data-dossier-action="overview-next"]').disabled = overviewPage >= pages - 1;
     }
+    if (!dialog.open) return;
     const dossier = snapshot.dossiers.find(row => row.id === active);
     if (active && !dossier) { if (dialog.open) { resetEntry(); active = ''; dialog.close(); } return; }
-    dialog.querySelector('#dossierTitle').textContent = dossier?.title || 'Dossier erstellen';
+    setText(dialog.querySelector('#dossierTitle'), dossier?.title || 'Dossier erstellen');
     if (!dossier) return;
-    const titleKey = JSON.stringify([dossier, snapshot.projects.map(row => [row.id,row.title])]);
+    const titleKey = JSON.stringify([presented(dossier), snapshot.projects.map(row => [row.id,row.title])]);
     if (titleKey !== titleSignature) {
       titleSignature = titleKey;
       const linked = snapshot.projects.find(row => row.id === dossier.project_id);
@@ -116,7 +126,7 @@
     const entries = snapshot.entries.filter(row => row.dossier_id === active).sort((a,b) => Number(b.is_pinned) - Number(a.is_pinned) || (order === 'oldest' ? a.created_at.localeCompare(b.created_at) : b.created_at.localeCompare(a.created_at)) || a.id.localeCompare(b.id));
     const entryPages = Math.max(1, Math.ceil(entries.length / PAGE_SIZE)); page = Math.min(page, entryPages - 1);
     const shown = entries.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-    const nextSignature = JSON.stringify([active, shown, entries.length, page, order]);
+    const nextSignature = JSON.stringify([active, shown.map(presented), entries.length, page, order]);
     if (nextSignature !== entrySignature) {
       entrySignature = nextSignature;
       dialog.querySelector('[data-entry-list]').innerHTML = shown.length ? shown.map(entryCard).join('') : '<div class="project-empty">Dein Dossier ist bereit. Halte oben den ersten Gedanken fest oder füge einen Link oder ein Bild hinzu.</div>';
@@ -126,7 +136,7 @@
       void loadImages();
     }
   }
-  function queueRefresh() { if (!renderFrame) renderFrame = window.requestAnimationFrame(() => { renderFrame = 0; refresh(); }); }
+  function queueRefresh() { if (!visible() && !dialog?.open) return; if (!renderFrame) renderFrame = window.requestAnimationFrame(() => { renderFrame = 0; refresh(); }); }
   async function receive(file) {
     if (busy || !active) return;
     busy = true; const token = ++imageOperation; status('Bild wird verkleinert …');
@@ -214,9 +224,10 @@
       catch (error) { status(error.message || 'Speichern fehlgeschlagen.'); }
     });
     store.subscribe(queueRefresh);
+    document.querySelector('.nav-btn[data-target="projects"]')?.addEventListener('click', () => { if (view === 'dossiers') queueRefresh(); });
     document.getElementById('settingsForm')?.addEventListener('submit', () => { void store.sync(active); });
     window.addEventListener('habitflow:auth-change', () => { resetEntry(); active = ''; if (dialog.open) dialog.close(); overviewSignature = ''; queueRefresh(); });
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && view === 'dossiers') { void store.sync(active); if (dialog.open) void loadImages(); } });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && visible()) { void store.sync(active); if (dialog.open) void loadImages(); } });
   }
   window.HabitFlowDossiers = Object.freeze({ showProjects() { if (projects) show('projects'); } });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, { once:true }); else mount();

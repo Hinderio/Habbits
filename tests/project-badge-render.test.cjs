@@ -95,6 +95,7 @@ function harness() {
     get writes() { return writes; },
     get reads() { return reads; },
     refresh() { vm.runInContext('scheduleTaskBadgePaint();', context); settle(); },
+    dossierMutation() { observers.forEach(observer => observer.callback([{ target: { closest: () => ({}) } }])); settle(); },
     unrelatedMutation() { dirty = true; settle(); },
     runTimers(delay) {
       timers.filter(timer => timer.delay === delay).forEach(timer => {
@@ -177,4 +178,12 @@ test('a recovered link clears pending removal and survives the old timer', () =>
   const recovered = card.badge;
   app.runTimers(1000);
   assert.equal(card.badge, recovered);
+});
+
+test('dossier-only DOM mutations do not schedule a full task-state scan', () => {
+  const app = harness(); app.addCard(); app.settle();
+  const reads = app.reads, writes = app.writes;
+  for (let i = 0; i < 20; i++) app.dossierMutation();
+  assert.equal(app.reads, reads); assert.equal(app.writes, writes);
+  app.unrelatedMutation(); assert.ok(app.reads > reads);
 });

@@ -9,16 +9,18 @@ const OWNER = '10000000-0000-4000-8000-000000000001';
 const OTHER = '10000000-0000-4000-8000-000000000002';
 const id = n => '20000000-0000-4000-8000-' + String(n).padStart(12, '0');
 const stamp = '2026-09-26T12:00:00.000Z';
-function harness() {
+function harness({ legacy = false } = {}) {
+  const counts = { writes: 0, parses: 0, serializes: 0 };
   const values = new Map(), events = new EventTarget(), remote = { dossiers: [], dossier_entries: [] }, requests = [];
-  let owner = OWNER, failWrite = false, failRemote = false, gate = null, uploads = 0;
-  const storage = { getItem: key => values.get(key) || null, setItem(key,value) { if (failWrite) throw new Error('quota'); values.set(key,value); } };
+  let owner = OWNER, failWrite = false, failRemote = false, gate = null, uploads = 0, beforeRequest = null;
+  const storage = { getItem: key => values.get(key) || null, setItem(key,value) { if (failWrite) throw new Error('quota'); counts.writes++; values.set(key,value); } };
   const client = {
     from(table) {
       const filters = [], query = { table, from:0, to:Infinity, rows:null };
       const api = { select() { return api; }, eq(key,value) { filters.push([key,value]); return api; }, order() { return api; }, range(from,to) { query.from=from;query.to=to;return api; }, upsert(rows) { query.rows=rows;return api; },
         then(resolve,reject) { return (async () => {
           requests.push({table,write:Boolean(query.rows),from:query.from});
+          if(beforeRequest)await beforeRequest(query);
           if (gate) { const wait=gate;gate=null;await wait; }
           if (failRemote) return { error:{code:'42P01',message:'missing'},data:null };
           if (query.rows) {
@@ -37,14 +39,15 @@ function harness() {
     storage: { from() { return { upload:async (path,blob)=>{uploads++;return {data:{path},error:null};}, remove:async()=>({error:null}), createSignedUrls:async paths=>({data:paths.map(path=>({path,signedUrl:'https://example.test/'+path})),error:null}) }; } }
   };
   const window = { localStorage:storage, crypto:webcrypto, navigator:{onLine:true}, HabitFlowRemote:{getClient:()=>client,getUserId:()=>owner}, setTimeout:()=>1, clearTimeout(){}, addEventListener:events.addEventListener.bind(events) };
-  const context = vm.createContext({window,console:{warn(){}},URL,Blob,Uint8Array,Date,Map,Set});
+  const trackedJSON = { parse(value) { counts.parses++; return JSON.parse(value); }, stringify(value) { counts.serializes++; return JSON.stringify(value); } };
+  const context = vm.createContext({window,console:{warn(){}},URL,Blob,Uint8Array,Date,Map,Set,JSON:trackedJSON});
   vm.runInContext(fs.readFileSync(path.join(root,'modules/state-persistence.js'),'utf8'),context);
   for(const stage of ['smoking','alcohol','points-ledger','projects'])window.HabitFlowPersistence.register(stage,{});
-  vm.runInContext(fs.readFileSync(path.join(root,'modules/dossiers-store.js'),'utf8'),context);
-  return { api:window.HabitFlowDossiersStore, window, values, remote, requests, storage,
+  vm.runInContext(fs.readFileSync(path.join(root,legacy ? 'tests/fixtures/dossiers-store-before-performance.js' : 'modules/dossiers-store.js'),'utf8'),context);
+  return { counts, resetCounts() { counts.writes=counts.parses=counts.serializes=0; }, api:window.HabitFlowDossiersStore, window, values, remote, requests, storage,
     read:()=>JSON.parse(storage.getItem('habitflow-state-v1')||'{}'),
     owner(value){owner=value;events.dispatchEvent(new Event('habitflow:auth-change'));},
-    failWrite(value){failWrite=value;},failRemote(value){failRemote=value;},
+    beforeRequest(callback){beforeRequest=callback;},failWrite(value){failWrite=value;},failRemote(value){failRemote=value;},
     pause(){let release;gate=new Promise(resolve=>release=resolve);return release;},uploads:()=>uploads
   };
 }
@@ -117,4 +120,75 @@ test('images use bounded blobs, synchronize the dossier first, and reject offlin
   assert.equal(app.uploads(),1);assert.equal(app.remote.dossiers.length,1);
   await assert.rejects(app.api.upload(new Blob([new Uint8Array(135001)],{type:'image/webp'}),dossier.id));
   app.window.navigator.onLine=false;await assert.rejects(app.api.upload(new Blob(['abc'],{type:'image/webp'}),dossier.id),/online/);
+});
+
+test('unchanged snapshots reuse normalized rows without whole-app JSON work', () => {
+  const app=harness(); app.api.saveDossier({title:'Stable'});
+  const first=app.api.snapshot(); app.resetCounts();
+  for(let i=0;i<30;i++){const next=app.api.snapshot();assert.equal(next.dossiers,first.dossiers);assert.equal(next.entries,first.entries);}
+  assert.deepEqual(app.counts,{writes:0,parses:0,serializes:0});
+});
+test('native storage changes invalidate the snapshot, and it cannot be mutated by a consumer', () => {
+  const app=harness();const row=app.api.saveDossier({title:'Initial'});const first=app.api.snapshot();
+  assert.ok(Object.isFrozen(first.dossiers));assert.ok(Object.isFrozen(first.dossiers[0]));
+  const raw=JSON.parse(app.values.get('habitflow-state-v1'));raw.dossiers[0].title='Other tab';
+  app.values.set('habitflow-state-v1',JSON.stringify(raw));
+  assert.equal(app.api.snapshot().dossiers[0].title,'Other tab');
+  app.values.delete('habitflow-state-v1');assert.equal(app.api.snapshot().dossiers.length,0);
+});
+test('unchanged sync performs zero writes instead of rewriting the whole app', async () => {
+  const app=harness();const dossier=app.api.saveDossier({title:'Ready'});await app.api.sync(dossier.id);app.resetCounts();
+  await app.api.sync(dossier.id);assert.equal(app.counts.writes,0);assert.equal(app.counts.serializes,0);
+});
+test('all fetched records and successful batches commit in one durable write', async () => {
+  const app=harness();const dossier=app.api.saveDossier({title:'Ready'});await app.api.sync();
+  app.remote.dossier_entries=Array.from({length:501},(_,n)=>({id:id(n),user_id:OWNER,dossier_id:dossier.id,body:'Entry '+n,created_at:stamp,updated_at:stamp}));
+  app.resetCounts();await app.api.sync(dossier.id);
+  assert.equal(app.counts.writes,1);assert.equal(app.api.snapshot().entries.length,501);
+});
+test('duplicate simultaneous sync calls share requests, but changing the dossier schedules one follow-up', async () => {
+  const app=harness();const first=app.api.saveDossier({title:'A'}),second=app.api.saveDossier({title:'B'});await app.api.sync();
+  app.requests.length=0;const release=app.pause();const pending=app.api.sync(first.id);
+  for(let i=0;i<10;i++)assert.equal(app.api.sync(first.id),pending);
+  release();await pending;assert.equal(app.requests.filter(r=>r.table==='dossiers'&&!r.write).length,1);
+  app.requests.length=0;const releaseAgain=app.pause();const changed=app.api.sync(first.id);app.api.sync(second.id);releaseAgain();await changed;
+  assert.equal(app.requests.filter(r=>r.table==='dossiers'&&!r.write).length,2);
+});
+test('a concurrent local edit survives a delayed response to the previous version', async () => {
+  const app=harness();const dossier=app.api.saveDossier({title:'Initial'});await app.api.sync();
+  const entry=app.api.saveEntry({dossier_id:dossier.id,body:'Before'});await app.api.sync(dossier.id);
+  const release=app.pause();const pending=app.api.sync(dossier.id);
+  app.api.saveEntry({...entry,body:'Edited while loading'});release();await pending;
+  assert.equal(app.api.snapshot().entries[0].body,'Edited while loading');
+  await app.api.sync(dossier.id);assert.equal(app.remote.dossier_entries[0].body,'Edited while loading');
+});
+test('synthetic large-state snapshot benchmark compares the previous implementation', () => {
+  const data={projects:[],dossiers:[{id:id(9000),user_id:OWNER,title:'Research',created_at:stamp,updated_at:stamp,synced:true}],
+    dossierEntries:Array.from({length:2000},(_,n)=>({id:id(n),user_id:OWNER,dossier_id:id(9000),body:'Research '.repeat(100),created_at:stamp,updated_at:stamp,synced:true})),
+    activityIdeas:Array.from({length:10000},(_,n)=>({id:n,title:'Unrelated data '.repeat(20)}))};
+  const results=[];
+  for(const legacy of [true,false]){const app=harness({legacy});app.values.set('habitflow-state-v1',JSON.stringify(data));app.api.snapshot();app.resetCounts();
+    const start=performance.now();for(let n=0;n<25;n++)app.api.snapshot();results.push({legacy,ms:Math.round(performance.now()-start),...app.counts});}
+  assert.ok(results[0].parses>=25);assert.equal(results[1].parses,0);assert.equal(results[1].writes,0);
+  console.log('Dossier snapshot benchmark (25 warm reads):',JSON.stringify(results));
+});
+
+test('a delayed upsert acknowledgment cannot mark a newer edit synced',async()=>{
+  const app=harness();const dossier=app.api.saveDossier({title:'Original'});
+  let reached,release;const started=new Promise(resolve=>reached=resolve),gate=new Promise(resolve=>release=resolve);
+  app.beforeRequest(async query=>{if(query.rows){app.beforeRequest(null);reached();await gate;}});
+  const pending=app.api.sync();await started;app.api.saveDossier({...dossier,title:'Newer edit'});release();await pending;
+  assert.equal(app.api.snapshot().dossiers[0].title,'Newer edit');assert.equal(app.read().dossiers[0].synced,false);
+  await app.api.sync();assert.equal(app.remote.dossiers[0].title,'Newer edit');assert.equal(app.read().dossiers[0].synced,true);
+});
+test('partial sync failure retains acknowledged headers and pending entries',async()=>{
+  const app=harness();const dossier=app.api.saveDossier({title:'Pending'});app.api.saveEntry({dossier_id:dossier.id,body:'Pending entry'});
+  app.beforeRequest(query=>{if(query.table==='dossier_entries')app.failRemote(true);});await app.api.sync();
+  assert.equal(app.read().dossiers[0].synced,true);assert.equal(app.read().dossierEntries[0].synced,false);
+  app.beforeRequest(null);app.failRemote(false);await app.api.sync();assert.equal(app.read().dossierEntries[0].synced,true);
+});
+test('quota failure during acknowledgment keeps the durable local edit available for retry',async()=>{
+  const app=harness();app.api.saveDossier({title:'Durable'});app.failWrite(true);await app.api.sync();
+  assert.equal(app.read().dossiers[0].title,'Durable');assert.equal(app.read().dossiers[0].synced,false);
+  app.failWrite(false);await app.api.sync();assert.equal(app.read().dossiers[0].synced,true);
 });

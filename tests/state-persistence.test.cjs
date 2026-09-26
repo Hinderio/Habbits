@@ -256,3 +256,15 @@ test('repeated reads of an external snapshot reuse smoking normalization', () =>
   h.read();
   assert.equal(recalculations, 2);
 });
+
+test('read-only collection projections reuse persisted data without running domain repairs',()=>{
+  const h=harness({initial:seed()});let repairReads=0;
+  h.window.HabitFlowPersistence.register('projection-probe',{read(state){repairReads++;return {state,changed:false};}});
+  const read=()=>h.window.HabitFlowPersistence.readCollections(['projects']);
+  const first=read();h.resetCounts();
+  for(let i=0;i<25;i++)assert.equal(read().projects,first.projects);
+  assert.equal(repairReads,0);assert.equal(h.counts.parses,0);assert.equal(h.counts.writes,0);assert.equal(h.counts.serializes,0);
+  const changed=seed();changed.projects[0].title='Other tab';h.data.set(KEY,JSON.stringify(changed));
+  assert.equal(read().projects[0].title,'Other tab');h.data.delete(KEY);assert.equal(read().projects,undefined);
+  h.write(seed());assert.equal(read().projects[0].title,'Project');h.read();assert.ok(repairReads>0,'regular reads retain their normalizers');
+});

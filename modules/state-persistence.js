@@ -99,7 +99,17 @@
     return persistState(state, options);
   }
 
+  // Read-only persisted slices for feature UIs without read-time domain repairs.
+  // Reuse the native-storage-validated parse cache, never a live application object.
+  // Callers must not mutate returned values; saves still use the full pipeline.
+  function readCollections(keys) {
+    const raw = getItem(KEY);
+    const state = typeof raw === 'string' && raw.trim().startsWith('{') ? parseStored(raw) : {};
+    return Object.fromEntries(keys.map(key => [key, state?.[key]]));
+  }
+
   window.HabitFlowPersistence = Object.freeze({
+    readCollections,
     writeState,
     isReady,
     register(name, stage) { if (!stages.has(name)) stages.set(name, stage); },
