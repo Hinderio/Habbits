@@ -62,3 +62,29 @@ test('hidden dossier screen performs no snapshot reads or scheduled renders',()=
   vm.runInNewContext(source.replace('  function mount() {','  window.hiddenRefresh=()=>{view="dossiers";pane={closest:()=>({hidden:true})};dialog={open:false};queueRefresh();refresh();};\n  function mount() {'),{window,document,URL,Date});
   window.hiddenRefresh();assert.equal(reads,0);assert.equal(frames,0);
 });
+
+function uploadHarness(failure) {
+  const nodes=new Map(),saved=[];let uploaded=0,revoked=0;
+  const node=key=>{if(!nodes.has(key))nodes.set(key,{textContent:'',value:'',replaceChildren(){this.innerHTML='';}});return nodes.get(key);};
+  const elements={body:{value:'A photo',focus(){}},link:{value:''},is_pinned:{checked:false},image_alt:{value:'Photo'}};
+  const form={elements,reportValidity:()=>true,setAttribute(){},removeAttribute(){},querySelector:node,querySelectorAll:()=>Object.values(elements),reset(){elements.body.value='';}};
+  const messages=[node('inline'),node('footer')];
+  const dialog={querySelector:selector=>selector==='[data-entry-form]'?form:node(selector),querySelectorAll:()=>messages};
+  const window={HabitFlowExhibition:{optimize:async()=> 'data:image/webp;base64,YWJj'},HabitFlowDossiersStore:{snapshot:()=>({entries:[]}),safeLink:()=>'',async upload(blob){uploaded++;assert.equal(blob.type,'image/webp');assert.equal(blob.size,3);if(failure)throw new Error(failure);return 'owner/dossier/photo.webp';},saveEntry:row=>saved.push(row)}};
+  const document={readyState:'loading',addEventListener(){}};
+  const URLmock={createObjectURL:()=> 'blob:preview',revokeObjectURL(){revoked++;}};
+  vm.runInNewContext(source.replace('  function mount() {','  window.uploadTest={setup(d){dialog=d;active="dossier";},receive,submitEntry};\n  function mount() {'),{window,document,URL:URLmock,Date,Blob,atob});
+  window.uploadTest.setup(dialog);
+  return {api:window.uploadTest,form,node,messages,saved,uploaded:()=>uploaded,revoked:()=>revoked};
+}
+test('image selection previews a blob and submit saves its uploaded path, then releases the preview',async()=>{
+  const h=uploadHarness();await h.api.receive({});assert.match(h.node('[data-draft-image]').innerHTML,/blob:preview/);
+  await h.api.submitEntry({preventDefault(){},target:h.form});assert.equal(h.uploaded(),1);assert.equal(h.saved[0].image_path,'owner/dossier/photo.webp');assert.equal(h.revoked(),1);
+  assert.match(h.messages[0].textContent,/gespeichert/);assert.equal(h.node('[data-entry-submit]').textContent,'Eintrag hinzufügen');
+});
+test('upload failure is visible beside the button and preserves image and text for retry',async()=>{
+  const h=uploadHarness('Bildspeicher fehlt');await h.api.receive({});await h.api.submitEntry({preventDefault(){},target:h.form});
+  assert.equal(h.saved.length,0);assert.equal(h.revoked(),0);assert.equal(h.form.elements.body.value,'A photo');assert.match(h.messages[0].textContent,/Bildspeicher fehlt/);
+  assert.equal(h.node('[data-entry-submit]').textContent,'Eintrag hinzufügen');assert.equal(h.form.elements.body.disabled,false);
+  await h.api.submitEntry({preventDefault(){},target:h.form});assert.equal(h.uploaded(),2,'retry retains the blob');
+});

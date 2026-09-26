@@ -12,7 +12,7 @@ const stamp = '2026-09-26T12:00:00.000Z';
 function harness({ legacy = false } = {}) {
   const counts = { writes: 0, parses: 0, serializes: 0 };
   const values = new Map(), events = new EventTarget(), remote = { dossiers: [], dossier_entries: [] }, requests = [];
-  let owner = OWNER, failWrite = false, failRemote = false, gate = null, uploads = 0, beforeRequest = null;
+  let owner = OWNER, failWrite = false, failRemote = false, gate = null, uploads = 0, beforeRequest = null, uploadError = null;
   const storage = { getItem: key => values.get(key) || null, setItem(key,value) { if (failWrite) throw new Error('quota'); counts.writes++; values.set(key,value); } };
   const client = {
     from(table) {
@@ -36,7 +36,7 @@ function harness({ legacy = false } = {}) {
         })().then(resolve,reject); }
       }; return api;
     },
-    storage: { from() { return { upload:async (path,blob)=>{uploads++;return {data:{path},error:null};}, remove:async()=>({error:null}), createSignedUrls:async paths=>({data:paths.map(path=>({path,signedUrl:'https://example.test/'+path})),error:null}) }; } }
+    storage: { from() { return { upload:async (path,blob)=>{uploads++;return {data:{path},error:uploadError};}, remove:async()=>({error:null}), createSignedUrls:async paths=>({data:paths.map(path=>({path,signedUrl:'https://example.test/'+path})),error:null}) }; } }
   };
   const window = { localStorage:storage, crypto:webcrypto, navigator:{onLine:true}, HabitFlowRemote:{getClient:()=>client,getUserId:()=>owner}, setTimeout:()=>1, clearTimeout(){}, addEventListener:events.addEventListener.bind(events) };
   const trackedJSON = { parse(value) { counts.parses++; return JSON.parse(value); }, stringify(value) { counts.serializes++; return JSON.stringify(value); } };
@@ -47,7 +47,7 @@ function harness({ legacy = false } = {}) {
   return { counts, resetCounts() { counts.writes=counts.parses=counts.serializes=0; }, api:window.HabitFlowDossiersStore, window, values, remote, requests, storage,
     read:()=>JSON.parse(storage.getItem('habitflow-state-v1')||'{}'),
     owner(value){owner=value;events.dispatchEvent(new Event('habitflow:auth-change'));},
-    beforeRequest(callback){beforeRequest=callback;},failWrite(value){failWrite=value;},failRemote(value){failRemote=value;},
+    uploadError(value){uploadError=value;},beforeRequest(callback){beforeRequest=callback;},failWrite(value){failWrite=value;},failRemote(value){failRemote=value;},
     pause(){let release;gate=new Promise(resolve=>release=resolve);return release;},uploads:()=>uploads
   };
 }
@@ -191,4 +191,12 @@ test('quota failure during acknowledgment keeps the durable local edit available
   const app=harness();app.api.saveDossier({title:'Durable'});app.failWrite(true);await app.api.sync();
   assert.equal(app.read().dossiers[0].title,'Durable');assert.equal(app.read().dossiers[0].synced,false);
   app.failWrite(false);await app.api.sync();assert.equal(app.read().dossiers[0].synced,true);
+});
+
+test('image upload distinguishes missing setup and denied storage while preserving the draft',async()=>{
+  const app=harness();const dossier=app.api.saveDossier({title:'Photos'});const blob=new Blob(['abc'],{type:'image/webp'});
+  app.failRemote(true);await assert.rejects(app.api.upload(blob,dossier.id),/Synchronisierung ist noch nicht eingerichtet/);assert.equal(app.uploads(),0);
+  app.failRemote(false);app.uploadError({message:'Bucket not found'});await assert.rejects(app.api.upload(blob,dossier.id),/Bildspeicher.*nicht eingerichtet/);
+  app.uploadError({statusCode:'403',message:'new row violates row-level security policy'});await assert.rejects(app.api.upload(blob,dossier.id),/Upload abgelehnt/);
+  app.uploadError(null);assert.match(await app.api.upload(blob,dossier.id),/webp$/);
 });

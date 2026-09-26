@@ -188,10 +188,20 @@
     if (!(blob instanceof Blob) || !['image/webp', 'image/jpeg'].includes(blob.type) || blob.size > 135000) throw new Error('Bitte zuerst ein optimiertes Bild auswählen.');
     await sync(dossierId);
     stillOwner(owner);
-    if (!(read().dossiers || []).some(row => row.id === dossierId && row.user_id === owner && row.synced && !row.is_archived)) throw new Error('Das Dossier muss vor dem Bild-Upload synchronisiert sein. Dein Entwurf bleibt erhalten.');
+    if (!(read().dossiers || []).some(row => row.id === dossierId && row.user_id === owner && row.synced && !row.is_archived)) {
+      throw new Error(status === 'Dossier-Sync noch nicht eingerichtet'
+        ? 'Die Dossier-Synchronisierung ist noch nicht eingerichtet. Der Bild-Upload ist deshalb nicht möglich. Dein Entwurf bleibt erhalten.'
+        : 'Das Dossier konnte noch nicht synchronisiert werden. Bitte Verbindung und Anmeldung prüfen und erneut speichern. Dein Entwurf bleibt erhalten.');
+    }
     const path = owner + '/' + dossierId + '/' + window.crypto.randomUUID() + (blob.type === 'image/webp' ? '.webp' : '.jpg');
     const result = await client().storage.from(BUCKET).upload(path, blob, { contentType: blob.type, upsert: false, cacheControl: '3600' });
-    if (result.error) throw new Error('Bild konnte nicht hochgeladen werden. Verbindung und Dossier-Bildspeicher prüfen. Dein Entwurf bleibt erhalten.');
+    if (result.error) {
+      const message = String(result.error.message || ''), code = String(result.error.statusCode || result.error.status || '');
+      const reason = /bucket.*not found/i.test(message) ? 'Der Bildspeicher für Dossiers ist noch nicht eingerichtet.'
+        : code === '403' || /row.level security|unauthorized|permission/i.test(message) ? 'Der Bildspeicher hat den Upload abgelehnt. Bitte Anmeldung und Zugriffsrechte prüfen.'
+        : 'Bild konnte nicht hochgeladen werden. Bitte Verbindung prüfen und erneut versuchen.';
+      throw new Error(reason + ' Dein Entwurf bleibt erhalten.');
+    }
     stillOwner(owner);
     return path;
   }
