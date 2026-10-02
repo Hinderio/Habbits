@@ -659,6 +659,7 @@
     boolean: '<path d="m5 13 4 4L19 7"/>',
     edit: '<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z"/><path d="m13 7 4 4"/>',
     trash: '<path d="M5 7h14"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M8 7l1-3h6l1 3"/><path d="M7 7l1 14h8l1-14"/>',
+    copy: '<rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
     archive: '<path d="M4 7h16v4H4V7Z"/><path d="M6 11v9h12v-9"/><path d="M10 15h4"/>',
     plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
     check: '<path d="m5 13 4 4L19 7"/>',
@@ -961,6 +962,7 @@
   let consumptionBackgroundRenderQueued = false;
   let habitFormOpen = false;
   let taskFormOpen = false;
+  const taskProjectFilters = new Set();
   let taskIdeasOpen = false;
   let taskBacklogOpen = false;
   let taskArchiveOpen = false;
@@ -1320,6 +1322,9 @@ cacheEls();
   }
 
   function bindEvents() {
+    document.addEventListener('habitflow:projects-updated', () => {
+      if (els.tasksList) renderTaskBoard();
+    });
     window.HabitFlowRoadmapBridge = Object.freeze({
       snapshot: () => ({
         tasks: state.tasks,
@@ -1561,6 +1566,8 @@ cacheEls();
       if (action === 'close-task-detail') closeTaskDetail();
       if (action === 'remove-task-step-draft') removeTaskStepDraft(id);
       if (action === 'toggle-task-step') toggleTaskStep(actionEl.dataset.taskId || id, actionEl.dataset.stepId, Boolean(actionEl.checked));
+      if (action === 'filter-task-project') toggleTaskProjectFilter(actionEl.dataset.projectId || '');
+      if (action === 'duplicate-task') duplicateTask(id);
       if (action === 'edit-task') editTask(id);
       if (action === 'delete-task') deleteTask(id);
       if (action === 'archive-task') archiveTask(id);
@@ -10032,7 +10039,6 @@ cacheEls();
 
   function renderTasks() {
     const tasks = [...state.tasks].map(normalizeTask).sort(compareTasks);
-    const boardTasks = tasks.filter(task => !isDoneArchivedTask(task));
     const totalOpen = tasks.filter(isActiveTask).length;
     const backlog = backlogTasks();
     const archive = archivedDoneTasks();
@@ -10048,6 +10054,12 @@ cacheEls();
     renderTaskBacklog(backlog);
     renderTaskArchive(archive);
     renderTaskTimeline();
+    renderTaskBoard(tasks);
+    refreshTaskDetailIfOpen();
+  }
+
+  function renderTaskBoard(tasks = [...state.tasks].map(normalizeTask).sort(compareTasks)) {
+    const boardTasks = filterTaskBoard(tasks);
     if (!tasks.length) {
       els.tasksList.innerHTML = '<div class="empty-state">Keine Aufgaben vorhanden. Neue Aufgaben erscheinen hier direkt als Kanban-Karte.</div>';
       refreshTaskDetailIfOpen();
@@ -10063,12 +10075,46 @@ cacheEls();
             <span class="badge muted">${columnTasks.length}</span>
           </div>
           <div class="kanban-cards">
-            ${columnTasks.length ? columnTasks.map(renderTaskCard).join('') : `<div class="kanban-empty">Hierhin ziehen</div>`}
+            ${columnTasks.length ? columnTasks.map(renderTaskCard).join('') : `<div class="kanban-empty">${taskProjectFilters.size ? 'Keine passenden Aufgaben' : 'Hierhin ziehen'}</div>`}
           </div>
         </section>`;
       }).join('')}
     </div>`;
     refreshTaskDetailIfOpen();
+  }
+
+  function toggleTaskProjectFilter(projectId) {
+    if (!projectId) taskProjectFilters.clear();
+    else if (taskProjectFilters.has(projectId)) taskProjectFilters.delete(projectId);
+    else taskProjectFilters.add(projectId);
+    renderTaskBoard();
+    const buttons = document.querySelectorAll('#taskProjectFilters [data-action="filter-task-project"]');
+    Array.from(buttons).find(button => button.dataset.projectId === projectId)?.focus();
+  }
+
+  function filterTaskBoard(tasks) {
+    const api = window.HabitFlowRoadmapProjects;
+    const snapshot = api?.snapshot() || { projects: [], taskLinks: [] };
+    const projects = snapshot.projects.filter(project => !project.is_archived);
+    const projectIds = new Set(projects.map(project => project.id));
+    const links = new Map(snapshot.taskLinks.map(link => [link.id, link.projectId]));
+    const projectKey = task => {
+      const id = links.has(task.id) ? links.get(task.id) : (task.project_id || task.projectId);
+      return projectIds.has(id) ? id : '__none__';
+    };
+    for (const id of taskProjectFilters) {
+      if (id !== '__none__' && !projectIds.has(id)) taskProjectFilters.delete(id);
+    }
+    const board = tasks.filter(task => !isDoneArchivedTask(task) && TASK_BOARD_COLUMNS.some(column => column.status === (task.status || 'open')));
+    const counts = new Map();
+    board.forEach(task => { const key = projectKey(task); counts.set(key, (counts.get(key) || 0) + 1); });
+    const filtered = taskProjectFilters.size ? board.filter(task => taskProjectFilters.has(projectKey(task))) : board;
+    const root = document.getElementById('taskProjectFilters');
+    if (root) {
+      const chip = (id, label, mark, count) => `<button class="task-project-filter" type="button" data-action="filter-task-project" data-project-id="${escapeHtml(id)}" aria-pressed="${id ? taskProjectFilters.has(id) : !taskProjectFilters.size}" title="${escapeHtml(label)}"><span aria-hidden="true">${mark}</span><span class="task-project-filter-label">${escapeHtml(label)}</span><span class="task-project-filter-count">${count}</span></button>`;
+      root.innerHTML = `<div class="task-project-filter-heading"><span>Projekte <small>Board filtern · Mehrfachauswahl</small></span><span role="status" aria-live="polite">${filtered.length} von ${board.length} Aufgaben</span></div><div class="task-project-filter-options" role="group" aria-label="Aufgaben-Board nach Projekten filtern">${chip('', 'Alle', '', board.length)}${projects.map(project => chip(project.id, project.title, api.badge(project, 'mark'), counts.get(project.id) || 0)).join('')}${chip('__none__', 'Ohne Projekt', '<span class="project-chip-mark task-project-neutral">–</span>', counts.get('__none__') || 0)}</div>`;
+    }
+    return filtered;
   }
 
   function taskIdeas() {
@@ -10866,6 +10912,7 @@ cacheEls();
         <button class="mini-btn" type="button" data-action="backlog-rank-up" data-id="${task.id}" ${index === 0 ? 'disabled' : ''}>↑</button>
         <button class="mini-btn" type="button" data-action="backlog-rank-down" data-id="${task.id}" ${index === total - 1 ? 'disabled' : ''}>↓</button>
         <span class="task-card-icon-actions">
+          <button class="consumption-icon-action" type="button" data-action="duplicate-task" data-id="${task.id}" aria-label="Task duplizieren" title="Duplizieren">${svgIcon('copy', 'ui-icon')}</button>
           <button class="consumption-icon-action" type="button" data-action="edit-task" data-id="${task.id}" aria-label="Task bearbeiten" title="Bearbeiten">${svgIcon('edit', 'ui-icon')}</button>
           <button class="consumption-icon-action consumption-icon-action-delete" type="button" data-action="delete-task" data-id="${task.id}" aria-label="Task löschen" title="Löschen">${svgIcon('trash', 'ui-icon')}</button>
         </span>
@@ -10910,6 +10957,7 @@ cacheEls();
         <button class="mini-btn" type="button" data-action="done-archive-rank-up" data-id="${task.id}" ${index === 0 ? 'disabled' : ''}>↑</button>
         <button class="mini-btn" type="button" data-action="done-archive-rank-down" data-id="${task.id}" ${index === total - 1 ? 'disabled' : ''}>↓</button>
         <span class="task-card-icon-actions">
+          <button class="consumption-icon-action" type="button" data-action="duplicate-task" data-id="${task.id}" aria-label="Task duplizieren" title="Duplizieren">${svgIcon('copy', 'ui-icon')}</button>
           <button class="consumption-icon-action" type="button" data-action="edit-task" data-id="${task.id}" aria-label="Task bearbeiten" title="Bearbeiten">${svgIcon('edit', 'ui-icon')}</button>
           <button class="consumption-icon-action consumption-icon-action-delete" type="button" data-action="delete-task" data-id="${task.id}" aria-label="Task löschen" title="Löschen">${svgIcon('trash', 'ui-icon')}</button>
         </span>
@@ -10958,10 +11006,10 @@ cacheEls();
       : status === 'in_progress'
         ? `<button class="mini-btn primary" type="button" data-action="move-task" data-status="done" data-id="${task.id}">Erledigt</button>`
         : status === 'done'
-          ? `<button class="mini-btn" type="button" data-action="move-task" data-status="in_progress" data-id="${task.id}">Zurück in Arbeit</button>`
+          ? ''
           : `<button class="mini-btn" type="button" data-action="move-task" data-status="open" data-id="${task.id}">Reaktivieren</button>`;
     const archiveAction = status === 'done'
-      ? `<button class="mini-btn" type="button" data-action="archive-done-task" data-id="${task.id}">Archivieren</button>`
+      ? ''
       : status === TASK_BACKLOG_STATUS
         ? ''
         : `<button class="mini-btn" type="button" data-action="move-task-to-backlog" data-id="${task.id}">Backlog</button>`;
@@ -10985,6 +11033,8 @@ cacheEls();
         <button class="mini-btn" type="button" data-action="open-task-detail" data-id="${task.id}">Details</button>
         ${archiveAction}
         <span class="task-card-icon-actions">
+          ${status === 'done' ? `<button class="consumption-icon-action" type="button" data-action="move-task" data-status="in_progress" data-id="${task.id}" aria-label="Zurück in Arbeit" title="Zurück in Arbeit">${svgIcon('reset', 'ui-icon')}</button><button class="consumption-icon-action" type="button" data-action="archive-done-task" data-id="${task.id}" aria-label="Task archivieren" title="Archivieren">${svgIcon('archive', 'ui-icon')}</button>` : ''}
+          <button class="consumption-icon-action" type="button" data-action="duplicate-task" data-id="${task.id}" aria-label="Task duplizieren" title="Duplizieren">${svgIcon('copy', 'ui-icon')}</button>
           <button class="consumption-icon-action" type="button" data-action="edit-task" data-id="${task.id}" aria-label="Task bearbeiten" title="Bearbeiten">${svgIcon('edit', 'ui-icon')}</button>
           <button class="consumption-icon-action consumption-icon-action-delete" type="button" data-action="delete-task" data-id="${task.id}" aria-label="Task löschen" title="Löschen">${svgIcon('trash', 'ui-icon')}</button>
         </span>
@@ -11052,6 +11102,7 @@ cacheEls();
     ${renderTaskImageGallery(normalized)}
     <div class="task-detail-actions">
       ${primaryAction}
+      <button class="consumption-icon-action" type="button" data-action="duplicate-task" data-id="${normalized.id}" aria-label="Task duplizieren" title="Duplizieren">${svgIcon('copy', 'ui-icon')}</button>
       <button class="consumption-icon-action" type="button" data-action="edit-task" data-id="${normalized.id}" aria-label="Task bearbeiten" title="Bearbeiten">${svgIcon('edit', 'ui-icon')}</button>
       <button class="pill secondary" type="button" data-action="close-task-detail">Schliessen</button>
     </div>`;
@@ -13309,6 +13360,43 @@ async function deleteAlcoholLog(id) {
     syncTaskFormPanel();
     updateTaskPreview();
     renderTasks();
+  }
+
+  function duplicateTask(id) {
+    const source = state.tasks.find(task => task.id === id);
+    if (!source) return;
+    const task = normalizeTask(source);
+    const created = nowIso();
+    const taskId = uid();
+    const link = window.HabitFlowRoadmapProjects?.snapshot().taskLinks.find(item => item.id === id);
+    const projectId = link ? link.projectId : (task.project_id || task.projectId || null);
+    const duplicate = normalizeTask({
+      id: taskId,
+      title: `${task.title} (Kopie)`,
+      description: taskDescriptionForDisplay(task),
+      category: task.category,
+      effort: task.effort,
+      priority: task.priority,
+      due_at: task.due_at || null,
+      project_id: projectId,
+      projectId,
+      images: taskImages(task).map(image => ({ ...image })),
+      steps: taskSteps(task).map(step => ({ ...step, id: uid(), done: false, created_at: created, completed_at: null })),
+      recurrence: task.recurrence ? { ...task.recurrence, series_id: taskId, previous_task_id: null } : null,
+      status: 'open',
+      completed_at: null,
+      done_archived_at: null,
+      done_archive_rank: null,
+      backlog_rank: null,
+      points: 0,
+      created_at: created,
+      updated_at: created,
+      synced: false
+    });
+    state.tasks.push(duplicate);
+    saveState();
+    toast('Aufgabe dupliziert · Kopie unter Offen');
+    syncWithSupabase({ silent: true });
   }
 
   async function deleteTask(id) {

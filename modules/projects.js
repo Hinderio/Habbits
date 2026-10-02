@@ -477,6 +477,7 @@
     if (grid) grid.innerHTML = state.projects.length ? state.projects.map(project => renderProjectCard(project, state)).join('') : '<div class="project-empty">Noch keine Projekte. Erstelle ein erstes Projekt mit Start, Ziel und den wichtigsten Phasen.</div>';
     if (selectedProjectId) renderDetail(selectedProjectId);
     scheduleTaskBadgePaint();
+    document.dispatchEvent(new CustomEvent('habitflow:projects-updated'));
   }
 
   function renderSummary(state) {
@@ -1097,6 +1098,7 @@
   }
 
   window.HabitFlowRoadmapProjects = Object.freeze({
+    badge: projectBadge,
     snapshot: () => { const current = readState(); return { projects: current.projects, milestones: current.projectMilestones, taskLinks: current.tasks.map(task => ({ id: task.id, projectId: task.project_id })) }; },
     open: id => { if (readState().projects.some(project => project.id === id && !project.is_archived)) openDetail(id); }
   });
