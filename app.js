@@ -16711,14 +16711,20 @@ function initOngoingSync() {
     const width = columns * resolution;
     const height = 7 * resolution;
     const field = new Float32Array(width * height);
-    const radius = Math.ceil(resolution * 1.15);
-    const sigma = resolution * .38;
+    const radius = Math.ceil(resolution * 1.7);
+    const sigma = resolution * .45;
+    const haloSigma = resolution * .72;
     const aspect = Math.max(1, Math.min(4, cellAspect));
     const kernelSize = radius * 2;
     const kernel = new Float32Array(kernelSize * kernelSize);
     for (let y = 0; y < kernelSize; y++) {
       for (let x = 0; x < kernelSize; x++) {
-        kernel[y * kernelSize + x] = Math.exp(-(((x - radius + .5) * aspect) ** 2 + (y - radius + .5) ** 2) / (2 * sigma * sigma));
+        const dx = x - radius + .5;
+        const dy = y - radius + .5;
+        const core = Math.exp(-((dx * aspect) ** 2 + dy ** 2) / (2 * sigma * sigma));
+        // A broader, softer halo connects nearby days without moving their centers.
+        const halo = Math.exp(-(dx * dx * aspect + dy * dy) / (2 * haloSigma * haloSigma));
+        kernel[y * kernelSize + x] = .55 * core + .45 * halo;
       }
     }
     values.forEach((value, index) => {
