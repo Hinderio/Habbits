@@ -8,6 +8,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="HabitFlow" />
+  <link rel="preload" as="image" href="https://spzytdyottsicwmmwsbl.supabase.co/storage/v1/object/public/companion-posters/stage-15.png" fetchpriority="high" />
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <link rel="stylesheet" href="style.css?v=353" />
@@ -25,61 +26,72 @@
   <link rel="stylesheet" href="modules/points-details.css?v=297" />
   <link rel="stylesheet" href="modules/weekly-points.css?v=335" />
   <style id="startup-art-style">
-    /* Inline so the first paint needs no image, font or script download. */
-    #startupArt { position:fixed; inset:0; z-index:2147483647; overflow:hidden; isolation:isolate; background:#f1efdf; color:#305b58; font-family:system-ui,sans-serif; transition:opacity .55s ease, visibility .55s; }
+    /* Companion poster typography and framing, available before app scripts. */
+    #startupArt { position:fixed; inset:0; z-index:2147483647; display:grid; place-items:center; padding:max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left)); box-sizing:border-box; overflow:auto; background:repeating-linear-gradient(135deg,#edf1ef 0 2px,#f5f6f3 2px 14px); color:#fff; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif; transition:opacity .55s ease,visibility .55s; }
+    #startupArt * { box-sizing:border-box; }
     #startupArt.is-leaving { opacity:0; visibility:hidden; pointer-events:none; }
-    #startupArt .startup-art__canvas { position:absolute; width:100%; height:100%; inset:0; }
-    #startupArt .startup-art__flow { transform-box:fill-box; transform-origin:50% 0; animation:startup-flow 9s ease-in-out infinite alternate; }
-    #startupArt .startup-art__flow--second { animation-duration:12s; animation-delay:-4s; }
-    #startupArt .startup-art__drop { animation:startup-drop 7s cubic-bezier(.4,0,.25,1) infinite; }
-    #startupArt .startup-art__drop--second { animation-delay:-3.5s; animation-duration:10s; }
-    #startupArt .startup-art__copy { position:absolute; left:max(8vw,24px); bottom:max(11vh,calc(env(safe-area-inset-bottom) + 32px)); right:24px; }
-    #startupArt .startup-art__label { margin:0 0 16px; font-size:10px; font-weight:500; letter-spacing:.32em; text-transform:uppercase; }
-    #startupArt .startup-art__title { margin:0; font-family:Georgia,'Times New Roman',serif; font-size:clamp(44px,8vw,88px); font-weight:400; line-height:1.08; letter-spacing:-.055em; color:#284d4a; }
-    #startupArt .startup-art__status { margin:20px 0 0; max-width:32ch; font-size:13px; line-height:1.65; color:#456762; }
-    #startupArt .startup-art__rule { display:block; width:40px; height:1px; margin-top:26px; background:#648e85; }
-    #startupArt .startup-art__retry { margin-top:18px; padding:10px 18px; border:1px solid #52736c; border-radius:24px; background:#f1efdf; color:#284d4a; font:inherit; font-size:13px; cursor:pointer; }
-    #startupArt .startup-art__retry:focus-visible { outline:3px solid #287f83; outline-offset:4px; }
+    #startupArt .startup-poster { position:relative; isolation:isolate; width:min(100%,620px); height:100%; max-height:900px; min-height:420px; overflow:hidden; border-radius:32px; background:linear-gradient(155deg,#88b7b8,#375d5a 48%,#172e2b); box-shadow:0 22px 64px #11243a24; }
+    #startupArt .startup-poster::after { content:""; position:absolute; inset:14px; border:1px solid #ffffff45; border-radius:21px; pointer-events:none; z-index:3; }
+    #startupArt .startup-poster__photo { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:62% center; }
+    #startupArt .startup-poster__shade { position:absolute; inset:0; background:linear-gradient(180deg,#09111d0a,#09111d18 28%,#09111d38 48%,#09111dbf 100%); }
+    #startupArt .startup-poster__texture { position:absolute; inset:0; background:repeating-linear-gradient(135deg,#ffffff0e 0 2px,transparent 2px 12px); mix-blend-mode:soft-light; pointer-events:none; }
+    #startupArt .startup-poster__badge { position:absolute; top:28px; left:28px; padding:10px 15px; border-radius:999px; background:#08111b3d; backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); font-size:11px; font-weight:900; letter-spacing:.14em; text-transform:uppercase; }
+    #startupArt .startup-poster__index { position:absolute; top:28px; right:28px; display:grid; place-items:center; min-width:66px; height:52px; border-radius:18px; background:#ffffff29; backdrop-filter:blur(7px); -webkit-backdrop-filter:blur(7px); box-shadow:inset 0 1px 0 #ffffff2e; font-size:26px; font-weight:950; letter-spacing:-.04em; }
+    #startupArt .startup-poster__content { position:absolute; inset:auto 30px 32px; display:flex; flex-direction:column; align-items:flex-start; color:#fff; text-shadow:0 6px 18px #0005; }
+    #startupArt .startup-cocktail { align-self:center; width:clamp(126px,24vh,196px); height:auto; margin:0 0 clamp(20px,4vh,42px); overflow:visible; filter:drop-shadow(0 8px 20px #051b2355); }
+    #startupArt .startup-cocktail__liquid { transform:translateY(var(--fill-offset,70px)); transition:transform .8s cubic-bezier(.22,1,.36,1); }
+    #startupArt .startup-cocktail__wave { animation:startup-wave 3.5s ease-in-out infinite alternate; }
+    #startupArt .startup-poster__eyebrow, #startupArt .startup-poster__caption { margin:0; font-size:clamp(10px,2.5vw,13px); font-weight:900; letter-spacing:.14em; text-transform:uppercase; line-height:1.4; }
+    #startupArt .startup-poster__title { margin:5px 0 8px; font:900 clamp(40px,10vw,66px)/.94 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif; letter-spacing:-.05em; color:#fff; }
+    #startupArt .startup-poster__caption { opacity:.85; }
+    #startupArt .startup-poster__status { margin:22px 0 0; max-width:36ch; color:#fff; font-size:12px; line-height:1.6; font-weight:500; }
+    #startupArt .startup-art__retry { margin-top:14px; padding:10px 18px; border:1px solid #ffffff80; border-radius:999px; background:#08111b66; color:#fff; font:700 12px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; cursor:pointer; }
+    #startupArt .startup-art__retry:focus-visible { outline:3px solid #ffe0a0; outline-offset:4px; }
     #startupArt [hidden] { display:none !important; }
     html.startup-art-active, html.startup-art-active body { overflow:hidden; }
     html.startup-art-active body > :not(#startupArt):not(script):not(style) { visibility:hidden; }
-    @keyframes startup-flow { from { transform:translateY(-30px) scaleY(.91); } to { transform:translateY(20px) scaleY(1.08); } }
-    @keyframes startup-drop { 0% { transform:translateY(-90px); opacity:0; } 18%,70% { opacity:.8; } 100% { transform:translateY(270px); opacity:0; } }
+    @keyframes startup-wave { from { transform:translateX(-8px); } to { transform:translateX(8px); } }
+    @media (max-width:480px) { #startupArt .startup-poster { border-radius:26px; } #startupArt .startup-poster__content { left:24px; right:24px; bottom:28px; } #startupArt .startup-poster__badge { left:24px; top:24px; } #startupArt .startup-poster__index { right:24px; top:24px; } }
+    @media (max-height:560px) { #startupArt .startup-poster { min-height:300px; } #startupArt .startup-poster__content { bottom:24px; } #startupArt .startup-cocktail { position:absolute; right:0; bottom:0; width:110px; margin:0; } #startupArt .startup-poster__title { font-size:40px; } #startupArt .startup-poster__status { max-width:calc(100% - 120px); margin-top:12px; } }
     @media (prefers-reduced-motion:reduce) { #startupArt, #startupArt * { animation:none !important; transition:none !important; } }
   </style>
 </head>
 <body>
   <section id="startupArt" aria-label="HabitFlow wird geladen">
-    <svg class="startup-art__canvas" viewBox="0 0 1200 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
-      <defs>
-        <linearGradient id="startupTurquoise" x1="0" y1="0" x2=".8" y2="1"><stop stop-color="#278c92"/><stop offset=".5" stop-color="#66c5c6"/><stop offset="1" stop-color="#b9e3d9"/></linearGradient>
-        <linearGradient id="startupGold" x1="0" y1="0" x2=".5" y2="1"><stop stop-color="#edc75e"/><stop offset="1" stop-color="#f5dda0"/></linearGradient>
-        <linearGradient id="startupVeil" x1="0" y1="0" x2="0" y2="1"><stop offset=".42" stop-color="#f1efdf" stop-opacity="0"/><stop offset="1" stop-color="#f1efdf" stop-opacity=".95"/></linearGradient>
-        <filter id="startupGrain"><feTurbulence type="fractalNoise" baseFrequency=".72" numOctaves="3" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter>
-      </defs>
-      <path fill="#e5e5c6" d="M0 0H1200V440C990 500 900 300 680 390S290 550 0 340Z"/>
-      <g class="startup-art__flow">
-        <path fill="url(#startupTurquoise)" d="M550-160H1280V760C1180 790 1105 695 1118 576L1105 218C1100 166 1050 165 1038 214L1030 496C1027 611 928 636 911 520L900 133C895 88 848 96 847 145L832 655C828 761 718 769 708 655L701 278C701 219 644 226 642 283L630 391C620 469 553 454 548 382Z"/>
-        <path fill="#d7eee3" opacity=".55" d="M720-100H790L775 484C770 531 739 530 735 480Z"/>
-        <path fill="#fffdf4" opacity=".75" d="M988-100H1013L1000 336C997 372 978 380 979 335Z"/>
-      </g>
-      <g class="startup-art__flow startup-art__flow--second" fill="url(#startupGold)">
-        <path d="M294-100H425L416 175C415 213 453 247 446 281C437 334 364 347 334 307C306 270 342 234 339 202Z"/>
-        <path opacity=".6" d="M70-80H163L151 124C148 179 106 195 91 146Z"/>
-      </g>
-      <path class="startup-art__drop" fill="#e6bb52" d="M390 370C385 389 374 401 374 414A17 17 0 0 0 408 414C408 401 396 385 390 370Z"/>
-      <path class="startup-art__drop startup-art__drop--second" fill="#4caaaa" d="M914 593C910 610 901 621 901 633A14 14 0 0 0 929 633C929 621 919 606 914 593Z"/>
-      <path fill="none" stroke="#fffcf0" stroke-width="3" opacity=".7" d="M1200 215C1010 286 1160 549 955 628S748 759 693 930"/>
-      <path fill="none" stroke="#599c93" stroke-width="1" opacity=".3" d="M1150-30C970 176 1190 485 961 653S858 866 883 930"/>
-      <path fill="url(#startupVeil)" d="M0 0H1200V900H0Z"/>
-      <path fill="#527068" opacity=".055" filter="url(#startupGrain)" d="M0 0H1200V900H0Z"/>
-    </svg>
-    <div class="startup-art__copy">
-      <p class="startup-art__label">Ein Moment zum Ankommen</p>
-      <h1 class="startup-art__title">HabitFlow</h1>
-      <p id="startupArtStatus" class="startup-art__status" role="status" aria-live="polite">Dein Tag nimmt Form an.</p>
-      <span class="startup-art__rule" aria-hidden="true"></span>
-      <button id="startupArtRetry" class="startup-art__retry" type="button" hidden>Erneut laden</button>
+    <div class="startup-poster">
+      <img class="startup-poster__photo" src="https://spzytdyottsicwmmwsbl.supabase.co/storage/v1/object/public/companion-posters/stage-15.png" alt="" fetchpriority="high" decoding="async" />
+      <div class="startup-poster__shade"></div>
+      <div class="startup-poster__texture"></div>
+      <span class="startup-poster__badge">Focus</span>
+      <b class="startup-poster__index" aria-label="Companion Poster 15">15</b>
+      <div class="startup-poster__content">
+        <svg id="startupArtProgress" class="startup-cocktail" viewBox="0 0 240 240" role="progressbar" aria-label="App-Start" aria-valuemin="0" aria-valuemax="100" aria-valuenow="8" aria-valuetext="App wird geladen" focusable="false">
+          <defs>
+            <clipPath id="startupGlassBowl"><path d="M38 57H202L128 143Q120 152 112 143Z"/></clipPath>
+            <linearGradient id="startupDrink" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#ffe5a5"/><stop offset=".45" stop-color="#efbc65"/><stop offset="1" stop-color="#d18b43"/></linearGradient>
+            <linearGradient id="startupCrystal" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff" stop-opacity=".45"/><stop offset=".5" stop-color="#fff" stop-opacity=".04"/><stop offset="1" stop-color="#fff" stop-opacity=".22"/></linearGradient>
+          </defs>
+          <circle cx="188" cy="55" r="25" fill="#dbe9ae" fill-opacity=".16" stroke="#f1e9bc" stroke-width="2"/>
+          <circle cx="188" cy="55" r="19" fill="none" stroke="#f1e9bc" stroke-opacity=".6"/>
+          <path d="M188 36V74M169 55H207M175 42L201 68M175 68L201 42" stroke="#f1e9bc" stroke-opacity=".55" stroke-width="1"/>
+          <path d="M34 53H206L129 146Q120 156 111 146Z" fill="url(#startupCrystal)"/>
+          <g clip-path="url(#startupGlassBowl)">
+            <g class="startup-cocktail__liquid">
+              <path class="startup-cocktail__wave" d="M10 57Q37 51 64 57T118 57T172 57T226 57L240 57V160H10Z" fill="url(#startupDrink)" fill-opacity=".92"/>
+              <path class="startup-cocktail__wave" d="M10 57Q37 51 64 57T118 57T172 57T226 57" fill="none" stroke="#fff2c9" stroke-width="2"/>
+              <circle cx="110" cy="96" r="2" fill="#fff5d5" opacity=".55"/><circle cx="135" cy="80" r="1.5" fill="#fff5d5" opacity=".65"/>
+            </g>
+          </g>
+          <path d="M34 53H206L129 146Q120 156 111 146ZM120 152V212M87 216Q120 206 153 216" fill="none" stroke="#fff" stroke-opacity=".9" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M49 62L107 130M124 162V202" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1.4" stroke-linecap="round"/>
+          <path d="M83 219H157" stroke="#fff" stroke-opacity=".3" stroke-width="1" stroke-linecap="round"/>
+        </svg>
+        <p class="startup-poster__eyebrow">Tropical Light</p>
+        <h1 class="startup-poster__title">HabitFlow</h1>
+        <p class="startup-poster__caption">Dein Flow beginnt.</p>
+        <p id="startupArtStatus" class="startup-poster__status" role="status" aria-live="polite">Ein Moment zum Ankommen.</p>
+        <button id="startupArtRetry" class="startup-art__retry" type="button" hidden>Erneut laden</button>
+      </div>
     </div>
   </section>
   <script id="startup-art-controller">
@@ -89,7 +101,32 @@
       const art = document.getElementById('startupArt');
       const status = document.getElementById('startupArtStatus');
       const retry = document.getElementById('startupArtRetry');
+      const progress = document.getElementById('startupArtProgress');
+      const phases = {
+        prepare: [20, 'Dein Raum wird vorbereitet.'],
+        session: [38, 'Deine Anmeldung wird geprüft.'],
+        sync: [58, 'Dein Fortschritt wird geladen.'],
+        details: [78, 'Die letzten Details kommen dazu.'],
+        render: [92, 'Dein Tag ist gleich bereit.']
+      };
+      let value = 8;
+      let failed = false;
       let finished = false;
+      function fill(next, label) {
+        value = Math.max(value, next);
+        // The triangular bowl widens upward: square root maps area to height.
+        progress.style.setProperty('--fill-offset', `${90 * (1 - Math.sqrt(value / 100))}px`);
+        progress.setAttribute('aria-valuenow', String(value));
+        progress.setAttribute('aria-valuetext', label);
+      }
+      function advance(event) {
+        if (finished || failed) return;
+        const phase = phases[event.detail?.phase];
+        if (!phase || phase[0] < value) return;
+        fill(...phase);
+        status.textContent = phase[1];
+      }
+      fill(8, 'App wird geladen');
       root.classList.add('startup-art-active');
       const slowTimer = setTimeout(() => {
         if (finished) return;
@@ -98,6 +135,7 @@
       }, 15000);
       function fail() {
         if (finished) return;
+        failed = true;
         clearTimeout(slowTimer);
         status.textContent = 'Der Start konnte nicht abgeschlossen werden. Bitte lade die App erneut.';
         retry.hidden = false;
@@ -105,7 +143,10 @@
       function ready() {
         if (finished) return;
         finished = true;
+        fill(100, 'Bereit');
+        status.textContent = 'Dein Flow ist bereit.';
         clearTimeout(slowTimer);
+        window.removeEventListener('habitflow:startup-progress', advance);
         window.removeEventListener('error', resourceError, true);
         window.removeEventListener('habitflow:startup-error', fail);
         window.removeEventListener('habitflow:ready', ready);
@@ -123,6 +164,7 @@
         if (event.target?.tagName === 'SCRIPT' && /(?:^|\/)app\.js(?:\?|$)/.test(event.target.src)) fail();
       }
       retry.addEventListener('click', () => window.location.reload());
+      window.addEventListener('habitflow:startup-progress', advance);
       window.addEventListener('habitflow:ready', ready);
       window.addEventListener('habitflow:startup-error', fail);
       window.addEventListener('error', resourceError, true);
@@ -972,7 +1014,7 @@
   <script src="modules/life-coach.js?v=305"></script>
   <script src="modules/weekly-points-domain.js?v=338"></script>
   <script src="modules/weekly-points.js?v=337"></script>
-  <script src="app.js?v=354"></script>
+  <script src="app.js?v=355"></script>
   <script src="modules/points-details.js?v=297"></script>
   <script src="modules/habit-story-coverage.js?v=333"></script>
   <script src="modules/ghost-arena.js?v=288"></script>

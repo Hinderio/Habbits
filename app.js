@@ -1054,7 +1054,12 @@
 
   window.addEventListener('pageshow', requestAppStart);
 
+  function reportStartupProgress(phase) {
+    window.dispatchEvent(new CustomEvent('habitflow:startup-progress', { detail: { phase } }));
+  }
+
   async function init() {
+    reportStartupProgress('prepare');
       registerServiceWorker();
 cacheEls();
     applyRulesVisibility();
@@ -1069,9 +1074,11 @@ cacheEls();
     migrateHabitScoring({ markUpdated: false });
     migrateCigaretteScoring();
     migrateAlcoholScoring();
+    reportStartupProgress('session');
     await initSupabase();
     initOngoingSync();
     
+    reportStartupProgress('render');
     render();
     setInterval(() => {
       renderTimers();
@@ -14256,9 +14263,11 @@ async function deleteAlcoholLog(id) {
         return;
       }
       renderSyncStatus('syncing');
+      reportStartupProgress('sync');
       await syncMonthlyMissionBackup();
       await syncMonthlyMissionsDirect();
       await syncWithSupabase({ silent: true, pullFirst: true, pullAfter: true });
+      reportStartupProgress('details');
       await syncLeisureCatalogWithSupabase({ silent: true });
       subscribeToRemoteChanges();
       renderSyncStatus('connected');
