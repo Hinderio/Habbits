@@ -16713,7 +16713,7 @@ function initOngoingSync() {
     const field = new Float32Array(width * height);
     const radius = Math.ceil(resolution * 1.7);
     const sigma = resolution * .45;
-    const haloSigma = resolution * .72;
+    const haloSigma = resolution * .8;
     const aspect = Math.max(1, Math.min(4, cellAspect));
     const kernelSize = radius * 2;
     const kernel = new Float32Array(kernelSize * kernelSize);
@@ -16724,7 +16724,7 @@ function initOngoingSync() {
         const core = Math.exp(-((dx * aspect) ** 2 + dy ** 2) / (2 * sigma * sigma));
         // A broader, softer halo connects nearby days without moving their centers.
         const halo = Math.exp(-(dx * dx * aspect + dy * dy) / (2 * haloSigma * haloSigma));
-        kernel[y * kernelSize + x] = .55 * core + .45 * halo;
+        kernel[y * kernelSize + x] = .4 * core + .6 * halo;
       }
     }
     values.forEach((value, index) => {
