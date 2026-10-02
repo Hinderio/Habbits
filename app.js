@@ -16713,7 +16713,7 @@ function initOngoingSync() {
     const field = new Float32Array(width * height);
     const radius = Math.ceil(resolution * 1.7);
     const sigma = resolution * .45;
-    const haloSigma = resolution * .8;
+    const haloSigma = resolution * .76;
     const aspect = Math.max(1, Math.min(4, cellAspect));
     const kernelSize = radius * 2;
     const kernel = new Float32Array(kernelSize * kernelSize);
@@ -16724,7 +16724,10 @@ function initOngoingSync() {
         const core = Math.exp(-((dx * aspect) ** 2 + dy ** 2) / (2 * sigma * sigma));
         // A broader, softer halo connects nearby days without moving their centers.
         const halo = Math.exp(-(dx * dx * aspect + dy * dy) / (2 * haloSigma * haloSigma));
-        kernel[y * kernelSize + x] = .4 * core + .6 * halo;
+        // Fade to zero before the kernel edge; avoid rectangular cutoff seams.
+        const edge = Math.min(1, Math.max(0, (Math.sqrt(dx * dx * aspect + dy * dy) / radius - .65) / .35));
+        const taper = 1 - edge * edge * (3 - 2 * edge);
+        kernel[y * kernelSize + x] = (.5 * core + .5 * halo) * taper;
       }
     }
     values.forEach((value, index) => {
@@ -16741,13 +16744,29 @@ function initOngoingSync() {
     });
     const pixels = new Uint8ClampedArray(width * height * 4);
     const colors = [[207,236,192], [207,236,192], [242,246,85], [255,226,20], [255,139,0], [255,38,18], [255,24,12]];
-    for (let i = 0; i < field.length; i++) {
-      const strength = Math.min(1, field[i] / 4);
+    const palette = new Uint8ClampedArray(1024 * 4);
+    for (let i = 0; i < 1024; i++) {
+      // Soft compression preserves differences in dense clusters instead of clipping red.
+      const strength = 1 - Math.exp(-(i / 64) / 2.8);
       const stop = strength * (colors.length - 1);
       const low = Math.min(colors.length - 2, Math.floor(stop));
       const mix = stop - low;
-      for (let c = 0; c < 3; c++) pixels[i * 4 + c] = colors[low][c] * (1 - mix) + colors[low + 1][c] * mix;
-      pixels[i * 4 + 3] = 255;
+      for (let c = 0; c < 3; c++) {
+        const p0 = colors[Math.max(0, low - 1)][c], p1 = colors[low][c];
+        const p2 = colors[low + 1][c], p3 = colors[Math.min(colors.length - 1, low + 2)][c];
+        palette[i * 4 + c] = Math.max(0, Math.min(255, .5 * ((2 * p1) + (-p0 + p2) * mix
+          + (2 * p0 - 5 * p1 + 4 * p2 - p3) * mix * mix
+          + (-p0 + 3 * p1 - 3 * p2 + p3) * mix * mix * mix)));
+      }
+      palette[i * 4 + 3] = 255;
+    }
+    for (let i = 0; i < field.length; i++) {
+      const color = Math.min(1023, Math.round(field[i] * 64)) * 4;
+      const pixel = i * 4;
+      pixels[pixel] = palette[color];
+      pixels[pixel + 1] = palette[color + 1];
+      pixels[pixel + 2] = palette[color + 2];
+      pixels[pixel + 3] = 255;
     }
     const image = { width, height, pixels };
     alcoholDensityCache = { key, image };
