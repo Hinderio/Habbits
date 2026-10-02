@@ -24,7 +24,8 @@ const context = vm.createContext({
   els: { alcoholIntervalVisual: {}, alcoholIntervalQuality: {}, alcoholHeatmapVisual: {}, alcoholHeatmapBadge: {} },
   calendarWeeksBack: () => [{ key: '2026-31', label: 'KW 31' }],
   isoWeekInfo: () => ({ key: '2026-31' }), alcoholDayLevel: key => levels[key],
-  formatDate: String, requestAnimationFrame: () => {}
+  formatDate: String, requestAnimationFrame: () => {},
+  alcoholMapView: 'matrix', setAlcoholMapView: () => {}
 });
 for (const name of ['alcoholAnalysisDays','alcoholWeekdayPoints','renderAlcoholWeekdayProfile','alcoholFreeStreakStats','renderAlcoholIntervalVisual','renderAlcoholWeekHeatmap']) vm.runInContext(fn(name), context);
 const days = context.alcoholAnalysisDays();

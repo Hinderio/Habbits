@@ -4990,3 +4990,18 @@ body.light #consumptionPauseList .pause-card { background: #fff; border-color: #
   .task-project-filter-label { max-width: 160px; }
   #screen-tasks .task-card-icon-actions .consumption-icon-action { width: 44px; height: 44px; min-width: 44px; flex-basis: 44px; }
 }
+
+/* The density layer uses the exact matrix geometry and scroll container. */
+.alcohol-map-view-switch { display: inline-flex; align-self: flex-end; justify-self: end; gap: 3px; padding: 3px; margin: 0 0 10px auto; border: 1px solid var(--line); border-radius: 999px; background: rgba(125,145,160,.08); }
+.alcohol-map-view-switch button { border: 0; border-radius: 999px; padding: 5px 12px; min-height: 30px; font: inherit; font-size: .72rem; font-weight: 650; cursor: pointer; background: transparent; color: var(--muted); }
+.alcohol-map-view-switch button[aria-pressed="true"] { background: #4ad7d1; color: #0d1827; }
+.alcohol-map-view-switch button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.alcohol-map-body { position: relative; }
+.alcohol-density-canvas { display: none; position: absolute; left: 64px; top: 0; width: calc(100% - 64px); height: 100%; pointer-events: none; }
+.is-density-view .alcohol-density-canvas { display: block; }
+.is-density-view .alcohol-map-row i { position: relative; background: transparent !important; color: transparent !important; border-color: rgba(25,68,78,.05); }
+.alcohol-density-legend { display: none; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; font-size: .72rem; color: var(--muted); }
+.is-density-view .alcohol-map-legend { display: none; }
+.is-density-view .alcohol-density-legend { display: flex; }
+.alcohol-density-scale { width: 90px; height: 8px; border-radius: 999px; background: linear-gradient(90deg,#daefd4,#f4e769,#ffa440,#e04244); }
+@media (max-width: 760px) { .alcohol-density-canvas { left: 58px; width: calc(100% - 58px); } }

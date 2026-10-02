@@ -1642,6 +1642,7 @@ cacheEls();
       if (action === 'cancel-alcohol-unit-edit') cancelAlcoholUnitEdit();
       if (action === 'delete-alcohol-unit') deleteAlcoholUnit(id);
       if (action === 'log-alcohol-unit') recordAlcoholUnit(actionEl.dataset.drinkType);
+      if (action === 'set-alcohol-map-view') setAlcoholMapView(actionEl.dataset.view);
       if (action === 'switch-consumption-mode') switchConsumptionMode(actionEl.dataset.mode);
       if (action === 'rotate-craving-tip') rotateSmokingTip();
       if (action === 'log-meditation') logMeditationTechnique(id);
@@ -16701,6 +16702,78 @@ function initOngoingSync() {
     }
   }
 
+  let alcoholMapView = 'matrix';
+  let alcoholDensityCache = null;
+
+  function alcoholDensityPixels(values, columns, resolution = 24) {
+    const key = `${columns}:${resolution}:${values.join(',')}`;
+    if (alcoholDensityCache?.key === key) return alcoholDensityCache.image;
+    const width = columns * resolution;
+    const height = 7 * resolution;
+    const field = new Float32Array(width * height);
+    const radius = Math.ceil(resolution * 1.15);
+    const sigma = resolution * .43;
+    const kernelSize = radius * 2;
+    const kernel = new Float32Array(kernelSize * kernelSize);
+    for (let y = 0; y < kernelSize; y++) {
+      for (let x = 0; x < kernelSize; x++) {
+        kernel[y * kernelSize + x] = Math.exp(-((x - radius + .5) ** 2 + (y - radius + .5) ** 2) / (2 * sigma * sigma));
+      }
+    }
+    values.forEach((value, index) => {
+      if (!value) return;
+      const left = (index % columns + .5) * resolution - radius;
+      const top = (Math.floor(index / columns) + .5) * resolution - radius;
+      const yStart = Math.max(0, top), yEnd = Math.min(height, top + kernelSize);
+      const xStart = Math.max(0, left), xEnd = Math.min(width, left + kernelSize);
+      for (let y = yStart; y < yEnd; y++) {
+        const fieldRow = y * width;
+        const kernelRow = (y - top) * kernelSize;
+        for (let x = xStart; x < xEnd; x++) field[fieldRow + x] += value * kernel[kernelRow + x - left];
+      }
+    });
+    const pixels = new Uint8ClampedArray(width * height * 4);
+    const colors = [[218,239,212], [244,231,105], [255,164,64], [224,66,68]];
+    for (let i = 0; i < field.length; i++) {
+      const strength = Math.min(1, field[i] / 4);
+      const stop = strength * 3;
+      const low = Math.min(2, Math.floor(stop));
+      const mix = stop - low;
+      for (let c = 0; c < 3; c++) pixels[i * 4 + c] = colors[low][c] * (1 - mix) + colors[low + 1][c] * mix;
+      pixels[i * 4 + 3] = 255;
+    }
+    const image = { width, height, pixels };
+    alcoholDensityCache = { key, image };
+    return image;
+  }
+
+  function setAlcoholMapView(view) {
+    const target = els.alcoholHeatmapVisual;
+    if (!target) return;
+    const canvas = target.querySelector('.alcohol-density-canvas');
+    if (!canvas) return;
+    const next = view === 'heatmap' ? 'heatmap' : 'matrix';
+    if (next === 'heatmap' && !canvas.dataset.ready) {
+      const context = canvas.getContext('2d');
+      if (!context) return;
+      const rows = [...target.querySelectorAll('.alcohol-map-row')];
+      const values = rows.flatMap(row => [...row.querySelectorAll('i')].map(cell => Number(cell.textContent) || 0));
+      const columns = rows[0]?.querySelectorAll('i').length || 11;
+      const image = alcoholDensityPixels(values, columns);
+      canvas.width = image.width;
+      canvas.height = image.height;
+      const data = context.createImageData(image.width, image.height);
+      data.data.set(image.pixels);
+      context.putImageData(data, 0, 0);
+      canvas.dataset.ready = 'true';
+    }
+    alcoholMapView = next;
+    target.classList.toggle('is-density-view', next === 'heatmap');
+    target.querySelectorAll('[data-action="set-alcohol-map-view"]').forEach(button => {
+      button.setAttribute('aria-pressed', String(button.dataset.view === next));
+    });
+  }
+
   function renderAlcoholWeekHeatmap(weeksCount = 11) {
     if (!els.alcoholHeatmapVisual) return;
     if (els.alcoholHeatmapBadge) els.alcoholHeatmapBadge.textContent = `${weeksCount} KW`;
@@ -16732,15 +16805,16 @@ function initOngoingSync() {
     const rows = [1,2,3,4,5,6,0].map(weekday => `<div class="alcohol-map-row"><strong>${escapeHtml(smokingWeekdayLabel(weekday, { short: true }))}</strong>${weeks.map(week => {
       const day = cells.get(`${week.key}-${weekday}`);
       const level = day ? alcoholDayLevel(day.consumption_key) : null;
-      return `<i class="${day ? `has-value level-${day.consumption_level}` : ''}" title="${day ? escapeHtml(`${formatDate(day.log_date)} · ${level.label}`) : 'Kein Konsumtag'}">${day ? day.consumption_level : ''}</i>`;
+      return `<i class="${day ? `has-value level-${day.consumption_level}` : ''}" title="${day ? escapeHtml(`${formatDate(day.log_date)} · Stufe ${day.consumption_level} · ${level.label}`) : 'Kein Konsumtag'}">${day ? day.consumption_level : ''}</i>`;
     }).join('')}</div>`).join('');
     els.alcoholHeatmapVisual.innerHTML = `<div class="smoking-visual-summary-grid alcohol-map-summary">
       <article><small>Stärkster Tag</small><strong>${escapeHtml(alcoholDayLevel(strongest.consumption_key).label)}</strong><p>${escapeHtml(formatDate(strongest.log_date))}</p></article>
       <article><small>Aktive Wochen</small><strong>${activeWeeks}</strong><p>von ${weeksCount} Kalenderwochen</p></article>
       <article><small>Häufigster Wochentag</small><strong>${escapeHtml(smokingWeekdayLabel(dominant))}</strong><p>${weekdayCounts.get(dominant) || 0} Konsumtage</p></article>
       <article><small>Punkte</small><strong>${formatSignedPoints(points)}</strong><p>im Kartenfenster</p></article>
-    </div><div class="smoke-week-grid-wrap alcohol-map-scroll" role="region" aria-label="Alkoholintensität nach Kalenderwoche" tabindex="0"><div class="alcohol-intensity-map"><div class="alcohol-map-header"><b>Tag</b>${header}</div>${rows}</div></div>
-    <div class="alcohol-map-legend"><span>Intensität</span>${Object.values(ALCOHOL_DAY_LEVELS).map(level => `<i class="level-${level.rank}">${level.rank}</i><small>${escapeHtml(level.label)}</small>`).join('')}</div>`;
+    </div><div class="alcohol-map-view-switch" role="group" aria-label="Darstellung der Alkohol-Matrix"><button type="button" data-action="set-alcohol-map-view" data-view="matrix" aria-pressed="true">Matrix</button><button type="button" data-action="set-alcohol-map-view" data-view="heatmap" aria-pressed="false">Heatmap</button></div><div class="smoke-week-grid-wrap alcohol-map-scroll" role="region" aria-label="Alkoholintensität nach Kalenderwoche" tabindex="0"><div class="alcohol-intensity-map"><div class="alcohol-map-header"><b>Tag</b>${header}</div><div class="alcohol-map-body"><canvas class="alcohol-density-canvas" aria-hidden="true"></canvas>${rows}</div></div></div>
+    <div class="alcohol-map-legend"><span>Intensität</span>${Object.values(ALCOHOL_DAY_LEVELS).map(level => `<i class="level-${level.rank}">${level.rank}</i><small>${escapeHtml(level.label)}</small>`).join('')}</div><div class="alcohol-density-legend"><span class="alcohol-density-scale" aria-hidden="true"></span><span>Geringe → hohe Dichte · geglättete Intensitäten</span></div>`;
+    setAlcoholMapView(alcoholMapView);
     requestAnimationFrame(() => {
       const heatmapScroll = els.alcoholHeatmapVisual?.querySelector('.alcohol-map-scroll');
       if (!heatmapScroll) return;
