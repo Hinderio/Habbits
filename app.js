@@ -16705,19 +16705,20 @@ function initOngoingSync() {
   let alcoholMapView = 'matrix';
   let alcoholDensityCache = null;
 
-  function alcoholDensityPixels(values, columns, resolution = 24) {
-    const key = `${columns}:${resolution}:${values.join(',')}`;
+  function alcoholDensityPixels(values, columns, resolution = 24, cellAspect = 2) {
+    const key = `${columns}:${resolution}:${cellAspect}:${values.join(',')}`;
     if (alcoholDensityCache?.key === key) return alcoholDensityCache.image;
     const width = columns * resolution;
     const height = 7 * resolution;
     const field = new Float32Array(width * height);
     const radius = Math.ceil(resolution * 1.15);
-    const sigma = resolution * .43;
+    const sigma = resolution * .38;
+    const aspect = Math.max(1, Math.min(4, cellAspect));
     const kernelSize = radius * 2;
     const kernel = new Float32Array(kernelSize * kernelSize);
     for (let y = 0; y < kernelSize; y++) {
       for (let x = 0; x < kernelSize; x++) {
-        kernel[y * kernelSize + x] = Math.exp(-((x - radius + .5) ** 2 + (y - radius + .5) ** 2) / (2 * sigma * sigma));
+        kernel[y * kernelSize + x] = Math.exp(-(((x - radius + .5) * aspect) ** 2 + (y - radius + .5) ** 2) / (2 * sigma * sigma));
       }
     }
     values.forEach((value, index) => {
@@ -16733,11 +16734,11 @@ function initOngoingSync() {
       }
     });
     const pixels = new Uint8ClampedArray(width * height * 4);
-    const colors = [[218,239,212], [244,231,105], [255,164,64], [224,66,68]];
+    const colors = [[207,236,192], [207,236,192], [242,246,85], [255,226,20], [255,139,0], [255,38,18], [255,24,12]];
     for (let i = 0; i < field.length; i++) {
       const strength = Math.min(1, field[i] / 4);
-      const stop = strength * 3;
-      const low = Math.min(2, Math.floor(stop));
+      const stop = strength * (colors.length - 1);
+      const low = Math.min(colors.length - 2, Math.floor(stop));
       const mix = stop - low;
       for (let c = 0; c < 3; c++) pixels[i * 4 + c] = colors[low][c] * (1 - mix) + colors[low + 1][c] * mix;
       pixels[i * 4 + 3] = 255;
@@ -16759,7 +16760,10 @@ function initOngoingSync() {
       const rows = [...target.querySelectorAll('.alcohol-map-row')];
       const values = rows.flatMap(row => [...row.querySelectorAll('i')].map(cell => Number(cell.textContent) || 0));
       const columns = rows[0]?.querySelectorAll('i').length || 11;
-      const image = alcoholDensityPixels(values, columns);
+      const cell = rows[0]?.querySelectorAll('i')[0];
+      const rect = cell?.getBoundingClientRect?.();
+      const cellAspect = rect?.height ? rect.width / rect.height : 2;
+      const image = alcoholDensityPixels(values, columns, 24, cellAspect);
       canvas.width = image.width;
       canvas.height = image.height;
       const data = context.createImageData(image.width, image.height);

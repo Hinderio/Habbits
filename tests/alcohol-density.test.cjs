@@ -23,7 +23,7 @@ assert.equal(image.width,264);assert.equal(image.height,168);
 assert.strictEqual(ctx.alcoholDensityPixels(values,11),image,'re-renders reuse density buffer');
 const at=(x,y)=>Array.from(image.pixels.slice((y*image.width+x)*4,(y*image.width+x)*4+3));
 assert.ok(at(132,84)[0]>at(0,0)[0]);assert.ok(at(132,84)[1]<at(0,0)[1]);
-const empty=ctx.alcoholDensityPixels(Array(77).fill(0),11);assert.deepEqual(Array.from(empty.pixels.slice(0,4)),[218,239,212,255]);
+const empty=ctx.alcoholDensityPixels(Array(77).fill(0),11);assert.deepEqual(Array.from(empty.pixels.slice(0,4)),[207,236,192,255]);
 const before=performance.now();
 for(let i=0;i<20;i++)ctx.alcoholDensityPixels(Array.from({length:77},(_,j)=>(j+i)%5),11);
 console.log(`Density checks passed; cold dense raster mean: ${((performance.now()-before)/20).toFixed(2)} ms; cached toggles perform no draw.`);

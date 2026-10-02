@@ -4999,9 +4999,9 @@ body.light #consumptionPauseList .pause-card { background: #fff; border-color: #
 .alcohol-map-body { position: relative; }
 .alcohol-density-canvas { display: none; position: absolute; left: 64px; top: 0; width: calc(100% - 64px); height: 100%; pointer-events: none; }
 .is-density-view .alcohol-density-canvas { display: block; }
-.is-density-view .alcohol-map-row i { position: relative; background: transparent !important; color: transparent !important; border-color: rgba(25,68,78,.05); }
+.is-density-view .alcohol-map-row i { position: relative; background: transparent !important; color: transparent !important; border-color: transparent; }
 .alcohol-density-legend { display: none; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; font-size: .72rem; color: var(--muted); }
 .is-density-view .alcohol-map-legend { display: none; }
 .is-density-view .alcohol-density-legend { display: flex; }
-.alcohol-density-scale { width: 90px; height: 8px; border-radius: 999px; background: linear-gradient(90deg,#daefd4,#f4e769,#ffa440,#e04244); }
+.alcohol-density-scale { width: 90px; height: 8px; border-radius: 999px; background: linear-gradient(90deg,#cfecc0,#f2f655,#ffe214,#ff8b00,#ff180c); }
 @media (max-width: 760px) { .alcohol-density-canvas { left: 58px; width: calc(100% - 58px); } }
