@@ -1026,8 +1026,10 @@
     appInitPromise = init()
       .then(() => {
         appInitialized = true;
+        window.dispatchEvent(new CustomEvent('habitflow:ready'));
       })
       .catch((error) => {
+        window.dispatchEvent(new CustomEvent('habitflow:startup-error'));
         console.error('HabitFlow Initialisierung fehlgeschlagen', error);
         throw error;
       })

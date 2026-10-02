@@ -24,8 +24,112 @@
   <link rel="stylesheet" href="modules/smoke-ring-premium.css?v=281" />
   <link rel="stylesheet" href="modules/points-details.css?v=297" />
   <link rel="stylesheet" href="modules/weekly-points.css?v=335" />
+  <style id="startup-art-style">
+    /* Inline so the first paint needs no image, font or script download. */
+    #startupArt { position:fixed; inset:0; z-index:2147483647; overflow:hidden; isolation:isolate; background:#f1efdf; color:#305b58; font-family:system-ui,sans-serif; transition:opacity .55s ease, visibility .55s; }
+    #startupArt.is-leaving { opacity:0; visibility:hidden; pointer-events:none; }
+    #startupArt .startup-art__canvas { position:absolute; width:100%; height:100%; inset:0; }
+    #startupArt .startup-art__flow { transform-box:fill-box; transform-origin:50% 0; animation:startup-flow 9s ease-in-out infinite alternate; }
+    #startupArt .startup-art__flow--second { animation-duration:12s; animation-delay:-4s; }
+    #startupArt .startup-art__drop { animation:startup-drop 7s cubic-bezier(.4,0,.25,1) infinite; }
+    #startupArt .startup-art__drop--second { animation-delay:-3.5s; animation-duration:10s; }
+    #startupArt .startup-art__copy { position:absolute; left:max(8vw,24px); bottom:max(11vh,calc(env(safe-area-inset-bottom) + 32px)); right:24px; }
+    #startupArt .startup-art__label { margin:0 0 16px; font-size:10px; font-weight:500; letter-spacing:.32em; text-transform:uppercase; }
+    #startupArt .startup-art__title { margin:0; font-family:Georgia,'Times New Roman',serif; font-size:clamp(44px,8vw,88px); font-weight:400; line-height:1.08; letter-spacing:-.055em; color:#284d4a; }
+    #startupArt .startup-art__status { margin:20px 0 0; max-width:32ch; font-size:13px; line-height:1.65; color:#456762; }
+    #startupArt .startup-art__rule { display:block; width:40px; height:1px; margin-top:26px; background:#648e85; }
+    #startupArt .startup-art__retry { margin-top:18px; padding:10px 18px; border:1px solid #52736c; border-radius:24px; background:#f1efdf; color:#284d4a; font:inherit; font-size:13px; cursor:pointer; }
+    #startupArt .startup-art__retry:focus-visible { outline:3px solid #287f83; outline-offset:4px; }
+    #startupArt [hidden] { display:none !important; }
+    html.startup-art-active, html.startup-art-active body { overflow:hidden; }
+    html.startup-art-active body > :not(#startupArt):not(script):not(style) { visibility:hidden; }
+    @keyframes startup-flow { from { transform:translateY(-30px) scaleY(.91); } to { transform:translateY(20px) scaleY(1.08); } }
+    @keyframes startup-drop { 0% { transform:translateY(-90px); opacity:0; } 18%,70% { opacity:.8; } 100% { transform:translateY(270px); opacity:0; } }
+    @media (prefers-reduced-motion:reduce) { #startupArt, #startupArt * { animation:none !important; transition:none !important; } }
+  </style>
 </head>
 <body>
+  <section id="startupArt" aria-label="HabitFlow wird geladen">
+    <svg class="startup-art__canvas" viewBox="0 0 1200 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+      <defs>
+        <linearGradient id="startupTurquoise" x1="0" y1="0" x2=".8" y2="1"><stop stop-color="#278c92"/><stop offset=".5" stop-color="#66c5c6"/><stop offset="1" stop-color="#b9e3d9"/></linearGradient>
+        <linearGradient id="startupGold" x1="0" y1="0" x2=".5" y2="1"><stop stop-color="#edc75e"/><stop offset="1" stop-color="#f5dda0"/></linearGradient>
+        <linearGradient id="startupVeil" x1="0" y1="0" x2="0" y2="1"><stop offset=".42" stop-color="#f1efdf" stop-opacity="0"/><stop offset="1" stop-color="#f1efdf" stop-opacity=".95"/></linearGradient>
+        <filter id="startupGrain"><feTurbulence type="fractalNoise" baseFrequency=".72" numOctaves="3" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter>
+      </defs>
+      <path fill="#e5e5c6" d="M0 0H1200V440C990 500 900 300 680 390S290 550 0 340Z"/>
+      <g class="startup-art__flow">
+        <path fill="url(#startupTurquoise)" d="M550-160H1280V760C1180 790 1105 695 1118 576L1105 218C1100 166 1050 165 1038 214L1030 496C1027 611 928 636 911 520L900 133C895 88 848 96 847 145L832 655C828 761 718 769 708 655L701 278C701 219 644 226 642 283L630 391C620 469 553 454 548 382Z"/>
+        <path fill="#d7eee3" opacity=".55" d="M720-100H790L775 484C770 531 739 530 735 480Z"/>
+        <path fill="#fffdf4" opacity=".75" d="M988-100H1013L1000 336C997 372 978 380 979 335Z"/>
+      </g>
+      <g class="startup-art__flow startup-art__flow--second" fill="url(#startupGold)">
+        <path d="M294-100H425L416 175C415 213 453 247 446 281C437 334 364 347 334 307C306 270 342 234 339 202Z"/>
+        <path opacity=".6" d="M70-80H163L151 124C148 179 106 195 91 146Z"/>
+      </g>
+      <path class="startup-art__drop" fill="#e6bb52" d="M390 370C385 389 374 401 374 414A17 17 0 0 0 408 414C408 401 396 385 390 370Z"/>
+      <path class="startup-art__drop startup-art__drop--second" fill="#4caaaa" d="M914 593C910 610 901 621 901 633A14 14 0 0 0 929 633C929 621 919 606 914 593Z"/>
+      <path fill="none" stroke="#fffcf0" stroke-width="3" opacity=".7" d="M1200 215C1010 286 1160 549 955 628S748 759 693 930"/>
+      <path fill="none" stroke="#599c93" stroke-width="1" opacity=".3" d="M1150-30C970 176 1190 485 961 653S858 866 883 930"/>
+      <path fill="url(#startupVeil)" d="M0 0H1200V900H0Z"/>
+      <path fill="#527068" opacity=".055" filter="url(#startupGrain)" d="M0 0H1200V900H0Z"/>
+    </svg>
+    <div class="startup-art__copy">
+      <p class="startup-art__label">Ein Moment zum Ankommen</p>
+      <h1 class="startup-art__title">HabitFlow</h1>
+      <p id="startupArtStatus" class="startup-art__status" role="status" aria-live="polite">Dein Tag nimmt Form an.</p>
+      <span class="startup-art__rule" aria-hidden="true"></span>
+      <button id="startupArtRetry" class="startup-art__retry" type="button" hidden>Erneut laden</button>
+    </div>
+  </section>
+  <script id="startup-art-controller">
+    (() => {
+      'use strict';
+      const root = document.documentElement;
+      const art = document.getElementById('startupArt');
+      const status = document.getElementById('startupArtStatus');
+      const retry = document.getElementById('startupArtRetry');
+      let finished = false;
+      root.classList.add('startup-art-active');
+      const slowTimer = setTimeout(() => {
+        if (finished) return;
+        status.textContent = 'Es dauert gerade etwas länger. Wir bereiten alles für dich vor.';
+        retry.hidden = false;
+      }, 15000);
+      function fail() {
+        if (finished) return;
+        clearTimeout(slowTimer);
+        status.textContent = 'Der Start konnte nicht abgeschlossen werden. Bitte lade die App erneut.';
+        retry.hidden = false;
+      }
+      function ready() {
+        if (finished) return;
+        finished = true;
+        clearTimeout(slowTimer);
+        window.removeEventListener('error', resourceError, true);
+        window.removeEventListener('habitflow:startup-error', fail);
+        window.removeEventListener('habitflow:ready', ready);
+        // Let the final dashboard or login render reach the next paint.
+        requestAnimationFrame(() => {
+          root.classList.remove('startup-art-active');
+          if (art.contains(document.activeElement)) document.activeElement.blur();
+          art.setAttribute('aria-hidden', 'true');
+          art.setAttribute('inert', '');
+          art.classList.add('is-leaving');
+          setTimeout(() => art.remove(), 600);
+        });
+      }
+      function resourceError(event) {
+        if (event.target?.tagName === 'SCRIPT' && /(?:^|\/)app\.js(?:\?|$)/.test(event.target.src)) fail();
+      }
+      retry.addEventListener('click', () => window.location.reload());
+      window.addEventListener('habitflow:ready', ready);
+      window.addEventListener('habitflow:startup-error', fail);
+      window.addEventListener('error', resourceError, true);
+    })();
+  </script>
+  <noscript><p>Bitte aktiviere JavaScript, um HabitFlow zu öffnen.</p><style>#startupArt { display:none; }</style></noscript>
+
   <div id="toast" class="save-toast hidden" role="status" aria-live="polite"></div>
 
   <section id="authGate" class="auth-gate hidden" aria-live="polite">
@@ -868,7 +972,7 @@
   <script src="modules/life-coach.js?v=305"></script>
   <script src="modules/weekly-points-domain.js?v=338"></script>
   <script src="modules/weekly-points.js?v=337"></script>
-  <script src="app.js?v=353"></script>
+  <script src="app.js?v=354"></script>
   <script src="modules/points-details.js?v=297"></script>
   <script src="modules/habit-story-coverage.js?v=333"></script>
   <script src="modules/ghost-arena.js?v=288"></script>
