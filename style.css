@@ -4090,16 +4090,6 @@ body.light .task-detail-facts article,body.light .task-detail-image{background:r
   border:1px solid rgba(255,255,255,.07);
   overflow:hidden;
 }
-.personal-best-card:after{
-  content:"";
-  position:absolute;
-  right:-28px;
-  top:-28px;
-  width:84px;
-  height:84px;
-  border-radius:50%;
-  background:rgba(143,240,167,.08);
-}
 .personal-best-card.is-unlocked{border-color:rgba(143,240,167,.18);background:linear-gradient(135deg,rgba(143,240,167,.08),rgba(255,255,255,.04))}
 .personal-best-card.is-locked{opacity:.78}
 .personal-best-icon{position:relative;z-index:1;width:40px;height:40px;border-radius:16px;display:grid;place-items:center;background:rgba(74,215,209,.12);color:var(--primary)}

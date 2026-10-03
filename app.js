@@ -9333,9 +9333,9 @@ cacheEls();
     return best ? { value: formatKmValue(best.km), detail: `KW ${best.week} · ${best.sessions} Run${best.sessions === 1 ? '' : 's'}` } : { value: 'Noch offen', detail: 'Logge Jogging-Distanzen, dann entsteht deine beste Laufwoche.' };
   }
 
-  function buildStrongestPointsMonth() {
+  function buildStrongestPointsMonth(ledger = visibleLedgerPoints()) {
     const months = new Map();
-    visibleLedgerPoints().forEach(point => {
+    ledger.forEach(point => {
       const key = monthKeyFromDate(point.earned_at);
       if (!key) return;
       months.set(key, (months.get(key) || 0) + Number(point.points || 0));
@@ -9368,23 +9368,36 @@ cacheEls();
     return best ? { value: `${best} Tag${best === 1 ? '' : 'e'}`, detail: 'längste Serie mit erledigten Aufgaben' } : { value: 'Noch offen', detail: 'Erledigte Aufgaben bauen hier eine Serie auf.' };
   }
 
+  function countHundredPointFitnessSessions(allSessions = [], ledger = []) {
+    const sessionIds = new Set(allSessions.map(session => session.id));
+    let count = 0;
+    for (const point of ledger) {
+      const points = Number(point.points);
+      if (point.source_type === 'habit' && Number.isFinite(points) && points >= 100 && sessionIds.delete(point.source_id)) count += 1;
+    }
+    return count;
+  }
+
   function buildFitnessPersonalBests(allSessions = []) {
+    const ledger = visibleLedgerPoints();
+    const hundredPointSessions = countHundredPointFitnessSessions(allSessions, ledger);
     const hikeSessions = allSessions.filter(session => session.type === 'hiking');
     const joggingSessions = allSessions.filter(session => session.type === 'jogging');
-    const bestHikeAscent = [...hikeSessions].sort((a, b) => Number(b.ascent || 0) - Number(a.ascent || 0))[0] || null;
+    const bestHikeAscent = hikeSessions.reduce((best, session) => !best || Number(session.ascent || 0) > Number(best.ascent || 0) ? session : best, null);
     const mountainCollection = buildMountainCollection(hikeSessions);
     return [
       { key: 'smoke', label: 'Längste Rauchpause', icon: 'smoke', ...buildBestSmokePause() },
       { key: 'ascent', label: 'Meiste Höhenmeter', icon: 'hiking', value: bestHikeAscent ? formatMetersValue(bestHikeAscent.ascent) : 'Noch offen', detail: bestHikeAscent ? `${escapeHtml(bestHikeAscent.dateLabel)} · kumuliert ${formatMetersValue(mountainCollection.totalAscent)}` : 'Eine Wanderung mit hm schaltet diesen Pokal frei.' },
       { key: 'runweek', label: 'Beste Laufwoche', icon: 'jogging', ...buildBestRunningWeek(joggingSessions) },
-      { key: 'month', label: 'Stärkster Monat', icon: 'reward', ...buildStrongestPointsMonth() },
-      { key: 'tasks', label: 'Task-Serie', icon: 'tasks', ...buildLongestTaskStreak() }
+      { key: 'month', label: 'Stärkster Monat', icon: 'reward', ...buildStrongestPointsMonth(ledger) },
+      { key: 'tasks', label: 'Task-Serie', icon: 'tasks', ...buildLongestTaskStreak() },
+      { key: 'hundred-points', label: '100-Punkte-Sessions', icon: 'reward', value: `${hundredPointSessions.toLocaleString('de-CH')} Session${hundredPointSessions === 1 ? '' : 's'}`, detail: 'Joggen & Wandern mit mindestens 100 Punkten pro Session', unlocked: hundredPointSessions > 0 }
     ];
   }
 
   function renderPersonalBestMuseum(allSessions = []) {
     const bests = buildFitnessPersonalBests(allSessions);
-    const unlocked = bests.filter(best => !String(best.value || '').includes('Noch offen')).length;
+    const unlocked = bests.filter(best => best.unlocked ?? !String(best.value || '').includes('Noch offen')).length;
     return `<details class="mobile-fitness-section fitness-bests-section" data-fitness-section="bests" open>
       <summary><span>Personal Best Museum</span><small>${unlocked}/${bests.length} Pokale sichtbar</small></summary>
       <section class="personal-best-museum fitness-intelligence-card">
@@ -9393,7 +9406,7 @@ cacheEls();
           <span class="personal-best-badge">${unlocked}/${bests.length}</span>
         </div>
         <div class="personal-best-grid">
-          ${bests.map(best => `<article class="personal-best-card is-${escapeHtml(best.key)} ${String(best.value || '').includes('Noch offen') ? 'is-locked' : 'is-unlocked'}">
+          ${bests.map(best => `<article class="personal-best-card is-${escapeHtml(best.key)} ${(best.unlocked ?? !String(best.value || '').includes('Noch offen')) ? 'is-unlocked' : 'is-locked'}">
             <div class="personal-best-icon" aria-hidden="true">${svgIcon(best.icon, 'ui-icon')}</div>
             <small>${escapeHtml(best.label)}</small>
             <strong>${escapeHtml(best.value)}</strong>
