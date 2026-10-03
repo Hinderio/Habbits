@@ -1352,6 +1352,54 @@ cacheEls();
       }
     });
     window.HabitFlowGiftTasks = Object.freeze({ create: createTaskFromGift });
+    // Read-only integration: the ontology never persists, scores or synchronizes data.
+    window.HabitFlowOntologyBridge = Object.freeze({
+      snapshot: () => ({
+        ...state,
+        ...(window.HabitFlowPersistence?.readCollections?.(['projects', 'projectPhases', 'projectMilestones', 'projectNotes']) || {}),
+        ontologyHabits: state.habits.map(habit => ({ id: habit.id,
+          fitness: isFitnessDistanceHabit(habit) ? fitnessHabitType(habit) : isSwimmingHabit(habit) ? 'swimming' : '',
+          category: habitCategoryMeta(habit).label }))
+      }),
+      open: (target = {}) => {
+        setPointsRulesPopoverOpen(false);
+        const screen = target.screen || 'dashboard';
+        if (!document.querySelector(`[data-screen="${screen}"]`)) return false;
+        showScreen(screen);
+        if (target.kind === 'habit') {
+          if (!state.habits.some(row => row.id === target.id && !row.is_archived)) return false;
+          openHistoryModal('habit-detail', target.id);
+          els.historyModal?.querySelector('button')?.focus();
+        } else if (target.kind === 'task') {
+          if (!state.tasks.some(row => row.id === target.id && !row.is_archived)) return false;
+          openTaskDetail(target.id); els.taskDetailCloseBtn?.focus();
+        } else if (target.kind === 'fitness') {
+          const entry = visibleHabitEntries().find(row => row.id === target.id);
+          const habit = entry && state.habits.find(row => row.id === entry.habit_id && !row.is_archived);
+          if (!habit || !isFitnessDistanceHabit(habit) || !(Number(entry.value_num) > 0)) return false;
+          selectedFitnessFilter = 'all'; selectFitnessEntry(target.id);
+        } else if (target.kind === 'appointment') {
+          const row = state.appointments.find(item => item.id === target.id);
+          if (!row) return false;
+          selectedCalendarDate = toDateKey(row.starts_at); calendarCursor = new Date(row.starts_at);
+          renderCalendar(); renderDayDetails();
+        } else if (target.kind === 'smoke') { switchConsumptionMode('smoke'); openHistoryModal('smoke'); }
+        else if (target.kind === 'alcohol') switchConsumptionMode('alcohol');
+        else if (target.kind === 'pauses') { pausesExpanded = true; applyPausesVisibility(); }
+        else if (target.kind === 'routine') openMorningRoutineModal();
+        else if (target.kind === 'reviews') openHistoryModal('weekly-reviews');
+        else if (target.kind === 'coach') openCoachModal();
+        else if (target.kind === 'fitness-coach') openFitnessCoach();
+        else if (target.kind === 'ideas') { taskIdeasOpen = true; syncTaskUtilityPanels(); }
+        const node = target.anchor ? document.getElementById(target.anchor) : document.getElementById('screen-' + screen);
+        if (node && (target.anchor || !['habit', 'task', 'routine', 'reviews', 'smoke', 'coach', 'fitness-coach'].includes(target.kind))) {
+          for (let parent = node; parent; parent = parent.parentElement) if (parent.tagName === 'DETAILS') parent.open = true;
+          node.tabIndex = -1; node.focus({ preventScroll: true }); node.scrollIntoView({ block: 'start', behavior: 'auto' });
+        }
+        return true;
+      }
+    });
+
     els.themeToggle.addEventListener('click', () => {
       document.body.classList.toggle('light');
       localStorage.setItem(THEME_KEY, document.body.classList.contains('light') ? 'light' : 'dark');
@@ -4224,6 +4272,7 @@ cacheEls();
     </div>
     <p class="points-rules-copy">Die Companion-Stufe wird direkt aus deinen gesammelten Punkten berechnet. Stufe 1→2 startet bei 250 Punkten; danach steigen die benötigten Punkte pro Stufe um 18%. Wandern zählt jetzt bewusst stärker: Touren starten bei +50 Pkt., jeder Kilometer bringt +10 Pkt. und je 100 Höhenmeter nochmals +10 Pkt.</p>
     <div class="points-rules-grid" aria-label="Nächste Stufenkosten">${sampleRows || '<span><b>20/20</b>Maximalstufe</span>'}</div>
+    <button class="points-rules-detail-toggle" type="button" data-ontology-open aria-haspopup="dialog">Ontology <span aria-hidden="true">↗</span><small style="display:block;font-size:.75em;font-weight:400">Entitäten & Beziehungen entdecken</small></button>
     <button class="points-rules-detail-toggle" type="button" data-action="toggle-points-detail" aria-expanded="false">Detaillierte Punktelogik ansehen</button>
     <div class="points-rules-detail-panel" hidden>
       <article><strong>Joggen</strong><span>Pro Eintrag +50 Pkt. Basis und +2 Pkt. pro Minute Laufdauer. Beispiel: 60 Minuten = 170 Pkt. Ohne Laufdauer: 50 Pkt. Sekunden zählen anteilig; das Ergebnis wird auf ganze Punkte gerundet.</span></article>

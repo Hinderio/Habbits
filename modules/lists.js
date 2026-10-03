@@ -3134,13 +3134,13 @@
   });
 
   window.HabitFlowListsCoach = Object.freeze({
-    snapshot: () => ({ lists: state.lists.filter(list => list.id !== ROADMAP_LIST_ID), items: state.items.filter(item => item.listId !== ROADMAP_LIST_ID) }),
+    snapshot: () => ({ lists: state.lists.filter(list => list.id !== ROADMAP_LIST_ID), items: state.items.filter(item => item.listId !== ROADMAP_LIST_ID), tours: state.tours, stops: state.stops }),
     open: (listId, itemId) => {
       const button = Array.from(document.querySelectorAll('[data-list-open]')).find(node => node.dataset.listOpen === listId);
       if (!button) return;
       button.click();
       requestAnimationFrame(() => {
-        const row = Array.from(document.querySelectorAll('[data-item-id], [data-weekly-id], [data-shopping-id], [data-subscription-id], [data-spot-id], [data-term-id], [data-finance-id], [data-chatgpt-id]'))
+        const row = Array.from(document.querySelectorAll('[data-item-id], [data-weekly-id], [data-shopping-id], [data-subscription-id], [data-spot-id], [data-stop-id], [data-tour-id], [data-term-id], [data-finance-id], [data-chatgpt-id]'))
           .find(node => Object.values(node.dataset).includes(String(itemId)));
         const target = row || document.getElementById('hfListDetail');
         if (target) {

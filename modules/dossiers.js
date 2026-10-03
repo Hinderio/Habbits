@@ -255,6 +255,6 @@
     window.addEventListener('habitflow:auth-change', () => { resetEntry(); active = ''; if (dialog.open) dialog.close(); overviewSignature = ''; queueRefresh(); });
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && visible()) { void store.sync(active); if (dialog.open) void loadImages(); } });
   }
-  window.HabitFlowDossiers = Object.freeze({ showProjects() { if (projects) show('projects'); } });
+  window.HabitFlowDossiers = Object.freeze({ showProjects() { if (projects) show('projects'); }, open(id) { if (!pane) return false; show('dossiers'); if (id) { if (!store.snapshot().dossiers.some(row => row.id === id)) return false; open(id); } return true; } });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, { once:true }); else mount();
 })(window, document);

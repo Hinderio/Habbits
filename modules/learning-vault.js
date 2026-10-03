@@ -678,6 +678,7 @@
     storageKey: STORAGE_KEY,
     tableName: TABLE_NAME,
     maxItems: MAX_ITEMS,
+    snapshot: () => visibleItems(),
     syncNow: syncWithRemote
   });
 })(window, document);
