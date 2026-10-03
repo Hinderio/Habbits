@@ -635,6 +635,7 @@
 
   const ICON_PATHS = {
     sunrise: '<path d="M3 17h18M5 21h14M7 17a5 5 0 0 1 10 0M12 3v3M4.2 7.2l2.1 2.1M19.8 7.2l-2.1 2.1M2 12h3M19 12h3"/>',
+    crm: '<circle cx="9" cy="8" r="3"/><path d="M3 21v-2a6 6 0 0 1 12 0v2M16 5a3 3 0 0 1 0 6M21 21v-2a6 6 0 0 0-4-5.65"/>',
     engagement: '<path d="M3 16h4l3 3h6l5-5a2 2 0 0 0-3-2l-3 3h-4M7 16v-5h5a2 2 0 0 1 0 4M3 11v9M15 9l-4-4a2.5 2.5 0 0 1 4-3 2.5 2.5 0 0 1 4 3l-4 4Z"/>',
     dashboard: '<path d="M4 13h7V4H4v9Z"/><path d="M13 20h7V4h-7v16Z"/><path d="M4 20h7v-5H4v5Z"/>',
     smoke: '<path d="M4 15h11"/><path d="M17 15h3"/><path d="M6 18h12"/><path d="M15 8c1.8-1.6 1.8-3.3 0-4.8"/><path d="M19 10c1.2-1.1 1.2-2.4 0-3.5"/>',
@@ -702,6 +703,7 @@
     const name = normalizeIconSearch(nameRaw);
     if (name === 'morgenroutine') return 'sunrise';
     if (name === 'engagement') return 'engagement';
+    if (habit.id === '00000000-0000-4000-8000-000000000109' || name === 'crm viertelstunde') return 'crm';
     if (iconRaw.includes('💧') || name.includes('wasser')) return 'water';
     if (iconRaw.includes('⚖') || name.includes('gewicht')) return 'weight';
     if (iconRaw.includes('🧘') || name.includes('meditation')) return 'meditation';
@@ -724,6 +726,7 @@
     mind: { label: 'Mind', tone: '#e8b850', rgb: '232,184,80', icon: 'meditation' },
     health: { label: 'Körper', tone: '#e08068', rgb: '224,128,104', icon: 'weight' },
     routine: { label: 'Routine', tone: '#e09060', rgb: '224,144,96', icon: 'habits' },
+    social: { label: 'Kontakte', tone: '#80c8c0', rgb: '128,200,192', icon: 'crm' },
     tracking: { label: 'Tracking', tone: '#e8a060', rgb: '232,160,96', icon: 'number' }
   });
 
@@ -748,6 +751,7 @@
       || name.includes('arbeitsplatz')
       || name.includes('schreibtisch')
       || name.includes('desk');
+    if (icon === 'crm') return HABIT_CATEGORY_META.social;
     if (icon === 'sunrise') return HABIT_CATEGORY_META.routine;
     if (icon === 'engagement') return HABIT_CATEGORY_META.mind;
     if (isSystemMeditationHabit(habit) || icon === 'meditation' || name.includes('meditation') || name.includes('atem')) return HABIT_CATEGORY_META.mind;
@@ -1850,7 +1854,7 @@ cacheEls();
     const created = nowIso();
     return {
       version: 1,
-      habits: [createSystemMeditationHabit(created)],
+      habits: [createSystemMeditationHabit(created), createCrmHabit(created)],
       habitEntries: [],
       cigarettes: [],
       alcoholLogs: [],
@@ -1972,8 +1976,37 @@ cacheEls();
     return changed;
   }
 
+  function createCrmHabit(created = nowIso()) {
+    return {
+      id: '00000000-0000-4000-8000-000000000109',
+      name: 'CRM Viertelstunde',
+      type: 'boolean',
+      unit: 'x',
+      direction: 'increase',
+      target: 1,
+      target_period: 'day',
+      icon: 'crm',
+      color: '#80c8c0',
+      is_archived: false,
+      created_at: created,
+      updated_at: created,
+      synced: false
+    };
+  }
+
+  function ensureCrmHabit(nextState = state) {
+    const id = '00000000-0000-4000-8000-000000000109';
+    const exists = nextState.habits.some(habit => habit.id === id
+      || habit.icon === 'crm'
+      || String(habit.name || '').trim().toLowerCase() === 'crm viertelstunde');
+    if (exists || nextState.deletedRemoteIds?.habit_definitions?.[id]) return false;
+    nextState.habits.push(createCrmHabit());
+    return true;
+  }
+
   function ensureSystemHabits(nextState = state) {
     migrateRoutineHabits(nextState);
+    ensureCrmHabit(nextState);
     const meditationHabit = nextState.habits.find(h => h.system_key === 'meditation' || String(h.name || '').trim().toLowerCase() === 'meditation');
     if (!meditationHabit) {
       nextState.habits.push(createSystemMeditationHabit());
@@ -7971,7 +8004,7 @@ cacheEls();
           <span class="habit-card-main">
             <span class="habit-category-pill">${escapeHtml(category.label)}</span>
             <strong>${escapeHtml(habit.name)}</strong>
-            <small>${habit.typeLabel || typeLabel(habit.type)}${unit ? ` · ${escapeHtml(unit)}` : ''} · ${escapeHtml(periodMeta.label)}</small>
+            <small>${iconKey === 'crm' ? '15 Min. Kontakte pflegen · 15 Punkte' : `${habit.typeLabel || typeLabel(habit.type)}${unit ? ` · ${escapeHtml(unit)}` : ''} · ${escapeHtml(periodMeta.label)}`}</small>
           </span>
           <span class="habit-card-status-badge">${escapeHtml(activityLabel)}</span>
           ${habitPause ? `<span class="habit-card-pause-note">${escapeHtml(pauseLabel)}</span>` : ''}
@@ -8037,7 +8070,7 @@ cacheEls();
           <div>
             <p class="eyebrow">${escapeHtml(category.label)} · Habit Details</p>
             <h2 id="historyModalTitle">${escapeHtml(normalizedHabit.name)}</h2>
-            <p class="subtle">Schnell loggen, Ziel prüfen und Muster ansehen – ohne die Übersicht zu überladen.</p>
+            <p class="subtle">${iconKey === 'crm' ? 'Nimm dir 15 Minuten, um bewusst Kontakte zu pflegen. Eine abgeschlossene Viertelstunde zählt 15 Punkte.' : 'Schnell loggen, Ziel prüfen und Muster ansehen – ohne die Übersicht zu überladen.'}</p>
           </div>
         </div>
         <span class="badge ${habitPause ? 'warning-badge' : fulfilled ? 'muted habit-detail-done' : dna.riskMeta.tone === 'high' ? 'danger-badge' : dna.riskMeta.tone === 'mid' ? 'warning-badge' : 'muted'}">${habitPause ? 'Pausiert' : fulfilled ? 'Heute erfüllt' : `Risiko ${escapeHtml(dna.riskMeta.label)}`}</span>
@@ -8554,6 +8587,7 @@ cacheEls();
     const cards = activeHabits
       .filter(habit => !isSystemMeditationHabit(habit))
       .filter(habit => !isFitnessDistanceHabit(habit))
+      .filter(habit => habitIconKey(habit) !== 'crm')
       .map(buildHabitStoryMetric)
       .sort((a, b) => {
         if (a.title === 'Brotfreier Tag') return -1;
@@ -14031,6 +14065,7 @@ async function deleteAlcoholLog(id) {
   function habitPoints(habit, entry) {
     const name = String(habit.name || '').trim().toLowerCase();
     if (habit.type === 'weight') return 5;
+    if (habit.type === 'boolean' && (habit.id === '00000000-0000-4000-8000-000000000109' || habit.icon === 'crm' || name === 'crm viertelstunde')) return entry.value_bool ? 15 : 0;
     if (habit.type === 'boolean' && (name === 'morgenroutine' || habit.icon === 'sunrise')) return entry.value_bool ? 30 : 0;
     if (habit.type === 'duration' && (name === 'engagement' || habit.icon === 'engagement')) {
       const minutes = Number(entry.value_num || 0);
@@ -15838,6 +15873,7 @@ function initOngoingSync() {
     }
     dedupeStateCollections(state);
     if (remoteHabitRows) migrateRoutineHabits(state);
+    if (remoteHabitRows) ensureCrmHabit(state);
     // Reconcile only complete snapshots; never delete ledger rows after a failed entries pull.
     if (remoteHabitRows && remoteEntryRows && remoteLedgerRows) migrateHabitScoring({ markUpdated: false });
     migrateCigaretteScoring();

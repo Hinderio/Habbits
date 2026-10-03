@@ -45,6 +45,7 @@
     const name = String(habit.name || '').trim().toLowerCase();
     if (name === 'morgenroutine') return 'sunrise';
     if (name === 'engagement') return 'engagement';
+    if (habit.id === '00000000-0000-4000-8000-000000000109' || name === 'crm viertelstunde') return 'crm';
     if (name.includes('wander')) return 'hiking';
     if (name.includes('jogg') || name.includes('lauf')) return 'jogging';
     if (name.includes('spazier')) return 'walking';
@@ -401,7 +402,7 @@
     const habitCards = document.getElementById('habitCards');
     if (!container || !habitCards) return;
     const state = readState();
-    const habits = Array.isArray(state.habits) ? state.habits.filter(habit => habit && !habit.is_archived && habit.id) : [];
+    const habits = Array.isArray(state.habits) ? state.habits.filter(habit => habit && !habit.is_archived && habit.id && iconKey(habit) !== 'crm') : [];
     if (!habits.length) return;
 
     const entries = Array.isArray(state.habitEntries) ? state.habitEntries : [];
