@@ -4193,6 +4193,7 @@ cacheEls();
     <div class="points-rules-grid" aria-label="Nächste Stufenkosten">${sampleRows || '<span><b>20/20</b>Maximalstufe</span>'}</div>
     <button class="points-rules-detail-toggle" type="button" data-action="toggle-points-detail" aria-expanded="false">Detaillierte Punktelogik ansehen</button>
     <div class="points-rules-detail-panel" hidden>
+      <article><strong>Joggen</strong><span>Pro Eintrag +50 Pkt. Basis und +2 Pkt. pro Minute Laufdauer. Beispiel: 60 Minuten = 170 Pkt. Ohne Laufdauer: 50 Pkt. Sekunden zählen anteilig; das Ergebnis wird auf ganze Punkte gerundet.</span></article>
       <article><strong>Schwimmen</strong><span>Pro Eintrag +30 Pkt. Basis und +2 Pkt. pro Minute. Beispiel: 60 Minuten = 150 Pkt.</span></article>
       <article><strong>Wandern</strong><span>Basis +50 Pkt. · +10 Pkt. pro km · +10 Pkt. pro 100 hm.</span></article>
       <article><strong>Rauchen · Pausen</strong><span>2–4 Std. +20 · 4–8 Std. +60 · 8+ Std. +100. Zwei 2h+ Pausen direkt nacheinander geben zusätzlich +10 Pkt.</span></article>
@@ -14007,7 +14008,19 @@ async function deleteAlcoholLog(id) {
     return 30 + (Number.isFinite(minutes) && minutes > 0 ? Math.round(minutes * 2) : 0);
   }
 
+  function joggingPoints(entry = {}) {
+    // value_num holds kilometres; duration is saved separately in the note.
+    const minutes = parseFitnessDurationNote(entry.note);
+    return 50 + (Number.isFinite(minutes) && minutes > 0 ? Math.round(minutes * 2) : 0);
+  }
+
   function habitPointReason(habit, entry) {
+    if (isFitnessDistanceHabit(habit) && fitnessHabitType(habit) === 'jogging') {
+      const minutes = parseFitnessDurationNote(entry.note);
+      return Number.isFinite(minutes) && minutes > 0
+        ? `${habit.name}: 50 Basis + ${minutes.toLocaleString('de-CH', { maximumFractionDigits: 2 })} Min. × 2 = ${joggingPoints(entry)} Pkt.`
+        : `${habit.name}: 50 Basispunkte · keine Laufdauer erfasst`;
+    }
     if (isSwimmingHabit(habit)) {
       const minutes = Math.max(0, Number(entry.value_num) || 0);
       return `${habit.name}: 30 Basis + ${minutes.toLocaleString('de-CH')} Min. × 2 = ${swimmingPoints(entry)} Pkt.`;
@@ -14024,6 +14037,7 @@ async function deleteAlcoholLog(id) {
       return Number.isFinite(minutes) && minutes > 0 ? Math.min(30, Math.round(minutes * 2)) : 0;
     }
     if (isSwimmingHabit(habit)) return swimmingPoints(entry);
+    if (isFitnessDistanceHabit(habit) && fitnessHabitType(habit) === 'jogging') return joggingPoints(entry);
     if (habit.type === 'boolean' && !isFitnessDistanceHabit(habit)) return 12;
     if (isFitnessDistanceHabit(habit) && fitnessHabitType(habit) === 'hiking') return Math.max(HIKING_POINTS_BASE, hikingPoints(entry));
     const value = Math.abs(Number(entry.value_num || 0));
