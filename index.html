@@ -24,7 +24,7 @@
   <link rel="stylesheet" href="modules/fitness-detail-mobile.css?v=275" />
   <link rel="stylesheet" href="modules/smoke-ring-premium.css?v=281" />
   <link rel="stylesheet" href="modules/points-details.css?v=297" />
-  <link rel="stylesheet" href="modules/weekly-points.css?v=335" />
+  <link rel="stylesheet" href="modules/weekly-points.css?v=364" />
   <style id="startup-art-style">
     /* Companion poster typography and framing, available before app scripts. */
     #startupArt { position:fixed; inset:0; z-index:2147483647; display:grid; place-items:center; padding:max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left)); box-sizing:border-box; overflow:auto; background:repeating-linear-gradient(135deg,#edf1ef 0 2px,#f5f6f3 2px 14px); color:#fff; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif; transition:opacity .55s ease,visibility .55s; }
@@ -319,8 +319,8 @@
               <button id="weeklyPointsNext" class="mini-btn" type="button">Später →</button>
             </nav>
           </div>
-          <p class="weekly-points-intro">Eine Spalte pro KW. Habits, erledigte Tasks und weitere Punktequellen: Positives wächst nach oben, Negatives nach unten. Je mehr Punkte, desto kräftiger die Farbe und weiter aussen das Quadrat.</p>
-          <div class="weekly-points-legend" aria-label="Farben: kräftiges Rot für hohe negative Punkte, blass nahe null, kräftiges Grün für hohe positive Punkte"><span>−300+</span><i aria-hidden="true"></i><span>+300+</span></div>
+          <p class="weekly-points-intro">Eine Spalte pro KW. Habits, erledigte Tasks und weitere Punktequellen: Positives wächst nach oben, Negatives nach unten. Je höher der Punktebetrag, desto weiter aussen das Quadrat – von Gelb für Minus über Grün bis Türkis für Plus.</p>
+          <div class="weekly-points-legend" aria-label="Farben: Gelb für hohe negative Punkte, Grün nahe null, Türkis für hohe positive Punkte"><span>−300+</span><i aria-hidden="true"></i><span>+300+</span></div>
           <div id="weeklyPointsScroll" class="weekly-points-scroll">
             <canvas id="weeklyPointsCanvas" tabindex="0" role="img" aria-label="Wochenbilanz der Punkte"></canvas>
             <div id="weeklyPointsWeeks" class="weekly-points-weeks" role="group" aria-label="Kalenderwoche auswählen"></div>
@@ -1013,7 +1013,7 @@
   <script src="modules/projects-milestone-edit.js?v=183"></script>
 
   <script src="modules/life-coach.js?v=305"></script>
-  <script src="modules/weekly-points-domain.js?v=338"></script>
+  <script src="modules/weekly-points-domain.js?v=364"></script>
   <script src="modules/weekly-points.js?v=337"></script>
   <script src="app.js?v=362"></script>
   <script src="modules/points-details.js?v=297"></script>

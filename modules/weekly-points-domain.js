@@ -19,8 +19,8 @@
     return { year, number: 1 + Math.round((start - first) / (7 * DAY)) };
   }
   function color(points) {
-    const positive = ['#dcecc8', '#bbdda0', '#8cc66b', '#59ac50', '#2b8746', '#12663d'];
-    const negative = ['#fee6bb', '#fbc977', '#f59c4b', '#ea713c', '#d44835', '#ab292e'];
+    const positive = ["#9db161","#8cb06e","#7cae7b","#71ac8b","#62a99a","#53a6a6"];
+    const negative = ["#b9b743","#c6b838","#d5ba28","#e5bd19","#f2bf10","#fdc000"];
     const n = Math.abs(points);
     const index = n <= 10 ? 0 : n <= 30 ? 1 : n <= 75 ? 2 : n <= 150 ? 3 : n <= 300 ? 4 : 5;
     return (points < 0 ? negative : positive)[index];
