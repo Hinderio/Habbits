@@ -14,7 +14,7 @@ function harness(legacy = false) {
   const counts = { normalized: 0, dates: 0, formatters: 0 };
   class Clock extends Date { constructor(...args) { super(...(args.length ? args : ['2026-09-17T10:00:00Z'])); } }
   const state = { appointments: [], tasks: [] };
-  const c = vm.createContext({ state, Date: Clock,
+  const c = vm.createContext({ state, Date: Clock, document: { getElementById: () => null }, calendarEventFilters: new Set(),
     Intl: { DateTimeFormat: function(...args) { counts.formatters++; return new Intl.DateTimeFormat(...args); } },
     calendarCursor: new Clock('2026-09-17T12:00:00'), selectedCalendarDate: '2026-09-17',
     els: { calendarTitle: {}, calendarGrid: {} },
@@ -28,7 +28,7 @@ function harness(legacy = false) {
   vm.runInContext("const calendarDateFormatters = new Map(); const APPOINTMENT_EVENT_KIND_META_RE = /(?:\\r?\\n)?<!--hf:event-kind=(birthday|holiday|public_holiday|celebration|visit)-->/gi;", c);
   for (const name of ['toDateKey','escapeHtml','appointmentOccursOnDate','appointmentsOnDate','compareAppointments','isActiveTask',
     'calendarTasksOnDate','calendarBubbleInitials','appointmentInitials','appointmentEventLabel','normalizeAppointmentEventKind',
-    'appointmentDescriptionMeta','appointmentEventKind','renderCalendarTaskDots','formatCalendarValue','calendarRowsForDates']) {
+    'appointmentDescriptionMeta','appointmentEventKind','renderCalendarTaskDots','formatCalendarValue','calendarRowsForDates','calendarEventMatches','renderCalendarEventFilters']) {
     vm.runInContext(block(name),c);
   }
   for (const name of ['renderCalendarContent','renderCalendarAppointmentChips','formatAppointmentRange','formatDateTime','formatTime']) {
@@ -125,4 +125,62 @@ test('full render consumes pending work and editing keeps deferred work pending'
   assert.equal(app.timers.size,0);assert.equal(app.renders,1);
   app.pending();app.defer(true);app.c.flushDeferredRender();app.flush();assert.equal(app.renders,1);
   app.defer(false);app.c.flushDeferredRender();app.flush();assert.equal(app.renders,2);
+});
+
+test('event filters support multiple types, legacy birthdays and an unchanged task layer', () => {
+  const app=harness(); seed(app.state);
+  app.state.appointments.push({id:'legacy',title:'Legacy birthday',description:'<!--hf:event-kind=birthday-->',starts_at:'2026-09-17T10:00:00'});
+  const snapshot=JSON.stringify(app.state);
+  app.c.calendarEventFilters.add('birthday');app.c.calendarEventFilters.add('visit');
+  const expected=harness();expected.state.tasks=app.state.tasks;
+  expected.state.appointments=app.state.appointments.filter(a=>a && ['birthday','visit'].includes(app.c.appointmentEventKind(a)));
+  app.c.renderCalendarContent();expected.c.renderCalendarContent();
+  assert.equal(app.c.els.calendarGrid.innerHTML,expected.c.els.calendarGrid.innerHTML);
+  assert.equal(JSON.stringify(app.state),snapshot);
+  assert.equal(app.counts.normalized,app.state.tasks.length);
+});
+
+test('monthly filter totals count spanning appointments once and exclude adjacent-month-only rows', () => {
+  const app=harness(),root={};app.c.document.getElementById=()=>root;
+  vm.runInContext(block('calendarEventFilterTypes'),app.c);
+  app.state.appointments=[
+    {id:'span',title:'Ferien',event_kind:'holiday',starts_at:'2026-08-28T12:00:00',ends_at:'2026-09-20T12:00:00'},
+    {id:'visit',title:'Besuch',event_kind:'visit',starts_at:'2026-09-20T12:00:00'},
+    {id:'next',title:'Oktober',event_kind:'visit',starts_at:'2026-10-02T12:00:00'}
+  ];
+  app.c.calendarEventFilters.add('holiday');app.c.renderCalendarContent();
+  assert.match(root.innerHTML,/1 von 2 Terminen im Monat/);
+  assert.match(root.innerHTML,/data-event-kind="holiday" aria-pressed="true"/);
+  assert.match(root.innerHTML,/data-event-kind="standard" aria-pressed="false"/);
+  app.state.appointments.splice(0,1);app.c.renderCalendarContent();
+  assert.match(root.innerHTML,/0 von 1 Terminen im Monat/);
+  assert.match(root.innerHTML,/data-event-kind="holiday" aria-pressed="true"/);
+});
+
+test('selection toggles, last deselection and All restore all types and focus', () => {
+  const app=harness();let month=0,day=0,focused='';
+  app.c.renderCalendar=()=>month++;app.c.renderDayDetails=()=>day++;
+  app.c.document.querySelectorAll=()=>['','holiday','visit'].map(kind=>({dataset:{eventKind:kind},focus:()=>focused=kind}));
+  for(const name of ['calendarEventFilterTypes','toggleCalendarEventFilter'])vm.runInContext(block(name),app.c);
+  app.c.toggleCalendarEventFilter('holiday');app.c.toggleCalendarEventFilter('visit');
+  assert.equal(app.c.calendarEventFilters.size,2);assert.equal(focused,'visit');
+  app.c.toggleCalendarEventFilter('holiday');app.c.toggleCalendarEventFilter('visit');
+  assert.equal(app.c.calendarEventFilters.size,0);
+  app.c.toggleCalendarEventFilter('holiday');app.c.toggleCalendarEventFilter('');
+  assert.equal(app.c.calendarEventFilters.size,0);assert.equal(focused,'');
+  app.c.toggleCalendarEventFilter('invalid');assert.equal(month,6);assert.equal(day,6);
+});
+
+test('day details apply the same event selection without hiding other entries', () => {
+  const app=harness();Object.assign(app.c,{
+    cigarettesOnDate:()=>[],alcoholForDate:()=>null,alcoholUnitsOnDate:()=>[],morningRoutineCompletedLog:()=>null,
+    renderAppointmentDetailCard:a=>`<article>${a.title}</article>`,TASK_COLUMNS:[{status:'open',title:'Offen'}]
+  });
+  app.c.els.selectedDateTitle={};app.c.els.dayDetails={};
+  app.state.appointments=[{id:'a',title:'Besuch',event_kind:'visit',starts_at:'2026-09-17T12:00:00'}, {id:'b',title:'Ferien',event_kind:'holiday',starts_at:'2026-09-17T12:00:00'}];
+  app.state.tasks=[{id:'task',title:'Task bleibt',status:'open',due_at:'2026-09-17T12:00:00'}];
+  vm.runInContext(block('renderDayDetails'),app.c);app.c.calendarEventFilters.add('visit');app.c.renderDayDetails();
+  assert.match(app.c.els.dayDetails.innerHTML,/Besuch/);assert.match(app.c.els.dayDetails.innerHTML,/Task bleibt/);assert.doesNotMatch(app.c.els.dayDetails.innerHTML,/Ferien/);
+  app.state.tasks=[];app.c.calendarEventFilters.clear();app.c.calendarEventFilters.add('birthday');app.c.renderDayDetails();
+  assert.match(app.c.els.dayDetails.innerHTML,/Event-Typ-Auswahl/);
 });

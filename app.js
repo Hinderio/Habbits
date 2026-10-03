@@ -935,6 +935,7 @@
   let remoteSyncRetryAttempt = 0;
   let mobileConsumptionPullInFlight = false;
   let lastMobileConsumptionFingerprint = '';
+  const calendarEventFilters = new Set();
   let selectedCalendarDate = toDateKey(new Date());
   let calendarCursor = new Date();
   let charts = { trend: null, points: null };
@@ -1575,6 +1576,7 @@ cacheEls();
       if (action === 'close-task-detail') closeTaskDetail();
       if (action === 'remove-task-step-draft') removeTaskStepDraft(id);
       if (action === 'toggle-task-step') toggleTaskStep(actionEl.dataset.taskId || id, actionEl.dataset.stepId, Boolean(actionEl.checked));
+      if (action === 'filter-calendar-event') toggleCalendarEventFilter(actionEl.dataset.eventKind || '');
       if (action === 'filter-task-project') toggleTaskProjectFilter(actionEl.dataset.projectId || '');
       if (action === 'duplicate-task') duplicateTask(id);
       if (action === 'edit-task') editTask(id);
@@ -11322,6 +11324,55 @@ cacheEls();
     return days;
   }
 
+  function calendarEventFilterTypes() {
+    return [
+      ['standard', 'Normaler Termin', 'NT', '#ffb84d'],
+      ['birthday', 'Geburtstag', 'GB', '#f6b33f'],
+      ['holiday', 'Ferientag', 'FT', '#efb3bd'],
+      ['public_holiday', 'Feiertag', 'FE', '#c23f95'],
+      ['celebration', 'Feier', 'FA', '#4bd7d1'],
+      ['visit', 'Einladung/Besuch', 'EB', '#4bbbd8']
+    ];
+  }
+
+  function calendarEventMatches(appointment) {
+    return !calendarEventFilters.size || calendarEventFilters.has(appointmentEventKind(appointment));
+  }
+
+  function toggleCalendarEventFilter(kind) {
+    if (!kind) calendarEventFilters.clear();
+    else {
+      if (!calendarEventFilterTypes().some(([key]) => key === kind)) return;
+      if (calendarEventFilters.has(kind)) calendarEventFilters.delete(kind);
+      else calendarEventFilters.add(kind);
+    }
+    renderCalendar();
+    renderDayDetails();
+    const buttons = document.querySelectorAll('#calendarEventFilters [data-event-kind]');
+    Array.from(buttons).find(button => button.dataset.eventKind === kind)?.focus({ preventScroll: true });
+  }
+
+  function renderCalendarEventFilters(days, year, month) {
+    const root = document.getElementById('calendarEventFilters');
+    if (!root) return;
+    const prefix = `${year}-${String(month + 1).padStart(2, '0')}-`;
+    const seen = new Set(), counts = new Map();
+    let total = 0, visible = 0;
+    for (const [key, day] of days) {
+      if (!key.startsWith(prefix)) continue;
+      for (const appointment of day.appointments) {
+        if (seen.has(appointment)) continue;
+        seen.add(appointment);
+        const kind = appointmentEventKind(appointment);
+        counts.set(kind, (counts.get(kind) || 0) + 1);
+        total++;
+        if (!calendarEventFilters.size || calendarEventFilters.has(kind)) visible++;
+      }
+    }
+    const chip = (kind, label, initials, color, count) => `<button class="task-project-filter calendar-event-filter" type="button" data-action="filter-calendar-event" data-event-kind="${kind}" aria-pressed="${kind ? calendarEventFilters.has(kind) : !calendarEventFilters.size}"><span aria-hidden="true">${kind ? `<span class="calendar-event-filter-mark" style="--event-filter-color:${color}">${initials}</span>` : ''}</span><span class="task-project-filter-label">${label}</span><span class="task-project-filter-count">${count}</span></button>`;
+    root.innerHTML = `<div class="task-project-filter-heading"><span>Event-Typ <small>Kalender filtern · Mehrfachauswahl</small></span><span role="status" aria-live="polite">${visible} von ${total} Terminen im Monat</span></div><div class="task-project-filter-options" role="group" aria-label="Kalender nach Event-Typ filtern">${chip('', 'Alle', '', '', total)}${calendarEventFilterTypes().map(([kind, label, initials, color]) => chip(kind, label, initials, color, counts.get(kind) || 0)).join('')}</div>`;
+  }
+
   function renderCalendar() {
     return withAnalyticsReadScope(renderCalendarContent);
   }
@@ -11342,10 +11393,12 @@ cacheEls();
       return { date, key: toDateKey(date) };
     });
     const days = calendarRowsForDates(dates.map(({ key }) => key));
+    renderCalendarEventFilters(days, year, month);
     const todayKey = toDateKey(new Date());
     const cells = [];
     for (const { date, key } of dates) {
-      const { appointments, tasks } = days.get(key);
+      const { appointments: allAppointments, tasks } = days.get(key);
+      const appointments = calendarEventFilters.size ? allAppointments.filter(calendarEventMatches) : allAppointments;
       const chips = renderCalendarAppointmentChips(appointments);
       const taskDots = renderCalendarTaskDots(tasks);
       cells.push(`<button class="calendar-day ${date.getMonth() !== month ? 'is-muted' : ''} ${key === todayKey ? 'is-today' : ''} ${key === selectedCalendarDate ? 'is-selected' : ''} ${appointments.length ? 'has-appointments' : ''} ${tasks.length ? 'has-task-dots' : ''}" type="button" data-action="select-day" data-day="${key}">
@@ -11371,11 +11424,11 @@ cacheEls();
       const routine = MORNING_ROUTINES.find(item => item.key === routineLog.routine_key);
       details.push(`<article class="list-card done"><div><h4>Morgenroutine</h4><p class="meta">${escapeHtml(routine?.title || '15-Minuten-Routine')} · +50 Punkte</p></div></article>`);
     }
-    const appointments = appointmentsOnDate(key);
+    const appointments = appointmentsOnDate(key).filter(calendarEventMatches);
     appointments.forEach(appointment => details.push(renderAppointmentDetailCard(appointment)));
     const tasks = state.tasks.filter(t => toDateKey(t.due_at || t.completed_at || t.created_at) === key);
     tasks.forEach(t => details.push(`<article class="list-card ${t.status === 'done' ? 'done' : ''}"><div><h4>${escapeHtml(t.title)}</h4><p class="meta">${escapeHtml(TASK_COLUMNS.find(column => column.status === (t.status || 'open'))?.title || 'Offen')} · ${escapeHtml(taskPriorityMeta(t).label)} · Aufwand ${t.effort}/5</p></div></article>`));
-    const empty = `<div class="empty-state">Für diesen Tag gibt es noch keine Einträge.<div class="empty-actions"><button class="pill secondary" type="button" data-action="new-appointment-for-day">Termin anlegen</button></div></div>`;
+    const empty = `<div class="empty-state">${calendarEventFilters.size ? 'Keine Einträge für die aktuelle Event-Typ-Auswahl.' : 'Für diesen Tag gibt es noch keine Einträge.'}<div class="empty-actions"><button class="pill secondary" type="button" data-action="new-appointment-for-day">Termin anlegen</button></div></div>`;
     els.dayDetails.innerHTML = details.length ? details.join('') : empty;
   }
 

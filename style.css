@@ -5005,3 +5005,11 @@ body.light #consumptionPauseList .pause-card { background: #fff; border-color: #
 .is-density-view .alcohol-density-legend { display: flex; }
 .alcohol-density-scale { width: 90px; height: 8px; border-radius: 999px; background: linear-gradient(90deg,#cfecc0,#f2f655,#ffe214,#ff8b00,#ff180c); }
 @media (max-width: 760px) { .alcohol-density-canvas { left: 58px; width: calc(100% - 58px); } }
+
+/* Calendar event chips reuse the task project's filter layout. */
+.calendar-event-filter-mark { display:inline-grid; place-items:center; width:40px; height:40px; flex:0 0 40px; border-radius:50%; background:var(--event-filter-color); color:#0d1827; font-size:.8rem; font-weight:850; }
+.calendar-event-filter[data-event-kind=""] { padding-left:16px; }
+.calendar-event-filter[data-event-kind=""] > span:first-child { display:none; }
+.calendar-event-filter:focus-visible { outline:3px solid var(--primary); outline-offset:4px; }
+
+.calendar-event-filter[data-event-kind="public_holiday"] .calendar-event-filter-mark { color:#fff; }
