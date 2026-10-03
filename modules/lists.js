@@ -105,6 +105,7 @@
   let editingGiftId = '';
   let giftMessage = '';
   const promotingGiftIds = new Set();
+  const weeklyCaptureDrafts = new Map();
   let editingWeeklyId = '';
   let openWeeklyMenuId = '';
   let weeklyArchiveOpen = false;
@@ -837,6 +838,7 @@
     const open = items.filter(item => !item.isDone).length;
     const done = items.length - open;
     const canCapture = !archive && offset >= 0;
+    const draft = weeklyCaptureDrafts.get(weekStart);
     const previousWeek = toDateKey(addDays(dateFromKey(currentWeek), -7));
     const previousOpen = offset === 0
       ? weeklyOpenItems(previousWeek).filter(item => !item.metadata?.carriedToId)
@@ -858,8 +860,9 @@
         ${canCapture ? `
           <form class="hf-weekly-capture" data-form="weekly-capture" data-week-start="${escapeHtml(weekStart)}">
             <span aria-hidden="true">+</span>
-            <input name="title" autocomplete="off" maxlength="240" aria-label="Gedanke für ${escapeHtml(formatWeekRange(weekStart))}" placeholder="Gedanke für diese Woche …">
-            <button type="submit" aria-label="Gedanke speichern">${icon('carry')}</button>
+            <input name="title" autocomplete="off" maxlength="240" value="${escapeHtml(draft?.title || '')}" ${draft?.busy ? 'disabled' : ''} aria-label="Gedanke für ${escapeHtml(formatWeekRange(weekStart))}" placeholder="Gedanke für diese Woche …">
+            <button type="submit" aria-label="Gedanke speichern" ${draft?.busy ? 'disabled' : ''}>${icon('carry')}</button>
+            <small class="hf-weekly-capture-message" data-weekly-capture-message role="status" ${draft?.message ? '' : 'hidden'}>${escapeHtml(draft?.message || '')}</small>
           </form>
         ` : ''}
         <footer>${open} offen · ${done} erledigt</footer>
@@ -2020,7 +2023,7 @@
       const form = event.target.closest('#screen-lists form[data-form]');
       if (!form) return;
       event.preventDefault();
-      if (form.dataset.form === 'weekly-capture') saveWeeklyThought(form);
+      if (form.dataset.form === 'weekly-capture') void saveWeeklyThought(form);
       if (form.dataset.form === 'weekly-move') moveWeeklyItem(form);
       if (form.dataset.form === 'weblink') saveWeblink(form);
       if (form.dataset.form === 'gift') saveGift(form);
@@ -2035,6 +2038,14 @@
     });
 
     document.addEventListener('input', event => {
+      const capture = event.target.closest?.('form[data-form="weekly-capture"]');
+      if (capture && event.target.name === 'title') {
+        const week = normalizeWeekStart(capture.dataset.weekStart);
+        if (week) {
+          const previous = weeklyCaptureDrafts.get(week);
+          if (!previous?.busy) weeklyCaptureDrafts.set(week, { ...previous, title: event.target.value, message: '' });
+        }
+      }
       if (event.target.matches?.('#hfWeblinkSearch')) {
         weblinkQuery = event.target.value;
         refreshWeblinkResults();
@@ -2121,28 +2132,73 @@
     render();
   }
 
-  function saveWeeklyThought(form) {
-    const title = String(form.elements?.title?.value || '').trim();
+  function updateWeeklyCapture(weekStart) {
+    const draft = weeklyCaptureDrafts.get(weekStart);
+    document.querySelectorAll('form[data-form="weekly-capture"]').forEach(form => {
+      if (form.dataset.weekStart !== weekStart) return;
+      form.elements.title.disabled = !!draft?.busy;
+      const submit = form.querySelector('button[type="submit"]');
+      if (submit) submit.disabled = !!draft?.busy;
+      const message = form.querySelector('[data-weekly-capture-message]');
+      if (message) {
+        message.textContent = draft?.message || '';
+        message.hidden = !draft?.message;
+      }
+    });
+  }
+
+  async function saveWeeklyThought(form) {
+    const title = String(form.elements?.title?.value || '').trim().slice(0, 240);
     const weekStart = normalizeWeekStart(form.dataset.weekStart);
     if (!title || !weekStart) return;
+    const previous = weeklyCaptureDrafts.get(weekStart);
+    if (previous?.busy) return;
     const now = new Date().toISOString();
-    const item = {
-      id: uid('list-item'),
-      listId: WEEKLY_LIST_ID,
-      title,
-      note: '',
-      metadata: { weekStart },
-      isDone: false,
-      isArchived: false,
-      sortRank: Date.now(),
-      createdAt: now,
-      updatedAt: now
+    // Reuse the ID after an ambiguous network failure to avoid duplicate notes on retry.
+    const item = previous?.item?.title === title ? previous.item : {
+      id: uid('list-item'), listId: WEEKLY_LIST_ID, title, note: '',
+      metadata: { weekStart }, isDone: false, isArchived: false,
+      sortRank: Date.now(), createdAt: now, updatedAt: now
     };
-    state.items.push(item);
-    form.reset();
-    weeklyFocusedWeekStart = weekStart;
-    saveAndSync([item]);
-    focusWeeklyCapture(weekStart);
+    const draft = { title, item, busy: true, message: '' };
+    weeklyCaptureDrafts.set(weekStart, draft);
+    let savedRemotely = false;
+    try {
+      try {
+        // Do not clear the field or publish an in-memory note before a durable write.
+        const items = [...state.items.filter(entry => entry.id !== item.id), item];
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, items, activeListId }));
+      } catch (_) {
+        draft.message = 'Notiz wird synchronisiert …';
+        updateWeeklyCapture(weekStart);
+        const client = await getClient();
+        if (!client) throw new Error('Speichern derzeit nicht möglich. Deine Eingabe bleibt erhalten.');
+        const session = await client.auth.getSession();
+        const userId = session.data?.session?.user?.id;
+        if (session.error || !userId) throw new Error('Speichern derzeit nicht möglich. Bitte anmelden; deine Eingabe bleibt erhalten.');
+        const result = await client.from('custom_list_items')
+          .upsert({ ...itemRemoteRow(item), user_id: userId }, { onConflict: 'user_id,id' })
+          .select('id').single();
+        if (result.error || result.data?.id !== item.id) throw new Error('Nicht gespeichert. Bitte erneut versuchen; deine Eingabe bleibt erhalten.');
+        const currentSession = await client.auth.getSession();
+        if (currentSession.error || currentSession.data?.session?.user?.id !== userId) {
+          throw new Error('Anmeldung wurde geändert. Bitte die Liste erneut öffnen.');
+        }
+        savedRemotely = true;
+      }
+      // Merge into the current state, which may have refreshed while the request was pending.
+      if (!state.items.some(entry => entry.id === item.id)) state.items.push(item);
+      weeklyCaptureDrafts.delete(weekStart);
+      form.reset();
+      weeklyFocusedWeekStart = weekStart;
+      render();
+      if (!savedRemotely) void syncToSupabase([item]);
+      if (activeListId === WEEKLY_LIST_ID) focusWeeklyCapture(weekStart);
+    } catch (error) {
+      draft.busy = false;
+      draft.message = error.message || 'Nicht gespeichert. Deine Eingabe bleibt erhalten; bitte erneut versuchen.';
+      updateWeeklyCapture(weekStart);
+    }
   }
 
   function commitWeeklyEdit(input) {

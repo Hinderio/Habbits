@@ -429,3 +429,6 @@ body.light .hf-weekly-archive section>button{background:rgba(255,255,255,.64);bo
   .hf-weblink-toolbar{grid-template-columns:minmax(0,1fr)}
   .hf-weblink-actions{justify-content:flex-end}
 }
+
+.hf-weekly-capture-message{grid-column:1/-1;font-size:.72rem;line-height:1.35;color:var(--muted)}
+.hf-weekly-capture-message[hidden]{display:none}
