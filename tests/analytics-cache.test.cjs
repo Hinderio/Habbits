@@ -20,7 +20,7 @@ function setup() {
     visibleHabitEntries: id => { counts.habits++; return state.habitEntries.filter(r => !paused(r) && (!id || r.habit_id === id)); },
     visibleLedgerPoints: () => { counts.ledger++; return state.pointsLedger.filter(r => !paused(r)); },
     visibleAlcoholDays: () => state.alcoholDays.filter(r => !paused(r)),
-    normalizeHabit: row => row, normalizeTask: row => row,
+    normalizeHabit: row => row, normalizeTask: row => row, normalizePausePeriod: row => row,
     normalizeMonthlyMission: row => ({ manual_count: 0, target: 1, title: 'Mission', month_key: '2026-09', ...row }),
     normalizeIconSearch: value => String(value).toLowerCase(),
     parseTaskRecurrenceFromDescription: description => ({description}),
@@ -37,13 +37,13 @@ function setup() {
   vm.runInContext('let analyticsReadCache = null; const monthlyMagazineReviewCache = new Map(); let monthlyMagazineCovers = [];',c);
   const names = ['withAnalyticsReadScope','analyticsRead','groupAnalyticsRows','analyticsDayRows','cigaretteLedgerSourceIds',
     'pointsOnDate','calendarPointsOnDate','getLastCigarette','cigarettesOnDate','entriesForHabitOnDate',
-    'monthMissionKeys','monthMissionTotalDays','entryTextMatchesFocus','countMonthlyMissionProgress','monthlyMissionState','activeMonthlyMissions',
+    'monthMissionKeys','monthMissionTotalDays','entryTextMatchesFocus','countMonthlyAlcoholFreeDays','countMonthlyMissionProgress','monthlyMissionState','activeMonthlyMissions',
     'monthlyMissionSummary','monthlyMissionStatusText','monthlyMagazinePoints','buildMonthlyMagazineBestDay','buildMonthlyMagazineReview','cachedMonthlyMagazineReviews'];
   names.forEach(name => vm.runInContext(block(name),c));
   for (const name of ['pointsOnDate','calendarPointsOnDate','getLastCigarette','cigarettesOnDate','entriesForHabitOnDate','buildMonthlyMagazineReview']) {
     vm.runInContext(block(name,before).replace(`function ${name}(`,`function old_${name}(`),c);
   }
-  vm.runInContext('const originalReview = buildMonthlyMagazineReview; buildMonthlyMagazineReview = (...args) => { counts.reviews++; return originalReview(...args); };',c);
+  vm.runInContext('const originalReview = buildMonthlyMagazineReview; globalThis.referenceReview = originalReview; buildMonthlyMagazineReview = (...args) => { counts.reviews++; return originalReview(...args); };',c);
   const source = () => ({ sessions:c.sessions, cigarettes:c.visibleCigarettes(), alcoholUnits:state.alcoholDays.map(r => ({...r,occurred_at:r.log_date})), tasks:state.tasks, habitEntries:c.visibleHabitEntries(), ledger:c.visibleLedgerPoints(), compass:{weakest:{label:'Fitness',cue:'Train'}} });
   return {c,state,counts,source,advance: ms => { now += ms; }};
 }
@@ -86,10 +86,10 @@ test('latest cigarette preserves ties, invalid timestamps and input ordering',()
     state.cigarettes=rows;const original=plain(rows);assert.equal(c.getLastCigarette(),c.old_getLastCigarette());assert.deepEqual(plain(rows),original);
   }
 });
-test('magazine cache matches original reviews, reuses unchanged issues and invalidates only edited month',()=>{
+test('magazine cache matches uncached reviews, reuses unchanged issues and invalidates only edited month',()=>{
   const {c,state,counts,source}=setup();seed(state);const keys=['2026-09','2026-08'];
   const read=()=>c.withAnalyticsReadScope(()=>c.cachedMonthlyMagazineReviews(keys,source()));
-  const first=read();assert.deepEqual(plain(first),plain(keys.map(k=>c.old_buildMonthlyMagazineReview(k,source()))));
+  const first=read();assert.deepEqual(plain(first),plain(keys.map(k=>c.referenceReview(k,source()))));
   const second=read();assert.equal(counts.reviews,2);assert.equal(first[0],second[0]);assert.equal(first[1],second[1]);
   state.tasks[0].title='Historical edit';const third=read();assert.equal(first[0],third[0]);assert.notEqual(first[1],third[1]);assert.equal(counts.reviews,3);
 });
@@ -97,7 +97,7 @@ test('magazine invalidation follows pauses, moved dates, ledger fallback, missio
   const {c,state,source}=setup();seed(state);const keys=['2026-09','2026-08'];
   let focus='Fitness'; const currentSource=()=>({...source(),compass:{weakest:{label:focus,cue:'Train'}}});
   const read=()=>c.withAnalyticsReadScope(()=>c.cachedMonthlyMagazineReviews(keys,currentSource()));
-  const verify=()=>assert.deepEqual(plain(read()),plain(keys.map(k=>c.old_buildMonthlyMagazineReview(k,currentSource()))));
+  const verify=()=>assert.deepEqual(plain(read()),plain(keys.map(k=>c.referenceReview(k,currentSource()))));
   verify();
   for(const mutate of [
     ()=>state.pausePeriods.push({id:'c0'},{id:'p1'},{id:'h2'}),
@@ -118,7 +118,7 @@ test('day rollover updates the live issue without rebuilding unaffected historic
   const {c,state,source,advance}=setup();seed(state);const keys=['2026-09','2026-08'];
   const first=c.cachedMonthlyMagazineReviews(keys,source());advance(86400000);const second=c.cachedMonthlyMagazineReviews(keys,source());
   assert.notEqual(first[0],second[0]);assert.equal(first[1],second[1]);
-  assert.deepEqual(plain(second),plain(keys.map(k=>c.old_buildMonthlyMagazineReview(k,source()))));
+  assert.deepEqual(plain(second),plain(keys.map(k=>c.referenceReview(k,source()))));
   c.cachedMonthlyMagazineReviews(['2026-09'],source());assert.equal(vm.runInContext('monthlyMagazineReviewCache.size',c),1);
 });
 test('habit render retains card and overview markup with one DNA calculation per habit',()=>{
@@ -154,7 +154,7 @@ test('month rollover finalizes the old issue and refreshed covers invalidate cac
   advance(15*86400000);
   const next=c.cachedMonthlyMagazineReviews(['2026-10','2026-09','2026-08'],source());
   assert.equal(next[1].isComplete,true);assert.equal(next[2],first[1]);
-  assert.deepEqual(plain(next),plain(['2026-10','2026-09','2026-08'].map(k=>c.old_buildMonthlyMagazineReview(k,source()))));
+  assert.deepEqual(plain(next),plain(['2026-10','2026-09','2026-08'].map(k=>c.referenceReview(k,source()))));
   const previous=counts.reviews;
   vm.runInContext("monthlyMagazineCovers = [{file:'new.png'}]",c);
   c.cachedMonthlyMagazineReviews(['2026-10','2026-09','2026-08'],source());

@@ -495,7 +495,8 @@
     running_sessions: { label: 'Jogging-Sessions', unit: 'Läufe', category: 'fitness', source: 'Fitness Joggen' },
     hiking_days: { label: 'Wandertage', unit: 'Tage', category: 'fitness', source: 'Fitness Wandern' },
     weight_measurements: { label: 'Aktuelles Gewicht', unit: 'kg', category: 'fitness', source: 'Habit Gewicht messen' },
-    smoke_free_evenings: { label: 'Rauchfreie Abende', unit: 'Abende', category: 'consumption', source: 'Konsum-Logs' },
+    // Keep the persisted metric key for compatibility with existing Supabase constraints.
+    smoke_free_evenings: { label: 'Alkoholfreie Tage', unit: 'Tage', category: 'consumption', source: 'Alkohol-Tagesdaten · ohne Pausen' },
     alcohol_free_weekend_days: { label: 'Alkoholfreie Wochenendtage', unit: 'Tage', category: 'consumption', source: 'Alkohol-Logs' },
     deep_work_sessions: { label: 'Deep-Work-Sessions', unit: 'Sessions', category: 'focus', source: 'Fokus-Habits & Tasks' },
     completed_tasks: { label: 'Erledigte Aufgaben', unit: 'Tasks', category: 'focus', source: 'Aufgaben' },
@@ -506,7 +507,7 @@
     { id: 'run-12', title: '12 Läufe', target: 12, metric: 'running_sessions', category: 'fitness' },
     { id: 'hike-4', title: '4 Wandertage', target: 4, metric: 'hiking_days', category: 'fitness' },
     { id: 'weight-target-85', title: '85 kg Zielgewicht', target: 85, metric: 'weight_measurements', category: 'fitness' },
-    { id: 'smoke-evenings-20', title: '20 rauchfreie Abende', target: 20, metric: 'smoke_free_evenings', category: 'consumption' },
+    { id: 'smoke-evenings-20', title: '20 alkoholfreie Tage', target: 20, metric: 'smoke_free_evenings', category: 'consumption' },
     { id: 'deep-work-8', title: '8 Deep-Work-Sessions', target: 8, metric: 'deep_work_sessions', category: 'focus' },
     { id: 'tasks-25', title: '25 erledigte Aufgaben', target: 25, metric: 'completed_tasks', category: 'focus' },
     { id: 'routine-20', title: '20 Morgenroutinen', target: 20, metric: 'morning_routines', category: 'routine' }
@@ -1885,7 +1886,7 @@ cacheEls();
     return {
       id: mission.id || uid(),
       month_key: mission.month_key || mission.monthKey || currentMonthKey(mission.created_at || new Date()),
-      title: String(mission.title || MONTHLY_MISSION_METRICS[metric]?.label || 'Monats-Mission').trim().slice(0, 80),
+      title: String(mission.title || MONTHLY_MISSION_METRICS[metric]?.label || 'Monats-Mission').replace(metric === 'smoke_free_evenings' ? /rauchfreie Abende/gi : /$^/, 'alkoholfreie Tage').trim().slice(0, 80),
       category: normalizeMonthlyMissionCategory(mission.category, metric),
       metric,
       target,
@@ -4960,6 +4961,32 @@ cacheEls();
     return raw.includes('deep work') || raw.includes('deepwork') || raw.includes('fokus') || raw.includes('focus') || raw.includes('konzent') || raw.includes('arbeit') || raw.includes('lernen');
   }
 
+  function countMonthlyAlcoholFreeDays(keys) {
+    const { consumed, pauses } = analyticsRead('monthly-alcohol-free-days', () => {
+      // Include raw entries as well: a pause must never turn consumption into success.
+      const consumed = new Set(visibleAlcoholDays().map(day => day.log_date));
+      (state.alcoholLogs || []).forEach(log => {
+        if (log.consumed || log.consumption_key || Number(log.consumption_level) > 0) consumed.add(String(log.log_date || '').slice(0, 10));
+      });
+      [...(state.alcoholUnits || []), ...(state.alcoholEvents || [])].forEach(unit => {
+        const at = unit.occurred_at || unit.created_at;
+        if (at) consumed.add(toDateKey(at));
+      });
+      const pauses = (state.pausePeriods || []).map(normalizePausePeriod)
+        .filter(period => !period.is_archived && period.scope === 'alcohol')
+        .map(period => ({ start: new Date(period.starts_at).getTime(), end: period.ends_at ? new Date(period.ends_at).getTime() : Infinity }));
+      return { consumed, pauses };
+    });
+    const today = toDateKey(new Date());
+    return keys.filter(key => {
+      if (key < '2026-07-27' || key >= today || consumed.has(key)) return false;
+      const start = new Date(`${key}T00:00:00`);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 1);
+      return !pauses.some(pause => pause.start < end.getTime() && pause.end >= start.getTime());
+    }).length;
+  }
+
   function countMonthlyMissionProgress(mission = {}) {
     const normalized = normalizeMonthlyMission(mission);
     const keys = monthMissionKeys(normalized.month_key);
@@ -4979,14 +5006,8 @@ cacheEls();
           .sort((left, right) => new Date(right.occurred_at) - new Date(left.occurred_at))[0];
         return latestWeight ? Math.round(Number(latestWeight.value_num) * 10) / 10 : 0;
       }
-      case 'smoke_free_evenings': {
-        const cigarettes = visibleCigarettes();
-        return keys.filter(key => !cigarettes.some(cigarette => {
-          if (toDateKey(cigarette.smoked_at) !== key) return false;
-          const hour = new Date(cigarette.smoked_at).getHours();
-          return Number.isFinite(hour) && hour >= 18;
-        })).length;
-      }
+      case 'smoke_free_evenings':
+        return countMonthlyAlcoholFreeDays(keys);
       case 'alcohol_free_weekend_days': {
         const alcoholDays = visibleAlcoholDays();
         return keys.filter(key => {
@@ -5335,21 +5356,21 @@ cacheEls();
     const cigaretteDayKeys = new Set(cigarettes.map(cigarette => toDateKey(cigarette.smoked_at)).filter(Boolean));
     const alcoholDayKeys = new Set(alcoholUnits.map(unit => toDateKey(unit.occurred_at || unit.created_at)).filter(Boolean));
     const cleanDays = [...activeDayKeys].filter(key => !cigaretteDayKeys.has(key) && !alcoholDayKeys.has(key)).length;
-    const smokeFreeEvenings = countMonthlyMissionProgress({ metric: 'smoke_free_evenings', target: 1, month_key: monthKey, title: 'Rauchfreie Abende' });
+    const alcoholFreeDays = countMonthlyMissionProgress({ metric: 'smoke_free_evenings', target: 1, month_key: monthKey, title: 'Alkoholfreie Tage' });
     const points = monthlyMagazinePoints(monthKey, keySet, source);
     const achievements = [
       missionSummary.completed ? { icon: 'reward', label: 'Missionen abgeschlossen', value: `${missionSummary.completed}/${missionSummary.count}`, detail: 'Monatsziele wirklich ins Ziel gebracht.', score: 120 + missionSummary.completed * 10 } : null,
       missionSummary.average ? { icon: 'habits', label: 'Missions-Fortschritt', value: `${missionSummary.average}%`, detail: `${missionSummary.count} aktive Mission${missionSummary.count === 1 ? '' : 'en'} im Fokus.`, score: missionSummary.average } : null,
       jogs.length ? { icon: 'jogging', label: 'Lauf-Momentum', value: `${jogs.length}×`, detail: `${formatKmValue(runKm)} im Monat.`, score: 45 + runKm * 2 + jogs.length * 8 } : null,
       hikes.length ? { icon: 'hiking', label: 'Wandern', value: `${hikes.length}×`, detail: `${formatKmValue(hikeKm)} · ${formatMetersValue(ascent)}.`, score: 45 + hikeKm * 1.6 + ascent / 35 } : null,
-      smokeFreeEvenings ? { icon: 'smoke', label: 'Rauchfreie Abende', value: `${smokeFreeEvenings}`, detail: 'Abendfenster ohne Rauch-Log.', score: smokeFreeEvenings * 5 } : null,
+      alcoholFreeDays ? { icon: 'alcohol', label: 'Alkoholfreie Tage', value: `${alcoholFreeDays}`, detail: 'Abgeschlossene Tage ohne Alkohol · ohne Pausentage.', score: alcoholFreeDays * 5 } : null,
       tasksDone.length ? { icon: 'tasks', label: 'Tasks erledigt', value: `${tasksDone.length}`, detail: 'sichtbares Produktivitäts-Momentum.', score: 35 + tasksDone.length * 4 } : null,
       routines ? { icon: 'meditation', label: 'Morgenroutine', value: `${routines}×`, detail: 'stabilisierende Starts in den Tag.', score: 35 + routines * 5 } : null,
       points ? { icon: 'reward', label: 'XP gesammelt', value: `${points.toLocaleString('de-CH')}`, detail: 'über Ledger, Habits und Entscheidungen.', score: Math.min(110, Math.abs(points) / 8) } : null
     ].filter(Boolean).sort((a, b) => b.score - a.score).slice(0, 3);
     const strongestPattern = (() => {
       if (jogs.length + hikes.length >= 4) return { value: 'Bewegung trägt', body: `${jogs.length + hikes.length} Fitness-Signale zeigen: dein Monat profitiert sichtbar von Bewegung.` };
-      if (smokeFreeEvenings >= Math.max(4, Math.round(keys.length * 0.65))) return { value: 'Ruhige Abende', body: `${smokeFreeEvenings} rauchfreie Abende sind dein stärkstes Konsum-Muster.` };
+      if (alcoholFreeDays >= Math.max(4, Math.round(keys.length * 0.65))) return { value: 'Alkoholfreie Tage', body: `${alcoholFreeDays} alkoholfreie Tage sind dein stärkstes Konsum-Muster.` };
       if (eveningCigarettes >= Math.max(3, Math.round(cigarettes.length * 0.5))) return { value: 'Abendfenster', body: `${eveningCigarettes} Rauch-Logs liegen ab 18 Uhr. Ein Abend-Playbook wäre der grösste Hebel.` };
       if (tasksDone.length >= 8) return { value: 'Task-Momentum', body: `${tasksDone.length} erledigte Aufgaben machen Produktivität zum dominanten Muster.` };
       if (routines >= 5) return { value: 'Routine-Anker', body: `${routines} Morgenroutinen stabilisieren den Monat stärker als grosse Einzelaktionen.` };
@@ -5381,7 +5402,7 @@ cacheEls();
       stats: [
         { label: 'Missionen', value: missionSummary.count ? `${missionSummary.completed}/${missionSummary.count}` : '0', detail: `${missionSummary.average}% Fortschritt` },
         { label: 'Fitness', value: `${sessions.length}×`, detail: `${formatKmValue(runKm + hikeKm)} · ${formatMetersValue(ascent)}` },
-        { label: 'Konsum', value: `${cigarettes.length}×`, detail: `${smokeFreeEvenings} rauchfreie Abende · ${alcoholUnits.length} Alkohol-Konsumtage` },
+        { label: 'Konsum', value: `${cigarettes.length}×`, detail: `${alcoholFreeDays} alkoholfreie Tage · ${alcoholUnits.length} Alkohol-Konsumtage` },
         { label: 'Fokus', value: `${tasksDone.length}`, detail: `Tasks · ${routines} Routinen` }
       ],
       achievements: achievements.length ? achievements : [{ icon: 'reward', label: 'Ausgabe startet', value: 'Live', detail: 'Logge diesen Monat erste Signale, dann füllt sich das Magazine automatisch.' }],
@@ -5401,7 +5422,7 @@ cacheEls();
         ascent,
         cigarettes: cigarettes.length,
         eveningCigarettes,
-        smokeFreeEvenings,
+        alcoholFreeDays,
         alcoholUnits: alcoholUnits.length,
         tasksDone: tasksDone.length,
         routines,
@@ -5504,7 +5525,7 @@ cacheEls();
         <div class="monthly-magazine-reader-editorial"><p class="eyebrow">Nächster Fokus</p><h2>${escapeHtml(magazine.nextFocus.value)}</h2><p>${escapeHtml(magazine.nextFocus.body)}</p></div>
         <div class="monthly-magazine-reader-facts is-six">
           ${monthlyMagazineReaderFact('Zigaretten', `${facts.cigarettes}×`, `${facts.eveningCigarettes} ab 18 Uhr`)}
-          ${monthlyMagazineReaderFact('Rauchfrei', `${facts.smokeFreeEvenings}`, 'rauchfreie Abende')}
+          ${monthlyMagazineReaderFact('Alkoholfrei', `${facts.alcoholFreeDays}`, 'abgeschlossene Tage · ohne Pausen')}
           ${monthlyMagazineReaderFact('Alkohol', `${facts.alcoholUnits}`, 'Einheiten im Monat')}
           ${monthlyMagazineReaderFact('Klare Tage', `${facts.cleanDays}`, 'aktiv ohne Rauch & Alkohol')}
           ${monthlyMagazineReaderFact('Aktive Tage', `${facts.activeDays}`, 'mit Fitness, Habit oder Fokus')}
@@ -5612,7 +5633,7 @@ cacheEls();
     const cigaretteIds = cigaretteLedgerSourceIds();
     const reviews = keys.map(monthKey => {
       const signature = JSON.stringify([
-        common, monthMissionKeys(monthKey),
+        common, monthMissionKeys(monthKey), countMonthlyAlcoholFreeDays(monthMissionKeys(monthKey)),
         toDateKey(monthKeyRange(monthKey).end) < toDateKey(new Date()),
         ...groups.map(group => group.get(monthKey) || []),
         (groups[1].get(monthKey) || []).map(row => cigaretteIds.has(row.id))
