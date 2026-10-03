@@ -9370,6 +9370,15 @@ cacheEls();
 
   function countHundredPointFitnessSessions(allSessions = [], ledger = []) {
     const sessionIds = new Set(allSessions.map(session => session.id));
+    const swimmingHabitIds = new Set(state.habits
+      .filter(habit => !habit.is_archived && isSwimmingHabit(habit))
+      .map(habit => habit.id));
+    if (swimmingHabitIds.size) {
+      for (const entry of visibleHabitEntries()) {
+        const minutes = Number(entry.value_num);
+        if (swimmingHabitIds.has(entry.habit_id) && Number.isFinite(minutes) && minutes > 0) sessionIds.add(entry.id);
+      }
+    }
     let count = 0;
     for (const point of ledger) {
       const points = Number(point.points);
@@ -9391,7 +9400,7 @@ cacheEls();
       { key: 'runweek', label: 'Beste Laufwoche', icon: 'jogging', ...buildBestRunningWeek(joggingSessions) },
       { key: 'month', label: 'Stärkster Monat', icon: 'reward', ...buildStrongestPointsMonth(ledger) },
       { key: 'tasks', label: 'Task-Serie', icon: 'tasks', ...buildLongestTaskStreak() },
-      { key: 'hundred-points', label: '100-Punkte-Sessions', icon: 'reward', value: `${hundredPointSessions.toLocaleString('de-CH')} Session${hundredPointSessions === 1 ? '' : 's'}`, detail: 'Joggen & Wandern mit mindestens 100 Punkten pro Session', unlocked: hundredPointSessions > 0 }
+      { key: 'hundred-points', label: '100-Punkte-Sessions', icon: 'reward', value: `${hundredPointSessions.toLocaleString('de-CH')} Session${hundredPointSessions === 1 ? '' : 's'}`, detail: 'Joggen, Wandern & Schwimmen mit mindestens 100 Punkten pro Session', unlocked: hundredPointSessions > 0 }
     ];
   }
 

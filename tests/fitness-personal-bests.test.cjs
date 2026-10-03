@@ -8,6 +8,8 @@ const block = name => app.match(new RegExp('  function ' + name + '\\([^]*?\\n  
 function setup() {
   let reads = 0;
   const context = vm.createContext({
+    state: { habits: [], habitEntries: [] },
+    isWithinPauseAt: occurredAt => occurredAt === 'paused',
     ledger: [], visibleLedgerPoints() { reads++; return context.ledger; },
     buildMountainCollection: () => ({ totalAscent: 0 }),
     buildBestSmokePause: () => ({ value: 'Noch offen' }),
@@ -16,7 +18,7 @@ function setup() {
     buildLongestTaskStreak: () => ({ value: 'Noch offen' }),
     formatMetersValue: value => value + ' m', escapeHtml: String, svgIcon: () => ''
   });
-  for (const name of ['countHundredPointFitnessSessions', 'buildFitnessPersonalBests', 'renderPersonalBestMuseum']) vm.runInContext(block(name), context);
+  for (const name of ['isSwimmingHabit', 'visibleHabitEntries', 'countHundredPointFitnessSessions', 'buildFitnessPersonalBests', 'renderPersonalBestMuseum']) vm.runInContext(block(name), context);
   return { context, reads: () => reads };
 }
 test('counts inclusive threshold once per visible fitness session, excluding unrelated and invalid points', () => {
@@ -71,4 +73,36 @@ test('large histories need only one ledger iteration and no session-by-session l
   }};
   assert.equal(c.countHundredPointFitnessSessions(sessions, ledger), 10000);
   assert.equal(visits, 100000);
+});
+
+test('includes swimming at 100 points alongside runs and hikes, excluding hidden or invalid entries', () => {
+  const { context: c } = setup();
+  c.state.habits = [
+    { id: 'swim', name: 'Schwimmen', type: 'duration', unit: 'min' },
+    { id: 'archived', name: 'Schwimmen', type: 'duration', is_archived: true },
+    { id: 'other', name: 'Meditation', type: 'duration' }
+  ];
+  c.state.habitEntries = [
+    { id: 'below', habit_id: 'swim', value_num: 34.5 },
+    { id: 'exact', habit_id: 'swim', value_num: 35 },
+    { id: 'above', habit_id: 'swim', value_num: 60 },
+    { id: 'paused', habit_id: 'swim', value_num: 60, occurred_at: 'paused' },
+    { id: 'archived', habit_id: 'archived', value_num: 60 },
+    { id: 'other', habit_id: 'other', value_num: 60 },
+    { id: 'zero', habit_id: 'swim', value_num: 0 },
+    { id: 'invalid', habit_id: 'swim', value_num: 'oops' }
+  ];
+  c.ledger = c.state.habitEntries.map(entry => ({
+    source_type: 'habit', source_id: entry.id, points: entry.id === 'below' ? 99 : 100
+  }));
+  c.ledger.push({ source_type: 'habit', source_id: 'run', points: 100 },
+    { source_type: 'habit', source_id: 'hike', points: 150 },
+    { source_type: 'habit', source_id: 'above', points: 150 });
+  const sessions = [{ id: 'run', type: 'jogging' }, { id: 'hike', type: 'hiking' }];
+  assert.equal(c.countHundredPointFitnessSessions(sessions, c.ledger), 4);
+  assert.match(c.buildFitnessPersonalBests(sessions)[5].detail, /Schwimmen/);
+  c.state.habitEntries = c.state.habitEntries.filter(entry => entry.id !== 'above');
+  assert.equal(c.countHundredPointFitnessSessions(sessions, c.ledger), 3);
+  c.ledger.find(point => point.source_id === 'exact').points = 99;
+  assert.equal(c.countHundredPointFitnessSessions(sessions, c.ledger), 2);
 });
