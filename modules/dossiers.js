@@ -6,6 +6,7 @@
   const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
   const dateFormatter = new Intl.DateTimeFormat('de-CH', { dateStyle: 'medium', timeStyle: 'short' });
   const date = value => dateFormatter.format(new Date(value));
+  const indexDateFormatter = new Intl.DateTimeFormat('de-CH', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const PAGE_SIZE = 20;
 
   const ICONS = {
@@ -42,11 +43,17 @@
     dialog.querySelector('[data-entry-index]').hidden = !indexOpen;
     if (!indexOpen) return;
     const matches = model.rows.map((row, index) => ({ row, index, title: entryHeading(row) })).filter(item => item.title.toLocaleLowerCase('de').includes(indexQuery));
-    const shown = matches.slice(0, indexLimit);
-    const signature = JSON.stringify([shown.map(item => [item.row.id, item.title, item.index, item.row.is_pinned]), matches.length, model.rows.length]);
+    const shown = matches.slice(0, indexLimit).map(item => {
+      // Untitled entries already use the body as their heading; avoid repetition.
+      const text = item.row.title?.trim() ? Array.from(String(item.row.body || '').replace(/\s+/g, ' ').trim()) : [];
+      const preview = text.length > 30 ? text.slice(0, 29).join('') + '…' : text.join('');
+      const updated = item.row.updated_at || item.row.created_at;
+      return { ...item, preview, updated };
+    });
+    const signature = JSON.stringify([shown.map(item => [item.row.id, item.title, item.index, item.row.is_pinned, item.preview, item.updated]), matches.length, model.rows.length]);
     if (signature === indexSignature) return;
     indexSignature = signature;
-    dialog.querySelector('[data-entry-index-list]').innerHTML = shown.map(({row, index, title}) => button('jump-entry', '<span>' + (row.is_pinned ? '★ ' : '') + escape(title) + '</span><small>Seite ' + (Math.floor(index / PAGE_SIZE) + 1) + '</small>', row.id)).join('') || '<p class="subtle">Keine passenden Einträge.</p>';
+    dialog.querySelector('[data-entry-index-list]').innerHTML = shown.map(({row, index, title, preview, updated}) => button('jump-entry', '<span class="dossier-index-label"><strong>' + (row.is_pinned ? '★ ' : '') + escape(title) + '</strong>' + (preview ? '<span class="dossier-index-preview"> – ' + escape(preview) + '</span>' : '') + '<time class="dossier-index-updated" datetime="' + escape(updated) + '" aria-label="Zuletzt aktualisiert: ' + escape(indexDateFormatter.format(new Date(updated))) + '">' + escape(indexDateFormatter.format(new Date(updated))) + '</time></span><small>Seite ' + (Math.floor(index / PAGE_SIZE) + 1) + '</small>', row.id)).join('') || '<p class="subtle">Keine passenden Einträge.</p>';
     setText(dialog.querySelector('[data-entry-index-count]'), shown.length + ' von ' + matches.length + ' Titeln');
     dialog.querySelector('[data-dossier-action="index-more"]').hidden = shown.length >= matches.length;
   }

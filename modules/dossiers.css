@@ -65,3 +65,6 @@
 .dossier-dialog .project-icon-action{display:inline-grid;place-items:center;width:44px;height:44px;min-width:44px;padding:0;border-radius:999px;background:rgba(74,215,209,.11);border:1px solid rgba(74,215,209,.24);color:var(--primary);box-shadow:none;font-size:0}
 .dossier-dialog .project-icon-action svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 .dossier-dialog .project-icon-action-delete{background:rgba(255,99,99,.08);border-color:rgba(255,99,99,.22);color:#b33a3a}
+
+.dossier-index-label{font-weight:400;line-height:1.5}.dossier-index-label strong{font-weight:800}.dossier-index-preview{font-weight:400}.dossier-index-updated{display:inline-block;margin-inline-start:.7em;color:var(--muted);font-size:.85em;font-weight:400;white-space:nowrap}
+@media(max-width:600px){.dossier-index-list .mini-btn{align-items:flex-start}.dossier-index-updated{display:block;margin-inline-start:0;margin-top:3px}}
