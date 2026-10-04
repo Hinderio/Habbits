@@ -2,6 +2,7 @@
   'use strict';
   const domain = window.HabitFlowWeeklyPointsDomain;
   let data = null, model = null, offset = 0, selected = 51, frame = 0, root = null, canvas = null, geometry = null, limit = 40, revealSelection = true;
+  let modelKey = null, paintedModel = null, paintKey = null, presentationPending = false;
   const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
   const fmt = n => (n > 0 ? '+' : '') + n.toLocaleString('de-CH', { maximumFractionDigits: 1 });
   const date = stamp => new Date(stamp).toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit', timeZone: 'UTC' });
@@ -43,6 +44,11 @@
     const step = Math.min(13, (zero - top - 10) / maxPositive, (bottom - zero - 10) / maxNegative);
     const size = Math.min(11, column - 5, step * .84);
     const ratio = Math.min(2, window.devicePixelRatio || 1);
+    const styles = getComputedStyle(root);
+    const muted = styles.getPropertyValue('--muted').trim() || '#65778c';
+    const ink = styles.getPropertyValue('--text').trim() || '#172536';
+    const nextPaintKey = JSON.stringify([width, ratio, selected, muted, ink]);
+    if (paintedModel === model && paintKey === nextPaintKey && !revealSelection) return;
     canvas.width = Math.round(width * ratio);
     canvas.height = height * ratio;
     canvas.style.width = width + 'px';
@@ -52,9 +58,6 @@
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.scale(ratio, ratio);
-    const styles = getComputedStyle(root);
-    const muted = styles.getPropertyValue('--muted').trim() || '#65778c';
-    const ink = styles.getPropertyValue('--text').trim() || '#172536';
     ctx.fillStyle = 'rgba(90,155,148,.08)';
     ctx.fillRect(left + selected * column, top - 8, column, bottom - top + 16);
     ctx.strokeStyle = 'rgba(128,145,155,.25)';
@@ -93,15 +96,45 @@
       ctx.fillText('Noch keine Punkte im gewählten Zeitraum.', width / 2, zero - 25);
     }
     geometry = { width, left, column, hits };
+    paintedModel = model;
+    paintKey = nextPaintKey;
     if (revealSelection) {
       find('weeklyPointsScroll').scrollLeft = Math.max(0, left + selected * column - find('weeklyPointsScroll').clientWidth / 2);
       revealSelection = false;
     }
   }
+  function inputKey(now) {
+    const nowTime = new Date(now).getTime();
+    // Compare copied values, not array identities: edits and sync mutate rows.
+    // Pauses are already applied by the caller's visibleLedgerPoints(). Keep
+    // ordering and duplicates because the domain's first-ID-wins rule uses them.
+    return JSON.stringify([
+      offset, domain.monday(now), new Date(now).getTimezoneOffset(),
+      Intl.DateTimeFormat().resolvedOptions().timeZone,
+      (data.ledger || []).map(point => {
+        const stamp = new Date(point.earned_at).getTime();
+        return [point.id, Number(point.points), stamp, stamp > nowTime,
+          point.source_type, point.source_id, point.reason];
+      }),
+      (data.habits || []).map(habit => [habit.id, habit.name]),
+      (data.entries || []).map(entry => [entry.id, entry.habit_id]),
+      (data.tasks || []).map(task => [task.id, task.title])
+    ]);
+  }
   function rebuild() {
     frame = 0;
     if (!data || !root) return;
-    model = domain.build({ ...data, offset, count: 52 });
+    const now = data.now === undefined ? new Date() : data.now;
+    const nextKey = inputKey(now);
+    if (model && modelKey === nextKey) {
+      if (presentationPending) details();
+      presentationPending = false;
+      draw();
+      return;
+    }
+    model = domain.build({ ...data, now, offset, count: 52 });
+    modelKey = nextKey;
+    presentationPending = false;
     selected = Math.min(selected, model.weeks.length - 1);
     const first = model.weeks[0], last = model.weeks.at(-1);
     find('weeklyPointsRange').textContent = 'KW ' + first.number + '/' + first.year + ' – KW ' + last.number + '/' + last.year;
@@ -113,7 +146,8 @@
     find('weeklyPointsSelect').innerHTML = model.weeks.map((week, i) => '<option value="' + i + '">KW ' + week.number + ' · ' + week.year + ' · ' + date(week.start) + '</option>').join('');
     details(); draw();
   }
-  function schedule() {
+  function schedule(refreshPresentation = false) {
+    presentationPending = presentationPending || refreshPresentation;
     if (!frame) frame = requestAnimationFrame(rebuild);
   }
   function init() {
@@ -123,7 +157,7 @@
     const change = delta => { offset = Math.max(0, Math.min(5148, offset + delta)); limit = 40; schedule(); };
     find('weeklyPointsPrev').addEventListener('click', () => change(52));
     find('weeklyPointsNext').addEventListener('click', () => change(-52));
-    find('weeklyPointsToday').addEventListener('click', () => { offset = 0; selected = 51; limit = 40; revealSelection = true; schedule(); });
+    find('weeklyPointsToday').addEventListener('click', () => { offset = 0; selected = 51; limit = 40; revealSelection = true; schedule(true); });
     find('weeklyPointsSelect').addEventListener('change', event => { if (model) { select(Number(event.target.value)); find('weeklyPointsDetail').open = true; } });
     find('weeklyPointsMore').addEventListener('click', () => { limit += 40; details(); });
     find('weeklyPointsWeeks').addEventListener('click', event => {
