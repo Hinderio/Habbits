@@ -64,18 +64,18 @@ test('hidden dossier screen performs no snapshot reads or scheduled renders',()=
 });
 
 function uploadHarness(failure) {
-  const nodes=new Map(),saved=[];let uploaded=0,revoked=0;
+  const nodes=new Map(),saved=[],extraLinks=[];let uploaded=0,revoked=0;
   const node=key=>{if(!nodes.has(key))nodes.set(key,{textContent:'',value:'',focus(){},replaceChildren(){this.innerHTML='';}});return nodes.get(key);};
   const elements={title:{value:'Photo title'},body:{value:'A photo',focus(){}},link:{value:''},is_pinned:{checked:false},image_alt:{value:'Photo'}};
-  const form={elements,reportValidity:()=>true,setAttribute(){},removeAttribute(){},querySelector:node,querySelectorAll:()=>Object.values(elements),reset(){elements.body.value='';}};
+  const form={elements,reportValidity:()=>true,setAttribute(){},removeAttribute(){},querySelector:node,querySelectorAll:selector=>selector==='[data-extra-link]'?extraLinks:Object.values(elements),reset(){elements.body.value='';}};
   const messages=[node('inline'),node('footer')];
   const dialog={querySelector:selector=>selector==='[data-entry-form]'?form:node(selector),querySelectorAll:()=>messages};
-  const window={HabitFlowExhibition:{optimize:async()=> 'data:image/webp;base64,YWJj'},HabitFlowDossiersStore:{snapshot:()=>({entries:[]}),safeLink:()=>'',async upload(blob){uploaded++;assert.equal(blob.type,'image/webp');assert.equal(blob.size,3);if(failure)throw new Error(failure);return 'owner/dossier/photo.webp';},saveEntry:row=>saved.push(row)}};
+  const window={HabitFlowExhibition:{optimize:async()=> 'data:image/webp;base64,YWJj'},HabitFlowDossiersStore:{snapshot:()=>({entries:[]}),safeLink:value=>{try{const url=new URL(value);return ['http:','https:'].includes(url.protocol)?url.href:'';}catch{return '';}} ,async upload(blob){uploaded++;assert.equal(blob.type,'image/webp');assert.equal(blob.size,3);if(failure)throw new Error(failure);return 'owner/dossier/photo.webp';},saveEntry:row=>saved.push(row)}};
   const document={readyState:'loading',addEventListener(){}};
   const URLmock={createObjectURL:()=> 'blob:preview',revokeObjectURL(){revoked++;}};
   vm.runInNewContext(source.replace('  function mount() {','  window.uploadTest={setup(d){dialog=d;active="dossier";},receive,submitEntry,entryHasDraft,edit(row){editing=row.id;entryBaseline=row;}};\n  function mount() {'),{window,document,URL:URLmock,Date,Blob,atob});
   window.uploadTest.setup(dialog);
-  return {api:window.uploadTest,form,node,messages,saved,uploaded:()=>uploaded,revoked:()=>revoked};
+  return {api:window.uploadTest,form,node,messages,saved,extraLinks,uploaded:()=>uploaded,revoked:()=>revoked};
 }
 test('image selection previews a blob and submit saves its uploaded path, then releases the preview',async()=>{
   const h=uploadHarness();await h.api.receive({});assert.match(h.node('[data-draft-image]').innerHTML,/blob:preview/);
@@ -125,4 +125,20 @@ test('entry actions use accessible app pencil and delete icon buttons',()=>{
   const html=harness().api.entryCard({id:'e',title:'Note',body:'Text',created_at:'2026-09-26'});
   assert.match(html,/project-icon-action-edit/);assert.match(html,/project-icon-action-delete/);
   assert.match(html,/aria-label="Eintrag bearbeiten"/);assert.match(html,/aria-label="Eintrag entfernen"/);
+});
+
+test('entry details render every safe link and preserve legacy single-link entries',()=>{
+  const h=harness();const html=h.api.entryCard({id:'links',title:'Trip',links:['https://a.test/one','https://b.test/two','javascript:bad'],body:'',created_at:'2026-10-04'});
+  assert.match(html,/href="https:\/\/a.test\/one"/);assert.match(html,/href="https:\/\/b.test\/two"/);
+  assert.ok(!html.includes('javascript:bad'));assert.equal((html.match(/rel="noopener noreferrer"/g)||[]).length,2);
+});
+
+test('composer saves multiple links, ignores empty added fields and keeps invalid drafts',async()=>{
+  const h=uploadHarness();h.form.elements.link.value='https://a.test';h.extraLinks.push({value:'https://b.test'},{value:''});
+  assert.equal(h.api.entryHasDraft(),true);
+  await h.api.submitEntry({preventDefault(){},target:h.form});
+  assert.deepEqual([...h.saved[0].links],['https://a.test','https://b.test']);
+  const bad=uploadHarness();bad.extraLinks.push({value:'javascript:bad'});
+  await bad.api.submitEntry({preventDefault(){},target:bad.form});
+  assert.equal(bad.saved.length,0);assert.equal(bad.extraLinks[0].value,'javascript:bad');assert.match(bad.messages[0].textContent,/gültigen/);
 });

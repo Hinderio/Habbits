@@ -46,7 +46,8 @@
     if (!uuid(row.dossier_id)) return null;
     const prefix = row.user_id + '/' + row.dossier_id + '/';
     const imagePath = typeof row.image_path === 'string' && row.image_path.length <= 160 && row.image_path.startsWith(prefix) && /^[0-9a-f/-]+\.(webp|jpg)$/.test(row.image_path) ? row.image_path : '';
-    return { ...base, dossier_id: row.dossier_id, title: text(row.title, 120), body: text(row.body, 10000), link: safeLink(row.link), image_path: imagePath, image_alt: text(row.image_alt, 200), is_pinned: row.is_pinned === true };
+    const links = Object.freeze([...new Set((Array.isArray(row.links) && row.links.length ? row.links : [row.link]).map(safeLink).filter(Boolean))]);
+    return { ...base, dossier_id: row.dossier_id, links, title: text(row.title, 120), body: text(row.body, 10000), link: links[0] || '', image_path: imagePath, image_alt: text(row.image_alt, 200), is_pinned: row.is_pinned === true };
   }
   function merge(a = [], b = [], entry = false) {
     const rows = new Map();
@@ -126,6 +127,13 @@
     const previous = rows.find(row => row.id === input.id && row.user_id === owner);
     if (input.id && (!previous || previous.is_archived)) throw new Error('Dieser Eintrag ist nicht mehr verfügbar. Bitte aktualisieren.');
     if (entry && !(state.dossiers || []).some(row => row.id === input.dossier_id && row.user_id === owner && !row.is_archived)) throw new Error('Dieses Dossier ist nicht mehr verfügbar.');
+    if (entry && Object.hasOwn(input, 'links')) {
+      if (!Array.isArray(input.links) || input.links.some(link => typeof link !== 'string' || !safeLink(link))) throw new Error('Bitte für jeden Link eine gültige http- oder https-Adresse eingeben.');
+      input = { ...input, links: [...new Set(input.links.map(safeLink))], link: input.links.length ? safeLink(input.links[0]) : '' };
+    } else if (entry && Object.hasOwn(input, 'link')) {
+      // Legacy callers change the first link, retaining the remaining links.
+      input = { ...input, links: [input.link, ...(previous?.links || []).slice(1)].filter(Boolean) };
+    }
     const updated = new Date(Math.max(Date.now(), Date.parse(previous?.updated_at || '') + 1 || 0)).toISOString();
     const row = normalize({ ...previous, ...input, id: previous?.id || window.crypto.randomUUID(), user_id: owner, created_at: previous?.created_at || updated, updated_at: updated, synced: false }, entry);
     if (!row || (!entry && !row.title) || (entry && !row.is_archived && !row.body && !row.link && !row.image_path)) throw new Error(entry ? 'Bitte Text, Link oder Bild hinzufügen.' : 'Bitte einen Titel angeben.');
@@ -187,15 +195,21 @@
         for (let offset = 0; offset < pending.length; offset += 100) {
           const batch = pending.slice(offset, offset + 100);
           syncTable = table;
-          const payload = batch.map(({ synced, ...row }) => row);
+          let payload = batch.map(({ synced, ...row }) => row);
           let result = await client().from(table).upsert(payload, { onConflict: 'id' }).select('*');
           if (!entry && /PGRST204|42703/.test(result.error?.code || '') && /icon_key|linked_task_ids/.test(result.error?.message || '') && batch.every(row => row.icon_key === 'life' && !row.linked_task_ids.length)) {
             result = await client().from(table).upsert(payload.map(({ icon_key, linked_task_ids, ...row }) => row), { onConflict: 'id' }).select('*');
           }
-          // Keep untitled entries working before the additive title migration.
-          // Never omit a non-empty title or silently acknowledge its loss.
-          if (entry && batch.every(row => !row.title) && /PGRST204|42703/.test(result.error?.code || '') && /title/i.test(result.error?.message || '')) {
-            result = await client().from(table).upsert(payload.map(({ title, ...row }) => row), { onConflict: 'id' }).select('*');
+          // Older schemas remain usable for single links and untitled entries.
+          // Never silently omit a populated title or additional links.
+          for (let retry = 0; entry && result.error && retry < 2; retry++) {
+            if (!/PGRST204|42703/.test(result.error.code || '')) break;
+            if (/links/i.test(result.error.message || '') && batch.every(row => row.links.length <= 1)) {
+              payload = payload.map(({ links, ...row }) => row);
+            } else if (/title/i.test(result.error.message || '') && batch.every(row => !row.title)) {
+              payload = payload.map(({ title, ...row }) => row);
+            } else break;
+            result = await client().from(table).upsert(payload, { onConflict: 'id' }).select('*');
           }
           if (result.error) throw result.error;
           stillOwner(owner);
@@ -227,7 +241,7 @@
       syncFailure = { owner, table: syncTable, code: /^[A-Z0-9]{3,12}$/.test(String(error.code || '')) ? String(error.code) : '' };
       // Keep successful earlier batches acknowledged even if a later request fails.
       try { commitRemote(received); } catch (_) { /* Pending local rows stay durable. */ }
-      status = /PGRST204|42703/.test(error.code || '') && /icon_key|linked_task_ids/.test(error.message || '') ? 'Für Icons und Task-Verknüpfungen ist noch das Datenbank-Update erforderlich; lokal gespeichert.' : /PGRST204|42703/.test(error.code || '') && /title/i.test(error.message || '') ? 'Für Eintragstitel ist noch das Datenbank-Update erforderlich; lokal gespeichert.' : /42P01|PGRST205/.test(error.code || '') ? 'Dossier-Sync noch nicht eingerichtet' : 'lokal · Sync ausstehend';
+      status = /PGRST204|42703/.test(error.code || '') && /links/i.test(error.message || '') && syncTable === 'dossier_entries' ? 'Für mehrere Links ist noch das Datenbank-Update erforderlich; alle Links sind lokal gespeichert.' : /PGRST204|42703/.test(error.code || '') && /icon_key|linked_task_ids/.test(error.message || '') ? 'Für Icons und Task-Verknüpfungen ist noch das Datenbank-Update erforderlich; lokal gespeichert.' : /PGRST204|42703/.test(error.code || '') && /title/i.test(error.message || '') ? 'Für Eintragstitel ist noch das Datenbank-Update erforderlich; lokal gespeichert.' : /42P01|PGRST205/.test(error.code || '') ? 'Dossier-Sync noch nicht eingerichtet' : 'lokal · Sync ausstehend';
       console.warn('[HabitFlow/dossiers] Sync bleibt ausstehend.', error.message || error);
       queued = false;
     } finally { publish(); }

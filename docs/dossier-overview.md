@@ -68,3 +68,12 @@ mobile/desktop remain manual because those environments are unavailable here.
 - Dossier forms follow remote updates while clean. Draft checks use the version opened for editing, and saves patch only changed fields. Entry editing likewise preserves unrelated background pin/image changes.
 - Cards use the same teal outline icons without tiles, right aligned beside the title. Each card reserves one project-link row so metrics and the open action align. Entry actions reuse the app's pencil/trash SVG and color treatments with 44px touch targets and accessible labels.
 - No SQL migration or additional listeners, dependencies, data sources, or image requests are introduced by this update.
+
+
+## Multiple links and mobile layout (v376)
+
+Run sql/add-dossier-entry-links.sql in the Supabase SQL editor once before using multiple links across devices. Fresh installations can use the updated add-dossiers.sql. The migration backfills the existing link, preserves timestamps and adds an ordered text array to the existing entry table. A compatibility trigger mirrors its first item to the original link column and preserves additional links when an older client changes the first link. Existing RLS policies apply unchanged.
+
+Each entry supports additional URL fields via “+ Link hinzufügen”; added fields can be removed individually. Empty fields are ignored, duplicate URLs are consolidated, and every address must use HTTP(S). Existing single-link entries remain editable. Without the migration, single-link syncing continues; multiple links remain saved locally with an explicit sync notice, never silently dropped.
+
+Mobile-only layout rules remove empty header placeholders, align creation/navigation controls, separate sorting from those actions, and place edit/delete alongside collapsed entry summaries. Expanded entries retain full-width text, links and images. Desktop spacing is unchanged. No additional listeners, network requests or libraries are needed.

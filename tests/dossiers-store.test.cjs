@@ -12,7 +12,7 @@ const stamp = '2026-09-26T12:00:00.000Z';
 function harness({ legacy = false } = {}) {
   const counts = { writes: 0, parses: 0, serializes: 0 };
   const values = new Map(), events = new EventTarget(), remote = { dossiers: [], dossier_entries: [] }, requests = [];
-  let owner = OWNER, failWrite = false, failRemote = false, gate = null, uploads = 0, beforeRequest = null, uploadError = null, titleColumn = true, featureColumns = true, summaryError = false;
+  let owner = OWNER, failWrite = false, failRemote = false, gate = null, uploads = 0, beforeRequest = null, uploadError = null, titleColumn = true, featureColumns = true, summaryError = false, linksColumn = true;
   const rpcCalls = [];
   const storage = { getItem: key => values.get(key) || null, setItem(key,value) { if (failWrite) throw new Error('quota'); counts.writes++; values.set(key,value); } };
   const client = {
@@ -35,6 +35,7 @@ function harness({ legacy = false } = {}) {
           if (gate) { const wait=gate;gate=null;await wait; }
           if (failRemote) return { error:{code:'42P01',message:'missing'},data:null };
           if (query.rows) {
+            if(!linksColumn && table==='dossier_entries' && query.rows.some(row=>Object.hasOwn(row,'links')))return {data:null,error:{code:'PGRST204',message:'links column missing'}};
             if(!featureColumns && table==='dossiers' && query.rows.some(row=>Object.hasOwn(row,'icon_key')))return {data:null,error:{code:'PGRST204',message:'icon_key column missing'}};
             if(!titleColumn && table==='dossier_entries' && query.rows.some(row=>Object.hasOwn(row,'title')))return {data:null,error:{code:'PGRST204',message:'title column missing'}};
             const result=[];
@@ -57,7 +58,7 @@ function harness({ legacy = false } = {}) {
   vm.runInContext(fs.readFileSync(path.join(root,'modules/state-persistence.js'),'utf8'),context);
   for(const stage of ['smoking','alcohol','points-ledger','projects'])window.HabitFlowPersistence.register(stage,{});
   vm.runInContext(fs.readFileSync(path.join(root,legacy ? 'tests/fixtures/dossiers-store-before-performance.js' : 'modules/dossiers-store.js'),'utf8'),context);
-  return { rpcCalls, featureColumns(value){featureColumns=value;},summaryError(value){summaryError=value;}, counts, resetCounts() { counts.writes=counts.parses=counts.serializes=0; }, api:window.HabitFlowDossiersStore, window, values, remote, requests, storage,
+  return { linksColumn(value){linksColumn=value;},rpcCalls, featureColumns(value){featureColumns=value;},summaryError(value){summaryError=value;}, counts, resetCounts() { counts.writes=counts.parses=counts.serializes=0; }, api:window.HabitFlowDossiersStore, window, values, remote, requests, storage,
     read:()=>JSON.parse(storage.getItem('habitflow-state-v1')||'{}'),
     owner(value){owner=value;events.dispatchEvent(new Event('habitflow:auth-change'));},
     titleColumn(value){titleColumn=value;},uploadError(value){uploadError=value;},beforeRequest(callback){beforeRequest=callback;},failWrite(value){failWrite=value;},failRemote(value){failRemote=value;},
@@ -309,4 +310,29 @@ test('missing overview migration does not block existing dossiers or image uploa
   await app.api.upload(new Blob(['abc'],{type:'image/webp'}),d.id);assert.equal(app.read().dossiers[0].synced,true);
   app.api.saveDossier({...d,icon_key:'sport'});await app.api.sync();assert.equal(app.read().dossiers[0].synced,false);assert.match(app.api.snapshot().status,/Datenbank-Update/);
   app.featureColumns(true);app.summaryError(false);await app.api.sync();assert.equal(app.remote.dossiers[0].icon_key,'sport');
+});
+
+test('multiple links survive edits, sync and stale app writes; legacy single links still work',async()=>{
+  const app=harness(),d=app.api.saveDossier({title:'Travel'});
+  const entry=app.api.saveEntry({dossier_id:d.id,links:['https://a.test','https://b.test','https://a.test']});
+  assert.deepEqual([...entry.links],['https://a.test/','https://b.test/']);assert.equal(entry.link,'https://a.test/');
+  await app.api.sync(d.id);assert.deepEqual([...app.remote.dossier_entries[0].links],['https://a.test/','https://b.test/']);
+  const stale=app.read();app.api.saveEntry({id:entry.id,dossier_id:d.id,links:['https://c.test'],body:'Updated'});
+  app.window.HabitFlowPersistence.writeState(stale);
+  assert.deepEqual([...app.api.snapshot().entries[0].links],['https://c.test/']);
+  app.api.saveEntry({id:entry.id,dossier_id:d.id,links:[]});await app.api.sync(d.id);
+  assert.equal(app.remote.dossier_entries[0].link,'');assert.deepEqual([...app.remote.dossier_entries[0].links],[]);
+  const legacy=app.api.saveEntry({dossier_id:d.id,link:'https://legacy.test'});assert.deepEqual([...legacy.links],['https://legacy.test/']);
+});
+test('link list validation rejects unsafe addresses and never silently drops extra links before migration',async()=>{
+  const app=harness(),d=app.api.saveDossier({title:'Links'});
+  for(const links of [['https://safe.test','javascript:alert(1)'],['https://user:pass@host.test'],[''],null]) assert.throws(()=>app.api.saveEntry({dossier_id:d.id,body:'Text',links}),/Link/);
+  app.linksColumn(false);const entry=app.api.saveEntry({dossier_id:d.id,links:['https://a.test','https://b.test']});
+  await app.api.sync(d.id);assert.equal(app.api.snapshot().entries[0].synced,false);assert.equal(app.api.snapshot().entries[0].links.length,2);assert.match(app.api.snapshot().status,/Datenbank-Update/);
+  app.linksColumn(true);await app.api.sync(d.id);assert.equal(app.remote.dossier_entries[0].links.length,2);assert.equal(app.api.snapshot().entries[0].synced,true);
+});
+test('single-link syncing supports schemas missing both links and entry titles',async()=>{
+  const app=harness(),d=app.api.saveDossier({title:'Legacy schema'});app.linksColumn(false);app.titleColumn(false);
+  app.api.saveEntry({dossier_id:d.id,link:'https://a.test'});await app.api.sync(d.id);
+  assert.equal(app.api.snapshot().entries[0].synced,true);assert.equal(app.remote.dossier_entries[0].link,'https://a.test/');
 });
