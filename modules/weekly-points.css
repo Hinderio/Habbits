@@ -4,7 +4,7 @@
 .weekly-points-intro { color: var(--muted); margin: 8px 0 18px; max-width: 76ch; font-size: .9rem; line-height: 1.55; }
 .weekly-points-nav { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .weekly-points-legend { display: flex; align-items: center; gap: 10px; justify-content: flex-end; margin: 12px 0 8px; font-size: .75rem; color: var(--muted); }
-.weekly-points-legend i { opacity: .8; display: block; width: min(220px, 35vw); height: 13px; background: linear-gradient(90deg,#fdc000,#f2bf10,#e5bd19,#d5ba28,#c6b838,#b9b743,#aab453,#9db161,#8cb06e,#7cae7b,#71ac8b,#62a99a,#53a6a6); border-radius: 3px; }
+.weekly-points-legend i { opacity: .8; display: block; width: min(220px, 35vw); height: 13px; background: linear-gradient(90deg,#f5a000,#eea210,#e3a619,#d5aa28,#c6ad38,#b9b043,#aab453,#9db161,#8cb06e,#7cae7b,#71ac8b,#62a99a,#53a6a6); border-radius: 3px; }
 .weekly-points-scroll { min-width: 0; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; padding-bottom: 8px; }
 .weekly-points-scroll canvas { display: block; max-width: none; touch-action: pan-x pan-y; }
 .weekly-points-scroll canvas:focus-visible { outline: 2px solid var(--accent, #4ad7d1); outline-offset: -2px; }
