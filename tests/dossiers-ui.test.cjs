@@ -73,7 +73,7 @@ function uploadHarness(failure) {
   const window={HabitFlowExhibition:{optimize:async()=> 'data:image/webp;base64,YWJj'},HabitFlowDossiersStore:{snapshot:()=>({entries:[]}),safeLink:()=>'',async upload(blob){uploaded++;assert.equal(blob.type,'image/webp');assert.equal(blob.size,3);if(failure)throw new Error(failure);return 'owner/dossier/photo.webp';},saveEntry:row=>saved.push(row)}};
   const document={readyState:'loading',addEventListener(){}};
   const URLmock={createObjectURL:()=> 'blob:preview',revokeObjectURL(){revoked++;}};
-  vm.runInNewContext(source.replace('  function mount() {','  window.uploadTest={setup(d){dialog=d;active="dossier";},receive,submitEntry};\n  function mount() {'),{window,document,URL:URLmock,Date,Blob,atob});
+  vm.runInNewContext(source.replace('  function mount() {','  window.uploadTest={setup(d){dialog=d;active="dossier";},receive,submitEntry,entryHasDraft,edit(row){editing=row.id;entryBaseline=row;}};\n  function mount() {'),{window,document,URL:URLmock,Date,Blob,atob});
   window.uploadTest.setup(dialog);
   return {api:window.uploadTest,form,node,messages,saved,uploaded:()=>uploaded,revoked:()=>revoked};
 }
@@ -110,4 +110,19 @@ test('disclosure state survives rendering and images are requested only when ope
   window.disclosureTest.toggleEntry({target:details});assert.equal(queries,1,'DOM rebuild toggle must not duplicate signing requests');
   details.open=false;window.disclosureTest.toggleEntry({target:details});assert.equal(queries,1);
   assert.doesNotMatch(window.disclosureTest.entryCard({id:'e',body:'Text',created_at:'2026-09-26'}),/data-entry-disclosure="e" open/);
+});
+
+test('editing an entry saves changed fields without reverting a background pin or image update',async()=>{
+  const h=uploadHarness();
+  const original={id:'entry',title:'Photo title',body:'A photo',link:'',is_pinned:false,image_alt:'Photo',image_path:'old.webp'};
+  h.api.edit(original);assert.equal(h.api.entryHasDraft(),false);
+  h.form.elements.body.value='Changed thought';assert.equal(h.api.entryHasDraft(),true);
+  await h.api.submitEntry({preventDefault(){},target:h.form});
+  assert.equal(h.saved.length,1);assert.equal(h.saved[0].body,'Changed thought');
+  for(const key of ['title','link','is_pinned','image_alt','image_path'])assert.ok(!Object.hasOwn(h.saved[0],key),key+' must remain untouched');
+});
+test('entry actions use accessible app pencil and delete icon buttons',()=>{
+  const html=harness().api.entryCard({id:'e',title:'Note',body:'Text',created_at:'2026-09-26'});
+  assert.match(html,/project-icon-action-edit/);assert.match(html,/project-icon-action-delete/);
+  assert.match(html,/aria-label="Eintrag bearbeiten"/);assert.match(html,/aria-label="Eintrag entfernen"/);
 });

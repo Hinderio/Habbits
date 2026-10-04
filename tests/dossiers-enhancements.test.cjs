@@ -13,7 +13,7 @@ function ui() {
   const window={HabitFlowDossiersStore:{snapshot:()=>data,safeLink:value=>value||''},requestAnimationFrame(callback){frames.push(callback);return 1;},confirm:()=>true};
   const document={readyState:'loading',addEventListener(type,fn){listeners.set(type,fn);},removeEventListener(type,fn){if(listeners.get(type)===fn)listeners.delete(type);},getElementById:()=>tasksModal};
   class MutationObserver {constructor(callback){this.callback=callback;this.disconnected=false;observers.push(this);}observe(){}disconnect(){this.disconnected=true;}}
-  const injection=`window.enhanceTest={icon,iconPicker,entryModel,renderIndex,jumpEntry,taskOptions,renderTasks,suspendForTask,clearTaskReturn,refresh,setup(p,d){pane=p;dialog=d;active='d';view='dossiers';},index(value){indexOpen=value;},search(value){indexQuery=value.toLocaleLowerCase("de");},limit(value){indexLimit=value;},order(value){order=value;},page(){return page;}};`;
+  const injection=`window.enhanceTest={fillHeader,headerHasDraft,headerChanges,icon,iconPicker,entryModel,renderIndex,jumpEntry,taskOptions,renderTasks,suspendForTask,clearTaskReturn,refresh,setup(p,d){pane=p;dialog=d;active='d';view='dossiers';},index(value){indexOpen=value;},search(value){indexQuery=value.toLocaleLowerCase("de");},limit(value){indexLimit=value;},order(value){order=value;},page(){return page;}};`;
   vm.runInNewContext(source.replace('  function mount() {','  '+injection+'\n  function mount() {'),{window,document,URL,Date,MutationObserver});
   window.enhanceTest.setup({querySelector:node},dialog);
   return {api:window.enhanceTest,data,node,dialog,tasksModal,observers,listeners,frames,focused:()=>focused,scrolled:()=>scrolled};
@@ -53,4 +53,29 @@ test('closing a linked task restores the same dossier, scroll position and trigg
 test('failed task opening restores the dossier and cancelling return disconnects the observer',()=>{
   const h=ui();h.api.suspendForTask(h.node('trigger'));h.frames.shift()();assert.equal(h.dialog.open,true);
   h.api.suspendForTask(h.node('trigger'));h.api.clearTaskReturn();h.observers[1].callback();assert.equal(h.dialog.open,false);assert.equal(h.observers[1].disconnected,true);
+});
+
+test('clean dossier fields follow sync; dirty fields save only their own changes',()=>{
+  const h=ui();
+  h.node('[data-dossier-form]').elements=Object.fromEntries(['title','description','project_id','icon_key'].map(key=>[key,{value:''}]));
+  h.api.fillHeader(h.data.dossiers[0]);
+  h.data.dossiers=[{...h.data.dossiers[0],title:'Remote title',icon_key:'holiday'}];
+  h.api.refresh();
+  const form=h.node('[data-dossier-form]');
+  assert.equal(form.elements.icon_key.value,'holiday');
+  assert.equal(form.elements.title.value,'Remote title');
+  assert.equal(h.api.headerHasDraft(),false);
+  form.elements.description.value='My draft';
+  h.data.dossiers=[{...h.data.dossiers[0],title:'Another title',icon_key:'sport'}];
+  h.api.refresh();
+  assert.equal(form.elements.description.value,'My draft');
+  assert.deepEqual(JSON.parse(JSON.stringify(h.api.headerChanges())),{description:'My draft'});
+});
+test('cards reserve the project row and put a bare icon after the heading',()=>{
+  const h=ui();h.data.projects=[{id:'p',title:'MAS Arbeit'}];
+  h.data.dossiers=[h.data.dossiers[0],{...h.data.dossiers[0],id:'other',project_id:'p'}];h.api.refresh();
+  const html=h.node('[data-dossier-grid]').innerHTML;
+  assert.equal((html.match(/class="dossier-card-project subtle"/g)||[]).length,2);
+  assert.ok(!html.includes('<small>Dossier</small>'));
+  assert.ok(html.includes('<h3>Education</h3><span class="dossier-symbol'));
 });

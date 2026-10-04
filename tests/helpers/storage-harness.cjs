@@ -3,7 +3,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const KEY = 'habitflow-state-v1';
 const clone = value => JSON.parse(JSON.stringify(value));
-function harness({ initial = {}, root = path.resolve(__dirname, '../..'), legacy = false } = {}) {
+function harness({ initial = {}, root = path.resolve(__dirname, '../..'), legacy = false, nativeStorage = false } = {}) {
   const data = new Map([[KEY, JSON.stringify(initial)]]);
   const counts = { parses: 0, serializes: 0, writes: 0 };
   let failWrites = false, clock = Date.parse('2026-09-16T12:00:00.000Z');
@@ -30,7 +30,12 @@ function harness({ initial = {}, root = path.resolve(__dirname, '../..'), legacy
     head: { appendChild() {} }, createElement: () => ({}),
   };
   const registered = new Map();
-  const window = { localStorage: new Storage(), Storage, document,
+  const window = { localStorage: nativeStorage ? new Proxy(new Storage(), { set(target, key, value) {
+      // WebIDL Storage named setter: method assignments become storage keys;
+      // inherited methods remain visible (no LegacyOverrideBuiltIns).
+      if (key in Storage.prototype) { target.setItem(key, String(value)); return true; }
+      target[key] = value; return true;
+    } }) : new Storage(), Storage, document,
     HabitFlowModules: { has: name => registered.has(name), register: (name, api) => registered.set(name, api) },
     setTimeout: () => 1, clearTimeout() {},
   };

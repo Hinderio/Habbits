@@ -6,7 +6,8 @@
   const storage = window.localStorage;
   if (!storage?.getItem || !storage?.setItem) return;
   const getItem = storage.getItem.bind(storage);
-  const setItem = storage.setItem.bind(storage);
+  const nativeSetItem = storage.setItem;
+  const setItem = nativeSetItem.bind(storage);
   const stages = new Map();
   let cachedRaw;
   let cachedState;
@@ -85,7 +86,10 @@
   storage.setItem = setStateItem;
 
   function isReady() {
-    return storage.setItem === setStateItem && ['smoking', 'alcohol', 'points-ledger', 'projects'].every(name => stages.has(name));
+    // Native Storage can keep prototype methods visible when an assignment
+    // creates a named storage property instead of overriding the method. The
+    // object API must still run every registered stage in that browser.
+    return (storage.setItem === setStateItem || storage.setItem === nativeSetItem) && ['smoking', 'alcohol', 'points-ledger', 'projects'].every(name => stages.has(name));
   }
 
   function writeState(state, options = {}) {

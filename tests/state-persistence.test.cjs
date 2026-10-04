@@ -268,3 +268,25 @@ test('read-only collection projections reuse persisted data without running doma
   assert.equal(read().projects[0].title,'Other tab');h.data.delete(KEY);assert.equal(read().projects,undefined);
   h.write(seed());assert.equal(read().projects[0].title,'Project');h.read();assert.ok(repairReads>0,'regular reads retain their normalizers');
 });
+
+test('native Storage method assignments cannot bypass dossier preservation on app saves', () => {
+  const h = harness({ initial: seed(), nativeStorage: true });
+  const owner = '10000000-0000-4000-8000-000000000001';
+  h.window.HabitFlowRemote = { getUserId: () => owner };
+  h.window.crypto = require('node:crypto').webcrypto;
+  h.window.addEventListener = () => {};
+  h.load('modules/dossiers-store.js');
+  const stale = h.saved();
+  const store = h.window.HabitFlowDossiersStore;
+  const dossier = store.saveDossier({ title: 'Sicilia', icon_key: 'holiday' });
+  const entry = store.saveEntry({ dossier_id: dossier.id, body: 'Updated trip' });
+  h.write(stale);
+  assert.equal(h.saved().dossiers[0].icon_key, 'holiday');
+  assert.equal(h.saved().dossierEntries[0].body, 'Updated trip');
+  const older = h.saved();
+  store.saveDossier({ id: dossier.id, icon_key: 'education' });
+  store.saveEntry({ id: entry.id, dossier_id: dossier.id, body: 'Newest trip' });
+  h.write(older);
+  assert.equal(h.saved().dossiers[0].icon_key, 'education');
+  assert.equal(h.saved().dossierEntries[0].body, 'Newest trip');
+});

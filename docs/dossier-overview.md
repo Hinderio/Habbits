@@ -60,3 +60,11 @@ image uploads and existing project/persistence behavior. Run node --test tests/*
 
 Tests use DOM/Supabase boundary mocks. Live SQL/RLS execution and visual checks on
 mobile/desktop remain manual because those environments are unavailable here.
+
+
+## Editing and storage stability (v374)
+
+- The shared persistence object API runs its merge stages even when native Web Storage keeps its prototype methods visible after method assignment. This prevents old app snapshots from replacing saved dossier icons and entries. Existing legacy wrapper fallback remains intact.
+- Dossier forms follow remote updates while clean. Draft checks use the version opened for editing, and saves patch only changed fields. Entry editing likewise preserves unrelated background pin/image changes.
+- Cards use the same teal outline icons without tiles, right aligned beside the title. Each card reserves one project-link row so metrics and the open action align. Entry actions reuse the app's pencil/trash SVG and color treatments with 44px touch targets and accessible labels.
+- No SQL migration or additional listeners, dependencies, data sources, or image requests are introduced by this update.
