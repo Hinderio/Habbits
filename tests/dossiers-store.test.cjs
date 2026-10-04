@@ -12,9 +12,20 @@ const stamp = '2026-09-26T12:00:00.000Z';
 function harness({ legacy = false } = {}) {
   const counts = { writes: 0, parses: 0, serializes: 0 };
   const values = new Map(), events = new EventTarget(), remote = { dossiers: [], dossier_entries: [] }, requests = [];
-  let owner = OWNER, failWrite = false, failRemote = false, gate = null, uploads = 0, beforeRequest = null, uploadError = null, titleColumn = true;
+  let owner = OWNER, failWrite = false, failRemote = false, gate = null, uploads = 0, beforeRequest = null, uploadError = null, titleColumn = true, featureColumns = true, summaryError = false;
+  const rpcCalls = [];
   const storage = { getItem: key => values.get(key) || null, setItem(key,value) { if (failWrite) throw new Error('quota'); counts.writes++; values.set(key,value); } };
   const client = {
+    rpc(name) {
+      const range = {from:0,to:499}; const api={order(){return api;},range(from,to){range.from=from;range.to=to;return api;},then(resolve,reject){return Promise.resolve().then(()=>{
+        rpcCalls.push({name,...range});
+        if(summaryError)return {error:{code:'PGRST202'},data:null};
+        const data=remote.dossiers.filter(d=>d.user_id===owner&&!d.is_archived).sort((a,b)=>a.id.localeCompare(b.id)).slice(range.from,range.to+1).map(d=>{
+          const entries=remote.dossier_entries.filter(e=>e.user_id===owner&&e.dossier_id===d.id);
+          return {id:d.id,entry_count:entries.filter(e=>!e.is_archived).length,last_update:[d.updated_at,...entries.map(e=>e.updated_at)].sort().at(-1)};
+        });return {data,error:null};
+      }).then(resolve,reject);}};return api;
+    },
     from(table) {
       const filters = [], query = { table, from:0, to:Infinity, rows:null };
       const api = { select() { return api; }, eq(key,value) { filters.push([key,value]); return api; }, order() { return api; }, range(from,to) { query.from=from;query.to=to;return api; }, upsert(rows) { query.rows=rows;return api; },
@@ -24,6 +35,7 @@ function harness({ legacy = false } = {}) {
           if (gate) { const wait=gate;gate=null;await wait; }
           if (failRemote) return { error:{code:'42P01',message:'missing'},data:null };
           if (query.rows) {
+            if(!featureColumns && table==='dossiers' && query.rows.some(row=>Object.hasOwn(row,'icon_key')))return {data:null,error:{code:'PGRST204',message:'icon_key column missing'}};
             if(!titleColumn && table==='dossier_entries' && query.rows.some(row=>Object.hasOwn(row,'title')))return {data:null,error:{code:'PGRST204',message:'title column missing'}};
             const result=[];
             for (const row of query.rows) {
@@ -45,7 +57,7 @@ function harness({ legacy = false } = {}) {
   vm.runInContext(fs.readFileSync(path.join(root,'modules/state-persistence.js'),'utf8'),context);
   for(const stage of ['smoking','alcohol','points-ledger','projects'])window.HabitFlowPersistence.register(stage,{});
   vm.runInContext(fs.readFileSync(path.join(root,legacy ? 'tests/fixtures/dossiers-store-before-performance.js' : 'modules/dossiers-store.js'),'utf8'),context);
-  return { counts, resetCounts() { counts.writes=counts.parses=counts.serializes=0; }, api:window.HabitFlowDossiersStore, window, values, remote, requests, storage,
+  return { rpcCalls, featureColumns(value){featureColumns=value;},summaryError(value){summaryError=value;}, counts, resetCounts() { counts.writes=counts.parses=counts.serializes=0; }, api:window.HabitFlowDossiersStore, window, values, remote, requests, storage,
     read:()=>JSON.parse(storage.getItem('habitflow-state-v1')||'{}'),
     owner(value){owner=value;events.dispatchEvent(new Event('habitflow:auth-change'));},
     titleColumn(value){titleColumn=value;},uploadError(value){uploadError=value;},beforeRequest(callback){beforeRequest=callback;},failWrite(value){failWrite=value;},failRemote(value){failRemote=value;},
@@ -255,4 +267,46 @@ test('before title migration, untitled entries sync and titled entries stay pend
   const titled=app.api.saveEntry({dossier_id:dossier.id,title:'Keep me',body:'Content'});await app.api.sync(dossier.id);
   assert.equal(app.read().dossierEntries.find(r=>r.id===titled.id).synced,false);assert.match(app.api.snapshot().status,/Datenbank-Update/);
   app.titleColumn(true);await app.api.sync(dossier.id);assert.equal(app.remote.dossier_entries.find(r=>r.id===titled.id).title,'Keep me');
+});
+
+test('icons and independent task links persist, synchronize and unlink without changing tasks',async()=>{
+  const app=harness();const task={id:id(8001),title:'Task',user_id:OWNER,project_id:id(999),status:'done'};
+  app.storage.setItem('habitflow-state-v1',JSON.stringify({tasks:[task]}));
+  const dossier=app.api.saveDossier({title:'Education',icon_key:'education',linked_task_ids:[task.id,task.id]});
+  assert.deepEqual([...dossier.linked_task_ids],[task.id]);await app.api.sync(dossier.id);
+  assert.equal(app.remote.dossiers[0].icon_key,'education');assert.deepEqual([...app.remote.dossiers[0].linked_task_ids],[task.id]);
+  const original=JSON.stringify(app.read().tasks);app.api.saveDossier({...dossier,linked_task_ids:[]});await app.api.sync();
+  assert.deepEqual([...app.remote.dossiers[0].linked_task_ids],[]);assert.equal(JSON.stringify(app.read().tasks),original);
+  const stale={dossiers:[dossier]};app.window.HabitFlowPersistence.writeState(stale);assert.deepEqual([...app.api.snapshot().dossiers[0].linked_task_ids],[]);
+});
+test('task ownership and removed tasks are checked; stale links can still be removed',()=>{
+  const app=harness();app.storage.setItem('habitflow-state-v1',JSON.stringify({tasks:[{id:id(1),title:'Other',user_id:OTHER},{id:id(2),title:'Archived',user_id:OWNER,is_archived:true}]}));
+  assert.throws(()=>app.api.saveDossier({title:'No access',linked_task_ids:[id(1)]}),/nicht mehr verfügbar/);
+  assert.throws(()=>app.api.saveDossier({title:'Archived',linked_task_ids:[id(2)]}),/nicht mehr verfügbar/);
+  assert.equal(app.api.snapshot().tasks.length,0);
+  assert.equal(app.api.normalize({id:id(3),user_id:OWNER,updated_at:stamp,title:'X',icon_key:'<script>'}).icon_key,'life');
+});
+test('overview aggregates include unopened dossiers without fetching entry bodies',async()=>{
+  const app=harness();app.remote.dossiers=[{id:id(1),user_id:OWNER,title:'Unopened',created_at:stamp,updated_at:stamp}];
+  app.remote.dossier_entries=Array.from({length:125},(_,i)=>({id:id(i+10),user_id:OWNER,dossier_id:id(1),body:'Remote',created_at:stamp,updated_at:'2026-10-04T12:00:00.000Z',is_archived:i===0}));
+  await app.api.sync('');const snap=app.api.snapshot();assert.equal(snap.entries.length,0);assert.equal(snap.metrics[id(1)].count,124);assert.equal(snap.metrics[id(1)].exact,true);assert.equal(snap.metrics[id(1)].updated_at,'2026-10-04T12:00:00.000Z');
+  assert.equal(app.requests.filter(r=>r.table==='dossier_entries').length,0);assert.equal(app.rpcCalls.length,1);
+  assert.ok(!app.values.get('habitflow-state-v1').includes('entry_count'),'aggregates are derived, not a second persistent dataset');
+  const metrics=snap.metrics;app.resetCounts();for(let i=0;i<20;i++)assert.equal(app.api.snapshot().metrics,metrics);assert.equal(app.counts.parses,0);
+});
+test('local complete counts track entry creation and archive, with no image queries',async()=>{
+  const app=harness();const d=app.api.saveDossier({title:'Local'});assert.equal(app.api.snapshot().metrics[d.id].count,0);
+  const e=app.api.saveEntry({dossier_id:d.id,body:'Note'});assert.equal(app.api.snapshot().metrics[d.id].count,1);
+  app.api.saveEntry({...e,is_archived:true});assert.equal(app.api.snapshot().metrics[d.id].count,0);await app.api.sync(d.id);assert.equal(app.api.snapshot().metrics[d.id].count,0);
+});
+test('summary pagination exceeds 1000 dossiers and account changes clear aggregates',async()=>{
+  const app=harness();app.remote.dossiers=Array.from({length:1001},(_,i)=>({id:id(i),user_id:OWNER,title:'D',created_at:stamp,updated_at:stamp}));
+  await app.api.sync();assert.equal(Object.keys(app.api.snapshot().metrics).length,1001);assert.deepEqual(app.rpcCalls.map(r=>r.from),[0,500,1000]);
+  app.owner(OTHER);assert.equal(Object.keys(app.api.snapshot().metrics).length,0);
+});
+test('missing overview migration does not block existing dossiers or image uploads; selected icons remain pending',async()=>{
+  const app=harness();app.featureColumns(false);app.summaryError(true);const d=app.api.saveDossier({title:'Compatible'});
+  await app.api.upload(new Blob(['abc'],{type:'image/webp'}),d.id);assert.equal(app.read().dossiers[0].synced,true);
+  app.api.saveDossier({...d,icon_key:'sport'});await app.api.sync();assert.equal(app.read().dossiers[0].synced,false);assert.match(app.api.snapshot().status,/Datenbank-Update/);
+  app.featureColumns(true);app.summaryError(false);await app.api.sync();assert.equal(app.remote.dossiers[0].icon_key,'sport');
 });

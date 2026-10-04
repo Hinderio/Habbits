@@ -1,0 +1,62 @@
+# Dossier overview, entry index and task links
+
+## Deployment
+
+Run sql/add-dossier-overview.sql once in the Supabase SQL editor after the existing
+Dossier migrations. It is repeatable and adds icon_key, linked_task_ids, a link
+ownership validation trigger and a read-only RLS-respecting aggregate function.
+The full sql/add-dossiers.sql now includes these additions for new installations.
+The agent has not executed SQL: no database administration connection is available.
+
+Before migration, existing default-icon dossiers and image uploads continue to
+sync. Custom icons/task links remain durable local pending changes, with an update
+message rather than silently losing fields. Refresh the app after deployment and
+use Aktualisieren after running the SQL. Other devices should also reload.
+
+## Behavior
+
+- Six lightweight inline SVG icons: Education, Ferien, Arbeit, Freizeit, Sport,
+  Life. Choose under Dossier bearbeiten. Existing dossiers use Life.
+- Cards show active entry count and latest dossier/entry modification, including
+  deletion activity. Remote summaries cover unopened dossiers without downloading
+  bodies or images. Partial offline counts are explicitly labelled lokal.
+- Alle Einträge opens a searchable title directory spanning every loaded entry
+  page. Opening a dossier fetches all its entries via existing 500-row pagination.
+  The directory renders 100 titles initially, offers Weitere Titel, and searches
+  the entire collection. A title jumps to its current page and expands/focuses it.
+  Entries without titles use their content preview, link hostname or Bild.
+- Verknüpfte Tasks allows searching existing tasks, linking, opening and unlinking.
+  Task status and project assignment are not modified. One task can belong to
+  several dossiers. Up to 100 task references per dossier; options are limited to
+  50 matching tasks at a time with search across all locally available tasks.
+  Removed/archived tasks remain removable links without opening unavailable data.
+- Closing the standard task dialog restores the dossier, focus and scroll without
+  rebuilding its forms. Editing a task intentionally navigates to the task editor;
+  unsaved dossier drafts prompt before discard. One temporary observer is cleaned
+  up on return, navigation and account change.
+
+## Data and performance
+
+The existing app state and persistence/merge pipeline remain authoritative. Icons
+and task IDs live on the dossier row, not on task records. Remote task-link writes
+validate newly added IDs against tasks owned by the dossier owner. Existing RLS
+still controls dossier access. Removing references works after target deletion.
+Conflicting dossier edits follow the existing newest-row policy, not set merging.
+
+Counts are derived in memory from local complete entry sets or a paginated SQL
+aggregate; there is no persistent second store, extra auth client or subscription.
+Account changes clear aggregates. Missing aggregate RPC cannot block normal sync.
+Canonical arrays compare by value so acknowledgments keep their previous behavior.
+Unchanged snapshots remain cached and unchanged sync performs zero storage writes.
+The entry index reuses the active collection sort; image loading stays restricted
+to expanded entries on the current page. Existing mobile containment remains.
+
+## Validation
+
+106 automated tests passed, covering the new metrics (including unopened dossiers
+and >1000 summaries), title navigation across pages, safe icons, task search and
+return behavior, migration fallback, account filtering, offline data, sync races,
+image uploads and existing project/persistence behavior. Run node --test tests/*.test.cjs.
+
+Tests use DOM/Supabase boundary mocks. Live SQL/RLS execution and visual checks on
+mobile/desktop remain manual because those environments are unavailable here.

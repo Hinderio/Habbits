@@ -3,6 +3,9 @@
   if (window.HabitFlowDossiersStore) return;
   const KEY = 'habitflow-state-v1';
   const BUCKET = 'dossier-images';
+  const ICON_KEYS = Object.freeze(['education', 'holiday', 'work', 'leisure', 'sport', 'life']);
+  let summaries = Object.freeze({}), summaryRevision = 0;
+  const completeDossiers = new Set();
   const FIELDS = { dossiers: 'dossiers', dossierEntries: 'dossier_entries' };
   const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
   const text = (value, max) => String(value || '').trim().slice(0, max);
@@ -15,12 +18,12 @@
   let snapshotCache = null, localRevision = 0, flightRequest = null, syncFailure = null;
   function featureState() {
     return window.HabitFlowPersistence?.readCollections
-      ? window.HabitFlowPersistence.readCollections(['dossiers', 'dossierEntries', 'projects']) : read();
+      ? window.HabitFlowPersistence.readCollections(['dossiers', 'dossierEntries', 'projects', 'tasks']) : read();
   }
   function sameRow(a, b) {
     if (a === b) return true;
     const keys = Object.keys(a || {});
-    return Boolean(b) && keys.length === Object.keys(b).length && keys.every(key => a[key] === b[key]);
+    return Boolean(b) && keys.length === Object.keys(b).length && keys.every(key => a[key] === b[key] || Array.isArray(a[key]) && Array.isArray(b[key]) && a[key].length === b[key].length && a[key].every((value, index) => value === b[key][index]));
   }
   function sameRows(a = [], b = []) {
     return a.length === b.length && a.every((row, index) => sameRow(row, b[index]));
@@ -39,7 +42,7 @@
   function normalize(row, entry = false) {
     if (!row || !uuid(row.id) || !uuid(row.user_id) || !date(row.updated_at)) return null;
     const base = { id: row.id, user_id: row.user_id, created_at: date(row.created_at) || date(row.updated_at), updated_at: date(row.updated_at), is_archived: row.is_archived === true, synced: row.synced === true };
-    if (!entry) return { ...base, title: text(row.title, 120), description: text(row.description, 600), project_id: uuid(row.project_id) ? row.project_id : null };
+    if (!entry) return { ...base, title: text(row.title, 120), description: text(row.description, 600), project_id: uuid(row.project_id) ? row.project_id : null, icon_key: ICON_KEYS.includes(row.icon_key) ? row.icon_key : 'life', linked_task_ids: Object.freeze([...new Set((Array.isArray(row.linked_task_ids) ? row.linked_task_ids : []).filter(uuid))].sort().slice(0, 100)) };
     if (!uuid(row.dossier_id)) return null;
     const prefix = row.user_id + '/' + row.dossier_id + '/';
     const imagePath = typeof row.image_path === 'string' && row.image_path.length <= 160 && row.image_path.startsWith(prefix) && /^[0-9a-f/-]+\.(webp|jpg)$/.test(row.image_path) ? row.image_path : '';
@@ -83,13 +86,26 @@
   });
   function snapshot() {
     const state = featureState(), owner = user();
-    if (!snapshotCache || snapshotCache.owner !== owner || snapshotCache.sourceDossiers !== state.dossiers || snapshotCache.sourceEntries !== state.dossierEntries || snapshotCache.sourceProjects !== state.projects) {
-      snapshotCache = { owner, sourceDossiers: state.dossiers, sourceEntries: state.dossierEntries, sourceProjects: state.projects,
+    if (!snapshotCache || snapshotCache.owner !== owner || snapshotCache.sourceDossiers !== state.dossiers || snapshotCache.sourceEntries !== state.dossierEntries || snapshotCache.sourceProjects !== state.projects || snapshotCache.sourceTasks !== state.tasks || snapshotCache.summaryRevision !== summaryRevision) {
+      snapshotCache = { owner, sourceDossiers: state.dossiers, sourceEntries: state.dossierEntries, sourceProjects: state.projects, sourceTasks: state.tasks, summaryRevision,
         dossiers: Object.freeze(cachedRows(state.dossiers, false).filter(row => row.user_id === owner && !row.is_archived)),
         entries: Object.freeze(cachedRows(state.dossierEntries, true).filter(row => row.user_id === owner && !row.is_archived)),
+        tasks: Object.freeze((state.tasks || []).filter(row => !row.is_archived && !row.done_archived_at && (!row.user_id || row.user_id === owner)).map(row => Object.freeze({ id: row.id, title: row.title || 'Aufgabe', status: row.status || 'open', due_at: row.due_at || '' }))),
         projects: Object.freeze((state.projects || []).filter(row => !row.is_archived && (!row.user_id || row.user_id === owner)).map(row => Object.freeze({ ...row }))) };
+      const counts = new Map(), activity = new Map(), pending = new Set();
+      for (const row of cachedRows(state.dossierEntries, true)) if (row.user_id === owner) {
+        if (!row.synced) pending.add(row.dossier_id);
+        if (!row.is_archived) counts.set(row.dossier_id, (counts.get(row.dossier_id) || 0) + 1);
+        if (row.updated_at > (activity.get(row.dossier_id) || '')) activity.set(row.dossier_id, row.updated_at);
+      }
+      snapshotCache.metrics = Object.freeze(Object.fromEntries(snapshotCache.dossiers.map(row => {
+        const remote = pending.has(row.id) ? null : summaries[row.id], complete = completeDossiers.has(row.id);
+        return [row.id, Object.freeze({ count: complete ? counts.get(row.id) || 0 : remote?.count ?? counts.get(row.id) ?? 0,
+          exact: complete || Boolean(remote), updated_at: [row.updated_at, activity.get(row.id) || '', remote?.updated_at || ''].sort().at(-1) })];
+      })));
+
     }
-    return { dossiers: snapshotCache.dossiers, entries: snapshotCache.entries, projects: snapshotCache.projects, status };
+    return { tasks: snapshotCache.tasks, metrics: snapshotCache.metrics, dossiers: snapshotCache.dossiers, entries: snapshotCache.entries, projects: snapshotCache.projects, status };
   }
   // Reconcile against the latest durable state, not the snapshot sent over the network.
   // Only changed results traverse the expensive whole-app write pipeline.
@@ -116,8 +132,14 @@
     if (input.link && !safeLink(input.link)) throw new Error('Bitte einen gültigen http- oder https-Link eingeben.');
     if (input.image_path && row.image_path !== input.image_path) throw new Error('Ungültiger Bildverweis.');
     if (!entry && row.project_id && !(state.projects || []).some(project => project.id === row.project_id && !project.is_archived)) throw new Error('Das verknüpfte Projekt ist nicht mehr verfügbar.');
+    if (!entry) {
+      const added = row.linked_task_ids.filter(id => !previous?.linked_task_ids.includes(id));
+      if (added.some(id => !(state.tasks || []).some(task => task.id === id && !task.is_archived && !task.done_archived_at && (!task.user_id || task.user_id === owner)))) throw new Error('Eine ausgewählte Aufgabe ist nicht mehr verfügbar.');
+      if (Array.isArray(input.linked_task_ids) && input.linked_task_ids.length > 100) throw new Error('Pro Dossier sind maximal 100 Task-Verknüpfungen möglich.');
+    }
     state[key] = merge(rows, [row], entry);
     write(state);
+    if (!entry && !previous) { completeDossiers.add(row.id); summaryRevision++; }
     localRevision++; status = 'lokal · Sync ausstehend'; publish(); schedule();
     return row;
   }
@@ -130,6 +152,17 @@
       if (result.error) throw result.error;
       all.push(...result.data);
       if (result.data.length < 500) return all.map(row => ({ ...row, synced: true }));
+    }
+  }
+  async function fetchSummaries(owner) {
+    if (!client()?.rpc) return null;
+    const result = {};
+    for (let offset = 0; ; offset += 500) {
+      const response = await client().rpc('habitflow_dossier_summaries').order('id', { ascending: true }).range(offset, offset + 499);
+      if (response.error) return null;
+      stillOwner(owner);
+      for (const row of response.data || []) if (uuid(row.id)) result[row.id] = Object.freeze({ count: Math.max(0, Number(row.entry_count) || 0), updated_at: date(row.last_update) });
+      if ((response.data || []).length < 500) return Object.freeze(result);
     }
   }
   function stillOwner(owner) { if (user() !== owner) throw new Error('Anmeldung hat sich geändert.'); }
@@ -156,6 +189,9 @@
           syncTable = table;
           const payload = batch.map(({ synced, ...row }) => row);
           let result = await client().from(table).upsert(payload, { onConflict: 'id' }).select('*');
+          if (!entry && /PGRST204|42703/.test(result.error?.code || '') && /icon_key|linked_task_ids/.test(result.error?.message || '') && batch.every(row => row.icon_key === 'life' && !row.linked_task_ids.length)) {
+            result = await client().from(table).upsert(payload.map(({ icon_key, linked_task_ids, ...row }) => row), { onConflict: 'id' }).select('*');
+          }
           // Keep untitled entries working before the additive title migration.
           // Never omit a non-empty title or silently acknowledge its loss.
           if (entry && batch.every(row => !row.title) && /PGRST204|42703/.test(result.error?.code || '') && /title/i.test(result.error?.message || '')) {
@@ -174,7 +210,15 @@
         received.dossierEntries.push(...entries);
       }
       commitRemote(received);
+      if (dossierId && !completeDossiers.has(dossierId)) { completeDossiers.add(dossierId); summaryRevision++; }
       received.dossiers = []; received.dossierEntries = [];
+      // Metadata only: no bodies or image requests for unopened dossiers.
+      const nextSummaries = await fetchSummaries(owner).catch(() => null);
+      stillOwner(owner);
+      if (nextSummaries) {
+        for (const id of completeDossiers) if (id !== dossierId && summaries[id]?.updated_at !== nextSummaries[id]?.updated_at) { completeDossiers.delete(id); summaryRevision++; }
+        if (Object.keys(summaries).length !== Object.keys(nextSummaries).length || Object.keys(nextSummaries).some(id => !sameRow(summaries[id], nextSummaries[id]))) { summaries = nextSummaries; summaryRevision++; }
+      }
       const latest = featureState();
       status = Object.keys(FIELDS).some(key => (latest[key] || []).some(row => row.user_id === owner && !row.synced)) ? 'lokal · Sync ausstehend' : 'synchronisiert';
     } catch (error) {
@@ -183,7 +227,7 @@
       syncFailure = { owner, table: syncTable, code: /^[A-Z0-9]{3,12}$/.test(String(error.code || '')) ? String(error.code) : '' };
       // Keep successful earlier batches acknowledged even if a later request fails.
       try { commitRemote(received); } catch (_) { /* Pending local rows stay durable. */ }
-      status = /PGRST204|42703/.test(error.code || '') && /title/i.test(error.message || '') ? 'Für Eintragstitel ist noch das Datenbank-Update erforderlich; lokal gespeichert.' : /42P01|PGRST205/.test(error.code || '') ? 'Dossier-Sync noch nicht eingerichtet' : 'lokal · Sync ausstehend';
+      status = /PGRST204|42703/.test(error.code || '') && /icon_key|linked_task_ids/.test(error.message || '') ? 'Für Icons und Task-Verknüpfungen ist noch das Datenbank-Update erforderlich; lokal gespeichert.' : /PGRST204|42703/.test(error.code || '') && /title/i.test(error.message || '') ? 'Für Eintragstitel ist noch das Datenbank-Update erforderlich; lokal gespeichert.' : /42P01|PGRST205/.test(error.code || '') ? 'Dossier-Sync noch nicht eingerichtet' : 'lokal · Sync ausstehend';
       console.warn('[HabitFlow/dossiers] Sync bleibt ausstehend.', error.message || error);
       queued = false;
     } finally { publish(); }
@@ -241,10 +285,10 @@
     }
     return new Map(allowed.map(path => [path, signed.get(path)?.url || '']));
   }
-  window.HabitFlowDossiersStore = Object.freeze({ snapshot, saveDossier: input => save(input), saveEntry: input => save(input, true), sync, upload, removeUpload, imageUrls, safeLink, normalize, merge,
+  window.HabitFlowDossiersStore = Object.freeze({ iconKeys: ICON_KEYS, snapshot, saveDossier: input => save(input), saveEntry: input => save(input, true), sync, upload, removeUpload, imageUrls, safeLink, normalize, merge,
     backup() { const state = read(); return { dossiers: merge([], state.dossiers).filter(row => row.user_id === user()), dossierEntries: merge([], state.dossierEntries, true).filter(row => row.user_id === user()) }; },
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); } });
-  window.addEventListener('habitflow:auth-change', () => { signed.clear(); activeDossier = ''; publish(); schedule(); });
+  window.addEventListener('habitflow:auth-change', () => { signed.clear(); summaries = Object.freeze({}); summaryRevision++; completeDossiers.clear(); activeDossier = ''; publish(); schedule(); });
   window.addEventListener('online', schedule);
   window.addEventListener('storage', event => { if (event.key === KEY) publish(); });
 })(window);

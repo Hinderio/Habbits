@@ -7,6 +7,116 @@
   const dateFormatter = new Intl.DateTimeFormat('de-CH', { dateStyle: 'medium', timeStyle: 'short' });
   const date = value => dateFormatter.format(new Date(value));
   const PAGE_SIZE = 20;
+
+  const ICONS = {
+    education: ['Education', '<path d="m3 9 9-5 9 5-9 5-9-5Z"/><path d="M7 12v5c3 3 7 3 10 0v-5M21 9v7"/>'],
+    holiday: ['Ferien', '<circle cx="17" cy="6" r="3"/><path d="M3 17c3-2 5-2 8 0s5 2 10 0M3 21c3-2 5-2 8 0s5 2 10 0M5 14l4-8 4 8M7 10h4"/>'],
+    work: ['Arbeit', '<rect x="3" y="7" width="18" height="14" rx="3"/><path d="M8 7V4h8v3M3 12c6 3 12 3 18 0M10 13v3h4v-3"/>'],
+    leisure: ['Freizeit', '<path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z"/>'],
+    sport: ['Sport', '<path d="m5 8 11 11M3 10l7-7M14 21l7-7M2 7l5-5M17 22l5-5M8 5l11 11"/>'],
+    life: ['Life', '<path d="M12 21S3 15 3 8a5 5 0 0 1 9-3 5 5 0 0 1 9 3c0 7-9 13-9 13Z"/><path d="M6 11h3l2-4 2 8 2-4h3"/>']
+  };
+  function icon(key) {
+    const chosen = Object.hasOwn(ICONS, key) ? key : 'life';
+    return '<span class="dossier-symbol dossier-symbol-' + chosen + '"><svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS[chosen][1] + '</svg><span class="dossier-sr">' + ICONS[chosen][0] + '</span></span>';
+  }
+  function iconPicker() {
+    return '<fieldset class="full dossier-icon-picker"><legend>Icon</legend>' + Object.entries(ICONS).map(([key, [label]]) => '<label><input type="radio" name="icon_key" value="' + key + '"' + (key === 'life' ? ' checked' : '') + '>' + icon(key) + '<span>' + label + '</span></label>').join('') + '</fieldset>';
+  }
+  function entryHeading(row) {
+    const link = store.safeLink(row.link);
+    return row.title || Array.from(String(row.body || '').replace(/\s+/g, ' ').trim()).slice(0, 100).join('') || (link ? new URL(link).hostname : 'Bild');
+  }
+  let modelCache = null, indexOpen = false, indexQuery = '', indexLimit = 100, indexSignature = '', taskSignature = '', taskRenderKey = null, taskReturn = null;
+  function entryModel(snapshot) {
+    if (!modelCache || modelCache.source !== snapshot.entries || modelCache.active !== active || modelCache.order !== order) {
+      const rows = snapshot.entries.filter(row => row.dossier_id === active).sort((a,b) => Number(b.is_pinned) - Number(a.is_pinned) || (order === 'oldest' ? a.created_at.localeCompare(b.created_at) : b.created_at.localeCompare(a.created_at)) || a.id.localeCompare(b.id));
+      modelCache = { source: snapshot.entries, active, order, rows, positions: new Map(rows.map((row, index) => [row.id, index])) };
+    }
+    return modelCache;
+  }
+  function renderIndex(model) {
+    const toggle = dialog.querySelector('[data-dossier-action="entry-index"]');
+    setText(toggle, 'Alle Einträge (' + model.rows.length + ')');
+    toggle.setAttribute?.('aria-expanded', String(indexOpen));
+    dialog.querySelector('[data-entry-index]').hidden = !indexOpen;
+    if (!indexOpen) return;
+    const matches = model.rows.map((row, index) => ({ row, index, title: entryHeading(row) })).filter(item => item.title.toLocaleLowerCase('de').includes(indexQuery));
+    const shown = matches.slice(0, indexLimit);
+    const signature = JSON.stringify([shown.map(item => [item.row.id, item.title, item.index, item.row.is_pinned]), matches.length, model.rows.length]);
+    if (signature === indexSignature) return;
+    indexSignature = signature;
+    dialog.querySelector('[data-entry-index-list]').innerHTML = shown.map(({row, index, title}) => button('jump-entry', '<span>' + (row.is_pinned ? '★ ' : '') + escape(title) + '</span><small>Seite ' + (Math.floor(index / PAGE_SIZE) + 1) + '</small>', row.id)).join('') || '<p class="subtle">Keine passenden Einträge.</p>';
+    setText(dialog.querySelector('[data-entry-index-count]'), shown.length + ' von ' + matches.length + ' Titeln');
+    dialog.querySelector('[data-dossier-action="index-more"]').hidden = shown.length >= matches.length;
+  }
+  function jumpEntry(id) {
+    const model = entryModel(store.snapshot()), position = model.positions.get(id);
+    if (position === undefined) { status('Dieser Eintrag ist nicht mehr verfügbar.'); return; }
+    page = Math.floor(position / PAGE_SIZE); expandedEntries.add(id);
+    entrySignature = ''; lastRender = null; refresh();
+    const card = Array.from(dialog.querySelectorAll('[data-entry-id]')).find(node => node.dataset.entryId === id);
+    card?.querySelector('summary')?.focus({ preventScroll: true });
+    card?.scrollIntoView({ block: 'start' });
+  }
+  const taskStatus = task => ({done:'Erledigt',completed:'Erledigt',in_progress:'In Bearbeitung',active:'In Bearbeitung',open:'Offen'})[task.status] || 'Offen';
+  function taskOptions(snapshot, dossier) {
+    const select = dialog.querySelector('[data-task-choice]'), previous = select.value;
+    const search = dialog.querySelector('[data-task-query]').value.trim().toLocaleLowerCase('de');
+    const linked = new Set(dossier.linked_task_ids || []);
+    const matches = (snapshot.tasks || []).filter(task => !linked.has(task.id) && task.title.toLocaleLowerCase('de').includes(search));
+    select.innerHTML = '<option value="">Task auswählen</option>' + matches.slice(0, 50).map(task => '<option value="' + escape(task.id) + '">' + escape(task.title) + ' · ' + taskStatus(task) + '</option>').join('');
+    if (matches.slice(0, 50).some(task => task.id === previous)) select.value = previous;
+    setText(dialog.querySelector('[data-task-search-hint]'), matches.length > 50 ? '50 von ' + matches.length + ' Tasks – Suche verfeinern.' : matches.length + ' verfügbare Tasks');
+  }
+  function renderTasks(snapshot, dossier) {
+    const linked = dossier.linked_task_ids || [];
+    if (taskRenderKey && taskRenderKey.tasks === snapshot.tasks && taskRenderKey?.links === dossier.linked_task_ids) return;
+    taskRenderKey = { tasks: snapshot.tasks, links: dossier.linked_task_ids };
+    const byId = new Map((snapshot.tasks || []).map(task => [task.id, task]));
+    const signature = JSON.stringify([linked, snapshot.tasks || []]);
+    if (signature === taskSignature) return;
+    taskSignature = signature;
+    setText(dialog.querySelector('[data-linked-task-count]'), linked.length + ' verknüpft');
+    dialog.querySelector('[data-linked-tasks]').innerHTML = linked.map(id => {
+      const task = byId.get(id);
+      return '<div class="dossier-task-row"><div><strong>' + escape(task?.title || 'Task nicht mehr verfügbar') + '</strong><small>' + (task ? taskStatus(task) : 'Verknüpfung kann gelöst werden') + '</small></div><div class="dossier-actions">' + (task ? '<button type="button" class="mini-btn secondary" data-dossier-action="open-linked-task" data-action="open-task-detail" data-id="' + escape(id) + '">Öffnen</button>' : '') + button('unlink-task','Lösen',id) + '</div></div>';
+    }).join('') || '<p class="subtle">Noch keine Tasks verknüpft.</p>';
+    taskOptions(snapshot, dossier);
+  }
+  function clearTaskReturn() {
+    if (!taskReturn) return;
+    taskReturn.observer.disconnect();
+    document.removeEventListener('click', taskReturn.onEdit, true);
+    taskReturn = null;
+  }
+  function suspendForTask(trigger) {
+    const modal = document.getElementById('taskDetailModal');
+    if (!modal) { status('Die Aufgabenansicht ist noch nicht bereit.'); return; }
+    clearTaskReturn();
+    const context = { id: active, trigger, scroll: dialog.scrollTop };
+    const restore = () => {
+      if (taskReturn !== context) return;
+      clearTaskReturn();
+      if (active !== context.id || !store.snapshot().dossiers.some(row => row.id === active)) return;
+      dialog.showModal(); refresh(); dialog.scrollTop = context.scroll;
+      const target = context.trigger.isConnected ? context.trigger : dialog.querySelector('#dossierTitle');
+      target?.focus({ preventScroll: true });
+    };
+    context.observer = new MutationObserver(() => { if (modal.classList.contains('hidden')) restore(); });
+    context.onEdit = event => {
+      if (!event.target.closest?.('[data-action="edit-task"]')) return;
+      if ((entryHasDraft() || headerHasDraft()) && !window.confirm('Dossier-Entwurf verwerfen und Task bearbeiten?')) { event.preventDefault(); event.stopImmediatePropagation(); return; }
+      clearTaskReturn(); resetEntry(); active = '';
+    };
+    taskReturn = context;
+    context.observer.observe(modal, { attributes: true, attributeFilter: ['class'] });
+    document.addEventListener('click', context.onEdit, true);
+    dialog.close();
+    // The existing app click handler opens the task after this handler bubbles.
+    window.requestAnimationFrame(() => { if (modal.classList.contains('hidden')) restore(); });
+  }
+
   let pane, projects, dialog, active = '', view = 'projects', page = 0, overviewPage = 0, query = '', order = 'newest';
   let editing = '', blob = null, previewUrl = '', busy = false, imageOperation = 0, renderFrame = 0, imageGeneration = 0;
   let overviewSignature = '', entrySignature = '', titleSignature = '', returnFocus = null;
@@ -54,7 +164,7 @@
   function headerHasDraft() {
     const form = dialog.querySelector('[data-dossier-form]');
     const original = store.snapshot().dossiers.find(row => row.id === active);
-    return form.elements.title.value.trim() !== (original?.title || '') || form.elements.description.value.trim() !== (original?.description || '') || form.elements.project_id.value !== (original?.project_id || '');
+    return form.elements.title.value.trim() !== (original?.title || '') || form.elements.description.value.trim() !== (original?.description || '') || form.elements.project_id.value !== (original?.project_id || '') || form.elements.icon_key.value !== (original?.icon_key || 'life');
   }
   function close() {
     if (busy) { status('Bitte kurz warten, der Vorgang läuft noch.'); return; }
@@ -64,6 +174,10 @@
     if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
   }
   function open(id = '', trigger) {
+    clearTaskReturn();
+    indexOpen = false; indexQuery = ''; indexLimit = 100; indexSignature = ''; taskSignature = ''; taskRenderKey = null;
+    dialog.querySelector('[data-entry-index-search]').value = '';
+    dialog.querySelector('[data-task-query]').value = '';
     returnFocus = trigger || document.activeElement;
     expandedEntries.clear();
     active = id; page = 0; order = 'newest'; editing = '';
@@ -73,6 +187,7 @@
     const form = dialog.querySelector('[data-dossier-form]');
     form.elements.title.value = dossier?.title || '';
     form.elements.description.value = dossier?.description || '';
+    form.elements.icon_key.value = dossier?.icon_key || 'life';
     form.elements.project_id.innerHTML = projectOptions(dossier?.project_id);
     dialog.querySelector('[data-dossier-editor]').open = !dossier;
     dialog.querySelector('[data-dossier-content]').hidden = !dossier;
@@ -84,7 +199,7 @@
   }
   function entryCard(row) {
     const link = store.safeLink(row.link);
-    const heading = row.title || Array.from(String(row.body || '').replace(/\s+/g, ' ').trim()).slice(0, 100).join('') || (link ? new URL(link).hostname : 'Bild');
+    const heading = entryHeading(row);
     return `<article class="dossier-entry project-detail-box" data-entry-id="${escape(row.id)}"><header><time datetime="${escape(row.created_at)}">${escape(date(row.created_at))}</time><button class="mini-btn secondary dossier-pin" type="button" data-dossier-action="pin" data-id="${escape(row.id)}" aria-pressed="${row.is_pinned}" aria-label="${row.is_pinned ? 'Eintrag lösen' : 'Eintrag anpinnen'}">${row.is_pinned ? '★ Angepinnt' : '☆ Anpinnen'}</button></header><details class="dossier-entry-disclosure" data-entry-disclosure="${escape(row.id)}"${expandedEntries.has(row.id) ? ' open' : ''}><summary><strong>${escape(heading)}</strong><span class="project-note-toggle"><span class="dossier-entry-more">Mehr anzeigen</span><span class="dossier-entry-less">Weniger anzeigen</span><span class="project-editor-chevron" aria-hidden="true">⌄</span></span></summary><div class="dossier-entry-content">${row.body ? `<p class="dossier-entry-text">${escape(row.body)}</p>` : ''}${link ? `<a class="dossier-link" href="${escape(link)}" target="_blank" rel="noopener noreferrer">↗ ${escape(new URL(link).hostname)}<span>${escape(link)}</span></a>` : ''}${row.image_path ? `<div class="dossier-image" data-image-path="${escape(row.image_path)}"><span>Bild wird geladen …</span><img alt="${escape(row.image_alt || 'Bild zum Dossier-Eintrag')}" loading="lazy" decoding="async" referrerpolicy="no-referrer" hidden></div>` : ''}</div></details><footer>${button('edit-entry', 'Bearbeiten', row.id)}${button('delete-entry', 'Entfernen', row.id)}</footer></article>`;
   }
   async function loadImages() {
@@ -107,17 +222,19 @@
     const snapshot = store.snapshot();
     setText(pane.querySelector('[data-dossier-sync]'), snapshot.status);
     setText(dialog.querySelector('[data-detail-sync]'), snapshot.status);
-    const renderKey = [snapshot.dossiers, snapshot.entries, snapshot.projects, active, query, order, page, overviewPage, dialog.open];
+    const renderKey = [snapshot.dossiers, snapshot.entries, snapshot.projects, snapshot.tasks, snapshot.metrics, active, query, order, page, overviewPage, dialog.open, indexOpen, indexQuery, indexLimit];
     if (lastRender && renderKey.every((value, index) => value === lastRender[index])) return;
     lastRender = renderKey;
     const dossiers = snapshot.dossiers.filter(row => (row.title + ' ' + row.description).toLocaleLowerCase('de').includes(query)).sort((a,b) => b.updated_at.localeCompare(a.updated_at));
     const pages = Math.max(1, Math.ceil(dossiers.length / PAGE_SIZE)); overviewPage = Math.min(overviewPage, pages - 1);
-    const signature = JSON.stringify([dossiers.map(presented), snapshot.projects.map(row => [row.id, row.title]), overviewPage]);
+    const signature = JSON.stringify([dossiers.map(presented), snapshot.projects.map(row => [row.id, row.title]), snapshot.metrics, overviewPage]);
     if (signature !== overviewSignature) {
       overviewSignature = signature;
       pane.querySelector('[data-dossier-grid]').innerHTML = dossiers.length ? dossiers.slice(overviewPage * PAGE_SIZE, (overviewPage + 1) * PAGE_SIZE).map(row => {
         const project = snapshot.projects.find(project => project.id === row.project_id);
-        return `<button type="button" class="project-card dossier-card" data-dossier-action="open" data-id="${escape(row.id)}"><small>Dossier</small><h3>${escape(row.title)}</h3><p>${escape(row.description || 'Gedanken, Links und Bilder an einem Ort.')}</p><div class="project-card-footer"><span class="badge muted">Dossier öffnen</span><span aria-hidden="true">↗</span></div>${project ? `<span class="subtle">Projekt: ${escape(project.title)}</span>` : ''}</button>`;
+        const metric = snapshot.metrics?.[row.id];
+        const metrics = '<div class="dossier-card-metrics"><span><small>Letztes Update</small><strong>' + escape(date(metric?.updated_at || row.updated_at)) + '</strong></span><span><small>Einträge</small><strong>' + (metric ? metric.count + (metric.exact ? '' : ' lokal') : '…') + '</strong></span></div>';
+        return `<button type="button" class="project-card dossier-card" data-dossier-action="open" data-id="${escape(row.id)}"><div class="dossier-card-heading">${icon(row.icon_key)}<small>Dossier</small></div><h3>${escape(row.title)}</h3><p>${escape(row.description || 'Gedanken, Links und Bilder an einem Ort.')}</p>${metrics}<div class="project-card-footer"><span class="badge muted">Dossier öffnen</span><span aria-hidden="true">↗</span></div>${project ? `<span class="subtle">Projekt: ${escape(project.title)}</span>` : ''}</button>`;
       }).join('') : `<div class="project-empty">${query ? 'Keine passenden Dossiers gefunden.' : 'Noch keine Dossiers. Sammle Gedanken, Links und Bilder zu deinem nächsten Thema.'}</div>`;
       pane.querySelector('[data-overview-page]').textContent = `${overviewPage + 1} / ${pages}`;
       pane.querySelector('[data-dossier-action="overview-prev"]').disabled = overviewPage === 0;
@@ -131,11 +248,14 @@
     const titleKey = JSON.stringify([presented(dossier), snapshot.projects.map(row => [row.id,row.title])]);
     if (titleKey !== titleSignature) {
       titleSignature = titleKey;
+      dialog.querySelector('[data-detail-icon]').innerHTML = icon(dossier.icon_key);
       const linked = snapshot.projects.find(row => row.id === dossier.project_id);
       dialog.querySelector('[data-dossier-description]').textContent = dossier.description;
       dialog.querySelector('[data-project-link]').innerHTML = linked ? button('open-project', 'Projekt öffnen: ' + escape(linked.title), linked.id) : '';
     }
-    const entries = snapshot.entries.filter(row => row.dossier_id === active).sort((a,b) => Number(b.is_pinned) - Number(a.is_pinned) || (order === 'oldest' ? a.created_at.localeCompare(b.created_at) : b.created_at.localeCompare(a.created_at)) || a.id.localeCompare(b.id));
+    renderTasks(snapshot, dossier);
+    const model = entryModel(snapshot); renderIndex(model);
+    const entries = model.rows;
     const entryPages = Math.max(1, Math.ceil(entries.length / PAGE_SIZE)); page = Math.min(page, entryPages - 1);
     const shown = entries.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
     const nextSignature = JSON.stringify([active, shown.map(presented), entries.length, page, order]);
@@ -181,11 +301,24 @@
     finally { busy = false; submit.textContent = editing ? 'Änderungen speichern' : 'Eintrag hinzufügen'; form.removeAttribute('aria-busy'); form.querySelectorAll('input,textarea,select,button').forEach(control => { control.disabled = false; }); }
   }
   function action(event) {
-    const target = event.target.closest('[data-dossier-action]'); if (!target || busy) return;
+    const target = event.target.closest('[data-dossier-action]'); if (!target) return;
+    if (busy) { if (target.dataset.dossierAction === 'open-linked-task') { event.preventDefault(); event.stopPropagation(); } return; }
     const name = target.dataset.dossierAction, id = target.dataset.id;
     try {
       if (name === 'create' || name === 'open') return open(id, target);
       if (name === 'close') return close();
+      if (name === 'entry-index') { indexOpen = !indexOpen; refresh(); if (indexOpen) dialog.querySelector('[data-entry-index-search]').focus(); return; }
+      if (name === 'index-more') { indexLimit += 100; refresh(); return; }
+      if (name === 'jump-entry') return jumpEntry(id);
+      if (name === 'open-linked-task') return suspendForTask(target);
+      if (name === 'link-task' || name === 'unlink-task') {
+        const dossier = store.snapshot().dossiers.find(row => row.id === active); if (!dossier) return;
+        const taskId = name === 'link-task' ? dialog.querySelector('[data-task-choice]').value : id;
+        if (!taskId) { status('Bitte zuerst einen Task auswählen.'); return; }
+        const ids = new Set(dossier.linked_task_ids || []);
+        if (name === 'link-task') ids.add(taskId); else ids.delete(taskId);
+        store.saveDossier({ ...dossier, linked_task_ids: [...ids] }); refresh(); status(name === 'link-task' ? 'Task verknüpft.' : 'Verknüpfung gelöst.'); return;
+      }
       if (name === 'refresh') { void store.sync(active); void loadImages(); return; }
       if (name === 'overview-prev' || name === 'overview-next') { overviewPage += name.endsWith('next') ? 1 : -1; refresh(); return; }
       if (name === 'entry-prev' || name === 'entry-next') { page += name.endsWith('next') ? 1 : -1; refresh(); dialog.querySelector('[data-entry-list]').scrollIntoView({ block:'start' }); return; }
@@ -231,13 +364,15 @@
     pane.innerHTML = `<section class="projects-hero glass"><div><p class="eyebrow">Wissen & Inspiration</p><h2>Gedanken sammeln. Zusammenhänge entdecken.</h2><p>Dein Ort für Notizen, Links und Bilder – von der nächsten Reise bis zur grossen Recherche.</p></div><button class="pill primary" type="button" data-dossier-action="create">Dossier erstellen</button></section><section class="panel glass"><div class="panel-head"><div><p class="eyebrow">Sammlungen</p><h3>Dossier-Übersicht</h3></div><span class="badge muted" data-dossier-sync>lokal</span></div><label class="dossier-search"><span>Dossiers suchen</span><input type="search" placeholder="Titel oder Beschreibung" data-dossier-search></label><div class="project-grid" data-dossier-grid></div><nav class="dossier-pagination" aria-label="Dossierseiten">${button('overview-prev','Zurück')}<span data-overview-page></span>${button('overview-next','Weiter')}</nav></section>`;
     screen.appendChild(pane);
     dialog = document.createElement('dialog'); dialog.className = 'dossier-dialog'; dialog.setAttribute('aria-labelledby','dossierTitle');
-    dialog.innerHTML = `<div class="dossier-dialog-body"><header class="dossier-dialog-head"><div><p class="eyebrow">Dossier</p><h2 id="dossierTitle" tabindex="-1">Dossier erstellen</h2></div><button type="button" class="icon-btn" data-dossier-action="close" aria-label="Dossier schliessen">×</button></header><p data-dossier-description class="subtle"></p><div data-project-link></div><details class="project-editor-toggle" data-dossier-editor><summary>Dossier bearbeiten <span aria-hidden="true">⌄</span></summary><form data-dossier-form class="project-form-grid dossier-form"><label class="full"><span>Titel</span><input name="title" maxlength="120" required placeholder="z. B. Konferenz Zürich"></label><label class="full"><span>Beschreibung</span><textarea name="description" maxlength="600" rows="2" placeholder="Worum geht es?"></textarea></label><label class="full"><span>Projekt (optional)</span><select name="project_id"></select></label><div class="full dossier-actions"><button type="submit" class="pill primary">Dossier speichern</button>${button('delete-dossier','Dossier entfernen')}</div></form></details><div data-dossier-content><div class="dossier-actions"><button type="button" class="pill primary" data-dossier-action="new-entry" aria-controls="dossierEntryForm">+ Neuer Eintrag</button></div><form id="dossierEntryForm" data-entry-form class="dossier-composer" hidden><h3>Gedanken festhalten</h3><label><span>Titel (optional)</span><input name="title" maxlength="120" placeholder="Worum geht es in diesem Eintrag?"></label><label><span>Text</span><textarea name="body" maxlength="10000" rows="3" placeholder="Was möchtest du festhalten?"></textarea></label><label><span>Link (optional)</span><input name="link" type="url" maxlength="4000" placeholder="https://…"></label><div class="dossier-composer-options"><label class="dossier-file"><span>Bild hinzufügen</span><input name="image" type="file" accept="image/jpeg,image/png,image/webp"></label><label class="dossier-check"><input name="is_pinned" type="checkbox"><span>Anpinnen</span></label></div><div data-draft-image class="dossier-draft-image"></div><label><span>Bildbeschreibung (optional)</span><input name="image_alt" maxlength="200" placeholder="Was zeigt das Bild?"></label><p data-entry-message class="dossier-message" role="status" aria-live="polite"></p><div class="dossier-actions"><button type="submit" class="pill primary" data-entry-submit>Eintrag hinzufügen</button><button type="button" class="mini-btn secondary" data-dossier-action="cancel-entry">Abbrechen</button></div></form><div class="dossier-history-head"><h3>Einträge</h3><label><span>Reihenfolge</span><select data-entry-order><option value="newest">Neueste zuerst</option><option value="oldest">Älteste zuerst</option></select></label></div><p class="subtle">Angepinnte Einträge stehen oben.</p><div data-entry-list class="dossier-entries"></div><nav class="dossier-pagination" aria-label="Eintragsseiten">${button('entry-prev','Zurück')}<span data-entry-page></span>${button('entry-next','Weiter')}</nav></div><footer class="dossier-sync-footer"><span class="subtle" data-detail-sync></span>${button('refresh','Aktualisieren')}</footer><p data-dossier-message class="dossier-message" role="status" aria-live="polite"></p></div>`;
+    dialog.innerHTML = `<div class="dossier-dialog-body"><header class="dossier-dialog-head"><div><div class="dossier-card-heading"><span data-detail-icon></span><p class="eyebrow">Dossier</p></div><h2 id="dossierTitle" tabindex="-1">Dossier erstellen</h2></div><button type="button" class="icon-btn" data-dossier-action="close" aria-label="Dossier schliessen">×</button></header><p data-dossier-description class="subtle"></p><div data-project-link></div><details class="project-editor-toggle" data-dossier-editor><summary>Dossier bearbeiten <span aria-hidden="true">⌄</span></summary><form data-dossier-form class="project-form-grid dossier-form"><label class="full"><span>Titel</span><input name="title" maxlength="120" required placeholder="z. B. Konferenz Zürich"></label><label class="full"><span>Beschreibung</span><textarea name="description" maxlength="600" rows="2" placeholder="Worum geht es?"></textarea></label>${iconPicker()}<label class="full"><span>Projekt (optional)</span><select name="project_id"></select></label><div class="full dossier-actions"><button type="submit" class="pill primary">Dossier speichern</button>${button('delete-dossier','Dossier entfernen')}</div></form></details><div data-dossier-content><details class="project-editor-toggle dossier-task-section"><summary>Verknüpfte Tasks <span data-linked-task-count></span></summary><div class="dossier-task-content"><div data-linked-tasks></div><label class="dossier-search"><span>Bestehenden Task suchen</span><input type="search" data-task-query placeholder="Titel eingeben"></label><div class="dossier-task-tools"><select data-task-choice aria-label="Task auswählen"></select>${button('link-task','Verknüpfen')}</div><p class="subtle" data-task-search-hint></p></div></details><div class="dossier-actions"><button type="button" class="pill primary" data-dossier-action="new-entry" aria-controls="dossierEntryForm">+ Neuer Eintrag</button><button type="button" class="mini-btn secondary" data-dossier-action="entry-index" aria-expanded="false" aria-controls="dossierEntryIndex">Alle Einträge</button></div><section id="dossierEntryIndex" data-entry-index class="dossier-entry-index" hidden aria-label="Eintragsverzeichnis"><label class="dossier-search"><span>Alle Titel durchsuchen</span><input type="search" data-entry-index-search placeholder="Titel eingeben"></label><div data-entry-index-list class="dossier-index-list"></div><div class="dossier-pagination"><span data-entry-index-count></span>${button('index-more','Weitere Titel')}</div></section><form id="dossierEntryForm" data-entry-form class="dossier-composer" hidden><h3>Gedanken festhalten</h3><label><span>Titel (optional)</span><input name="title" maxlength="120" placeholder="Worum geht es in diesem Eintrag?"></label><label><span>Text</span><textarea name="body" maxlength="10000" rows="3" placeholder="Was möchtest du festhalten?"></textarea></label><label><span>Link (optional)</span><input name="link" type="url" maxlength="4000" placeholder="https://…"></label><div class="dossier-composer-options"><label class="dossier-file"><span>Bild hinzufügen</span><input name="image" type="file" accept="image/jpeg,image/png,image/webp"></label><label class="dossier-check"><input name="is_pinned" type="checkbox"><span>Anpinnen</span></label></div><div data-draft-image class="dossier-draft-image"></div><label><span>Bildbeschreibung (optional)</span><input name="image_alt" maxlength="200" placeholder="Was zeigt das Bild?"></label><p data-entry-message class="dossier-message" role="status" aria-live="polite"></p><div class="dossier-actions"><button type="submit" class="pill primary" data-entry-submit>Eintrag hinzufügen</button><button type="button" class="mini-btn secondary" data-dossier-action="cancel-entry">Abbrechen</button></div></form><div class="dossier-history-head"><h3>Einträge</h3><label><span>Reihenfolge</span><select data-entry-order><option value="newest">Neueste zuerst</option><option value="oldest">Älteste zuerst</option></select></label></div><p class="subtle">Angepinnte Einträge stehen oben.</p><div data-entry-list class="dossier-entries"></div><nav class="dossier-pagination" aria-label="Eintragsseiten">${button('entry-prev','Zurück')}<span data-entry-page></span>${button('entry-next','Weiter')}</nav></div><footer class="dossier-sync-footer"><span class="subtle" data-detail-sync></span>${button('refresh','Aktualisieren')}</footer><p data-dossier-message class="dossier-message" role="status" aria-live="polite"></p></div>`;
     document.body.appendChild(dialog);
     tabs.addEventListener('click', event => { const tab = event.target.closest('[data-project-view]'); if (tab) show(tab.dataset.projectView); });
     tabs.addEventListener('keydown', event => { if (['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) { event.preventDefault(); const next = event.key === 'Home' ? 'projects' : event.key === 'End' ? 'dossiers' : view === 'projects' ? 'dossiers' : 'projects'; show(next); tabs.querySelector(`[data-project-view="${next}"]`).focus(); } });
     pane.addEventListener('click', action); dialog.addEventListener('click', action);
     pane.querySelector('[data-dossier-search]').addEventListener('input', event => { query = event.target.value.trim().toLocaleLowerCase('de'); overviewPage = 0; queueRefresh(); });
     dialog.addEventListener('toggle', toggleEntry, true);
+    dialog.querySelector('[data-entry-index-search]').addEventListener('input', event => { indexQuery = event.target.value.trim().toLocaleLowerCase('de'); indexLimit = 100; queueRefresh(); });
+    dialog.querySelector('[data-task-query]').addEventListener('input', () => { const snapshot = store.snapshot(), dossier = snapshot.dossiers.find(row => row.id === active); if (dossier) taskOptions(snapshot, dossier); });
     dialog.addEventListener('cancel', event => { event.preventDefault(); close(); });
     dialog.querySelector('[data-entry-order]').addEventListener('change', event => { order = event.target.value; page = 0; refresh(); });
     dialog.querySelector('[data-entry-form]').addEventListener('submit', submitEntry);
@@ -246,15 +381,15 @@
     dialog.querySelector('[data-dossier-form]').addEventListener('submit', event => {
       event.preventDefault(); if (busy || !event.target.reportValidity()) return;
       const form = event.target;
-      try { const row = store.saveDossier({ id:active || undefined, title:form.elements.title.value, description:form.elements.description.value, project_id:form.elements.project_id.value || null }); active = row.id; dialog.querySelector('[data-dossier-editor]').open = false; dialog.querySelector('[data-dossier-content]').hidden = false; dialog.querySelector('[data-dossier-action="delete-dossier"]').hidden = false; refresh(); void store.sync(active); status('Dossier lokal gespeichert.'); dialog.querySelector('#dossierTitle').focus({ preventScroll: true }); }
+      try { const row = store.saveDossier({ id:active || undefined, title:form.elements.title.value, description:form.elements.description.value, project_id:form.elements.project_id.value || null, icon_key:form.elements.icon_key.value }); active = row.id; dialog.querySelector('[data-dossier-editor]').open = false; dialog.querySelector('[data-dossier-content]').hidden = false; dialog.querySelector('[data-dossier-action="delete-dossier"]').hidden = false; refresh(); void store.sync(active); status('Dossier lokal gespeichert.'); dialog.querySelector('#dossierTitle').focus({ preventScroll: true }); }
       catch (error) { status(error.message || 'Speichern fehlgeschlagen.'); }
     });
     store.subscribe(queueRefresh);
     document.querySelector('.nav-btn[data-target="projects"]')?.addEventListener('click', () => { if (view === 'dossiers') queueRefresh(); });
     document.getElementById('settingsForm')?.addEventListener('submit', () => { void store.sync(active); });
-    window.addEventListener('habitflow:auth-change', () => { resetEntry(); active = ''; if (dialog.open) dialog.close(); overviewSignature = ''; queueRefresh(); });
+    window.addEventListener('habitflow:auth-change', () => { clearTaskReturn(); resetEntry(); active = ''; if (dialog.open) dialog.close(); overviewSignature = ''; queueRefresh(); });
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && visible()) { void store.sync(active); if (dialog.open) void loadImages(); } });
   }
-  window.HabitFlowDossiers = Object.freeze({ showProjects() { if (projects) show('projects'); }, open(id) { if (!pane) return false; show('dossiers'); if (id) { if (!store.snapshot().dossiers.some(row => row.id === id)) return false; open(id); } return true; } });
+  window.HabitFlowDossiers = Object.freeze({ showProjects() { clearTaskReturn(); if (projects) show('projects'); }, open(id) { if (!pane) return false; show('dossiers'); if (id) { if (!store.snapshot().dossiers.some(row => row.id === id)) return false; open(id); } return true; } });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, { once:true }); else mount();
 })(window, document);

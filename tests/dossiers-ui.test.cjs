@@ -35,7 +35,7 @@ test('switch restores existing project panel without rebuilding its DOM',()=>{
 test('large dossiers render 20 entries per page; status changes preserve entry DOM and composer',()=>{
   const nodes=new Map();let entryWrites=0;
   const node = selector => {
-    if(!nodes.has(selector))nodes.set(selector,{_html:'',textContent:'',disabled:false,hidden:false,set innerHTML(value){this._html=value;if(selector==='[data-entry-list]')entryWrites++;},get innerHTML(){return this._html;}});
+    if(!nodes.has(selector))nodes.set(selector,{_html:'',textContent:'',value:'',disabled:false,hidden:false,set innerHTML(value){this._html=value;if(selector==='[data-entry-list]')entryWrites++;},get innerHTML(){return this._html;}});
     return nodes.get(selector);
   };
   const pane={querySelector:node},dialog={open:true,querySelector:node,querySelectorAll:()=>[]};
