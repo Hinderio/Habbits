@@ -252,9 +252,9 @@ test('habit grouping uses exact normalized names, not reused icons or related na
 test('weekly squares and legend use the warm orange-green-teal palette', () => {
   const negatives = [-301, -300, -150, -75, -30, -10].map(domain.color);
   const positives = [10, 30, 75, 150, 300, 301].map(domain.color);
-  assert.deepEqual(negatives, ["#f5a000","#eea210","#e3a619","#d5aa28","#c6ad38","#b9b043"]);
-  assert.deepEqual(positives, ["#9db161","#8cb06e","#7cae7b","#71ac8b","#62a99a","#53a6a6"]);
+  assert.deepEqual(negatives, ["#f28a00","#ed8e08","#e59414","#d99b22","#cba331","#bdac3e"]);
+  assert.deepEqual(positives, ["#99b260","#85b16f","#70b080","#5daf91","#47ad9e","#30aaa9"]);
   const css = fs.readFileSync(path.join(__dirname, '../modules/weekly-points.css'), 'utf8');
-  assert.ok(css.includes('linear-gradient(90deg,#f5a000,#eea210,#e3a619,#d5aa28,#c6ad38,#b9b043,#aab453,#9db161,#8cb06e,#7cae7b,#71ac8b,#62a99a,#53a6a6)'));
+  assert.ok(css.includes('linear-gradient(90deg,#f28a00,#ed8e08,#e59414,#d99b22,#cba331,#bdac3e,#aab453,#99b260,#85b16f,#70b080,#5daf91,#47ad9e,#30aaa9)'));
   assert.ok(html.includes('Orange für hohe negative Punkte, Grün nahe null, Türkis für hohe positive Punkte'));
 });
