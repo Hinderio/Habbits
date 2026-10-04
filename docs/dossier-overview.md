@@ -77,3 +77,7 @@ Run sql/add-dossier-entry-links.sql in the Supabase SQL editor once before using
 Each entry supports additional URL fields via “+ Link hinzufügen”; added fields can be removed individually. Empty fields are ignored, duplicate URLs are consolidated, and every address must use HTTP(S). Existing single-link entries remain editable. Without the migration, single-link syncing continues; multiple links remain saved locally with an explicit sync notice, never silently dropped.
 
 Mobile-only layout rules remove empty header placeholders, align creation/navigation controls, separate sorting from those actions, and place edit/delete alongside collapsed entry summaries. Expanded entries retain full-width text, links and images. Desktop spacing is unchanged. No additional listeners, network requests or libraries are needed.
+
+## Project task inheritance (v377)
+
+The project link uses the existing Projects badge renderer (original initials, color and title). Detail sections are ordered project, tasks, dossier editor. Project tasks are derived from the current task.project_id plus explicit linked_task_ids, deduplicated and cached by source collection identity. Inherited tasks are labelled and cannot be individually unlinked from the dossier; change their project assignment instead. Explicit links remain independent when the project changes or is removed. Archived tasks are excluded from inheritance; completed tasks remain included. No SQL change, additional writes or listeners are required.

@@ -91,7 +91,7 @@
       snapshotCache = { owner, sourceDossiers: state.dossiers, sourceEntries: state.dossierEntries, sourceProjects: state.projects, sourceTasks: state.tasks, summaryRevision,
         dossiers: Object.freeze(cachedRows(state.dossiers, false).filter(row => row.user_id === owner && !row.is_archived)),
         entries: Object.freeze(cachedRows(state.dossierEntries, true).filter(row => row.user_id === owner && !row.is_archived)),
-        tasks: Object.freeze((state.tasks || []).filter(row => !row.is_archived && !row.done_archived_at && (!row.user_id || row.user_id === owner)).map(row => Object.freeze({ id: row.id, title: row.title || 'Aufgabe', status: row.status || 'open', due_at: row.due_at || '' }))),
+        tasks: Object.freeze((state.tasks || []).filter(row => !row.is_archived && !row.done_archived_at && (!row.user_id || row.user_id === owner)).map(row => Object.freeze({ id: row.id, title: row.title || 'Aufgabe', status: row.status || 'open', project_id: row.project_id || '', due_at: row.due_at || '' }))),
         projects: Object.freeze((state.projects || []).filter(row => !row.is_archived && (!row.user_id || row.user_id === owner)).map(row => Object.freeze({ ...row }))) };
       const counts = new Map(), activity = new Map(), pending = new Set();
       for (const row of cachedRows(state.dossierEntries, true)) if (row.user_id === owner) {

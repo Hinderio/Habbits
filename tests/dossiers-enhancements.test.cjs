@@ -79,3 +79,31 @@ test('cards reserve the project row and put a bare icon after the heading',()=>{
   assert.ok(!html.includes('<small>Dossier</small>'));
   assert.ok(html.includes('<h3>Education</h3><span class="dossier-symbol'));
 });
+
+test('project tasks are inherited live, deduplicated and excluded from manual choices',()=>{
+  const h=ui();h.data.projects=[{id:'p',title:'MAS'}];
+  h.data.tasks=[{id:'auto',project_id:'p',title:'Project task',status:'open'},{id:'manual',project_id:'other',title:'Manual task',status:'open'}];
+  h.data.dossiers=[{...h.data.dossiers[0],project_id:'p',linked_task_ids:['auto','manual']}];h.api.refresh();
+  assert.equal(h.node('[data-linked-task-count]').textContent,'2 verknüpft');
+  const html=h.node('[data-linked-tasks]').innerHTML;
+  assert.match(html,/Über Projekt verknüpft/);
+  assert.ok(!html.includes('data-dossier-action="unlink-task" data-id="auto"'));
+  assert.ok(html.includes('data-dossier-action="unlink-task" data-id="manual"'));
+  assert.ok(!h.node('[data-task-choice]').innerHTML.includes('value="auto"'));
+  h.data.tasks=[...h.data.tasks,{id:'new',project_id:'p',title:'New project task',status:'done'}];h.api.refresh();
+  assert.equal(h.node('[data-linked-task-count]').textContent,'3 verknüpft');
+  h.data.dossiers=[{...h.data.dossiers[0],project_id:null}];h.api.refresh();
+  assert.equal(h.node('[data-linked-task-count]').textContent,'2 verknüpft');
+  assert.ok(!h.node('[data-linked-tasks]').innerHTML.includes('New project task'));
+});
+test('project reassignment and project deletion drop inherited tasks without altering manual links',()=>{
+  const h=ui();h.data.projects=[{id:'p',title:'Project'}];
+  h.data.tasks=[{id:'t',project_id:'p',title:'Inherited',status:'open'}];
+  h.data.dossiers=[{...h.data.dossiers[0],project_id:'p',linked_task_ids:[]}];h.api.refresh();
+  assert.equal(h.node('[data-linked-task-count]').textContent,'1 verknüpft');
+  h.data.tasks=[{...h.data.tasks[0],project_id:'elsewhere'}];h.api.refresh();
+  assert.equal(h.node('[data-linked-task-count]').textContent,'0 verknüpft');
+  h.data.tasks=[{...h.data.tasks[0],project_id:'p'}];h.api.refresh();
+  h.data.projects=[];h.api.refresh();assert.equal(h.node('[data-linked-task-count]').textContent,'0 verknüpft');
+  assert.deepEqual(h.data.dossiers[0].linked_task_ids,[]);
+});
