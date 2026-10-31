@@ -12737,6 +12737,36 @@ async function deleteAlcoholLog(id) {
     syncWithSupabase({ silent: true, pullFirst: false });
   }
 
+  function refreshLoggedHabitCard(habit) {
+    const card = els.habitCards?.querySelector(`[data-action="open-habit-detail"][data-id="${cssEscape(habit.id)}"]`)?.closest('.habit-card');
+    if (!card) return;
+    // Patch feedback in place: mobile browsers may retain input focus after a tap,
+    // so the normal render remains deferred to protect drafts and the keyboard.
+    withAnalyticsReadScope(() => {
+      const periodValue = habitValueForPeriod(habit);
+      const todayEntries = entriesForHabitOnDate(habit.id, toDateKey(new Date()));
+      const booleanHabit = habit.type === 'boolean' && !isFitnessDistanceHabit(habit);
+      const todayValue = booleanHabit
+        ? todayEntries.some(entry => entry.value_bool)
+        : todayEntries.reduce((total, entry) => total + Number(entry.value_num || 0), 0);
+      const pause = activePauseNow('habit', habit.id);
+      const fulfilled = habitFulfillmentState(habit, { periodValue, todayEntries, todayValue });
+      const setText = (selector, value) => {
+        const node = card.querySelector(selector);
+        if (node) node.textContent = value;
+      };
+      card.classList.toggle('is-complete', fulfilled);
+      setText('.habit-card-status-badge', pause ? 'Pausiert' : fulfilled ? 'Erfüllt' : (todayEntries.length ? `${todayEntries.length} Log${todayEntries.length === 1 ? '' : 's'} heute` : 'Heute offen'));
+      setText('.habit-card-value-row strong', formatHabitValue(habit, todayValue));
+      const progress = card.querySelector('.habit-progress-track i');
+      if (progress) progress.style.width = `${habitProgressPercent(habit, periodValue, todayEntries)}%`;
+      const period = habitTargetPeriodMeta(habit);
+      const unit = effectiveHabitUnit(habit);
+      setText('.habit-card-meta-row span:last-child', habit.target ? `${period.short}: ${periodValue.label} / ${habit.target}${unit ? ` ${unit}` : ''}` : 'ohne Zielwert');
+      if (booleanHabit) setText('.habit-quick-check', todayValue ? 'Heute erledigt' : 'Heute abhaken');
+    });
+  }
+
   function logHabit(habitId, inputId = '', timeInputId = '', timeSecondsInputId = '', ascentInputId = '') {
     const habit = state.habits.find(h => h.id === habitId);
     if (!habit) return;
@@ -12779,6 +12809,7 @@ async function deleteAlcoholLog(id) {
     const points = habitPoints(habit, entry);
     addPoints('habit', entry.id, points, habitPointReason(habit, entry), occurredAt);
     saveState();
+    refreshLoggedHabitCard(habit);
     renderHistoryModal();
     const duration = parseFitnessDurationNote(note);
     const ascent = parseFitnessAscentNote(note);

@@ -12,7 +12,7 @@ function setup() {
     state: { habits: [], habitEntries: [], pointsLedger: [], deletedRemoteIds: {} },
     nowIso: () => '2026-10-03T12:00:00Z', uid: () => 'entry-' + ++id,
     isFitnessDistanceHabit: () => false, markRemoteDeletedMany() {},
-    activePauseNow: () => null, saveState() {}, renderHistoryModal() {},
+    activePauseNow: () => null, saveState() {}, renderHistoryModal() {}, refreshLoggedHabitCard() {},
     toast() {}, syncWithSupabase() {}, parseFitnessDurationNote: () => null,
     parseFitnessAscentNote: () => null
   };
