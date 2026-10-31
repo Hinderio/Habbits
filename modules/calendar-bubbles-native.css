@@ -109,7 +109,7 @@
     padding: 0 !important;
     border: 1px solid rgba(17, 36, 58, .08) !important;
     border-radius: 999px !important;
-    background: #acdacf !important;
+    background: #ffb84d !important;
     box-shadow: none !important;
     color: #111827 !important;
     overflow: hidden !important;
@@ -118,6 +118,24 @@
   #screen-calendar .day-chip.calendar-event-chip.is-birthday {
     background: #f6b33f !important;
     border-color: rgba(17, 24, 39, .08) !important;
+  }
+
+  /* Match the desktop event palette without changing the compact layout. */
+  #screen-calendar .day-chip.calendar-event-chip.is-holiday {
+    background: #efb3bd !important;
+  }
+
+  #screen-calendar .day-chip.calendar-event-chip.is-public_holiday {
+    background: #c23f95 !important;
+  }
+
+  #screen-calendar .day-chip.calendar-event-chip.is-public_holiday::before {
+    color: #fff !important;
+  }
+
+  /* Tasks keep their own mobile treatment, distinct from every event type. */
+  #screen-calendar .calendar-task-dot {
+    background: #b8aff0 !important;
   }
 
   #screen-calendar .calendar-event-chip b,
