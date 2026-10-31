@@ -10,6 +10,7 @@
   const GIFT_LIST_ID = 'gifts';
   const WEBLINK_LIST_ID = 'weblinks';
   const EXHIBITION_LIST_ID = 'exhibition';
+  const EVENT_LIST_ID = 'event-ideas';
   const WEEKLY_PAST_WEEKS = 3;
   const WEEKLY_FUTURE_WEEKS = 3;
   const PHOTO_IMAGE_MAX_EDGE = 1280;
@@ -49,10 +50,12 @@
     { id: GIFT_LIST_ID, slug: 'geschenk', title: 'Geschenk', type: 'generic', icon: 'gift', color: '#6EBBBE', description: 'Geschenkideen für deine Lieblingsmenschen sammeln und als Task umsetzen.' },
     { id: WEEKLY_LIST_ID, slug: 'wochenzettel', title: 'Wochenzettel', type: 'generic', icon: 'note', color: '#4AA885', description: 'Kleine Gedanken und Erinnerungen – Woche für Woche.' },
     { id: EXHIBITION_LIST_ID, slug: 'exhibition', title: 'Exhibition', type: 'generic', icon: 'gallery', color: '#75A56A', description: 'Fotos und Ideen als persönliche Ausstellung – mit deiner Typografie direkt auf dem Bild.' },
+    { id: EVENT_LIST_ID, slug: 'eventliste', title: 'Eventliste', type: 'generic', icon: 'calendar', color: '#A5AD56', description: 'Eventideen, Orte und gemeinsame Erlebnisse für später sammeln.' },
     { id: ROADMAP_LIST_ID, slug: 'roadmap-goals', title: 'Roadmap-Ziele', type: 'generic', icon: 'star', color: '#47ceca', description: 'Persönliche Ziele der Kalender-Roadmap.' }
   ];
 
   const ICONS = {
+    calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 11h18"/><path d="m9 16 2 2 4-4"/>',
     gallery: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8" cy="9" r="1.5"/><path d="m3 17 6-5 4 3 3-4 5 6"/>',
     star: '<path d="m12 3 2.8 5.7 6.3.9-4.5 4.4 1.1 6.2L12 17.3l-5.7 3 1.1-6.2L2.9 9.6l6.3-.9Z"/>',
     copy: '<rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/>',
@@ -106,6 +109,7 @@
   let giftMessage = '';
   const promotingGiftIds = new Set();
   const weeklyCaptureDrafts = new Map();
+  let editingEventId = '';
   let editingWeeklyId = '';
   let openWeeklyMenuId = '';
   let weeklyArchiveOpen = false;
@@ -370,7 +374,7 @@
         : list.type === 'photos' ? state.stops.filter(stop => !stop.isArchived).length : itemsFor(list.id).length;
       const categories = list.id === 'terms' ? termCategories().length : 0;
       const done = list.type === 'photos' ? state.tours.filter(tour => !tour.isArchived).length : itemsFor(list.id).filter(item => item.isDone).length;
-      const cardType = list.id === WEEKLY_LIST_ID ? 'Weekly Inbox' : list.type === 'photos' ? 'Touren & Orte' : list.id === 'terms' ? 'Lernkarten' : list.id === 'finance' ? 'Werte & Verpflichtungen' : list.id === 'chatgpt' ? 'Threads & Projekte' : 'Liste';
+      const cardType = list.id === WEEKLY_LIST_ID ? 'Weekly Inbox' : list.type === 'photos' ? 'Touren & Orte' : list.id === 'terms' ? 'Lernkarten' : list.id === 'finance' ? 'Finanzübersicht' : list.id === 'chatgpt' ? 'Threads & Projekte' : 'Liste';
       const cardStat = list.id === WEEKLY_LIST_ID ? 'diese Woche' : list.type === 'photos' ? `${done} Touren` : list.id === 'terms' ? `${categories} ${categories === 1 ? 'Kategorie' : 'Kategorien'}` : list.id === 'finance' ? 'Positionen' : list.id === 'chatgpt' ? 'Threads' : 'Einträge';
       return `
         <article class="hf-list-card ${list.id === activeListId ? 'is-active' : ''}" style="--hf-list-tone:${escapeHtml(list.color)}">
@@ -412,6 +416,10 @@
   }
 
   function renderDetail(target, list) {
+    if (list.id === 'event-ideas') {
+      target.innerHTML = renderEventIdeas();
+      return;
+    }
     if (list.id === EXHIBITION_LIST_ID) {
       window.HabitFlowExhibition.mount(target, { items: itemsFor(EXHIBITION_LIST_ID), save: saveExhibition });
       return;
@@ -477,6 +485,68 @@
     `;
   }
 
+
+
+
+  function renderEventIdeas() {
+    const items = itemsFor(EVENT_LIST_ID);
+    const editing = items.find(item => item.id === editingEventId);
+    return '<div class="panel-head"><div><p class="eyebrow">Eventliste</p><h3>Ideen für gemeinsame Erlebnisse</h3></div><span class="badge">' + items.length + ' Ideen</span></div>' +
+      '<form class="hf-list-form" data-form="event-idea" data-editing-id="' + escapeHtml(editing?.id || '') + '">' +
+      '<label class="full"><span>Eventidee</span><input name="title" value="' + escapeHtml(editing?.title || '') + '" maxlength="160" placeholder="z. B. Open-Air-Kino oder ein Kochabend" required></label>' +
+      '<label><span>Kategorie</span><input name="metaA" value="' + escapeHtml(editing?.metadata?.metaA || '') + '" maxlength="100" placeholder="z. B. Kultur, Essen oder Outdoor"></label>' +
+      '<label><span>Ort / Location</span><input name="metaB" value="' + escapeHtml(editing?.metadata?.metaB || '') + '" maxlength="160" placeholder="Wo könnte es stattfinden?"></label>' +
+      '<label class="full"><span>Notizen</span><textarea name="note" rows="3" maxlength="2000" placeholder="Mit wem, wann ungefähr, was braucht es?">' + escapeHtml(editing?.note || '') + '</textarea></label>' +
+      '<div class="full"><button class="pill primary" type="submit">' + icon(editing ? 'check' : 'plus') + (editing ? ' Änderungen speichern' : ' Idee speichern') + '</button>' +
+      (editing ? '<button class="pill secondary" type="button" data-action="cancel-event-edit">Abbrechen</button>' : '') + '</div>' +
+      '<p class="full" data-event-message role="status" hidden></p></form>' +
+      '<div class="hf-list-items ' + (items.length ? '' : 'is-empty') + '">' + (items.length ? items.map(renderItem).join('') : '<p>Noch keine Eventideen. Was möchtest du als Nächstes erleben?</p>') + '</div>';
+  }
+
+  function commitEventIdea(item) {
+    const items = state.items.some(entry => entry.id === item.id)
+      ? state.items.map(entry => entry.id === item.id ? item : entry)
+      : [...state.items, item];
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, items, activeListId }));
+    state = { ...state, items };
+    editingEventId = '';
+    render();
+    void syncToSupabase([item]);
+  }
+
+  function eventIdeaError() {
+    const message = document.querySelector('[data-event-message]');
+    if (message) { message.hidden = false; message.textContent = 'Speichern fehlgeschlagen. Deine Eingaben bleiben erhalten. Bitte erneut versuchen.'; }
+  }
+
+  function saveEventIdea(form) {
+    const data = new FormData(form);
+    const title = String(data.get('title') || '').trim().slice(0, 160);
+    if (!title) return;
+    const id = form.dataset.editingId || '';
+    const existing = id ? itemsFor(EVENT_LIST_ID).find(item => item.id === id) : null;
+    if (id && !existing) { eventIdeaError(); return; }
+    const now = new Date().toISOString();
+    const item = {
+      ...existing, id: existing?.id || uid('event-idea'), listId: EVENT_LIST_ID, title,
+      note: String(data.get('note') || '').trim().slice(0, 2000),
+      metadata: { ...existing?.metadata, metaA: String(data.get('metaA') || '').trim().slice(0, 100), metaB: String(data.get('metaB') || '').trim().slice(0, 160) },
+      isDone: existing?.isDone || false, isArchived: false,
+      sortRank: existing?.sortRank ?? Date.now(), createdAt: existing?.createdAt || now, updatedAt: now
+    };
+    try { commitEventIdea(item); } catch (_) { eventIdeaError(); }
+  }
+
+  function handleEventIdeaAction(action, id) {
+    const item = itemsFor(EVENT_LIST_ID).find(entry => entry.id === id);
+    if (!item) return;
+    if (action === 'edit-item') { editingEventId = id; render(); focusListForm('event-idea'); return; }
+    if (action === 'delete-item' && !window.confirm('Eventidee „' + item.title + '“ entfernen?')) return;
+    if (!['delete-item', 'toggle-item'].includes(action)) return;
+    try {
+      commitEventIdea({ ...item, isArchived: action === 'delete-item', isDone: action === 'toggle-item' ? !item.isDone : item.isDone, updatedAt: new Date().toISOString() });
+    } catch (_) { eventIdeaError(); }
+  }
 
 
   function validatedWeblinkUrl(value) {
@@ -1776,6 +1846,7 @@
       const listOpen = event.target.closest('[data-list-open]');
       if (listOpen) {
         activeListId = listOpen.dataset.listOpen;
+        editingEventId = '';
         editingSpotId = '';
         editingTourId = '';
         editingTermId = '';
@@ -1822,6 +1893,12 @@
       }
 
       const action = event.target.closest('[data-action]')?.dataset.action;
+      if (action === 'cancel-event-edit') { editingEventId = ''; render(); return; }
+      const eventRow = event.target.closest('[data-item-id]');
+      if (activeListId === EVENT_LIST_ID && eventRow && ['edit-item', 'delete-item', 'toggle-item'].includes(action)) {
+        handleEventIdeaAction(action, eventRow.dataset.itemId);
+        return;
+      }
       if (action === 'weekly-previous' || action === 'weekly-next') {
         moveWeeklyFocus(action === 'weekly-next' ? 1 : -1);
         return;
@@ -2027,6 +2104,7 @@
       if (form.dataset.form === 'weekly-move') moveWeeklyItem(form);
       if (form.dataset.form === 'weblink') saveWeblink(form);
       if (form.dataset.form === 'gift') saveGift(form);
+      if (form.dataset.form === 'event-idea') saveEventIdea(form);
       if (form.dataset.form === 'item') saveItem(form);
       if (form.dataset.form === 'term') saveTerm(form);
       if (form.dataset.form === 'shopping') saveShopping(form);
