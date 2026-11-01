@@ -16889,6 +16889,27 @@ function initOngoingSync() {
     return `<div class="stack-list tall alcohol-history-modal-list">${days.map(renderAlcoholDayHistoryItem).join("")}</div>`;
   }
 
+  function alcoholBottleMarkup(day) {
+    const rank = day ? Math.max(1, Math.min(4, Number(day.consumption_level) || 1)) : 0;
+    const colors = ['#94a3b8', '#79b995', '#e7ad42', '#ec956b', '#d96676'];
+    const fillY = 142 - rank * 27;
+    const label = rank ? `Konsumstufe ${rank} von 4 · ${alcoholDayLevel(rank).label}` : 'Leere Flasche · noch kein Tageskonsum erfasst';
+    const outline = 'M32 18H52V43C52 49 65 55 65 65V130Q65 142 53 142H31Q19 142 19 130V65C19 55 32 49 32 43Z';
+    return `<svg class="alcohol-day-bottle" viewBox="0 0 84 156" role="img" aria-label="${escapeHtml(label)}" style="--bottle-liquid:${colors[rank]}">
+      <defs><clipPath id="alcohol-today-bottle-clip"><path d="${outline}"/></clipPath>
+      <linearGradient id="alcohol-today-bottle-glass" x1="0" y1="0" x2="1" y2="0"><stop stop-color="currentColor" stop-opacity=".08"/><stop offset=".45" stop-color="currentColor" stop-opacity=".015"/><stop offset="1" stop-color="currentColor" stop-opacity=".07"/></linearGradient></defs>
+      <path d="${outline}" fill="url(#alcohol-today-bottle-glass)"/>
+      <g clip-path="url(#alcohol-today-bottle-clip)">
+        ${rank ? `<rect class="alcohol-bottle-liquid" x="19" y="${fillY}" width="46" height="${142 - fillY}" fill="var(--bottle-liquid)" fill-opacity=".75"/><path d="M19 ${fillY}H65" stroke="var(--bottle-liquid)" stroke-width="1.5"/>` : ''}
+        <path d="M26 66V128" stroke="white" stroke-opacity=".55" stroke-width="3" stroke-linecap="round"/>
+        <path d="M57 77H61M57 101H61M57 125H61" stroke="currentColor" stroke-opacity=".24" stroke-width="1.2" stroke-linecap="round"/>
+      </g>
+      <path d="${outline}" fill="none" stroke="currentColor" stroke-opacity=".55" stroke-width="1.6" stroke-linejoin="round"/>
+      <rect x="30" y="11" width="24" height="9" rx="3" fill="currentColor" fill-opacity=".14" stroke="currentColor" stroke-opacity=".4" stroke-width="1.2"/>
+      <path d="M34 26H50" stroke="currentColor" stroke-opacity=".2" stroke-width="1.2" stroke-linecap="round"/>
+    </svg>`;
+  }
+
   function renderAlcoholDashboard() {
     const todayKey = toDateKey(new Date());
     const today = alcoholDayForDate(todayKey);
@@ -16899,7 +16920,7 @@ function initOngoingSync() {
       dateInput.max = todayKey;
       if (!dateInput.value) dateInput.value = todayKey;
     }
-    if (els.alcoholTodayUnits) els.alcoholTodayUnits.textContent = today ? String(today.consumption_level) : '–';
+    if (els.alcoholTodayUnits) els.alcoholTodayUnits.innerHTML = alcoholBottleMarkup(today);
     if (els.alcoholTodayHint) els.alcoholTodayHint.textContent = today
       ? `${alcoholDayLevel(today.consumption_key).label} · ${formatSignedPoints(alcoholPointsForDay(today))} Pkt.`
       : 'Noch kein Tageskonsum erfasst';
