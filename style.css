@@ -5004,8 +5004,3 @@ body.light #consumptionPauseList .pause-card { background: #fff; border-color: #
 
 .calendar-event-filter[data-event-kind="public_holiday"] .calendar-event-filter-mark { color:#fff; }
 
-/* Today's rating: a quiet, scalable bottle with four discrete fill levels. */
-#alcoholTodayUnits { display: grid; place-items: center; line-height: 1; font-size: 0; }
-.alcohol-day-hero .alcohol-day-bottle { display: block; width: 68px; height: 126px; color: var(--muted); overflow: visible; }
-.alcohol-day-hero:has(.alcohol-day-bottle) { padding: 18px 16px; gap: 8px; }
-@media (max-width: 760px) { .alcohol-day-hero .alcohol-day-bottle { width: 60px; height: 112px; } }
