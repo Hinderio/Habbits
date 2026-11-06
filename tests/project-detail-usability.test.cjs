@@ -23,7 +23,7 @@ function harness() {
     querySelector: () => card, querySelectorAll: () => [] };
   const taskModal = { classList: classes(taskClasses) };
   const context = vm.createContext({
-    Intl, console,
+    Intl, console, URL,
     MutationObserver: class {
       constructor(callback) { this.callback = callback; observers.push(this); }
       observe() { this.active = true; }
@@ -40,11 +40,11 @@ function harness() {
     },
     PROJECT_ACTION_ICONS: { edit: '', trash: '' }
   });
-  const functions = ['escapeHtml', 'dateLabel', 'taskDone', 'projectActionButton', 'renderProjectNote',
+  const functions = ['escapeHtml', 'dateLabel', 'taskDone', 'projectActionButton', 'renderProjectLinkedText', 'renderProjectNote',
     'renderTaskRow', 'suspendProjectForTask', 'clearProjectTaskReturn', 'bindEvents'];
   const closeStart = source.indexOf('  function closeDetail(');
   const closeEnd = source.indexOf('\n  async function ', closeStart);
-  vm.runInContext('let selectedProjectId = "p1", projectTaskReturn = null;\n' + functions.map(extract).join('\n') + '\n' + source.slice(closeStart, closeEnd), context);
+  vm.runInContext('let selectedProjectId = "p1", projectTaskReturn = null, dossierUnsubscribe = null;\n' + functions.map(extract).join('\n') + '\n' + source.slice(closeStart, closeEnd), context);
   let focused = false;
   const trigger = { dataset: { action: 'open-task-detail', id: 't1' }, isConnected: true,
     closest: () => ({}), focus(options) { focused = options.preventScroll; } };
@@ -148,4 +148,11 @@ test('preview collapses blank lines while the full note retains formatting', () 
   const preview = html.match(/class="project-note-preview">([^<]*)<\/span>/)[1];
   assert.ok(preview.startsWith('Mittwoch ZHAW: Präsentation: Text'));
   assert.ok(html.includes('Mittwoch ZHAW:<br><br><br>Präsentation:<br><br>'));
+});
+
+test('project notes use existing safe link recognition and preserve punctuation and line breaks',()=>{
+  const {context}=harness();
+  const html=context.renderProjectNote({body:'Recherche https://example.org/path?a=1&b=2.\nwww.example.org',category:'Links'});
+  assert.match(html,/href="https:\/\/example.org\/path\?a=1&amp;b=2"/);assert.match(html,/<\/a>\.<br>/);assert.match(html,/href="https:\/\/www.example.org\/"/);assert.match(html,/rel="noopener noreferrer"/);
+  const unsafe=context.renderProjectNote({body:'<script>alert(1)</script> javascript:alert(1)',category:'Safety'});assert.ok(!unsafe.includes('<script>'));assert.ok(!unsafe.includes('href="javascript:'));
 });

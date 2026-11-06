@@ -112,7 +112,8 @@
     const restore = () => {
       if (taskReturn !== context) return;
       clearTaskReturn();
-      if (active !== context.id || !store.snapshot().dossiers.some(row => row.id === active)) return;
+      if (active !== context.id) return;
+      if (!store.snapshot().dossiers.some(row => row.id === active)) { resetEntry(); active = ''; finishReturn(); return; }
       dialog.showModal(); refresh(); dialog.scrollTop = context.scroll;
       const target = context.trigger.isConnected ? context.trigger : dialog.querySelector('#dossierTitle');
       target?.focus({ preventScroll: true });
@@ -121,7 +122,7 @@
     context.onEdit = event => {
       if (!event.target.closest?.('[data-action="edit-task"]')) return;
       if ((entryHasDraft() || headerHasDraft()) && !window.confirm('Dossier-Entwurf verwerfen und Task bearbeiten?')) { event.preventDefault(); event.stopImmediatePropagation(); return; }
-      clearTaskReturn(); resetEntry(); active = '';
+      clearTaskReturn(); resetEntry(); active = ''; finishReturn(false);
     };
     taskReturn = context;
     context.observer.observe(modal, { attributes: true, attributeFilter: ['class'] });
@@ -212,12 +213,18 @@
   function headerHasDraft() {
     return Object.keys(headerChanges()).length > 0;
   }
-  function close() {
+  let returnToCaller = null;
+  function finishReturn(restore = true) {
+    const callback = returnToCaller; returnToCaller = null;
+    if (callback) callback(restore);
+    return Boolean(callback);
+  }
+  function close({ restore = true } = {}) {
     if (busy) { status('Bitte kurz warten, der Vorgang läuft noch.'); return; }
     const form = dialog.querySelector('[data-entry-form]');
     if ((entryHasDraft() || headerHasDraft()) && !window.confirm('Dossier schliessen und den ungespeicherten Entwurf verwerfen?')) return;
     resetEntry(); active = ''; dialog.close(); imageGeneration++;
-    if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
+    if (!finishReturn(restore) && returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
   }
   function open(id = '', trigger) {
     clearTaskReturn();
@@ -294,7 +301,7 @@
     }
     if (!dialog.open) return;
     const dossier = snapshot.dossiers.find(row => row.id === active);
-    if (active && !dossier) { if (dialog.open) { resetEntry(); active = ''; dialog.close(); } return; }
+    if (active && !dossier) { if (dialog.open) { resetEntry(); active = ''; dialog.close(); finishReturn(); } return; }
     setText(dialog.querySelector('#dossierTitle'), dossier?.title || 'Dossier erstellen');
     dialog.querySelector('[data-dossier-tasks]').hidden = !dossier;
     if (!dossier) return;
@@ -387,10 +394,10 @@
       if (name === 'new-entry') { setComposer(true, true); status(''); return; }
       if (name === 'cancel-entry' && entryHasDraft() && !window.confirm('Ungespeicherten Eintrag verwerfen?')) return;
       if (name === 'cancel-entry' || name === 'remove-image') { if (name === 'cancel-entry') { resetEntry(); setComposer(false, true); } else { blob = null; if (previewUrl) URL.revokeObjectURL(previewUrl); previewUrl = ''; dialog.querySelector('[data-draft-image]').replaceChildren(); } status(''); return; }
-      if (name === 'open-project') { close(); if (!dialog.open) { show('projects'); window.HabitFlowRoadmapProjects?.open(id); } return; }
+      if (name === 'open-project') { close({restore:false}); if (!dialog.open) { show('projects'); window.HabitFlowRoadmapProjects?.open(id); } return; }
       if (name === 'delete-dossier') {
         const row = store.snapshot().dossiers.find(row => row.id === active);
-        if (row && window.confirm('Dossier und seine Einträge entfernen? Das verknüpfte Projekt bleibt erhalten.')) { store.saveDossier({ ...row, is_archived:true }); resetEntry(); active = ''; dialog.close(); refresh(); } return;
+        if (row && window.confirm('Dossier und seine Einträge entfernen? Das verknüpfte Projekt bleibt erhalten.')) { store.saveDossier({ ...row, is_archived:true }); resetEntry(); active = ''; dialog.close(); finishReturn(); refresh(); } return;
       }
       const row = store.snapshot().entries.find(row => row.id === id && row.dossier_id === active); if (!row) return;
       if (name === 'pin') { store.saveEntry({ ...row, is_pinned:!row.is_pinned }); refresh(); }
@@ -449,9 +456,17 @@
     store.subscribe(queueRefresh);
     document.querySelector('.nav-btn[data-target="projects"]')?.addEventListener('click', () => { if (view === 'dossiers') queueRefresh(); });
     document.getElementById('settingsForm')?.addEventListener('submit', () => { void store.sync(active); });
-    window.addEventListener('habitflow:auth-change', () => { clearTaskReturn(); resetEntry(); active = ''; if (dialog.open) dialog.close(); overviewSignature = ''; queueRefresh(); });
+    window.addEventListener('habitflow:auth-change', () => { clearTaskReturn(); resetEntry(); active = ''; if (dialog.open) dialog.close(); finishReturn(false); overviewSignature = ''; queueRefresh(); });
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && visible()) { void store.sync(active); if (dialog.open) void loadImages(); } });
   }
-  window.HabitFlowDossiers = Object.freeze({ showProjects() { clearTaskReturn(); if (projects) show('projects'); }, open(id) { if (!pane) return false; show('dossiers'); if (id) { if (!store.snapshot().dossiers.some(row => row.id === id)) return false; open(id); } return true; } });
+  window.HabitFlowDossiers = Object.freeze({
+    showProjects() { clearTaskReturn(); finishReturn(false); if (projects) show('projects'); },
+    open(id, options = {}) {
+      if (!pane || dialog.open || (id && !store.snapshot().dossiers.some(row => row.id === id))) return false;
+      if (!options.fromProject) show('dossiers');
+      if (id) { open(id); returnToCaller = typeof options.onDismiss === 'function' ? options.onDismiss : null; }
+      return true;
+    }
+  });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, { once:true }); else mount();
 })(window, document);

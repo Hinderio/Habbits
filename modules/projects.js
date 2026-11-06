@@ -490,7 +490,7 @@
     const progress = progressFor(project, state);
     const tasks = projectTasks(state, project.id);
     const status = STATUS[project.status] || STATUS.planned;
-    return `<button class="project-card" type="button" data-action="open-project-detail" data-id="${escapeHtml(project.id)}"><div class="project-card-head"><div>${projectBadge(project)}<small>Projekt</small><h3>${escapeHtml(project.title)}</h3></div><span class="badge ${status.cls}">${status.label}</span></div><p>${escapeHtml(project.description || 'Noch keine Kurzbeschreibung hinterlegt.')}</p><div class="project-progress-track" aria-label="Fortschritt ${progress}%"><i style="width:${progress}%"></i></div><div class="project-card-meta"><div><small>Start</small><strong>${dateLabel(project.start_date)}</strong></div><div><small>Ende</small><strong>${dateLabel(project.end_date)}</strong></div><div><small>Fortschritt</small><strong>${progress}%</strong></div><div><small>Tasks</small><strong>${tasks.length}</strong></div></div><div class="project-card-footer"><span class="subtle">${escapeHtml(nextMilestone(project, state))}</span><span class="mini-btn">Öffnen</span></div></button>`;
+    return `<button class="project-card" type="button" aria-label="Projekt öffnen: ${escapeHtml(project.title)}" data-action="open-project-detail" data-id="${escapeHtml(project.id)}"><div class="project-card-head"><div>${projectBadge(project)}<small>Projekt</small><h3>${escapeHtml(project.title)}</h3></div><span class="badge ${status.cls}">${status.label}</span></div><p>${escapeHtml(project.description || 'Noch keine Kurzbeschreibung hinterlegt.')}</p><div class="project-progress-track" aria-label="Fortschritt ${progress}%"><i style="width:${progress}%"></i></div><div class="project-card-meta"><div><small>Start</small><strong>${dateLabel(project.start_date)}</strong></div><div><small>Ende</small><strong>${dateLabel(project.end_date)}</strong></div><div><small>Fortschritt</small><strong>${progress}%</strong></div><div><small>Tasks</small><strong>${tasks.length}</strong></div></div><div class="project-card-footer"><span class="subtle">${escapeHtml(nextMilestone(project, state))}</span><span class="mini-btn project-card-open-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M10 4H4v16h16v-6"/></svg></span></div></button>`;
   }
 
   function renderProjectEditors(project, phases, milestones) {
@@ -503,12 +503,38 @@
     return `<article class="project-editor-record"><div><strong>${escapeHtml(phase.name)}</strong><span class="subtle">${escapeHtml(PHASE_STATUS[phase.status] || PHASE_STATUS.open)}</span></div><span class="project-editor-record-meta">${dateLabel(phase.start_date)} bis ${dateLabel(phase.end_date)}</span><div class="list-actions">${projectActionButton('edit-phase', phase.id, 'Phase bearbeiten', 'edit')}${projectActionButton('delete-phase', phase.id, 'Phase löschen', 'trash', true)}</div></article>`;
   }
 
+  function renderProjectLinkedText(text = '') {
+    const source = String(text || '');
+    if (!source) return '';
+    const urlRe = /\b(?:https?:\/\/|www\.)[^\s<>'"]+/gi;
+    let html = '';
+    let lastIndex = 0;
+    source.replace(urlRe, (match, offset) => {
+      html += escapeHtml(source.slice(lastIndex, offset));
+      const trailing = (match.match(/[),.;:!?]+$/) || [''])[0];
+      const cleanUrl = trailing ? match.slice(0, -trailing.length) : match;
+      const href = cleanUrl.startsWith('www.') ? `https://${cleanUrl}` : cleanUrl;
+      try {
+        const parsed = new URL(href);
+        if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('unsupported protocol');
+        html += `<a class="task-inline-link" href="${escapeHtml(parsed.href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(cleanUrl)}</a>${escapeHtml(trailing)}`;
+      } catch {
+        html += escapeHtml(match);
+      }
+      lastIndex = offset + match.length;
+      return match;
+    });
+    html += escapeHtml(source.slice(lastIndex));
+    return html.replace(/\n/g, '<br>');
+  }
+
+
   function renderProjectNote(note) {
     const body = String(note.body || '');
     const characters = typeof Intl.Segmenter === 'function'
       ? Array.from(new Intl.Segmenter('de', { granularity: 'grapheme' }).segment(body), part => part.segment)
       : Array.from(body);
-    const fullText = escapeHtml(body).replace(/\n/g, '<br>');
+    const fullText = renderProjectLinkedText(body);
     const preview = escapeHtml(characters.slice(0, 100).join('').replace(/\s+/g, ' ').trim());
     const content = characters.length > 100
       ? `<details class="project-note-disclosure"><summary aria-label="Notiz: ${escapeHtml(note.category)}"><span class="project-note-preview">${preview}…</span><span class="project-note-toggle"><span class="project-note-more">Mehr anzeigen</span><span class="project-note-less">Weniger anzeigen</span><span class="project-editor-chevron" aria-hidden="true">⌄</span></span></summary><p tabindex="0" aria-label="Vollständige Notiz">${fullText}</p></details>`
@@ -980,6 +1006,22 @@
     projectTaskReturn = null;
   }
 
+  function openProjectDossier(id, trigger) {
+    const modal = document.getElementById('projectDetailModal');
+    if (!selectedProjectId || !modal) return;
+    const card = modal.querySelector('.project-detail-card');
+    const context = { projectId:selectedProjectId, modalScroll:modal.scrollTop, cardScroll:card?.scrollTop || 0 };
+    const opened = window.HabitFlowDossiers?.open(id, { fromProject:true, onDismiss(restore) {
+      if (selectedProjectId !== context.projectId) return;
+      if (!restore || !readState().projects.some(project => project.id === context.projectId)) { closeDetail({skipSync:true}); return; }
+      window.HabitFlowRoadmapProjects?.refreshTasks?.();
+      modal.classList.remove('hidden'); document.body.classList.add('project-modal-open');
+      modal.scrollTop = context.modalScroll; if (card) card.scrollTop = context.cardScroll;
+      const target = trigger.isConnected ? trigger : Array.from(modal.querySelectorAll('[data-action="open-project-dossier"]')).find(button => button.dataset.id === id);
+      (target || modal.querySelector('.project-detail-close'))?.focus({preventScroll:true});
+    } });
+    if (opened) { modal.classList.add('hidden'); document.body.classList.remove('project-modal-open'); }
+  }
   let dossierUnsubscribe = null;
   const loadedProjectDossiers = new Set();
   function renderProjectDossiers(projectId) {
@@ -1114,7 +1156,7 @@
       if (action === 'delete-project-note') deleteProjectNote(id);
       if (action === 'link-selected-task') linkTask(id, document.getElementById('projectTaskSelect')?.value || '');
       if (action === 'open-task-detail' && actionEl.closest('.project-task-row')) suspendProjectForTask(actionEl);
-      if (action === 'open-project-dossier') { closeDetail({skipSync:true}); window.HabitFlowDossiers?.open(id); }
+      if (action === 'open-project-dossier') openProjectDossier(id, actionEl);
       if (action === 'project-task-up' || action === 'project-task-down') {
         window.HabitFlowTaskOrder?.shift(id, action === 'project-task-up' ? -1 : 1, selectedProjectId);
         const mount = document.querySelector('[data-project-tasks]');
