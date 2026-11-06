@@ -6,7 +6,7 @@
 .weekly-points-legend { display: flex; align-items: center; gap: 10px; justify-content: flex-end; margin: 12px 0 8px; font-size: .75rem; color: var(--muted); }
 .weekly-points-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .weekly-points-legend i { display: block; width: 10px; height: 14px; border-radius: 3px; }
-.weekly-points-legend .weekly-points-positive { background: #70b080; }
+.weekly-points-legend .weekly-points-positive { background: #82ceca; }
 .weekly-points-legend .weekly-points-negative { background: #f28a00; }
 .weekly-points-scroll { min-width: 0; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; padding-bottom: 8px; }
 .weekly-points-scroll canvas { display: block; max-width: none; touch-action: pan-x pan-y; }

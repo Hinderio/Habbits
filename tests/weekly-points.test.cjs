@@ -123,7 +123,7 @@ test('canvas rendering is coalesced, signed, keyboard-accessible and escapes lab
   assert.equal(frames.length, 1);
   frames.shift()();
   assert.equal(builds, 1);
-  const greens = rectangles.filter(rect => rect.color === '#70b080');
+  const greens = rectangles.filter(rect => rect.color === '#82ceca');
   const green = greens.at(-1);
   const red = rectangles.find(rect => rect.color === '#f28a00');
   assert.equal(greens.length, 2, 'one positive bar per populated week');
@@ -131,7 +131,8 @@ test('canvas rendering is coalesced, signed, keyboard-accessible and escapes lab
   assert.equal(green.h, greens[0].h * 2, 'weekly sums determine proportional height');
   assert.equal(green.h, red.h * 2, 'both signs use the same point scale');
   assert.equal(green.y + green.h, 235);
-  assert.ok(green.radius > 0 && green.radius <= green.h / 2);
+  assert.deepEqual(Array.from(green.radius), [4, 4, 0, 0], 'positive bar is rounded only at the top');
+  assert.deepEqual(Array.from(red.radius), [0, 0, 4, 4], 'negative bar is rounded only at the bottom');
   assert.ok(labels.some(label => label.text === '-50'), 'axis labels show points');
   node('weeklyPointsCanvas').listeners.pointermove({ clientX: green.x + green.w / 2, clientY: green.y + 1, pointerType: 'mouse' });
   assert.match(node('weeklyPointsTooltip').textContent, /Plus gesamt · \+100 Punkte/);
@@ -185,7 +186,7 @@ test('canvas rendering is coalesced, signed, keyboard-accessible and escapes lab
 
 test('legend uses the same solid colors as the bars', () => {
   const css = fs.readFileSync(path.join(__dirname, '../modules/weekly-points.css'), 'utf8');
-  assert.ok(css.includes('background: #70b080'));
+  assert.ok(css.includes('background: #82ceca'));
   assert.ok(css.includes('background: #f28a00'));
   assert.ok(!css.includes('linear-gradient'));
   assert.ok(!renderer.includes('globalAlpha'));

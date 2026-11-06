@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const domain = window.HabitFlowWeeklyPointsDomain;
-  const barColors = { positive: '#70b080', negative: '#f28a00' };
+  const barColors = { positive: '#82ceca', negative: '#f28a00' };
   let data = null, model = null, offset = 0, selected = 51, frame = 0, root = null, canvas = null, geometry = null, limit = 40, revealSelection = true;
   let modelKey = null, paintedModel = null, paintKey = null, presentationPending = false;
   const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
@@ -95,7 +95,10 @@
         const y = sign > 0 ? zero - barHeight : zero;
         ctx.fillStyle = sign > 0 ? barColors.positive : barColors.negative;
         ctx.beginPath();
-        ctx.roundRect(x - barWidth / 2, y, barWidth, barHeight, Math.min(4, barWidth / 2, barHeight / 2));
+        const radius = Math.min(4, barWidth / 2, barHeight / 2);
+        // Keep the baseline flat; round only the outward end of each bar.
+        ctx.roundRect(x - barWidth / 2, y, barWidth, barHeight,
+          sign > 0 ? [radius, radius, 0, 0] : [0, 0, radius, radius]);
         ctx.fill();
         hits[index].push({ x: x - barWidth / 2, y, width: barWidth, height: barHeight, points, sign });
       }
