@@ -12,6 +12,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <link rel="stylesheet" href="style.css?v=372" />
+  <link rel="stylesheet" href="modules/competition.css?v=391" />
   <link rel="stylesheet" href="modules/life-coach.css?v=305" />
   <link rel="stylesheet" href="modules/habit-card-typography.css?v=346" />
   <link rel="stylesheet" href="modules/habit-personal-best.css?v=296" />
@@ -391,24 +392,27 @@
           <div>
             <p class="eyebrow">Konsum</p>
             <h2>Ruhig steuern statt reagieren</h2>
-            <p>Rauchen und Alkohol bleiben getrennt, schnell erfassbar und mobil als klares Command Center lesbar.</p>
+            <p>Rauchen und Alkohol bewusst steuern. Mit Competition persönliche Challenges starten und Bestwerte setzen.</p>
           </div>
         </section>
 
         <div class="consumption-switch glass" role="tablist" aria-label="Konsum-Modus wechseln">
-          <button class="consumption-switch-btn is-active" type="button" role="tab" aria-selected="true" data-action="switch-consumption-mode" data-mode="smoke">
+          <button class="consumption-switch-btn is-active" type="button" role="tab" aria-selected="true" data-action="switch-consumption-mode" data-mode="smoke" id="consumption-tab-smoke" aria-controls="consumption-pane-smoke">
             <span data-icon="smoke"></span>
             <strong>Rauchen</strong>
             <small>Pause, Verlauf & Analyse</small>
           </button>
-          <button class="consumption-switch-btn" type="button" role="tab" aria-selected="false" data-action="switch-consumption-mode" data-mode="alcohol">
+          <button class="consumption-switch-btn" type="button" role="tab" aria-selected="false" data-action="switch-consumption-mode" data-mode="alcohol" id="consumption-tab-alcohol" aria-controls="consumption-pane-alcohol">
             <span data-icon="alcohol"></span>
             <strong>Alkohol</strong>
             <small>Einheiten, Punkte & Muster</small>
           </button>
+          <button class="consumption-switch-btn" type="button" role="tab" aria-selected="false" tabindex="-1" data-action="switch-consumption-mode" data-mode="competition" id="consumption-tab-competition" aria-controls="consumption-pane-competition">
+            <span data-icon="trophy"></span><strong>Competition</strong><small>Challenges, Strikes & Bestwerte</small>
+          </button>
         </div>
 
-        <div class="consumption-pane is-active" data-consumption-pane="smoke">
+        <div class="consumption-pane is-active" data-consumption-pane="smoke" id="consumption-pane-smoke" role="tabpanel" aria-labelledby="consumption-tab-smoke">
           <div class="grid two-columns smoking-layout">
             <section class="panel glass smoke-control-card">
               <div class="panel-head compact"><div><p class="eyebrow">Rauchen & Kontext</p><h3>Schnell erfassen</h3></div></div>
@@ -475,7 +479,7 @@
           </div>
         </div>
 
-        <div class="consumption-pane" data-consumption-pane="alcohol">
+        <div class="consumption-pane" data-consumption-pane="alcohol" id="consumption-pane-alcohol" role="tabpanel" aria-labelledby="consumption-tab-alcohol">
           <div class="grid two-columns smoking-layout alcohol-daily-layout">
             <section class="panel glass alcohol-control-card alcohol-day-control">
               <div class="panel-head compact">
@@ -559,6 +563,12 @@
             </details>
           </div>
         </div>
+
+        <div class="consumption-pane" data-consumption-pane="competition" id="consumption-pane-competition" role="tabpanel" aria-labelledby="consumption-tab-competition">
+          <div id="competitionRoot" class="competition-workspace"></div>
+          <p id="competitionNotice" class="comp-notice" role="status" aria-live="polite"></p>
+        </div>
+        <dialog id="competitionDialog" class="comp-dialog"></dialog>
 
         <details class="mobile-consumption-section pause-overview-mobile-section">
           <summary><span>Pausen</span><small>Logs & Planung</small></summary>
@@ -1015,7 +1025,10 @@
   <script src="modules/life-coach.js?v=305"></script>
   <script src="modules/weekly-points-domain.js?v=372"></script>
   <script src="modules/weekly-points.js?v=390-bar-ends"></script>
-  <script src="app.js?v=387"></script>
+  <script src="app.js?v=391"></script>
+  <script src="modules/competition-domain.js?v=391"></script>
+  <script src="modules/competition-store.js?v=391"></script>
+  <script src="modules/competition.js?v=391"></script>
   <script src="modules/ontology-loader.js?v=369"></script>
   <script src="modules/points-details.js?v=297"></script>
   <script src="modules/habit-story-coverage.js?v=333"></script>

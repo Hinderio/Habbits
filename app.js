@@ -679,6 +679,7 @@
     money: '<path d="M4 7h16v10H4z"/><path d="M4 10h16"/><path d="M12 10v7"/><path d="M8 15h.01"/><path d="M16 15h.01"/>',
     dna: '<path d="M8 4c4 2 4 4 8 6"/><path d="M8 20c4-2 4-4 8-6"/><path d="M9 7h6"/><path d="M9 12h6"/><path d="M9 17h6"/>',
     delay: '<circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/>',
+    trophy: '<path d="M8 3h8v7a4 4 0 0 1-8 0zM8 5H4v3c0 3 2 4 4 4M16 5h4v3c0 3-2 4-4 4M12 14v6M8 21h8"/>',
     reset: '<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/>'
   };
 
@@ -1000,7 +1001,7 @@
   let pausesExpanded = localStorage.getItem(PAUSES_UI_KEY) === 'expanded';
   let expandedHabitDnaIds = loadExpandedHabitDnaIds();
   let expandedHabitCardIds = loadExpandedHabitCardIds();
-  let activeConsumptionMode = localStorage.getItem(CONSUMPTION_MODE_KEY) === 'alcohol' ? 'alcohol' : 'smoke';
+  let activeConsumptionMode = ['smoke', 'alcohol', 'competition'].includes(localStorage.getItem(CONSUMPTION_MODE_KEY)) ? localStorage.getItem(CONSUMPTION_MODE_KEY) : 'smoke';
   let activeHabitsPane = localStorage.getItem(HABITS_EXPERIENCE_KEY) === 'fitness' ? 'fitness' : 'overview';
   let selectedFitnessFilter = ['all', 'jogging', 'hiking'].includes(localStorage.getItem(FITNESS_FILTER_KEY)) ? localStorage.getItem(FITNESS_FILTER_KEY) : 'all';
   let selectedFitnessDetailTab = ['summary', 'stats', 'peaks'].includes(localStorage.getItem(FITNESS_DETAIL_TAB_KEY)) ? localStorage.getItem(FITNESS_DETAIL_TAB_KEY) : 'summary';
@@ -3415,6 +3416,7 @@ cacheEls();
       localStorage.setItem(STORAGE_KEY, serializedState);
     }
     window.HabitFlowCoach?.refresh();
+    window.HabitFlowCompetition?.onStateSaved();
     if (!skipRender) queueRender();
     queuePointEvolutionRefresh();
   }
@@ -3577,6 +3579,7 @@ cacheEls();
     });
     document.body.dataset.activeScreen = targetScreen;
     document.documentElement.dataset.activeScreen = targetScreen;
+    window.HabitFlowCompetition?.onScreenChange();
     if (!shouldRefresh) return;
     if (targetScreen === 'calendar') {
       renderCalendar();
@@ -11825,7 +11828,7 @@ cacheEls();
       }
     });
   }
-  function recordCigarette() {
+  function recordCigarette({ fromCompetition = false, onSaved, onError } = {}) {
     const smokedAt = nowIso();
     const last = getLastCigarette();
     const scoringContext = smokingScoringContext(last, { smoked_at: smokedAt });
@@ -11865,9 +11868,15 @@ cacheEls();
       committed = true;
       if (fallbackTimer) window.clearTimeout(fallbackTimer);
 
-      addPoints('cigarette', entry.id, points, cigarettePointReason(scoringContext.scoringInterval, scoringContext), smokedAt);
-      recalculateSmokeDailyBonuses(new Set([todayKey]));
-      saveState({ skipRender: true });
+      try {
+        addPoints('cigarette', entry.id, points, cigarettePointReason(scoringContext.scoringInterval, scoringContext), smokedAt);
+        recalculateSmokeDailyBonuses(new Set([todayKey]));
+        saveState({ skipRender: true });
+        onSaved?.();
+      } catch (error) {
+        if (onError) { onError(error); return; }
+        throw error;
+      }
       renderSmokingQuickCapture();
       notifyConsumptionLiveUpdate('cigarette-recorded-committed');
       scheduleConsumptionBackgroundRender();
@@ -11882,7 +11891,7 @@ cacheEls();
     if (typeof window.requestAnimationFrame === 'function') {
       window.requestAnimationFrame(() => {
         const triggerCard = document.getElementById('triggerCaptureCard');
-        if (triggerCard && window.matchMedia('(max-width: 760px)').matches) {
+        if (!fromCompetition && triggerCard && window.matchMedia('(max-width: 760px)').matches) {
           triggerCard.scrollIntoView({ behavior: 'auto', block: 'start' });
         }
         window.setTimeout(commitAfterPaint, 0);
@@ -14569,6 +14578,7 @@ async function deleteAlcoholLog(id) {
   }
 
   // Feature modules share the existing authenticated client and session.
+  window.HabitFlowCompetitionBridge = Object.freeze({ recordSmoke: () => new Promise((resolve, reject) => recordCigarette({ fromCompetition: true, onSaved: resolve, onError: reject })) });
   window.HabitFlowRemote = Object.freeze({ getClient: () => supabaseClient, getUserId: currentUserId });
 
   function setAuthSession(session) {
@@ -14941,17 +14951,20 @@ function initOngoingSync() {
   }
 
   function applyConsumptionMode() {
-    const mode = activeConsumptionMode === 'alcohol' ? 'alcohol' : 'smoke';
+    const mode = ['smoke', 'alcohol', 'competition'].includes(activeConsumptionMode) ? activeConsumptionMode : 'smoke';
+    document.getElementById('screen-smoking').dataset.consumptionMode = mode;
     els.consumptionPanes?.forEach(pane => pane.classList.toggle('is-active', pane.dataset.consumptionPane === mode));
     els.consumptionModeButtons?.forEach(button => {
       const active = button.dataset.mode === mode;
       button.classList.toggle('is-active', active);
       button.setAttribute('aria-selected', String(active));
+      button.tabIndex = active ? 0 : -1;
     });
+    window.HabitFlowCompetition?.onScreenChange();
   }
 
   function switchConsumptionMode(mode) {
-    const next = mode === 'alcohol' ? 'alcohol' : 'smoke';
+    const next = ['smoke', 'alcohol', 'competition'].includes(mode) ? mode : 'smoke';
     if (activeConsumptionMode === next) return;
     activeConsumptionMode = next;
     localStorage.setItem(CONSUMPTION_MODE_KEY, next);
