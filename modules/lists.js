@@ -106,6 +106,8 @@
   let weblinkFavoritesOnly = false;
   let weblinkMessage = '';
   let editingGiftId = '';
+  let shoppingMessage = '';
+  const promotingShoppingIds = new Set();
   let giftMessage = '';
   const promotingGiftIds = new Set();
   const weeklyCaptureDrafts = new Map();
@@ -1195,6 +1197,7 @@
           ${editingItem ? '<button class="pill secondary" type="button" data-action="cancel-shopping-edit">Abbrechen</button>' : ''}
         </div>
       </form>
+      <p class="hf-shopping-message" role="status">${escapeHtml(shoppingMessage)}</p>
       <div class="hf-term-categories hf-shopping-categories ${categories.length ? '' : 'is-empty'}">
         ${categories.length ? categories.map(renderShoppingCategory).join('') : '<p>Noch keine Einkäufe vorhanden.</p>'}
       </div>
@@ -1227,6 +1230,11 @@
         <div><strong>${escapeHtml(item.title)}</strong>${details ? `<span>${escapeHtml(details)}</span>` : ''}</div>
         <button class="hf-list-icon-btn" type="button" data-action="edit-shopping" aria-label="Artikel bearbeiten">${icon('edit')}</button>
         <button class="hf-list-icon-btn danger" type="button" data-action="delete-shopping" aria-label="Artikel löschen">${icon('trash')}</button>
+        <div class="hf-shopping-task-action">
+          <button class="pill secondary" type="button" data-action="${item.metadata?.promotedTaskId ? 'open-shopping-task' : 'promote-shopping'}" ${promotingShoppingIds.has(item.id) ? 'disabled' : ''}>
+            ${icon('external')} ${item.metadata?.promotedTaskId ? 'Task öffnen' : promotingShoppingIds.has(item.id) ? 'Wird angelegt …' : 'Als Task'}
+          </button>
+        </div>
       </article>
     `;
   }
@@ -2061,7 +2069,7 @@
       }
 
       const shoppingRow = event.target.closest('[data-shopping-id]');
-      if (shoppingRow && ['toggle-shopping', 'edit-shopping', 'delete-shopping'].includes(action)) {
+      if (shoppingRow && ['toggle-shopping', 'edit-shopping', 'delete-shopping', 'promote-shopping', 'open-shopping-task'].includes(action)) {
         handleShoppingAction(action, shoppingRow.dataset.shoppingId);
         return;
       }
@@ -2516,9 +2524,47 @@
     });
   }
 
-  function handleShoppingAction(action, id) {
+  async function handleShoppingAction(action, id) {
     const item = state.items.find(entry => entry.id === id && entry.listId === 'shopping' && !entry.isArchived);
     if (!item) return;
+    if (action === 'open-shopping-task') {
+      const opened = window.HabitFlowShoppingTasks?.open?.(item.metadata?.promotedTaskId);
+      shoppingMessage = opened ? '' : 'Der verknüpfte Task ist nicht verfügbar. Bitte die Synchronisierung prüfen.';
+      if (!opened) render();
+      return;
+    }
+    if (action === 'promote-shopping') {
+      if (item.metadata?.promotedTaskId || promotingShoppingIds.has(id)) return;
+      promotingShoppingIds.add(id);
+      shoppingMessage = '';
+      render();
+      let linkedItem;
+      let previousMetadata;
+      try {
+        if (!window.HabitFlowShoppingTasks?.create) throw new Error('Tasks sind noch nicht bereit.');
+        const taskId = await window.HabitFlowShoppingTasks.create({
+          itemId: id, title: item.title, note: item.note,
+          category: shoppingCategory(item),
+          amount: item.metadata?.amount ?? item.metadata?.metaA,
+          store: item.metadata?.store ?? item.metadata?.metaB
+        });
+        if (!taskId) throw new Error('Task konnte nicht angelegt werden.');
+        linkedItem = state.items.find(entry => entry.id === id && entry.listId === 'shopping');
+        if (!linkedItem) throw new Error('Shopping-Eintrag nicht mehr vorhanden.');
+        previousMetadata = linkedItem.metadata;
+        linkedItem.metadata = { ...linkedItem.metadata, promotedTaskId: taskId };
+        linkedItem.updatedAt = new Date().toISOString();
+        saveAndSync([linkedItem]);
+        shoppingMessage = 'Task im Backlog angelegt und verknüpft.';
+      } catch (error) {
+        if (linkedItem && previousMetadata) linkedItem.metadata = previousMetadata;
+        shoppingMessage = 'Verknüpfung nicht gespeichert. Bitte erneut versuchen; es entsteht kein doppelter Task.';
+      } finally {
+        promotingShoppingIds.delete(id);
+        render();
+      }
+      return;
+    }
     if (action === 'edit-shopping') {
       editingShoppingId = id;
       render();
@@ -3215,6 +3261,10 @@
   window.HabitFlowListsCoach = Object.freeze({
     snapshot: () => ({ lists: state.lists.filter(list => list.id !== ROADMAP_LIST_ID), items: state.items.filter(item => item.listId !== ROADMAP_LIST_ID), tours: state.tours, stops: state.stops }),
     open: (listId, itemId) => {
+      if (listId === 'shopping' && itemId) {
+        const item = state.items.find(entry => entry.id === itemId && entry.listId === 'shopping');
+        if (item) collapsedShoppingCategories.delete(shoppingCategory(item));
+      }
       const button = Array.from(document.querySelectorAll('[data-list-open]')).find(node => node.dataset.listOpen === listId);
       if (!button) return;
       button.click();

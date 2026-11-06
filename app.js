@@ -1354,6 +1354,16 @@ cacheEls();
     });
     window.HabitFlowTaskOrder = Object.freeze({ compare: compareBacklogTasks, shift: shiftBacklogTask });
     window.HabitFlowGiftTasks = Object.freeze({ create: createTaskFromGift });
+    window.HabitFlowShoppingTasks = Object.freeze({
+      create: createTaskFromShopping,
+      open: id => {
+        if (!state.tasks.some(task => task.id === id && !task.is_archived)) return false;
+        taskBacklogOpen = true;
+        showScreen('tasks');
+        openTaskDetail(id);
+        return true;
+      }
+    });
     // Read-only integration: the ontology never persists, scores or synchronizes data.
     window.HabitFlowOntologyBridge = Object.freeze({
       snapshot: () => ({
@@ -1628,6 +1638,11 @@ cacheEls();
       if (action === 'open-monthly-magazine') openMonthlyMagazineReader(id || currentMonthKey());
       if (action === 'open-task-detail') openTaskDetail(id);
       if (action === 'close-task-detail') closeTaskDetail();
+      if (action === 'open-shopping-source') {
+        closeTaskDetail();
+        showScreen('lists');
+        window.HabitFlowListsCoach?.open('shopping', id);
+      }
       if (action === 'remove-task-step-draft') removeTaskStepDraft(id);
       if (action === 'toggle-task-step') toggleTaskStep(actionEl.dataset.taskId || id, actionEl.dataset.stepId, Boolean(actionEl.checked));
       if (action === 'filter-calendar-event') toggleCalendarEventFilter(actionEl.dataset.eventKind || '');
@@ -11197,6 +11212,8 @@ cacheEls();
 
   function renderTaskDetailContent(task = {}) {
     const normalized = normalizeTask(task);
+    const shoppingSource = window.HabitFlowListsCoach?.snapshot?.().items?.find(item =>
+      item.listId === 'shopping' && !item.isArchived && item.metadata?.promotedTaskId === normalized.id);
     const status = normalized.status || 'open';
     const priority = taskPriorityMeta(normalized.priority);
     const dueState = taskDueState(normalized);
@@ -11242,6 +11259,7 @@ cacheEls();
     ${renderTaskImageGallery(normalized)}
     <div class="task-detail-actions">
       ${primaryAction}
+      ${shoppingSource ? `<button class="pill secondary" type="button" data-action="open-shopping-source" data-id="${escapeHtml(shoppingSource.id)}">Zum Shopping-Eintrag</button>` : ''}
       <button class="consumption-icon-action" type="button" data-action="duplicate-task" data-id="${normalized.id}" aria-label="Task duplizieren" title="Duplizieren">${svgIcon('copy', 'ui-icon')}</button>
       <button class="consumption-icon-action" type="button" data-action="edit-task" data-id="${normalized.id}" aria-label="Task bearbeiten" title="Bearbeiten">${svgIcon('edit', 'ui-icon')}</button>
       <button class="pill secondary" type="button" data-action="close-task-detail">Schliessen</button>
@@ -13249,6 +13267,36 @@ async function deleteAlcoholLog(id) {
         description: [`Für: ${String(person).trim()}`, String(note).trim(), 'Aus der Geschenkliste übernommen'].filter(Boolean).join('\n\n'),
         effort: storyPointsToEffort(2), priority: normalizeTaskPriority('medium'),
         due_at: null, status: 'open', backlog_rank: null, completed_at: null,
+        done_archived_at: null, done_archive_rank: null, points: 0,
+        created_at: created, updated_at: created, synced: false
+      });
+      state.tasks.push(task);
+    }
+    // Retrying after a storage error also retries persistence, without adding a duplicate.
+    saveState();
+    syncWithSupabase({ silent: true });
+    return taskId;
+  }
+
+  async function createTaskFromShopping({ itemId, title, category = '', amount = '', store = '', note = '' } = {}) {
+    if (!String(itemId || '').trim() || !String(title || '').trim()) {
+      throw new Error('Shopping-Eintrag und Titel sind erforderlich.');
+    }
+    // Stable UUID across devices: repeated conversions resolve to the same task.
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('habitflow:shopping-task:' + itemId));
+    const bytes = new Uint8Array(digest).slice(0, 16);
+    bytes[6] = (bytes[6] & 15) | 128;
+    bytes[8] = (bytes[8] & 63) | 128;
+    const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+    const taskId = [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join('-');
+    let task = state.tasks.find(entry => entry.id === taskId);
+    if (!task) {
+      const created = nowIso();
+      task = normalizeTask({
+        id: taskId, title: `Einkaufen: ${String(title).trim()}`,
+        description: [category && `Kategorie: ${category}`, amount && `Menge: ${amount}`, store && `Laden: ${store}`, String(note || '').trim(), 'Aus der Shoppingliste übernommen'].filter(Boolean).join('\n\n'),
+        effort: storyPointsToEffort(2), priority: normalizeTaskPriority('medium'),
+        due_at: null, status: TASK_BACKLOG_STATUS, backlog_rank: nextBacklogRank(), completed_at: null,
         done_archived_at: null, done_archive_rank: null, points: 0,
         created_at: created, updated_at: created, synced: false
       });
