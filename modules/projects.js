@@ -539,7 +539,7 @@
     const content = characters.length > 100
       ? `<details class="project-note-disclosure"><summary aria-label="Notiz: ${escapeHtml(note.category)}"><span class="project-note-preview">${preview}…</span><span class="project-note-toggle"><span class="project-note-more">Mehr anzeigen</span><span class="project-note-less">Weniger anzeigen</span><span class="project-editor-chevron" aria-hidden="true">⌄</span></span></summary><p tabindex="0" aria-label="Vollständige Notiz">${fullText}</p></details>`
       : `<p class="project-note-preview">${fullText}</p>`;
-    return `<article class="project-note-card"><div class="project-note-head"><span>${escapeHtml(note.category)}</span><div class="list-actions">${projectActionButton('edit-project-note', note.id, 'Notiz bearbeiten', 'edit')}${projectActionButton('delete-project-note', note.id, 'Notiz löschen', 'trash', true)}</div></div>${content}<small>${dateLabel(note.updated_at)}</small></article>`;
+    return `<article class="project-card project-note-card"><div class="project-note-head"><h3>${escapeHtml(note.category)}</h3></div>${content}<footer class="project-note-footer"><div><small>Letztes Update</small><strong>${dateLabel(note.updated_at)}</strong></div><div class="list-actions">${projectActionButton('edit-project-note', note.id, 'Notiz bearbeiten', 'edit')}${projectActionButton('delete-project-note', note.id, 'Notiz löschen', 'trash', true)}</div></footer></article>`;
   }
 
   function renderProjectNotes(project, state) {
