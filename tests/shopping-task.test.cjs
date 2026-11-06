@@ -76,3 +76,33 @@ test('shopping task enters backlog, carries details and has deterministic identi
  h.fail(true);await assert.rejects(h.create(p));h.fail(false);assert.equal(await h.create(p),ids[0]);assert.equal(h.state.tasks.length,1);
  await assert.rejects(h.create({...p,title:''}));
 });
+
+test('shopping task action uses the same icon button as edit and delete', () => {
+ const {api,form}=listHarness();
+ api.saveShopping(form({title:'Sofa',category:'Wohnen'}));
+ const html=api.renderShoppingRow(api.getState().items[0]);
+ assert.match(html, /class="hf-list-icon-btn" type="button" data-action="promote-shopping"/);
+ assert.ok(html.indexOf('promote-shopping') < html.indexOf('edit-shopping'));
+ assert.ok(html.indexOf('edit-shopping') < html.indexOf('delete-shopping'));
+ assert.ok(!html.includes('hf-shopping-task-action'));
+ assert.ok(html.includes('aria-label="Als Task im Backlog anlegen"'));
+});
+test('opening and closing a shopping task preserves the underlying shopping screen', () => {
+ const start=appSource.indexOf('window.HabitFlowShoppingTasks =');
+ const bridge=appSource.slice(start,appSource.indexOf('    // Read-only integration:',start));
+ const modal={hidden:true,classList:{add(){modal.hidden=true;},remove(){modal.hidden=false;}}};
+ const context={window:{},state:{tasks:[{id:'task-1'}]},createTaskFromShopping(){},
+   normalizeTask:v=>v,renderTaskDetailContent:()=>'<div>Task</div>',
+   taskDetailTaskId:null,els:{taskDetailModal:modal,taskDetailContent:{innerHTML:''}},
+   document:{body:{classList:{add(){},remove(){}}}},
+   showScreen(){throw Error('Shopping must stay active');}};
+ vm.createContext(context);
+ const detail=appSource.slice(appSource.indexOf('  function openTaskDetail('),appSource.indexOf('  function refreshTaskDetailIfOpen('));
+ vm.runInContext(detail+'\n'+bridge,context);
+ assert.equal(context.window.HabitFlowShoppingTasks.open('missing'),false);
+ assert.equal(context.window.HabitFlowShoppingTasks.open('task-1'),true);
+ assert.equal(modal.hidden,false);
+ context.closeTaskDetail();
+ assert.equal(modal.hidden,true);
+ assert.equal(context.taskDetailTaskId,null);
+});

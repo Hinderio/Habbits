@@ -1228,13 +1228,10 @@
       <article class="hf-list-row ${item.isDone ? 'is-done' : ''}" data-shopping-id="${escapeHtml(item.id)}">
         <button class="hf-list-check" type="button" data-action="toggle-shopping" aria-label="Status wechseln">${item.isDone ? icon('check') : ''}</button>
         <div><strong>${escapeHtml(item.title)}</strong>${details ? `<span>${escapeHtml(details)}</span>` : ''}</div>
+        <button class="hf-list-icon-btn" type="button" data-action="${item.metadata?.promotedTaskId ? 'open-shopping-task' : 'promote-shopping'}" aria-label="${item.metadata?.promotedTaskId ? 'Task öffnen' : promotingShoppingIds.has(item.id) ? 'Task wird angelegt' : 'Als Task im Backlog anlegen'}" title="${item.metadata?.promotedTaskId ? 'Task öffnen' : 'Als Task im Backlog anlegen'}" ${promotingShoppingIds.has(item.id) ? 'disabled aria-busy="true"' : ''}>${icon('external')}</button>
         <button class="hf-list-icon-btn" type="button" data-action="edit-shopping" aria-label="Artikel bearbeiten">${icon('edit')}</button>
         <button class="hf-list-icon-btn danger" type="button" data-action="delete-shopping" aria-label="Artikel löschen">${icon('trash')}</button>
-        <div class="hf-shopping-task-action">
-          <button class="pill secondary" type="button" data-action="${item.metadata?.promotedTaskId ? 'open-shopping-task' : 'promote-shopping'}" ${promotingShoppingIds.has(item.id) ? 'disabled' : ''}>
-            ${icon('external')} ${item.metadata?.promotedTaskId ? 'Task öffnen' : promotingShoppingIds.has(item.id) ? 'Wird angelegt …' : 'Als Task'}
-          </button>
-        </div>
+
       </article>
     `;
   }

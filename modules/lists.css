@@ -430,7 +430,7 @@ body.light .hf-weekly-archive section>button{background:rgba(255,255,255,.64);bo
 .hf-weekly-capture-message{grid-column:1/-1;font-size:.72rem;line-height:1.35;color:var(--muted)}
 .hf-weekly-capture-message[hidden]{display:none}
 
-/* Shopping-to-task action stays below the item on narrow screens. */
-.hf-shopping-task-action{grid-column:2 / -1;justify-self:start}
-.hf-shopping-task-action .pill{display:inline-flex;align-items:center;gap:6px;font-size:.82rem;padding:7px 12px}
+/* Keep all three Shopping actions aligned and styled consistently. */
+.hf-list-row[data-shopping-id]{grid-template-columns:auto minmax(0,1fr) auto auto auto}
+.hf-list-row[data-shopping-id] .hf-list-icon-btn:disabled{opacity:.5;cursor:wait}
 .hf-shopping-message:empty{display:none}

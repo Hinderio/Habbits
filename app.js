@@ -1358,8 +1358,7 @@ cacheEls();
       create: createTaskFromShopping,
       open: id => {
         if (!state.tasks.some(task => task.id === id && !task.is_archived)) return false;
-        taskBacklogOpen = true;
-        showScreen('tasks');
+        // Keep Shopping underneath the modal so every close path returns there.
         openTaskDetail(id);
         return true;
       }
