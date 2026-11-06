@@ -106,3 +106,15 @@ test('opening and closing a shopping task preserves the underlying shopping scre
  assert.equal(modal.hidden,true);
  assert.equal(context.taskDetailTaskId,null);
 });
+
+test('shopping task icon distinguishes creation from opening', () => {
+ const {api,form}=listHarness();
+ api.saveShopping(form({title:'Sofa',category:'Wohnen'}));
+ const item=api.getState().items[0];
+ const creation=api.renderShoppingRow(item).match(/<button[^>]*data-action="promote-shopping"[^>]*>([\s\S]*?)<\/button>/)[1];
+ item.metadata.promotedTaskId='task-1';
+ const opening=api.renderShoppingRow(item).match(/<button[^>]*data-action="open-shopping-task"[^>]*>([\s\S]*?)<\/button>/)[1];
+ assert.notEqual(creation,opening);
+ assert.ok(creation.includes('<svg'));
+ assert.ok(opening.includes('<svg'));
+});
