@@ -1352,6 +1352,7 @@ cacheEls();
 
       }
     });
+    window.HabitFlowTaskOrder = Object.freeze({ compare: compareBacklogTasks, shift: shiftBacklogTask });
     window.HabitFlowGiftTasks = Object.freeze({ create: createTaskFromGift });
     // Read-only integration: the ontology never persists, scores or synchronizes data.
     window.HabitFlowOntologyBridge = Object.freeze({
@@ -13414,19 +13415,35 @@ async function deleteAlcoholLog(id) {
     syncWithSupabase({ silent: true });
   }
 
-  function shiftBacklogTask(id, delta) {
-    const ordered = backlogTasks();
+  function shiftBacklogTask(id, delta, projectId = '') {
+    if (delta !== -1 && delta !== 1) return;
+    if (projectId) {
+      // Project edits can arrive through the existing project persistence layer.
+      // Reconcile newer persisted tasks before changing their shared ranks.
+      const saved = window.HabitFlowPersistence?.readCollections?.(['tasks']).tasks || [];
+      const byId = new Map(state.tasks.map(task => [task.id, task]));
+      saved.forEach(task => { const old = byId.get(task.id); if (!old || Date.parse(task.updated_at || 0) > Date.parse(old.updated_at || 0)) byId.set(task.id, normalizeTask(task)); });
+      state.tasks = [...byId.values()];
+    }
+    const ordered = state.tasks.filter(task => !task.is_archived && !task.done_archived_at && ['open','in_progress',TASK_BACKLOG_STATUS].includes(task.status || 'open')).sort(compareBacklogTasks);
+    const scope = projectId ? ordered.filter(task => task.project_id === projectId) : ordered.filter(task => task.status === TASK_BACKLOG_STATUS);
+    const scopedIndex = scope.findIndex(task => task.id === id);
+    if (scopedIndex < 0 || !scope[scopedIndex + delta]) return;
+    const targetId = scope[scopedIndex + delta].id;
     const index = ordered.findIndex(task => task.id === id);
     if (index < 0) return;
-    const nextIndex = Math.max(0, Math.min(ordered.length - 1, index + delta));
+    const nextIndex = ordered.findIndex(task => task.id === targetId);
     if (nextIndex === index) return;
     const [item] = ordered.splice(index, 1);
     ordered.splice(nextIndex, 0, item);
+    const updatedAt = nowIso();
+    const sources = new Map(state.tasks.map(task => [task.id, task]));
     ordered.forEach((task, orderIndex) => {
-      const source = state.tasks.find(t => t.id === task.id);
+      const source = sources.get(task.id);
       if (source) {
+        if (source.backlog_rank === orderIndex + 1) return;
         source.backlog_rank = orderIndex + 1;
-        source.updated_at = nowIso();
+        source.updated_at = updatedAt;
         source.synced = false;
       }
     });

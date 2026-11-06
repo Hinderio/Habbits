@@ -283,7 +283,7 @@
     };
   }
 
-  function projectTasks(state, projectId) { return state.tasks.filter(task => task.project_id === projectId && (task.status || 'open') !== 'archived'); }
+  function projectTasks(state, projectId) { return state.tasks.filter(task => task.project_id === projectId && !task.is_archived); }
   function projectPhases(state, projectId) { return state.projectPhases.filter(phase => phase.project_id === projectId && !phase.is_archived && !projectRecordWasDeleted(TABLE_PHASES, phase.id)).sort((a, b) => a.start_date.localeCompare(b.start_date)); }
   function projectMilestones(state, projectId) { return state.projectMilestones.filter(item => item.project_id === projectId && !item.is_archived && !projectRecordWasDeleted(TABLE_MILESTONES, item.id)).sort((a, b) => a.milestone_date.localeCompare(b.milestone_date)); }
   function projectNotes(state, projectId) { return state.projectNotes.filter(item => item.project_id === projectId && !item.is_archived && !projectRecordWasDeleted(TABLE_NOTES, item.id)).sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at))); }
@@ -542,10 +542,18 @@
       ${renderProjectNotes(project, state)}
       <div class="project-section-head"><div><p class="eyebrow">Tasks</p><h3>Verknüpfte Aufgaben</h3></div><span class="badge muted">${tasks.length} Task${tasks.length === 1 ? '' : 's'}</span></div>
       ${renderTaskTools(project, state)}
-      <div class="project-task-list">${tasks.length ? tasks.map(task => renderTaskRow(task)).join('') : '<div class="project-empty">Noch keine Tasks verknüpft.</div>'}</div>
+      <div data-project-tasks>${renderProjectTaskList(tasks)}</div>
+      <section data-project-dossiers></section>
       <div class="form-actions project-detail-actions">${projectActionButton('edit-project', project.id, 'Projekt bearbeiten', 'edit')}<button class="pill primary project-complete-button" type="button" data-action="mark-project-done" data-id="${escapeHtml(project.id)}"><span class="project-complete-icon" aria-hidden="true">${PROJECT_ACTION_ICONS.check}</span><span>Als abgeschlossen markieren</span></button></div>`;
+    renderProjectDossiers(projectId);
   }
 
+  const completedProjects = new Set();
+  function renderProjectTaskList(tasks) {
+    const active = tasks.filter(task => !taskDone(task)).sort((a,b) => window.HabitFlowTaskOrder?.compare(a,b) || 0);
+    const done = tasks.filter(taskDone);
+    return '<div class="project-task-list">' + (active.length ? active.map((task,index) => renderTaskRow(task,index,active.length)).join('') : '<p class="subtle">Keine offenen Aufgaben.</p>') + '</div>' + (done.length ? '<details class="project-completed-tasks" data-project-completed' + (completedProjects.has(selectedProjectId) ? ' open' : '') + '><summary>Erledigt <span class="badge muted">' + done.length + '</span><span aria-hidden="true">⌄</span></summary><div class="project-task-list">' + done.map(task => renderTaskRow(task)).join('') + '</div></details>' : '');
+  }
   function renderMilestone(milestone, phases = []) {
     return `<article class="milestone-chip"><strong>${escapeHtml(milestoneAbbr(milestone.title))}</strong><span>${escapeHtml(milestone.title)}</span><small>${dateLabel(milestone.milestone_date)}</small><em>${escapeHtml(milestonePhaseLabel(milestone, phases))}</em>${projectActionButton('edit-milestone', milestone.id, 'Meilenstein bearbeiten', 'edit')}${projectActionButton('delete-milestone', milestone.id, 'Meilenstein löschen', 'trash', true)}</article>`;
   }
@@ -566,8 +574,11 @@
     return `<div class="project-task-tools"><label><span class="subtle">Bestehenden Task verbinden</span><select id="projectTaskSelect"><option value="">Task auswählen</option>${options}</select></label><div class="list-actions"><button class="mini-btn" type="button" data-action="link-selected-task" data-id="${escapeHtml(project.id)}">Verbinden</button><button class="mini-btn primary" type="button" data-action="create-project-task" data-id="${escapeHtml(project.id)}">Task für Projekt erstellen</button></div></div>`;
   }
 
-  function renderTaskRow(task) {
-    return `<article class="project-task-row ${taskDone(task) ? 'is-done' : ''}"><div><strong>${escapeHtml(task.title)}</strong><span class="subtle">${escapeHtml(task.status || 'open')}${task.due_at ? ` · fällig ${escapeHtml(dateLabel(task.due_at))}` : ''}</span></div><div class="project-task-actions"><button class="mini-btn primary project-task-open" type="button" data-action="open-task-detail" data-id="${escapeHtml(task.id)}" aria-label="Aufgabe öffnen: ${escapeHtml(task.title)}">Aufgabe öffnen <span aria-hidden="true">↗</span></button><button class="mini-btn project-task-unlink" type="button" data-action="unlink-task" data-id="${escapeHtml(task.id)}" aria-label="Projektverknüpfung lösen: ${escapeHtml(task.title)}" title="Nur die Verknüpfung zum Projekt entfernen">Lösen</button></div></article>`;
+  function renderTaskRow(task, index = -1, count = 0) {
+    const states = { open: ['Offen','<circle cx="12" cy="12" r="8"/>'], in_progress: ['In Bearbeitung','<circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/>'], archived: ['Backlog','<path d="M4 5h16v14H4zM4 13h5l2 3h2l2-3h5"/>'], done: ['Erledigt','<circle cx="12" cy="12" r="8"/><path d="m8 12 3 3 5-6"/>'] };
+    const status = states[task.status] || states.open;
+    const icon = (action,label,path,disabled=false) => '<button class="mini-btn project-icon-action project-task-icon" data-polished="true" type="button" data-action="' + action + '" data-id="' + escapeHtml(task.id) + '" aria-label="' + escapeHtml(label) + '" title="' + escapeHtml(label) + '"' + (disabled ? ' disabled' : '') + '><svg viewBox="0 0 24 24" aria-hidden="true">' + path + '</svg></button>';
+    return '<article class="project-task-row ' + (taskDone(task) ? 'is-done' : '') + '"><div class="project-task-info"><span class="project-task-state" role="img" aria-label="' + status[0] + '" title="' + status[0] + '"><svg viewBox="0 0 24 24" aria-hidden="true">' + status[1] + '</svg></span><div><strong>' + escapeHtml(task.title) + '</strong>' + (task.due_at ? '<small>Fällig ' + escapeHtml(dateLabel(task.due_at)) + '</small>' : '') + '</div></div><div class="project-task-actions">' + (index >= 0 ? icon('project-task-up','Höher priorisieren','<path d="m6 14 6-6 6 6"/>',index===0) + icon('project-task-down','Tiefer priorisieren','<path d="m6 10 6 6 6-6"/>',index===count-1) : '') + icon('open-task-detail','Aufgabe öffnen: '+task.title,'<path d="M14 4h6v6M20 4l-9 9M10 4H4v16h16v-6"/>') + icon('unlink-task','Projektverknüpfung lösen: '+task.title,'<path d="m10 14 4-4M8 16l-1 1a3 3 0 0 1-4-4l4-4M16 8l1-1a3 3 0 0 1 4 4l-4 4M3 3l18 18"/>') + '</div></article>';
   }
 
   function openForm(projectId = '') {
@@ -948,6 +959,7 @@
       if (projectTaskReturn !== context) return;
       projectTaskReturn = null;
       if (selectedProjectId !== context.projectId) return;
+      window.HabitFlowRoadmapProjects?.refreshTasks?.();
       modal.classList.remove('hidden');
       document.body.classList.add('project-modal-open');
       modal.scrollTop = context.modalScroll;
@@ -968,11 +980,37 @@
     projectTaskReturn = null;
   }
 
+  let dossierUnsubscribe = null;
+  const loadedProjectDossiers = new Set();
+  function renderProjectDossiers(projectId) {
+    const mount = document.querySelector('[data-project-dossiers]');
+    const store = window.HabitFlowDossiersStore;
+    if (!mount || !store || selectedProjectId !== projectId) return;
+    const snapshot = store.snapshot();
+    const dossiers = snapshot.dossiers.filter(row => row.project_id === projectId);
+    const expanded = new Set(Array.from(mount.querySelectorAll('details[open]'), node => node.dataset.projectDossier));
+    const grouped = new Map(dossiers.map(row => [row.id, []]));
+    for (const entry of snapshot.entries) {
+      const list = grouped.get(entry.dossier_id); if (!list) continue;
+      list.push(entry); list.sort((a,b) => b.updated_at.localeCompare(a.updated_at)); if (list.length > 3) list.pop();
+    }
+    const previews = dossiers.map(row => ({ row: {id:row.id,title:row.title}, metric:snapshot.metrics[row.id], entries:grouped.get(row.id).map(entry => ({title:entry.title,body:Array.from((entry.body || entry.link || 'Bild').replace(/\s+/g,' ').trim()).slice(0,100).join(''),updated_at:entry.updated_at})) }));
+    const signature = JSON.stringify(previews);
+    if (mount.dataset.signature === signature) return;
+    const focused = document.activeElement?.closest?.('[data-project-dossier]');
+    const focusId = focused && mount.contains(focused) ? focused.dataset.projectDossier : '';
+    mount.dataset.signature = signature;
+    mount.innerHTML = dossiers.length ? '<div class="project-section-head"><div><p class="eyebrow">Wissen &amp; Notizen</p><h3>Verknüpfte Dossiers</h3></div><span class="badge muted">' + dossiers.length + '</span></div><div class="project-dossier-grid">' + previews.map(({row,metric,entries}) => '<details class="project-dossier-preview" data-project-dossier="' + escapeHtml(row.id) + '"' + (expanded.has(row.id) ? ' open' : '') + '><summary><strong>' + escapeHtml(row.title) + '</strong><span>' + (metric?.exact ? metric.count + ' Einträge' : 'Einträge ansehen') + ' ⌄</span></summary><div class="project-dossier-notes">' + (entries.length ? entries.map(entry => '<article><strong>' + escapeHtml(entry.title || 'Notiz') + '</strong><p>' + escapeHtml(Array.from((entry.body || entry.link || 'Bild').replace(/\s+/g,' ').trim()).slice(0,100).join('')) + '</p><small>' + dateLabel(entry.updated_at) + '</small></article>').join('') : (metric?.exact && metric.count === 0 ? '<p class="subtle">Noch keine Einträge.</p>' : '<p class="subtle">Einträge werden beim Aufklappen geladen. Falls sie nicht erscheinen, bitte das Dossier öffnen.</p>')) + '<button class="mini-btn" type="button" data-action="open-project-dossier" data-id="' + escapeHtml(row.id) + '">Dossier öffnen ↗</button></div></details>').join('') + '</div>' : '';
+    if (focusId) Array.from(mount.querySelectorAll('[data-project-dossier]')).find(node => node.dataset.projectDossier === focusId)?.querySelector('summary')?.focus({preventScroll:true});
+  }
   async function openDetail(projectId) {
     window.HabitFlowDossiers?.showProjects();
     clearProjectTaskReturn();
+    loadedProjectDossiers.clear();
     selectedProjectId = projectId;
     renderDetail(projectId);
+    if (!dossierUnsubscribe && window.HabitFlowDossiersStore) dossierUnsubscribe = window.HabitFlowDossiersStore.subscribe(() => { if (selectedProjectId) renderProjectDossiers(selectedProjectId); });
+    void window.HabitFlowDossiersStore?.sync('');
     const modal = document.getElementById('projectDetailModal');
     if (!modal) return;
     modal.classList.remove('hidden');
@@ -981,6 +1019,7 @@
   }
 
   function closeDetail(options = {}) {
+    dossierUnsubscribe?.(); dossierUnsubscribe = null;
     clearProjectTaskReturn();
     selectedProjectId = '';
     document.getElementById('projectDetailModal')?.classList.add('hidden');
@@ -1075,9 +1114,21 @@
       if (action === 'delete-project-note') deleteProjectNote(id);
       if (action === 'link-selected-task') linkTask(id, document.getElementById('projectTaskSelect')?.value || '');
       if (action === 'open-task-detail' && actionEl.closest('.project-task-row')) suspendProjectForTask(actionEl);
+      if (action === 'open-project-dossier') { closeDetail({skipSync:true}); window.HabitFlowDossiers?.open(id); }
+      if (action === 'project-task-up' || action === 'project-task-down') {
+        window.HabitFlowTaskOrder?.shift(id, action === 'project-task-up' ? -1 : 1, selectedProjectId);
+        const mount = document.querySelector('[data-project-tasks]');
+        if (mount) { mount.innerHTML = renderProjectTaskList(projectTasks(readState(),selectedProjectId)); const button = Array.from(mount.querySelectorAll('button')).find(node => node.dataset.id === id && node.dataset.action === action); (button?.disabled ? Array.from(mount.querySelectorAll('button')).find(node => node.dataset.id === id && node.dataset.action === 'open-task-detail') : button)?.focus({preventScroll:true}); }
+      }
       if (action === 'unlink-task') unlinkTask(id);
       if (action === 'create-project-task') createProjectTask(id);
     });
+    document.addEventListener('toggle', event => {
+      if (event.target.isConnected && event.target.matches?.('[data-project-completed]')) { if (event.target.open) completedProjects.add(selectedProjectId); else completedProjects.delete(selectedProjectId); }
+      if (event.target.matches?.('[data-project-dossier]') && event.target.open && event.target.isConnected) {
+        if (!loadedProjectDossiers.has(event.target.dataset.projectDossier)) { loadedProjectDossiers.add(event.target.dataset.projectDossier); void window.HabitFlowDossiersStore?.sync(event.target.dataset.projectDossier); }
+      }
+    }, true);
     document.addEventListener('keydown', event => {
       if (event.key === 'Escape' && !document.getElementById('projectDetailModal')?.classList.contains('hidden')) closeDetail();
     });
@@ -1099,6 +1150,7 @@
 
   window.HabitFlowRoadmapProjects = Object.freeze({
     badge: projectBadge,
+    refreshTasks: () => { const mount = document.querySelector('[data-project-tasks]'); if (mount && selectedProjectId) mount.innerHTML = renderProjectTaskList(projectTasks(readState(),selectedProjectId)); },
     snapshot: () => { const current = readState(); return { projects: current.projects, milestones: current.projectMilestones, taskLinks: current.tasks.map(task => ({ id: task.id, projectId: task.project_id })) }; },
     open: id => { if (readState().projects.some(project => project.id === id && !project.is_archived)) openDetail(id); }
   });

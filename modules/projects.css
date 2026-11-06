@@ -45,3 +45,14 @@ body.light .project-editor-record{background:rgba(255,255,255,.72);border-color:
 .project-note-disclosure[open]>summary{height:auto}
 .project-note-disclosure[open]>p{position:absolute;inset:52px 0 0;min-height:0;margin:0;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
 .project-note-card>small{align-self:end}
+
+/* Shared task ordering and compact project knowledge previews. */
+.project-task-row>.project-task-info{display:flex;align-items:center;gap:10px;flex-wrap:nowrap;min-width:0}
+.project-task-info>div{min-width:0}.project-task-info strong{overflow-wrap:anywhere}.project-task-info small{display:block;color:var(--muted);margin-top:4px;font-size:.75rem}
+.project-task-state{display:inline-flex;flex:0 0 28px;color:var(--primary)}.project-task-state svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.project-task-actions .project-task-icon{display:inline-grid;place-items:center;width:40px;height:40px;min-height:40px;padding:0;border:1px solid rgba(74,215,209,.24);background:rgba(74,215,209,.08);color:var(--primary);box-shadow:none}
+.project-task-icon svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.project-task-icon:disabled{opacity:.3;cursor:default}
+.project-completed-tasks{margin-top:12px;border:1px solid var(--card-border);border-radius:18px;padding:12px}.project-completed-tasks>summary{display:flex;align-items:center;gap:10px;cursor:pointer;min-height:44px;font-weight:800;list-style:none}.project-completed-tasks>summary::-webkit-details-marker{display:none}
+.project-dossier-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:12px}.project-dossier-preview{min-width:0;border:1px solid var(--card-border);border-radius:20px;padding:14px;background:rgba(74,215,209,.035)}.project-dossier-preview>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;cursor:pointer;list-style:none}.project-dossier-preview>summary::-webkit-details-marker{display:none}.project-dossier-preview>summary strong{overflow-wrap:anywhere}.project-dossier-preview>summary span{font-size:.75rem;color:var(--muted);flex-shrink:0}
+.project-dossier-notes{display:grid;gap:8px;padding-top:12px}.project-dossier-notes article{padding:12px;border:1px solid var(--card-border);border-radius:14px;background:var(--card-strong);min-width:0}.project-dossier-notes strong{font-size:.85rem;overflow-wrap:anywhere}.project-dossier-notes p{font-size:.82rem;line-height:1.45;color:var(--muted);margin:6px 0;overflow-wrap:anywhere}.project-dossier-notes small{font-size:.7rem;color:var(--muted)}
+@media(max-width:760px){.project-task-actions .project-task-icon{width:44px;height:44px;min-height:44px}.project-task-row>.project-task-actions{gap:6px}.project-dossier-preview>summary{align-items:flex-start;flex-direction:column;gap:4px}}
