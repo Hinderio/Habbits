@@ -24,7 +24,7 @@
   <link rel="stylesheet" href="modules/fitness-detail-mobile.css?v=275" />
   <link rel="stylesheet" href="modules/smoke-ring-premium.css?v=281" />
   <link rel="stylesheet" href="modules/points-details.css?v=297" />
-  <link rel="stylesheet" href="modules/weekly-points.css?v=372" />
+  <link rel="stylesheet" href="modules/weekly-points.css?v=389-bars" />
   <style id="startup-art-style">
     /* Companion poster typography and framing, available before app scripts. */
     #startupArt { position:fixed; inset:0; z-index:2147483647; display:grid; place-items:center; padding:max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left)); box-sizing:border-box; overflow:auto; background:repeating-linear-gradient(135deg,#edf1ef 0 2px,#f5f6f3 2px 14px); color:#fff; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif; transition:opacity .55s ease,visibility .55s; }
@@ -319,13 +319,13 @@
               <button id="weeklyPointsNext" class="mini-btn" type="button">Später →</button>
             </nav>
           </div>
-          <p class="weekly-points-intro">Eine Spalte pro KW. Habits, erledigte Tasks und weitere Punktequellen: Positives wächst nach oben, Negatives nach unten. Je höher der Punktebetrag, desto weiter aussen das Quadrat – von Orange für Minus über Grün bis Türkis für Plus.</p>
-          <div class="weekly-points-legend" aria-label="Farben: Orange für hohe negative Punkte, Grün nahe null, Türkis für hohe positive Punkte"><span>−300+</span><i aria-hidden="true"></i><span>+300+</span></div>
+          <p class="weekly-points-intro">Eine Spalte pro KW. Habits, erledigte Tasks und weitere Punktequellen: Pluspunkte werden als grüner Balken nach oben summiert, Minuspunkte als oranger Balken nach unten. Die Balkenhöhe entspricht der Punktzahl.</p>
+          <div class="weekly-points-legend" aria-label="Farben: Grün für Pluspunkte, Orange für Minuspunkte"><span><i class="weekly-points-positive" aria-hidden="true"></i>Pluspunkte</span><span><i class="weekly-points-negative" aria-hidden="true"></i>Minuspunkte</span></div>
           <div id="weeklyPointsScroll" class="weekly-points-scroll">
             <canvas id="weeklyPointsCanvas" tabindex="0" role="img" aria-label="Wochenbilanz der Punkte"></canvas>
             <div id="weeklyPointsWeeks" class="weekly-points-weeks" role="group" aria-label="Kalenderwoche auswählen"></div>
           </div>
-          <p class="weekly-points-note">Rauchen, Brotfreier Tag, Spazieren, Stehpult und Meditation werden jeweils pro KW zusammengefasst; Plus und Minus bleiben getrennt. Alle anderen Habit-Logs, Tasks und Alkohol-Buchungen bleiben einzeln. Höhe = Rang nach Punktwert, Achse = Anzahl Quadrate, keine Punkteskala. Ohne Punkte kein Quadrat. Wischen, antippen oder Pfeiltasten nutzen.</p>
+          <p class="weekly-points-note">Rauchen, Brotfreier Tag, Spazieren, Stehpult und Meditation werden jeweils pro KW zusammengefasst; Plus und Minus bleiben getrennt. Alle anderen Habit-Logs, Tasks und Alkohol-Buchungen bleiben einzeln. Die Balken zeigen die getrennten Wochensummen auf derselben Punkteskala. Ohne Punkte kein Balken. Wischen, antippen oder Pfeiltasten nutzen.</p>
           <p id="weeklyPointsTooltip" class="weekly-points-tooltip" role="tooltip" hidden></p>
           <label class="weekly-points-picker"><span>Woche auswählen</span><select id="weeklyPointsSelect" aria-label="Woche für die Punktedetails auswählen"></select></label>
           <details id="weeklyPointsDetail" class="weekly-points-detail">
@@ -1014,7 +1014,7 @@
 
   <script src="modules/life-coach.js?v=305"></script>
   <script src="modules/weekly-points-domain.js?v=372"></script>
-  <script src="modules/weekly-points.js?v=337"></script>
+  <script src="modules/weekly-points.js?v=389-bars"></script>
   <script src="app.js?v=387"></script>
   <script src="modules/ontology-loader.js?v=369"></script>
   <script src="modules/points-details.js?v=297"></script>

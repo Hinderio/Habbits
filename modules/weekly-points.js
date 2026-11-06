@@ -1,6 +1,7 @@
 (() => {
   'use strict';
   const domain = window.HabitFlowWeeklyPointsDomain;
+  const barColors = { positive: '#70b080', negative: '#f28a00' };
   let data = null, model = null, offset = 0, selected = 51, frame = 0, root = null, canvas = null, geometry = null, limit = 40, revealSelection = true;
   let modelKey = null, paintedModel = null, paintKey = null, presentationPending = false;
   const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
@@ -39,10 +40,17 @@
     const width = window.matchMedia('(max-width: 760px)').matches ? Math.max(850, availableWidth) : availableWidth;
     const height = 460, left = 46, top = 30, bottom = 410, zero = 235;
     const column = (width - left - 14) / model.weeks.length;
-    const maxPositive = Math.max(6, ...model.weeks.map(w => w.positive.length));
-    const maxNegative = Math.max(6, ...model.weeks.map(w => w.negative.length));
-    const step = Math.min(13, (zero - top - 10) / maxPositive, (bottom - zero - 10) / maxNegative);
-    const size = Math.min(11, column - 5, step * .84);
+    const maxPositive = Math.max(1, ...model.weeks.map(w => w.positivePoints));
+    const maxNegative = Math.max(1, ...model.weeks.map(w => Math.abs(w.negativePoints)));
+    const positiveRoom = zero - top - 10, negativeRoom = bottom - zero - 10;
+    // Both signs share one points-to-pixels scale, including unequal totals.
+    const rawTick = Math.max(1, maxPositive / 4, maxNegative / 4);
+    const magnitude = 10 ** Math.floor(Math.log10(rawTick));
+    const tick = [1, 2, 5, 10].find(n => n * magnitude >= rawTick) * magnitude;
+    const positiveLimit = Math.ceil(maxPositive / tick) * tick;
+    const negativeLimit = Math.ceil(maxNegative / tick) * tick;
+    const scale = Math.min(positiveRoom / positiveLimit, negativeRoom / negativeLimit);
+    const barWidth = Math.max(1, Math.min(14, column - 5));
     const ratio = Math.min(2, window.devicePixelRatio || 1);
     const styles = getComputedStyle(root);
     const muted = styles.getPropertyValue('--muted').trim() || '#65778c';
@@ -66,11 +74,10 @@
     ctx.font = '11px system-ui, sans-serif';
     ctx.textAlign = 'right'; ctx.fillStyle = muted;
     for (const sign of [1, -1]) {
-      const max = sign > 0 ? maxPositive : maxNegative;
-      const tick = Math.max(1, Math.ceil(max / 4));
+      const max = sign > 0 ? positiveLimit : negativeLimit;
       for (let value = tick; value <= max; value += tick) {
-        const y = zero - sign * value * step;
-        ctx.fillText(String(sign * value), left - 10, y + 4);
+        const y = zero - sign * value * scale;
+        ctx.fillText((sign * value).toLocaleString('de-CH'), left - 10, y + 4);
       }
     }
     ctx.fillText('0', left - 10, zero + 4);
@@ -82,12 +89,15 @@
         ctx.fillStyle = ink; ctx.fillText(String(week.year), x - 8, top - 2);
       }
       for (const sign of [1, -1]) {
-        (sign > 0 ? week.positive : week.negative).forEach((item, rank) => {
-          const y = zero - sign * (rank + .7) * step;
-          ctx.fillStyle = domain.color(item.points);
-          ctx.fillRect(x - size / 2, y - size / 2, size, size);
-          hits[index].push({ x, y, item, week: index });
-        });
+        const points = sign > 0 ? week.positivePoints : week.negativePoints;
+        if (!points) continue;
+        const barHeight = Math.abs(points) * scale;
+        const y = sign > 0 ? zero - barHeight : zero;
+        ctx.fillStyle = sign > 0 ? barColors.positive : barColors.negative;
+        ctx.beginPath();
+        ctx.roundRect(x - barWidth / 2, y, barWidth, barHeight, Math.min(4, barWidth / 2, barHeight / 2));
+        ctx.fill();
+        hits[index].push({ x: x - barWidth / 2, y, width: barWidth, height: barHeight, points, sign });
       }
     });
     if (!model.weeks.some(week => week.positive.length || week.negative.length)) {
@@ -186,15 +196,17 @@
       if (!geometry || event.pointerType === 'touch') return;
       const p = position(event);
       const week = Math.floor((p.x - geometry.left) / geometry.column);
-      let closest = null, distance = 10;
+      let closest = null;
       for (const hit of geometry.hits[week] || []) {
-        const d = Math.hypot(hit.x - p.x, hit.y - p.y);
-        if (d < distance) { closest = hit; distance = d; }
+        if (p.x >= hit.x - 3 && p.x <= hit.x + hit.width + 3 && p.y >= hit.y && p.y <= hit.y + hit.height) {
+          closest = hit;
+          break;
+        }
       }
       const tip = find('weeklyPointsTooltip');
       tip.hidden = !closest;
       if (closest) {
-        tip.textContent = closest.item.label + ' · ' + fmt(closest.item.points) + ' Punkte · KW ' + model.weeks[week].number;
+        tip.textContent = (closest.sign > 0 ? 'Plus gesamt' : 'Minus gesamt') + ' · ' + fmt(closest.points) + ' Punkte · KW ' + model.weeks[week].number;
         const box = root.getBoundingClientRect();
         tip.style.left = Math.max(12, Math.min(box.width - 260, event.clientX - box.left + 12)) + 'px';
         tip.style.top = Math.max(12, event.clientY - box.top - 58) + 'px';

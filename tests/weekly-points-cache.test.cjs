@@ -11,7 +11,7 @@ function harness() {
   class Clock extends Date { constructor(...args) { super(...(args.length ? args : [time])); } static now() { return time; } }
   const frames = [], nodes = new Map(), models = [], resize = [], mutation = [];
   const counts = { builds: 0, markup: 0, paints: 0 };
-  const ctx = { scale() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, fillText() {}, fillRect() { counts.paints++; } };
+  const ctx = { scale() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, roundRect() {}, fill() { counts.paints++; }, fillText() {}, fillRect() { counts.paints++; } };
   function node(id) {
     if (!nodes.has(id)) {
       let html = '';

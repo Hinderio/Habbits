@@ -101,6 +101,7 @@ test('canvas rendering is coalesced, signed, keyboard-accessible and escapes lab
   const frames = [], rectangles = [], labels = [], nodes = new Map();
   let builds = 0, fills = '', width = 960, mobile = false;
   const ctx = { scale() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, fillText(text, x, y) { labels.push({ text, x, y }); },
+    roundRect(x, y, w, h, radius) { rectangles.push({ x, y, w, h, radius, color: fills }); }, fill() {},
     set fillStyle(value) { fills = value; }, fillRect(x, y, w, h) { rectangles.push({ x, y, w, h, color: fills }); } };
   function node(id) {
     if (!nodes.has(id)) nodes.set(id, { style: {}, listeners: {}, attrs: {}, hidden: false, clientWidth: width,
@@ -116,17 +117,29 @@ test('canvas rendering is coalesced, signed, keyboard-accessible and escapes lab
   const sandbox = { window, document: { getElementById: () => root }, requestAnimationFrame(fn) { frames.push(fn); return frames.length; },
     getComputedStyle() { return { getPropertyValue: () => '#607080' }; }, ResizeObserver: class { observe() {} }, console };
   vm.runInNewContext(renderer, sandbox);
-  const data = { ledger: [point('good', 30, { reason: '<img onerror=bad>' }), point('bad', -30)] };
+  const data = { ledger: [point('good', 30, { reason: '<img onerror=bad>' }), point('more', 70), point('bad', -50), point('previous', 50, { earned_at: '2026-09-15T12:00:00Z' })] };
   window.HabitFlowWeeklyPoints.render(data);
   window.HabitFlowWeeklyPoints.render(data);
   assert.equal(frames.length, 1);
   frames.shift()();
   assert.equal(builds, 1);
-  const green = rectangles.find(rect => rect.color === domain.color(30));
-  const red = rectangles.find(rect => rect.color === domain.color(-30));
+  const greens = rectangles.filter(rect => rect.color === '#70b080');
+  const green = greens.at(-1);
+  const red = rectangles.find(rect => rect.color === '#f28a00');
+  assert.equal(greens.length, 2, 'one positive bar per populated week');
+  assert.equal(rectangles.filter(rect => rect.color === '#f28a00').length, 1);
+  assert.equal(green.h, greens[0].h * 2, 'weekly sums determine proportional height');
+  assert.equal(green.h, red.h * 2, 'both signs use the same point scale');
+  assert.equal(green.y + green.h, 235);
+  assert.ok(green.radius > 0 && green.radius <= green.h / 2);
+  assert.ok(labels.some(label => label.text === '-50'), 'axis labels show points');
+  node('weeklyPointsCanvas').listeners.pointermove({ clientX: green.x + green.w / 2, clientY: green.y + 1, pointerType: 'mouse' });
+  assert.match(node('weeklyPointsTooltip').textContent, /Plus gesamt · \+100 Punkte/);
+  node('weeklyPointsCanvas').listeners.pointermove({ clientX: red.x + red.w / 2, clientY: red.y + red.h - 1, pointerType: 'mouse' });
+  assert.match(node('weeklyPointsTooltip').textContent, /Minus gesamt · -50 Punkte/);
   assert.ok(green.y < 235);
-  assert.ok(red.y > 235);
-  assert.equal(green.w, green.h);
+  assert.equal(red.y, 235);
+  assert.ok(green.h > green.w);
   assert.equal(node('weeklyPointsCanvas').width, 1916);
   assert.equal(node('weeklyPointsCanvas').height, 920);
   const positiveLabel = labels.find(label => label.text === 'Positiv');
@@ -163,15 +176,18 @@ test('canvas rendering is coalesced, signed, keyboard-accessible and escapes lab
   node('weeklyPointsSelect').listeners.change({ target: { value: '0' } });
   assert.equal(node('weeklyPointsDetail').open, true);
   assert.equal(node('weeklyPointsSelect').value, '0');
+  rectangles.length = 0;
   window.HabitFlowWeeklyPoints.render({ ledger: [] });
   frames.shift()();
   assert.ok(node('weeklyPointsItems').innerHTML.includes('Keine Punktebuchungen'));
+  assert.equal(rectangles.filter(rect => rect.radius !== undefined).length, 0, 'zero totals draw no bars');
 });
 
-test('only the legend ramp gets twenty percent transparency', () => {
+test('legend uses the same solid colors as the bars', () => {
   const css = fs.readFileSync(path.join(__dirname, '../modules/weekly-points.css'), 'utf8');
-  const ramp = css.match(/\.weekly-points-legend i \{([^}]+)\}/)[1];
-  assert.ok(ramp.includes('opacity: .8'));
+  assert.ok(css.includes('background: #70b080'));
+  assert.ok(css.includes('background: #f28a00'));
+  assert.ok(!css.includes('linear-gradient'));
   assert.ok(!renderer.includes('globalAlpha'));
 });
 
@@ -249,12 +265,10 @@ test('habit grouping uses exact normalized names, not reused icons or related na
   assert.equal(week.positivePoints, 80);
 });
 
-test('weekly squares and legend use the warm orange-green-teal palette', () => {
+test('detail markers retain the warm orange-green-teal palette', () => {
   const negatives = [-301, -300, -150, -75, -30, -10].map(domain.color);
   const positives = [10, 30, 75, 150, 300, 301].map(domain.color);
   assert.deepEqual(negatives, ["#f28a00","#ed8e08","#e59414","#d99b22","#cba331","#bdac3e"]);
   assert.deepEqual(positives, ["#99b260","#85b16f","#70b080","#5daf91","#47ad9e","#30aaa9"]);
-  const css = fs.readFileSync(path.join(__dirname, '../modules/weekly-points.css'), 'utf8');
-  assert.ok(css.includes('linear-gradient(90deg,#f28a00,#ed8e08,#e59414,#d99b22,#cba331,#bdac3e,#aab453,#99b260,#85b16f,#70b080,#5daf91,#47ad9e,#30aaa9)'));
-  assert.ok(html.includes('Orange für hohe negative Punkte, Grün nahe null, Türkis für hohe positive Punkte'));
+  assert.ok(html.includes('Grün für Pluspunkte, Orange für Minuspunkte'));
 });
