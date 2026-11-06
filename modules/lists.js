@@ -38,19 +38,19 @@
   const FINANCE_COLORS = ['#35c9a5', '#61cbf4', '#f6b33f'];
   const ROADMAP_LIST_ID = 'roadmap-goals';
   const DEFAULT_LISTS = [
-    { id: 'lists', slug: 'listen', title: 'Listen', type: 'generic', icon: 'list', color: '#EDAF36', description: 'Freie Listen für kleine Sammlungen, Ideen und Dinge, die nicht in Tasks gehören.' },
-    { id: 'vouchers', slug: 'gutscheine', title: 'Gutscheine', type: 'voucher', icon: 'ticket', color: '#E08230', description: 'Gutscheine, Codes und Fristen ruhig im Blick behalten.' },
-    { id: 'shopping', slug: 'shopping', title: 'Shopping', type: 'shopping', icon: 'shopping', color: '#D8612C', description: 'Einkäufe, Mengen und Läden als klare Liste sammeln.' },
-    { id: 'photos', slug: 'fotospots', title: 'Fotospots', type: 'photos', icon: 'camera', color: '#CF2E26', description: 'Spots sammeln und daraus visuelle Touren planen.' },
-    { id: 'subscriptions', slug: 'abos', title: 'Abos', type: 'subscription', icon: 'repeat', color: '#AF4360', description: 'Abos, Kosten, Laufzeiten und Kündigungsfenster ordnen.' },
-    { id: 'terms', slug: 'begriffe', title: 'Begriffe', type: 'generic', icon: 'book', color: '#AD4189', description: 'Begriffe nach Kategorien sammeln und mit Lernkarten festigen.' },
-    { id: 'finance', slug: 'finanzen', title: 'Finanzen', type: 'generic', icon: 'wallet', color: '#713B89', description: 'Investitionen, Guthaben und offene Schulden in einem ruhigen Finanzbild.' },
-    { id: 'chatgpt', slug: 'chatgpt', title: 'ChatGPT', type: 'generic', icon: 'message', color: '#8C9DD8', description: 'Wichtige Projekte und Threads gruppiert sichern und direkt wieder öffnen.' },
-    { id: WEBLINK_LIST_ID, slug: 'weblinks', title: 'Weblinks', type: 'generic', icon: 'external', color: '#587E99', description: 'Wichtige Webseiten sammeln, kategorisieren und schnell wiederfinden.' },
-    { id: GIFT_LIST_ID, slug: 'geschenk', title: 'Geschenk', type: 'generic', icon: 'gift', color: '#6EBBBE', description: 'Geschenkideen für deine Lieblingsmenschen sammeln und als Task umsetzen.' },
-    { id: WEEKLY_LIST_ID, slug: 'wochenzettel', title: 'Wochenzettel', type: 'generic', icon: 'note', color: '#4AA885', description: 'Kleine Gedanken und Erinnerungen – Woche für Woche.' },
-    { id: EXHIBITION_LIST_ID, slug: 'exhibition', title: 'Exhibition', type: 'generic', icon: 'gallery', color: '#75A56A', description: 'Fotos und Ideen als persönliche Ausstellung – mit deiner Typografie direkt auf dem Bild.' },
-    { id: EVENT_LIST_ID, slug: 'eventliste', title: 'Eventliste', type: 'generic', icon: 'calendar', color: '#A5AD56', description: 'Eventideen, Orte und gemeinsame Erlebnisse für später sammeln.' },
+    { id: 'lists', slug: 'listen', title: 'Listen', type: 'generic', icon: 'list', color: '#EDAF36', description: 'Freie Sammlungen für Ideen und Dinge außerhalb von Tasks.' },
+    { id: 'vouchers', slug: 'gutscheine', title: 'Gutscheine', type: 'voucher', icon: 'ticket', color: '#E08230', description: 'Gutscheine, Codes und Fristen sammeln.' },
+    { id: 'shopping', slug: 'shopping', title: 'Shopping', type: 'shopping', icon: 'shopping', color: '#D8612C', description: 'Einkäufe mit Mengen und Läden sammeln.' },
+    { id: 'photos', slug: 'fotospots', title: 'Fotospots', type: 'photos', icon: 'camera', color: '#CF2E26', description: 'Fotospots sammeln und Touren planen.' },
+    { id: 'subscriptions', slug: 'abos', title: 'Abos', type: 'subscription', icon: 'repeat', color: '#AF4360', description: 'Kosten, Laufzeiten und Kündigungen ordnen.' },
+    { id: 'terms', slug: 'begriffe', title: 'Begriffe', type: 'generic', icon: 'book', color: '#AD4189', description: 'Begriffe sammeln und mit Lernkarten festigen.' },
+    { id: 'finance', slug: 'finanzen', title: 'Finanzen', type: 'generic', icon: 'wallet', color: '#713B89', description: 'Investitionen, Guthaben und Schulden im Überblick.' },
+    { id: 'chatgpt', slug: 'chatgpt', title: 'ChatGPT', type: 'generic', icon: 'message', color: '#8C9DD8', description: 'Projekte und Threads bündeln und schnell öffnen.' },
+    { id: WEBLINK_LIST_ID, slug: 'weblinks', title: 'Weblinks', type: 'generic', icon: 'external', color: '#587E99', description: 'Webseiten ordnen und schnell wiederfinden.' },
+    { id: GIFT_LIST_ID, slug: 'geschenk', title: 'Geschenk', type: 'generic', icon: 'gift', color: '#6EBBBE', description: 'Geschenkideen sammeln und in Tasks verwandeln.' },
+    { id: WEEKLY_LIST_ID, slug: 'wochenzettel', title: 'Wochenzettel', type: 'generic', icon: 'note', color: '#4AA885', description: 'Gedanken und Erinnerungen je Woche.' },
+    { id: EXHIBITION_LIST_ID, slug: 'exhibition', title: 'Exhibition', type: 'generic', icon: 'gallery', color: '#75A56A', description: 'Fotos und Ideen ausstellen – mit deinem Text auf dem Bild.' },
+    { id: EVENT_LIST_ID, slug: 'eventliste', title: 'Eventliste', type: 'generic', icon: 'calendar', color: '#A5AD56', description: 'Eventideen und Orte für Erlebnisse sammeln.' },
     { id: ROADMAP_LIST_ID, slug: 'roadmap-goals', title: 'Roadmap-Ziele', type: 'generic', icon: 'star', color: '#47ceca', description: 'Persönliche Ziele der Kalender-Roadmap.' }
   ];
 
@@ -372,20 +372,21 @@
       const count = list.id === WEEKLY_LIST_ID
         ? weeklyOpenItems(currentWeekStartKey()).length
         : list.type === 'photos' ? state.stops.filter(stop => !stop.isArchived).length : itemsFor(list.id).length;
-      const categories = list.id === 'terms' ? termCategories().length : 0;
-      const done = list.type === 'photos' ? state.tours.filter(tour => !tour.isArchived).length : itemsFor(list.id).filter(item => item.isDone).length;
       const cardType = list.id === WEEKLY_LIST_ID ? 'Weekly Inbox' : list.type === 'photos' ? 'Touren & Orte' : list.id === 'terms' ? 'Lernkarten' : list.id === 'finance' ? 'Finanzübersicht' : list.id === 'chatgpt' ? 'Threads & Projekte' : 'Liste';
-      const cardStat = list.id === WEEKLY_LIST_ID ? 'diese Woche' : list.type === 'photos' ? `${done} Touren` : list.id === 'terms' ? `${categories} ${categories === 1 ? 'Kategorie' : 'Kategorien'}` : list.id === 'finance' ? 'Positionen' : list.id === 'chatgpt' ? 'Threads' : 'Einträge';
+      const cardStat = list.id === WEEKLY_LIST_ID ? 'offen' : list.type === 'photos' ? (count === 1 ? 'Spot' : 'Spots') : (count === 1 ? 'Eintrag' : 'Einträge');
+      const countLabel = list.id === WEEKLY_LIST_ID ? count + ' offen diese Woche' : count + ' ' + cardStat;
+      // Built-in card copy is presentation text, not user data; refresh it for older synced lists too.
+      const description = DEFAULT_LISTS.find(entry => entry.id === list.id)?.description || list.description;
       return `
         <article class="hf-list-card ${list.id === activeListId ? 'is-active' : ''}" style="--hf-list-tone:${escapeHtml(list.color)}">
           <button type="button" data-list-open="${escapeHtml(list.id)}">
             <span class="hf-list-card-art">${icon(list.icon)}</span>
+            <span class="hf-list-card-stat" aria-label="${escapeHtml(countLabel)}"><b>${count}</b><small>${escapeHtml(cardStat)}</small></span>
             <span class="hf-list-card-copy">
               <small>${escapeHtml(cardType)}</small>
               <strong>${escapeHtml(list.title)}</strong>
-              <em>${escapeHtml(list.description)}</em>
+              <em>${escapeHtml(description)}</em>
             </span>
-            <span class="hf-list-card-stat"><b>${count}</b><small>${escapeHtml(cardStat)}</small></span>
           </button>
         </article>
       `;
