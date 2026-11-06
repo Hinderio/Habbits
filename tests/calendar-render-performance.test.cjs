@@ -32,7 +32,7 @@ function harness(legacy = false) {
     vm.runInContext(block(name),c);
   }
   for (const name of ['renderCalendarContent','renderCalendarAppointmentChips','formatAppointmentRange','formatDateTime','formatTime']) {
-    vm.runInContext(block(name,legacy ? before : source),c);
+    vm.runInContext(block(name,legacy && name !== 'renderCalendarAppointmentChips' ? before : source),c);
   }
   const dateKey = c.toDateKey;
   c.toDateKey = value => { counts.dates++; return dateKey(value); };
@@ -51,7 +51,7 @@ function seed(state) {
     { id: 'long', title: 'Lange Ferien', starts_at: '2025-01-01', ends_at: '2028-01-01' });
 }
 
-test('month HTML stays byte-identical while tasks normalize once, not 42 times', () => {
+test('month layout matches the legacy index with the current chip renderer while tasks normalize once', () => {
   const old = harness(true), fast = harness(); seed(old.state); seed(fast.state);
   old.c.renderCalendarContent(); fast.c.renderCalendarContent();
   assert.equal(fast.c.els.calendarGrid.innerHTML, old.c.els.calendarGrid.innerHTML);
@@ -183,4 +183,15 @@ test('day details apply the same event selection without hiding other entries', 
   assert.match(app.c.els.dayDetails.innerHTML,/Besuch/);assert.match(app.c.els.dayDetails.innerHTML,/Task bleibt/);assert.doesNotMatch(app.c.els.dayDetails.innerHTML,/Ferien/);
   app.state.tasks=[];app.c.calendarEventFilters.clear();app.c.calendarEventFilters.add('birthday');app.c.renderDayDetails();
   assert.match(app.c.els.dayDetails.innerHTML,/Event-Typ-Auswahl/);
+});
+
+
+test('standard appointments render initial bubbles with escaped title and time accessibly', () => {
+  const app = harness();
+  const html = app.c.renderCalendarAppointmentChips([{ id: 'normal', title: 'Arzt Besuch <Test>', starts_at: '2026-11-06T09:00:00', event_kind: 'standard' }]);
+  assert.match(html, /is-special-event is-standard/);
+  assert.match(html, /data-initials="AB"/);
+  assert.match(html, /<strong>AB<\/strong>/);
+  assert.match(html, /aria-label="Arzt Besuch &lt;Test&gt;, Normaler Termin, 09:00/);
+  assert.doesNotMatch(html, /<em>|<b>|<Test>/);
 });

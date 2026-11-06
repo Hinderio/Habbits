@@ -197,3 +197,19 @@
 #screen-calendar .day-chip.calendar-event-chip.is-visit {
   background: #4bbbd8 !important;
 }
+
+/* Standard appointments use the same initial bubble layout on every viewport.
+   Fuchsia sampled from the reference after converting its ICC profile to sRGB. */
+#screen-calendar .day-chip.calendar-event-chip.is-standard {
+  background: #da014c !important;
+  color: #fff !important;
+}
+
+#screen-calendar .day-chip.calendar-event-chip.is-standard strong,
+#screen-calendar .day-chip.calendar-event-chip.is-standard::before {
+  color: #fff !important;
+}
+
+.calendar-event-filter[data-event-kind="standard"] .calendar-event-filter-mark {
+  color: #fff;
+}

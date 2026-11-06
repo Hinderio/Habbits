@@ -11378,10 +11378,8 @@ cacheEls();
         ? formatCalendarValue(startsAt, { hour: '2-digit', minute: '2-digit' })
         : 'Zeit offen';
       const calendarAppointmentInitials = calendarBubbleInitials(appointment.title || type.label || 'Termin', type.short || type.label || 'TE');
-      return `<span class="day-chip appointment calendar-event-chip type-${normalizeAppointmentType(appointment.appointment_type)}" data-initials="${escapeHtml(calendarAppointmentInitials)}">
-        <b>${escapeHtml(time)} · ${escapeHtml(type.short || type.label)}</b>
-        <em>${escapeHtml(appointment.title || type.label || 'Termin')}</em>
-      </span>`;
+      const accessibleLabel = `${appointment.title || type.label || 'Termin'}, Normaler Termin, ${time} · ${type.label}`;
+      return `<span class="day-chip appointment calendar-event-chip is-special-event is-standard" data-initials="${escapeHtml(calendarAppointmentInitials)}" title="${escapeHtml(accessibleLabel)}" aria-label="${escapeHtml(accessibleLabel)}"><strong>${escapeHtml(calendarAppointmentInitials)}</strong></span>`;
     });
     if (appointments.length > visibleAppointments.length) {
       chips.push(`<span class="day-chip appointment-more">+${appointments.length - visibleAppointments.length} weitere</span>`);
@@ -11454,7 +11452,7 @@ cacheEls();
 
   function calendarEventFilterTypes() {
     return [
-      ['standard', 'Normaler Termin', 'NT', '#ffb84d'],
+      ['standard', 'Normaler Termin', 'NT', '#da014c'],
       ['birthday', 'Geburtstag', 'GB', '#f6b33f'],
       ['holiday', 'Ferientag', 'FT', '#efb3bd'],
       ['public_holiday', 'Feiertag', 'FE', '#c23f95'],
