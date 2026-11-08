@@ -52,3 +52,7 @@ test('pagination retrieves more than one page without dropping rows',async()=>{
 test('a corrupt local row does not hide the remaining valid rows',()=>{
  const h=harness();h.storage.set('habitflow-competition-v1:user-a:event:broken','{');const e=start(h);const restored=harness({storage:h.storage});assert.equal(restored.store.snapshot().events[0].id,e.id);assert.equal(restored.store.snapshot().status,'error');
 });
+test('selected Habit link survives cloud sync and another device',async()=>{
+ const remote=remoteMock(),h=harness({remote});h.store.append(null,'start',{type:'alcohol',goal:7,habit_id:'habit-alcohol'});await h.store.sync();
+ const second=harness({remote});await second.store.sync();assert.equal(second.store.snapshot().events[0].payload.habit_id,'habit-alcohol');
+});

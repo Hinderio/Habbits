@@ -45,3 +45,26 @@ test('new attempts preserve independent historical bests and old events cannot c
  const rows=[a,check(a,'2026-11-01'),check(a,'2026-11-02'),event(a.challenge_id,'finish',{ended_at:new Date(at('2026-11-03')).toISOString()},at('2026-11-03')),b];
  const result=D.project(rows,at('2026-11-05'));assert.equal(result.length,2);assert.equal(result[0].active,true);assert.equal(result[0].best,0);assert.equal(result[1].best,2);
 });
+test('linked alcohol Habit counts completed positive days once and consumption wins',()=>{
+ const s=start('alcohol');const state={habits:[{id:'dry',name:'Alkoholfreie Tage'}],habitEntries:[{habit_id:'dry',value_bool:true,occurred_at:new Date(at('2026-11-01')).toISOString()},{habit_id:'dry',value_num:1,occurred_at:new Date(at('2026-11-01')).toISOString()},{habit_id:'dry',value_bool:true,occurred_at:new Date(at('2026-11-02')).toISOString()}]};
+ let r=D.project([s],at('2026-11-02'),D.evidence(state))[0];assert.equal(r.current,1);assert.equal(r.habitId,'dry');assert.equal(r.habitName,'Alkoholfreie Tage');
+ state.alcoholLogs=[{log_date:'2026-11-01',consumed:true}];r=D.project([s],at('2026-11-02'),D.evidence(state))[0];assert.equal(r.active,false);assert.equal(r.current,0);
+});
+test('chosen Habit survives serialization, overrides automatic matching and reflects removed entries',()=>{
+ const s=start('meditation');s.payload.habit_id='custom';const saved=D.normalize(JSON.parse(JSON.stringify(s)));assert.equal(saved.payload.habit_id,'custom');
+ const state={habits:[{id:'auto',name:'Meditation'},{id:'custom',name:'Meine Atemroutine'}],habitEntries:[{habit_id:'custom',value_num:5,occurred_at:new Date(at('2026-11-01')).toISOString()}]};
+ assert.equal(D.project([saved],at('2026-11-02'),D.evidence(state))[0].current,1);
+ state.habitEntries=[];assert.equal(D.project([saved],at('2026-11-02'),D.evidence(state))[0].current,0);
+});
+test('explicit manual mode is respected and ambiguous Habit names are not guessed',()=>{
+ const s=start('meditation');s.payload.habit_id='';const state={habits:[{id:'a',name:'Meditation'}],habitEntries:[{habit_id:'a',value_bool:true,occurred_at:new Date(at('2026-11-01')).toISOString()}]};assert.equal(D.project([s],at('2026-11-02'),D.evidence(state))[0].current,0);
+ state.habits.push({id:'b',name:'Meditation'});assert.equal(D.evidence(state).habitLinks.meditation,null);
+});
+test('fruit and retired sweets histories remain distinct',()=>{
+ const a=start('sweets'),b=start('fruit');const rows=[a,check(a,'2026-11-01'),b,check(b,'2026-11-01'),check(b,'2026-11-02')];const runs=D.project(rows,at('2026-11-02'));assert.equal(runs.length,2);assert.equal(runs.find(r=>r.type==='sweets').definition.retired,true);assert.equal(runs.find(r=>r.type==='fruit').best,2);assert.deepEqual(D.records(runs).map(r=>r.type),['fruit']);
+});
+test('Hall of Fame chooses one record per category without mixing units',()=>{
+ const a=start('reading'),b=start('reading',at('2026-11-02')),c=start('smoke',at('2026-11-01'),24),empty=start('bread');
+ const rows=[a,check(a,'2026-11-01'),check(a,'2026-11-02'),b,check(b,'2026-11-02'),c,empty];const records=D.records(D.project(rows,at('2026-11-03')));
+ assert.equal(records.length,2);assert.equal(records.find(r=>r.type==='reading').id,a.challenge_id);assert.equal(records.find(r=>r.type==='smoke').score,2*D.DAY);
+});
