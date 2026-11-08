@@ -30,6 +30,13 @@
   let client = null;
   let taskBadgeRaf = 0;
   let taskLinkRefreshTimer = 0;
+  let workspaceTab = 'cockpit', workspaceProject = '', workspaceState = null;
+  let workspaceReady = false, workspaceSyncMessage = '', workspaceGeneration = 0, workspaceRaf = 0;
+  let knowledgeFilter = 'all', knowledgeQuery = '', knowledgeLimit = 20, knowledgeBusy = false;
+  let knowledgeRows = [], knowledgeKey = null, projectNoteLimit = 20, projectAuthEpoch = 0;
+  const workspaceLoaded = new Set();
+  const workspaceModel = () => window.HabitFlowProjectWorkspaceModel;
+
 
   function uid(prefix = 'project') {
     if (window.crypto?.randomUUID) return window.crypto.randomUUID();
@@ -421,7 +428,7 @@
   }
 
   function ensureCss() {
-    ['modules/projects.css', 'modules/projects-mobile-fix.css'].forEach(href => {
+    ['modules/projects.css', 'modules/projects-mobile-fix.css', 'modules/project-workspace.css'].forEach(href => {
       if (document.querySelector(`link[href="${href}"]`)) return;
       const link = document.createElement('link');
       link.rel = 'stylesheet';
@@ -539,13 +546,13 @@
     const content = characters.length > 100
       ? `<details class="project-note-disclosure"><summary aria-label="Notiz: ${escapeHtml(note.category)}"><span class="project-note-preview">${preview}…</span><span class="project-note-toggle"><span class="project-note-more">Mehr anzeigen</span><span class="project-note-less">Weniger anzeigen</span><span class="project-editor-chevron" aria-hidden="true">⌄</span></span></summary><p tabindex="0" aria-label="Vollständige Notiz">${fullText}</p></details>`
       : `<p class="project-note-preview">${fullText}</p>`;
-    return `<article class="project-card project-note-card"><div class="project-note-head"><h3>${escapeHtml(note.category)}</h3></div>${content}<footer class="project-note-footer"><div><small>Letztes Update</small><strong>${dateLabel(note.updated_at)}</strong></div><div class="list-actions">${projectActionButton('edit-project-note', note.id, 'Notiz bearbeiten', 'edit')}${projectActionButton('delete-project-note', note.id, 'Notiz löschen', 'trash', true)}</div></footer></article>`;
+    return `<article class="project-card project-note-card" data-note-id="${escapeHtml(note.id)}"><div class="project-note-head"><h3>${escapeHtml(note.category)}</h3></div>${content}<footer class="project-note-footer"><div><small>Letztes Update</small><strong>${dateLabel(note.updated_at)}</strong></div><div class="list-actions">${projectActionButton('edit-project-note', note.id, 'Notiz bearbeiten', 'edit')}${projectActionButton('delete-project-note', note.id, 'Notiz löschen', 'trash', true)}</div></footer></article>`;
   }
 
   function renderProjectNotes(project, state) {
     const notes = projectNotes(state, project.id);
     const categories = [...new Set(notes.map(note => note.category).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
-    return `<div class="project-section-head"><div><p class="eyebrow">Notizen</p><h3>Projektnotizen</h3></div><span class="badge muted">${notes.length} Notiz${notes.length === 1 ? '' : 'en'}</span></div><details class="project-editor-toggle project-note-editor" data-project-editor="note"><summary><span><small>Notizzettel</small>Notiz erfassen oder bearbeiten</span><span class="project-editor-chevron" aria-hidden="true">⌄</span></summary><form class="project-note-form" data-project-note-form data-project-id="${escapeHtml(project.id)}"><label class="project-note-body"><span>Notiz</span><textarea name="body" rows="4" required placeholder="Gedanke, Entscheid oder offene Frage"></textarea></label><label class="project-note-category"><span>Kategorie</span><input name="category" list="project-note-categories-${escapeHtml(project.id)}" required placeholder="z. B. Recherche" /></label><datalist id="project-note-categories-${escapeHtml(project.id)}">${categories.map(category => `<option value="${escapeHtml(category)}"></option>`).join('')}</datalist><button class="mini-btn primary" type="submit">Notiz speichern</button></form></details><div class="project-note-list">${notes.length ? notes.map(renderProjectNote).join('') : '<div class="project-empty">Noch keine Projektnotiz. Halte Entscheide, Fragen und Erkenntnisse direkt hier fest.</div>'}</div>`;
+    return `<div class="project-section-head"><div><p class="eyebrow">Notizen</p><h3>Projektnotizen</h3></div><span class="badge muted">${notes.length} Notiz${notes.length === 1 ? '' : 'en'}</span></div><details class="project-editor-toggle project-note-editor" data-project-editor="note"><summary><span><small>Notizzettel</small>Notiz erfassen oder bearbeiten</span><span class="project-editor-chevron" aria-hidden="true">⌄</span></summary><form class="project-note-form" data-project-note-form data-project-id="${escapeHtml(project.id)}"><label class="project-note-body"><span>Notiz</span><textarea name="body" rows="4" required placeholder="Gedanke, Entscheid oder offene Frage"></textarea></label><label class="project-note-category"><span>Kategorie</span><input name="category" list="project-note-categories-${escapeHtml(project.id)}" required placeholder="z. B. Recherche" /></label><datalist id="project-note-categories-${escapeHtml(project.id)}">${categories.map(category => `<option value="${escapeHtml(category)}"></option>`).join('')}</datalist><button class="mini-btn primary" type="submit">Notiz speichern</button></form></details><div class="project-note-list">${notes.length ? notes.slice(0,projectNoteLimit).map(renderProjectNote).join('') : '<div class="project-empty">Noch keine Projektnotiz. Halte Entscheide, Fragen und Erkenntnisse direkt hier fest.</div>'}</div><button class="mini-btn secondary" type="button" data-action="workspace-notes-more"${notes.length <= projectNoteLimit ? ' hidden' : ''}>Weitere Projektnotizen</button>`;
   }
 
   function renderDetail(projectId) {
@@ -554,24 +561,233 @@
     const node = document.getElementById('projectDetailContent');
     if (!node || !project) return;
     selectedProjectId = projectId;
+    workspaceState = state;
+    if (workspaceProject === projectId && node.querySelector('[data-workspace-tabs]')) { refreshWorkspace(project, state); return; }
+    workspaceProject = projectId;
     const progress = progressFor(project, state);
     const tasks = projectTasks(state, project.id);
     const phases = projectPhases(state, project.id);
     const milestones = projectMilestones(state, project.id);
     const status = STATUS[project.status] || STATUS.planned;
-    node.innerHTML = `<div class="project-detail-head">${projectBadge(project)}<p class="eyebrow">Projekt</p><h2>${escapeHtml(project.title)}</h2><p>${escapeHtml(project.description || 'Noch keine Beschreibung.')}</p></div>
-      <div class="project-detail-grid"><article class="project-detail-box"><small>Status</small><h3><span class="badge ${status.cls}">${status.label}</span></h3><p class="subtle">${dateLabel(project.start_date)} bis ${dateLabel(project.end_date)}</p></article><article class="project-detail-box"><small>Fortschritt</small><h3>${progress}%</h3><div class="project-progress-track"><i style="width:${progress}%"></i></div></article><article class="project-detail-box"><small>Ziel / Outcome</small><p class="subtle">${escapeHtml(project.outcome_note || 'Noch kein Outcome notiert.')}</p></article><article class="project-detail-box project-next-step"><small>Nächster sinnvoller Schritt</small><p>${escapeHtml(nextStep(project, state, progress))}</p></article></div>
+    node.innerHTML = `<div data-workspace-header><div class="project-detail-head">${projectBadge(project)}<p class="eyebrow">Projekt</p><h2>${escapeHtml(project.title)}</h2><p>${escapeHtml(project.description || 'Noch keine Beschreibung.')}</p></div>
+</div>
+      <nav class="project-workspace-tabs" data-workspace-tabs role="tablist" aria-label="Projektbereiche">${[['cockpit','Cockpit'],['planning','Planung'],['knowledge','Wissen']].map(([id,label]) => `<button type="button" role="tab" id="project-tab-${id}" aria-controls="project-panel-${id}" aria-selected="${workspaceTab === id}" tabindex="${workspaceTab === id ? '0' : '-1'}" data-action="workspace-tab" data-id="${id}">${label}</button>`).join('')}</nav>
+      <div class="workspace-capture-bar"><button class="pill primary" type="button" data-action="workspace-capture" aria-controls="projectCaptureChoices" aria-expanded="false">+ Erfassen</button><span class="subtle" data-workspace-sync role="status"></span><button class="mini-btn secondary" type="button" data-action="workspace-refresh">Aktualisieren</button></div>
+      ${renderWorkspaceCapture(project)}
+      <section role="tabpanel" id="project-panel-cockpit" aria-labelledby="project-tab-cockpit" data-workspace-panel="cockpit" tabindex="0">
+        <div data-workspace-summary>      <div class="project-detail-grid"><article class="project-detail-box"><small>Status</small><h3><span class="badge ${status.cls}">${status.label}</span></h3><p class="subtle">${dateLabel(project.start_date)} bis ${dateLabel(project.end_date)}</p></article><article class="project-detail-box"><small>Fortschritt</small><h3>${progress}%</h3><div class="project-progress-track"><i style="width:${progress}%"></i></div></article><article class="project-detail-box"><small>Ziel / Outcome</small><p class="subtle">${escapeHtml(project.outcome_note || 'Noch kein Outcome notiert.')}</p></article><article class="project-detail-box project-next-step"><small>Nächster sinnvoller Schritt</small><p>${escapeHtml(nextStep(project, state, progress))}</p></article></div>
+</div>
+        <div data-workspace-aggregate></div><section data-workspace-coach aria-label="Projekt-Coach"></section><div data-workspace-activity></div>
+      </section>
+      <section role="tabpanel" id="project-panel-planning" aria-labelledby="project-tab-planning" data-workspace-panel="planning" tabindex="0">
       <div class="project-section-head"><div><p class="eyebrow">Projektstruktur</p><h3>Phasen &amp; Meilensteine</h3></div><span class="badge muted">Verwalten</span></div>
       ${renderProjectEditors(project, phases, milestones)}
       <div class="project-section-head project-overview-head"><div><p class="eyebrow">Timeline</p><h3>Projektübersicht</h3></div><span class="badge muted">${phases.length} Phase${phases.length === 1 ? '' : 'n'} · ${milestones.length} Meilenstein${milestones.length === 1 ? '' : 'e'}</span></div>
-      <div class="project-phase-list">${phases.length ? phases.map((phase, index) => renderPhase(phase, project, milestonesForPhase(milestones, phase.id), index === 0)).join('') : '<div class="project-empty">Noch keine Phasen. Erstelle die erste Projektphase.</div>'}</div>
-      ${renderProjectNotes(project, state)}
-      <div class="project-section-head"><div><p class="eyebrow">Tasks</p><h3>Verknüpfte Aufgaben</h3></div><span class="badge muted">${tasks.length} Task${tasks.length === 1 ? '' : 's'}</span></div>
+      <div class="project-phase-list" data-workspace-phases>${phases.length ? phases.map((phase, index) => renderPhase(phase, project, milestonesForPhase(milestones, phase.id), index === 0)).join('') : '<div class="project-empty">Noch keine Phasen. Erstelle die erste Projektphase.</div>'}</div>
+      <div class="project-section-head"><div><p class="eyebrow">Tasks</p><h3>Verknüpfte Aufgaben</h3></div><span class="badge muted" data-workspace-task-count>${tasks.length} Task${tasks.length === 1 ? '' : 's'}</span></div>
       ${renderTaskTools(project, state)}
       <div data-project-tasks>${renderProjectTaskList(tasks)}</div>
-      <section data-project-dossiers></section>
+</section>
+      <section role="tabpanel" id="project-panel-knowledge" aria-labelledby="project-tab-knowledge" data-workspace-panel="knowledge" tabindex="0">
+        <div class="project-section-head"><div><p class="eyebrow">Projektwissen</p><h3>Quellen, Gedanken &amp; Entscheidungen</h3></div></div>
+        <label class="workspace-search"><span>Wissen durchsuchen</span><input type="search" data-workspace-search placeholder="Titel, Inhalt oder URL" /></label>
+        <div class="workspace-filters" role="group" aria-label="Wissensfilter">${[['all','Alle'],['links','Links'],['thoughts','Gedanken'],['decisions','Entscheide'],['dossiers','Dossiers']].map(([id,label]) => `<button class="mini-btn secondary" type="button" data-action="workspace-filter" data-id="${id}" aria-pressed="${knowledgeFilter === id}">${label}</button>`).join('')}</div>
+        <div class="workspace-knowledge-status"><p class="subtle" data-knowledge-status role="status"></p><button type="button" class="mini-btn secondary" data-action="workspace-load">Inhalte laden</button></div>
+        <div class="workspace-knowledge-list" data-knowledge-results></div><button type="button" class="mini-btn secondary" data-action="workspace-more" hidden>Mehr anzeigen</button>
+        <div class="workspace-dossier-actions"><button type="button" class="mini-btn secondary" data-action="workspace-choose-dossier">Dossier verknüpfen</button><button type="button" class="mini-btn secondary" data-action="workspace-create-dossier">Dossier erstellen</button></div>
+        <section data-project-dossiers></section>
+        <section data-workspace-notes>${renderProjectNotes(project, state)}</section>
+      </section>
       <div class="form-actions project-detail-actions">${projectActionButton('edit-project', project.id, 'Projekt bearbeiten', 'edit')}<button class="pill primary project-complete-button" type="button" data-action="mark-project-done" data-id="${escapeHtml(project.id)}"><span class="project-complete-icon" aria-hidden="true">${PROJECT_ACTION_ICONS.check}</span><span>Als abgeschlossen markieren</span></button></div>`;
-    renderProjectDossiers(projectId);
+    selectWorkspaceTab(workspaceTab, false);
+    refreshWorkspace(project, state);
+  }
+
+  function workspaceButton(action, label, id = '') {
+    return `<button class="mini-btn secondary" type="button" data-action="${action}" data-id="${escapeHtml(id)}">${label}</button>`;
+  }
+
+  function renderWorkspaceCapture(project) {
+    return `<section id="projectCaptureChoices" class="workspace-capture project-detail-box" hidden>
+      <div class="project-section-head"><h3>Was möchtest du festhalten?</h3>${workspaceButton('workspace-capture-close','Schliessen')}</div>
+      <div class="workspace-capture-types">${[['thought','Gedanke'],['link','Link'],['decision','Entscheidung']].map(([id,label])=>workspaceButton('workspace-capture-type',label,id)).join('')}${workspaceButton('create-project-task','Aufgabe',project.id)}</div>
+      <div data-workspace-dossier-choice hidden><p class="subtle">Wähle das Dossier für deinen Eintrag. Es wird nichts automatisch angelegt.</p><label class="workspace-search"><span>Dossier</span><select data-workspace-dossier-select></select></label><div class="dossier-actions">${workspaceButton('workspace-dossier-continue','Weiter')}${workspaceButton('workspace-create-dossier','Dossier erstellen')}</div><p data-workspace-capture-status role="status"></p></div>
+      <form data-project-note-form data-project-decision-form data-project-id="${escapeHtml(project.id)}" class="workspace-decision-form" hidden>
+        <h3>Entscheidung festhalten</h3><label><span>Entscheid *</span><textarea name="decision" rows="2" maxlength="600" required></textarea></label><label><span>Begründung *</span><textarea name="reason" rows="3" maxlength="800" required></textarea></label><label><span>Alternativen (optional)</span><textarea name="alternatives" rows="2" maxlength="400"></textarea></label><label><span>Konsequenz (optional)</span><textarea name="consequence" rows="2" maxlength="400"></textarea></label>
+        <p class="subtle">Wird als Projektnotiz gespeichert. Eine Aufgabe wird dadurch nicht automatisch erstellt.</p><p class="workspace-save-status" role="status" aria-live="polite"></p><button class="pill primary" type="submit">Entscheidung speichern</button>
+      </form>
+    </section>`;
+  }
+
+  function updateWorkspaceHtml(selector, html) {
+    const mount = document.querySelector(selector);
+    if (!mount || mount.dataset.workspaceHtml === html) return;
+    const focus = document.activeElement;
+    const action = mount.contains(focus) ? focus?.dataset?.action : '';
+    const id = action ? focus.dataset.id : '';
+    mount.dataset.workspaceHtml = html;
+    mount.innerHTML = html;
+    if (action) Array.from(mount.querySelectorAll('[data-action]')).find(button=>button.dataset.action === action && button.dataset.id === id)?.focus({preventScroll:true});
+  }
+
+  function refreshWorkspace(project, state) {
+    workspaceState = state;
+    const tasks = projectTasks(state, project.id), phases = projectPhases(state, project.id), milestones = projectMilestones(state, project.id);
+    const notes = projectNotes(state, project.id), progress = progressFor(project, state), status = STATUS[project.status] || STATUS.planned;
+    updateWorkspaceHtml('[data-workspace-header]', `<div class="project-detail-head">${projectBadge(project)}<p class="eyebrow">Projekt</p><h2>${escapeHtml(project.title)}</h2><p>${escapeHtml(project.description || 'Noch keine Beschreibung.')}</p></div>`);
+    updateWorkspaceHtml('[data-workspace-summary]', `<div class="project-detail-grid"><article class="project-detail-box"><small>Status</small><h3><span class="badge ${status.cls}">${status.label}</span></h3><p class="subtle">${dateLabel(project.start_date)} bis ${dateLabel(project.end_date)}</p></article><article class="project-detail-box"><small>Fortschritt</small><h3>${progress}%</h3><div class="project-progress-track"><i style="width:${progress}%"></i></div></article><article class="project-detail-box"><small>Ziel / Outcome</small><p class="subtle">${escapeHtml(project.outcome_note || 'Noch kein Outcome notiert.')}</p></article><article class="project-detail-box project-next-step"><small>Nächster sinnvoller Schritt</small><p>${escapeHtml(nextStep(project,state,progress))}</p>${workspaceButton('workspace-tab','Zur Planung','planning')}</article></div>`);
+    const today = new Date(); const localDay = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+    const hints = workspaceModel().coach(project,tasks,phases,milestones,localDay,workspaceReady);
+    updateWorkspaceHtml('[data-workspace-coach]', '<div class="project-section-head"><div><p class="eyebrow">Projekt-Coach</p><h3>Orientierung für den nächsten Schritt</h3></div></div>' + (hints.length ? '<div class="workspace-coach-grid">' + hints.map(hint=>`<article class="project-detail-box"><strong>${escapeHtml(hint.title)}</strong><p class="subtle">${escapeHtml(hint.reason)}</p><button class="mini-btn secondary" type="button" data-action="workspace-coach" data-id="${hint.action}" data-record-id="${escapeHtml(hint.recordId || '')}">${hint.label}</button></article>`).join('') + '</div>' : `<p class="subtle">${project.status === 'done' ? 'Projekt abgeschlossen. Wissen und Entscheidungen bleiben verfügbar.' : !workspaceReady ? 'Hinweise erscheinen nach dem Abgleich der Projektdaten.' : 'Die Grundlagen sind erfasst. In der Planung findest du deine nächsten Aufgaben.'}</p>`));
+    // Forms remain mounted. Updating record lists never resets typed values or selection.
+    updateWorkspaceHtml('[data-project-tasks]', renderProjectTaskList(tasks));
+    updateWorkspaceHtml('[data-workspace-phases]', phases.length ? phases.map((phase,index)=>renderPhase(phase,project,milestonesForPhase(milestones,phase.id),index===0)).join('') : '<div class="project-empty">Noch keine Phasen. Erstelle die erste Projektphase.</div>');
+    const temporary = document.createElement('div'); temporary.innerHTML = renderProjectEditors(project,phases,milestones);
+    for (const kind of ['phase','milestone']) {
+      const selector = `[data-project-editor="${kind}"] .project-editor-records`;
+      updateWorkspaceHtml(selector, temporary.querySelector(selector)?.innerHTML || '');
+    }
+    const phaseSelect=document.querySelector('[data-project-milestone-form] [name="phase_id"]');
+    if(phaseSelect && document.activeElement !== phaseSelect) { const value=phaseSelect.value; const options=phaseOptions(phases); if(phaseSelect.innerHTML !== options) { phaseSelect.innerHTML=options; phaseSelect.value=value; } }
+    const taskSelect=document.getElementById('projectTaskSelect');
+    if(taskSelect && document.activeElement !== taskSelect) {
+      const value=taskSelect.value; temporary.innerHTML=renderTaskTools(project,state);
+      const options=temporary.querySelector('select')?.innerHTML || ''; if(taskSelect.innerHTML !== options) { taskSelect.innerHTML=options; taskSelect.value=value; }
+    }
+    const taskCount=document.querySelector('[data-workspace-task-count]'); if(taskCount) taskCount.textContent=tasks.length + (tasks.length === 1 ? ' Task' : ' Tasks');
+    const phaseCount=document.querySelector('.project-overview-head>.badge'); if(phaseCount) phaseCount.textContent=phases.length + (phases.length === 1 ? ' Phase' : ' Phasen') + ' · ' + milestones.length + (milestones.length === 1 ? ' Meilenstein' : ' Meilensteine');
+    updateWorkspaceNotes(notes);
+    refreshWorkspaceKnowledge();
+    const message = document.querySelector('[data-workspace-sync]');
+    if (message) message.textContent = workspaceSyncMessage;
+  }
+
+  function updateWorkspaceNotes(notes) {
+    const mount = document.querySelector('[data-workspace-notes] .project-note-list');
+    if (!mount) return;
+    const signature = JSON.stringify(notes.slice(0,projectNoteLimit));
+    const count = document.querySelector('[data-workspace-notes] .project-section-head>.badge');
+    if (count) count.textContent = notes.length + (notes.length === 1 ? ' Notiz' : ' Notizen');
+    const more=document.querySelector('[data-action="workspace-notes-more"]'); if(more) more.hidden=notes.length <= projectNoteLimit;
+    if (mount.dataset.notesSignature === signature) return;
+    const expanded = new Set(Array.from(mount.querySelectorAll('[data-note-id]')).filter(card=>card.querySelector('details')?.open).map(card=>card.dataset.noteId));
+    updateWorkspaceHtml('[data-workspace-notes] .project-note-list', notes.length ? notes.slice(0,projectNoteLimit).map(renderProjectNote).join('') : '<div class="project-empty">Noch keine Projektnotiz. Halte Entscheide, Fragen und Erkenntnisse direkt hier fest.</div>');
+    mount.dataset.notesSignature = signature;
+    for (const card of mount.querySelectorAll('[data-note-id]')) if (expanded.has(card.dataset.noteId) && card.querySelector('details')) card.querySelector('details').open = true;
+
+  }
+
+  function selectWorkspaceTab(tab, focus = true) {
+    if (!['cockpit','planning','knowledge'].includes(tab)) return;
+    workspaceTab = tab;
+    const root = document.getElementById('projectDetailContent'); if (!root) return;
+    root.querySelectorAll('[data-workspace-tabs] [role="tab"]').forEach(button=>{ const active = button.dataset.id === tab; button.setAttribute('aria-selected',String(active)); button.tabIndex = active ? 0 : -1; if (active && focus) button.focus({preventScroll:true}); });
+    root.querySelectorAll('[data-workspace-panel]').forEach(panel=>{ panel.hidden = panel.dataset.workspacePanel !== tab; });
+    if (tab === 'knowledge') refreshWorkspaceKnowledge();
+  }
+
+  function refreshWorkspaceKnowledge() {
+    if (!selectedProjectId || !workspaceState) return;
+    const snapshot = window.HabitFlowDossiersStore?.snapshot() || { dossiers:[],entries:[],metrics:{},status:'Dossier-Speicher wird geladen' };
+    const owner = window.HabitFlowRemote?.getUserId() || '';
+    const notes = projectNotes(workspaceState,selectedProjectId);
+    const dossiers = snapshot.dossiers.filter(row=>row.project_id === selectedProjectId && row.user_id === owner);
+    const decisions = notes.filter(note=>note.category === 'Entscheidung');
+    const knownHeaders = snapshot.status === 'synchronisiert' || dossiers.length > 0;
+    updateWorkspaceHtml('[data-workspace-aggregate]', `<div class="workspace-metrics"><article class="project-detail-box"><small>Tasks</small><strong>${projectTasks(workspaceState,selectedProjectId).length}</strong></article><article class="project-detail-box"><small>Dossiers</small><strong>${knownHeaders ? dossiers.length : '–'}</strong></article><article class="project-detail-box"><small>Entscheide</small><strong>${workspaceReady || decisions.length ? decisions.length : '–'}</strong></article></div>`);
+    const latest = dossiers.slice().sort((a,b)=>(snapshot.metrics[b.id]?.updated_at || b.updated_at).localeCompare(snapshot.metrics[a.id]?.updated_at || a.updated_at))[0];
+    updateWorkspaceHtml('[data-workspace-activity]', `<div class="workspace-activity-grid"><article class="project-detail-box"><small>Letzte Entscheidung</small><p>${escapeHtml(decisions[0] ? workspaceModel().preview(decisions[0].body) : 'Noch keine Entscheidung erfasst.')}</p>${decisions[0] ? workspaceButton('workspace-open-note','Entscheidung ansehen',decisions[0].id) : workspaceButton('workspace-capture-type','Entscheid erfassen','decision')}</article><article class="project-detail-box"><small>Zuletzt aktualisiertes Wissen</small><p>${escapeHtml(latest?.title || (knownHeaders ? 'Noch kein Dossier verknüpft.' : 'Dossier-Übersicht wird abgeglichen.'))}</p>${latest ? workspaceButton('open-project-dossier','Dossier öffnen ↗',latest.id) : workspaceButton('workspace-choose-dossier','Dossier auswählen')}</article></div>`);
+    if (workspaceTab !== 'knowledge') return;
+    const key = [snapshot.dossiers,snapshot.entries,workspaceState.projectNotes,owner,selectedProjectId];
+    if (!knowledgeKey || key.some((value,index)=>value!==knowledgeKey[index])) { knowledgeRows = workspaceModel().knowledge(selectedProjectId,owner,snapshot,notes); knowledgeKey = key; }
+    const result = workspaceModel().page(knowledgeRows,knowledgeFilter,knowledgeQuery,knowledgeLimit);
+    updateWorkspaceHtml('[data-knowledge-results]', result.rows.length ? result.rows.map(row=>`<article class="workspace-knowledge-card"><div><small>${({links:'Quelle',thoughts:'Gedanke / Eintrag',decisions:'Entscheidung',dossiers:'Dossier'})[row.kind]}${row.dossierTitle ? ' · ' + escapeHtml(row.dossierTitle) : ''}</small><h4>${escapeHtml(row.title)}</h4>${row.url ? `<a href="${escapeHtml(row.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(row.url)}</a>` : `<p>${escapeHtml(row.preview)}</p>`}<time>${dateLabel(row.updated)}</time></div><button class="mini-btn project-task-icon" type="button" data-action="${row.noteId ? 'workspace-open-note' : 'open-project-dossier'}" data-id="${escapeHtml(row.noteId || row.dossierId)}" data-entry-id="${escapeHtml(row.entryId || '')}" aria-label="${row.noteId ? 'Entscheidung ansehen' : 'Im Dossier öffnen'}" title="${row.noteId ? 'Entscheidung ansehen' : 'Im Dossier öffnen'}">↗</button></article>`).join('') : '<p class="project-empty">' + (knowledgeQuery ? 'Keine Treffer in den lokal verfügbaren Inhalten.' : 'Hier erscheinen verknüpfte Dossiers, geladene Einträge und Entscheidungen.') + '</p>');
+    const more = document.querySelector('[data-action="workspace-more"]'); if (more) more.hidden = result.rows.length >= result.total;
+    const load = document.querySelector('[data-action="workspace-load"]');
+    const unloaded = dossiers.filter(row=>!workspaceLoaded.has(row.id));
+    if (load) { load.disabled = knowledgeBusy || !dossiers.length; load.textContent = knowledgeBusy ? 'Inhalte werden geladen …' : unloaded.length ? 'Weitere Inhalte laden (' + unloaded.length + ')' : 'Inhalte aktualisieren'; }
+    const status = document.querySelector('[data-knowledge-status]');
+    if (status) status.textContent = `${result.rows.length} von ${result.total} Treffern · Nur lokal verfügbare Inhalte. ${workspaceLoaded.size} Dossiers in dieser Sitzung geladen. ${snapshot.status || ''}`;
+    renderProjectDossiers(selectedProjectId);
+  }
+
+  async function loadWorkspaceKnowledge() {
+    if (knowledgeBusy || !selectedProjectId) return;
+    const store = window.HabitFlowDossiersStore; if (!store) return;
+    const generation = workspaceGeneration, projectId = selectedProjectId;
+    const snapshot = store.snapshot(), dossiers = snapshot.dossiers.filter(row=>row.project_id === projectId);
+    const pending = dossiers.filter(row=>!workspaceLoaded.has(row.id));
+    const batch = (pending.length ? pending : dossiers).slice(0,3);
+    knowledgeBusy = true; refreshWorkspaceKnowledge();
+    try {
+      for (const dossier of batch) {
+        if (generation !== workspaceGeneration || projectId !== selectedProjectId) break;
+        await store.sync(dossier.id);
+        if (generation !== workspaceGeneration) break;
+        if (store.snapshot().metrics?.[dossier.id]?.loaded) workspaceLoaded.add(dossier.id);
+        else break;
+      }
+    } finally { if (generation === workspaceGeneration) { knowledgeBusy = false; refreshWorkspaceKnowledge(); } }
+  }
+
+  function showWorkspaceCapture(type) {
+    const panel = document.getElementById('projectCaptureChoices'); if (!panel) return;
+    panel.hidden = false;
+    document.querySelector('[data-action="workspace-capture"]')?.setAttribute('aria-expanded','true');
+    const decision = panel.querySelector('[data-project-decision-form]'), choice = panel.querySelector('[data-workspace-dossier-choice]');
+    decision.hidden = type !== 'decision'; choice.hidden = !['thought','link','link-dossier'].includes(type);
+    if (!choice.hidden) {
+      choice.dataset.mode = type;
+      const select = choice.querySelector('select'), snapshot = window.HabitFlowDossiersStore?.snapshot();
+      const options = (snapshot?.dossiers || []).filter(row=>!row.project_id || row.project_id === selectedProjectId);
+      select.innerHTML = '<option value="">Dossier auswählen</option>' + options.map(row=>`<option value="${escapeHtml(row.id)}">${escapeHtml(row.title)}${row.project_id ? '' : ' · noch ohne Projekt'}</option>`).join('');
+      choice.querySelector('[data-workspace-capture-status]').textContent = type === 'link-dossier' ? 'Ein eigenständiges Dossier wird erst durch «Weiter» mit diesem Projekt verknüpft.' : 'Ein noch nicht verknüpftes Dossier wird mit «Weiter» diesem Projekt zugeordnet.';
+      select.focus();
+    } else if (type === 'decision') decision.querySelector('textarea').focus();
+    else panel.querySelector('button')?.focus();
+    panel.scrollIntoView({block:'nearest'});
+  }
+
+  function continueWorkspaceDossier(trigger) {
+    const choice = document.querySelector('[data-workspace-dossier-choice]');
+    const id = choice?.querySelector('select')?.value;
+    const store = window.HabitFlowDossiersStore;
+    const row = store?.snapshot().dossiers.find(item=>item.id === id);
+    const message = choice?.querySelector('[data-workspace-capture-status]');
+    if (!row) { if (message) message.textContent = 'Bitte ein Dossier auswählen.'; return; }
+    if (row.project_id && row.project_id !== selectedProjectId) { message.textContent = 'Das Dossier gehört inzwischen zu einem anderen Projekt. Bitte erneut auswählen.'; return; }
+    try {
+      if (!row.project_id) store.saveDossier({ id:row.id,project_id:selectedProjectId });
+      if (choice.dataset.mode === 'link-dossier') { message.textContent = 'Dossier lokal verknüpft. Der Sync-Status zeigt den Abgleich.'; refreshWorkspaceKnowledge(); return; }
+      openProjectDossier(row.id,trigger,{ composer:choice.dataset.mode });
+    } catch(error) { message.textContent = error.message || 'Dossier konnte nicht verknüpft werden.'; }
+  }
+
+  function workspaceAction(action, id, trigger) {
+    if (action === 'workspace-tab') selectWorkspaceTab(id);
+    if (action === 'workspace-filter') { knowledgeFilter=id; knowledgeLimit=20; document.querySelectorAll('[data-action="workspace-filter"]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.id === id))); refreshWorkspaceKnowledge(); }
+    if (action === 'workspace-notes-more') { projectNoteLimit+=20; updateWorkspaceNotes(projectNotes(workspaceState,selectedProjectId)); }
+    if (action === 'workspace-more') { knowledgeLimit+=20; refreshWorkspaceKnowledge(); }
+    if (action === 'workspace-refresh') { workspaceSyncMessage='Projektdaten werden abgeglichen …'; renderDetail(selectedProjectId); void pullRemoteProjectData(selectedProjectId); }
+    if (action === 'workspace-load') void loadWorkspaceKnowledge();
+    if (action === 'workspace-capture') showWorkspaceCapture('');
+    if (action === 'workspace-capture-type') showWorkspaceCapture(id);
+    if (action === 'workspace-capture-close') { document.getElementById('projectCaptureChoices').hidden=true; const button=document.querySelector('[data-action="workspace-capture"]'); button?.setAttribute('aria-expanded','false'); button?.focus(); }
+    if (action === 'workspace-choose-dossier') showWorkspaceCapture('link-dossier');
+    if (action === 'workspace-dossier-continue') continueWorkspaceDossier(trigger);
+    if (action === 'workspace-create-dossier') openProjectDossier('',trigger,{ create:true, projectId:selectedProjectId });
+    if (action === 'workspace-open-note') {
+      selectWorkspaceTab('knowledge',false);
+      const notes=projectNotes(workspaceState,selectedProjectId), position=notes.findIndex(note=>note.id===id);
+      if(position>=projectNoteLimit) { projectNoteLimit=Math.ceil((position+1)/20)*20; updateWorkspaceNotes(notes); }
+      const card=Array.from(document.querySelectorAll('[data-note-id]')).find(node=>node.dataset.noteId===id);
+      if (card) { const details=card.querySelector('details'); if(details) details.open=true; card.scrollIntoView({block:'center'}); const target=card.querySelector('summary,button'); target?.focus({preventScroll:true}); }
+    }
+    if (action === 'workspace-coach') {
+      if (id === 'task') document.querySelector('[data-action="create-project-task"]')?.click();
+      if (id === 'outcome') { closeDetail({skipSync:true}); openForm(selectedProjectId || workspaceProject); document.querySelector('#projectForm [name="outcome_note"]')?.focus(); }
+      if (id === 'phase' || id === 'milestone') { selectWorkspaceTab('planning',false); const editor=document.querySelector(`[data-project-editor="${id}"]`); if(editor) { editor.open=true; editor.querySelector('input')?.focus(); editor.scrollIntoView({block:'nearest'}); } if(id==='milestone' && trigger.dataset.recordId) editMilestone(trigger.dataset.recordId); }
+    }
   }
 
   const completedProjects = new Set();
@@ -836,39 +1052,54 @@
   async function saveProjectNote(event) {
     event.preventDefault();
     const form = event.target;
-    if (!(form instanceof HTMLFormElement)) return;
-    const data = new FormData(form);
-    const projectId = form.dataset.projectId;
+    if (!(form instanceof HTMLFormElement) || form.dataset.saving === 'true') return;
+    const data = new FormData(form), projectId = form.dataset.projectId;
     const editingNoteId = form.dataset.editingNoteId || '';
-    const category = String(data.get('category') || '').trim();
-    const body = String(data.get('body') || '').trim();
-    if (!projectId || !category || !body) return toast('Notiz braucht Kategorie und Inhalt.');
+    const decision = form.hasAttribute('data-project-decision-form');
+    let message = form.querySelector('.workspace-save-status');
+    if (!message) { message=document.createElement('p'); message.className='workspace-save-status'; message.setAttribute('role','status'); form.append(message); }
+    let body, category;
     try {
-      const state = readState();
-      const existing = editingNoteId ? state.projectNotes.find(item => item.id === editingNoteId) : null;
+      category = decision ? 'Entscheidung' : String(data.get('category') || '').trim();
+      body = decision ? workspaceModel().decisionBody(Object.fromEntries(data.entries())) : String(data.get('body') || '').trim();
+      if (!projectId || !category || !body) throw new Error('Notiz braucht Kategorie und Inhalt.');
+      if (body.length > 2000) throw new Error('Bitte die Notiz auf 2’000 Zeichen kürzen. Der Entwurf bleibt erhalten.');
+    } catch (error) { message.textContent=error.message; return; }
+    const submit = form.querySelector('button[type="submit"]');
+    form.dataset.saving='true'; form.setAttribute('aria-busy','true'); if(submit) submit.disabled=true;
+    message.textContent='Wird gespeichert …';
+    const generation = workspaceGeneration;
+    try {
+      const existing = editingNoteId ? readState().projectNotes.find(item => item.id === editingNoteId) : null;
       const now = nowIso();
-      const note = normalizeProjectNote({ ...(existing || {}), id: existing?.id || uid('note'), project_id: projectId, category, body, created_at: existing?.created_at || now, updated_at: now, synced: true });
+      // Retain the id on ambiguous remote errors, so retry cannot duplicate a decision.
+      const id = existing?.id || form.dataset.pendingNoteId || uid('note'); form.dataset.pendingNoteId=id;
+      const note = normalizeProjectNote({ ...(existing || {}), id, project_id:projectId, category, body, created_at:existing?.created_at || now, updated_at:now, synced:true });
       const { supabase, userId } = await requireRemoteUser();
-      const row = { id: note.id, user_id: userId, project_id: note.project_id, category: note.category, body: note.body, is_archived: false, created_at: note.created_at, updated_at: note.updated_at };
-      const { error } = await supabase.from(TABLE_NOTES).upsert(row, { onConflict: 'id' });
+      if (generation !== workspaceGeneration) return;
+      const row = { id:note.id, user_id:userId, project_id:note.project_id, category:note.category, body:note.body, is_archived:false, created_at:note.created_at, updated_at:note.updated_at };
+      const { error } = await supabase.from(TABLE_NOTES).upsert(row, { onConflict:'id' });
       if (error) throw error;
-      state.projectNotes = existing ? state.projectNotes.map(item => item.id === note.id ? note : item) : [note, ...state.projectNotes];
+      if (generation !== workspaceGeneration || userId !== await currentUserId()) return;
+      const state = readState();
+      state.projectNotes = [note, ...state.projectNotes.filter(item=>item.id !== note.id)];
       writeState(state);
-      delete form.dataset.editingNoteId;
+      delete form.dataset.editingNoteId; delete form.dataset.pendingNoteId;
       form.reset();
-      renderDetail(projectId);
+      if(submit) submit.textContent=decision ? 'Entscheidung speichern' : 'Notiz speichern';
+      message.textContent=decision ? 'Entscheidung gespeichert.' : 'Notiz gespeichert.';
       render();
-      toast(existing ? 'Notiz aktualisiert' : 'Notiz gespeichert');
+      toast(decision ? 'Entscheidung gespeichert' : existing ? 'Notiz aktualisiert' : 'Notiz gespeichert');
     } catch (error) {
       console.warn('[HabitFlow/projects] Projektnotiz konnte nicht gespeichert werden.', error);
-      toast(isMissingRemoteRelationError(error) ? 'Bitte zuerst das Supabase-Skript für Projektnotizen ausführen.' : (error.message || 'Notiz konnte nicht gespeichert werden.'));
-    }
+      message.textContent=(isMissingRemoteRelationError(error) ? 'Bitte zuerst das Supabase-Skript für Projektnotizen ausführen.' : (error.message || 'Notiz konnte nicht gespeichert werden.')) + ' Dein Entwurf bleibt erhalten. Bitte erneut versuchen.';
+    } finally { delete form.dataset.saving; form.removeAttribute('aria-busy'); if(submit) submit.disabled=false; }
   }
 
   function editProjectNote(id) {
     const note = readState().projectNotes.find(item => item.id === id);
     if (!note) return;
-    const form = Array.from(document.querySelectorAll('[data-project-note-form]')).find(item => item.dataset.projectId === note.project_id);
+    const form = Array.from(document.querySelectorAll('[data-project-note-form]:not([data-project-decision-form])')).find(item => item.dataset.projectId === note.project_id);
     if (!form) return;
     form.dataset.editingNoteId = note.id;
     form.elements.category.value = note.category || 'Allgemein';
@@ -1006,12 +1237,12 @@
     projectTaskReturn = null;
   }
 
-  function openProjectDossier(id, trigger) {
+  function openProjectDossier(id, trigger, options = {}) {
     const modal = document.getElementById('projectDetailModal');
     if (!selectedProjectId || !modal) return;
     const card = modal.querySelector('.project-detail-card');
     const context = { projectId:selectedProjectId, modalScroll:modal.scrollTop, cardScroll:card?.scrollTop || 0 };
-    const opened = window.HabitFlowDossiers?.open(id, { fromProject:true, onDismiss(restore) {
+    const opened = window.HabitFlowDossiers?.open(id, { ...options, entryId:options.entryId || trigger?.dataset?.entryId, fromProject:true, onDismiss(restore) {
       if (selectedProjectId !== context.projectId) return;
       if (!restore || !readState().projects.some(project => project.id === context.projectId)) { closeDetail({skipSync:true}); return; }
       window.HabitFlowRoadmapProjects?.refreshTasks?.();
@@ -1049,9 +1280,15 @@
     window.HabitFlowDossiers?.showProjects();
     clearProjectTaskReturn();
     loadedProjectDossiers.clear();
+    workspaceGeneration++; workspaceLoaded.clear(); knowledgeBusy=false; knowledgeKey=null;
+    workspaceTab='cockpit'; workspaceProject=''; workspaceReady=false; workspaceSyncMessage='Projektdaten werden abgeglichen …';
+    knowledgeFilter='all'; knowledgeQuery=''; knowledgeLimit=20; projectNoteLimit=20;
     selectedProjectId = projectId;
     renderDetail(projectId);
-    if (!dossierUnsubscribe && window.HabitFlowDossiersStore) dossierUnsubscribe = window.HabitFlowDossiersStore.subscribe(() => { if (selectedProjectId) renderProjectDossiers(selectedProjectId); });
+    if (!dossierUnsubscribe && window.HabitFlowDossiersStore) dossierUnsubscribe = window.HabitFlowDossiersStore.subscribe(() => {
+      if (!selectedProjectId || workspaceRaf) return;
+      workspaceRaf = window.requestAnimationFrame(() => { workspaceRaf=0; if(selectedProjectId) refreshWorkspaceKnowledge(); });
+    });
     void window.HabitFlowDossiersStore?.sync('');
     const modal = document.getElementById('projectDetailModal');
     if (!modal) return;
@@ -1061,6 +1298,8 @@
   }
 
   function closeDetail(options = {}) {
+    workspaceGeneration++; knowledgeBusy=false; workspaceLoaded.clear(); knowledgeKey=null; knowledgeRows=[];
+    if (workspaceRaf) window.cancelAnimationFrame(workspaceRaf); workspaceRaf=0;
     dossierUnsubscribe?.(); dossierUnsubscribe = null;
     clearProjectTaskReturn();
     selectedProjectId = '';
@@ -1070,9 +1309,13 @@
   }
 
   async function pullRemoteProjectData(projectId = '', options = {}) {
+    const authEpoch=projectAuthEpoch;
     const supabase = getSupabaseClient();
     const userId = await currentUserId();
-    if (!supabase || !userId || syncing) return;
+    if (!supabase || !userId || syncing) {
+      if (!userId && selectedProjectId) { workspaceSyncMessage='Lokal verfügbar · zum Abgleichen bitte anmelden.'; renderDetail(selectedProjectId); }
+      return;
+    }
     syncing = true;
     if (!options.silent) setSyncStatus('synchronisiert...');
     try {
@@ -1087,6 +1330,7 @@
       }
       const taskLinkQuery = supabase.from('tasks').select('id,project_id,updated_at').eq('user_id', userId).not('project_id', 'is', null);
       const [projectsRemote, phasesRemote, milestonesRemote, notesRemote, taskLinksRemote] = await Promise.all([projectQuery, phaseQuery, milestoneQuery, noteQuery, taskLinkQuery]);
+      if (userId !== await currentUserId() || authEpoch !== projectAuthEpoch) return;
       if (projectsRemote.error) throw projectsRemote.error;
       if (phasesRemote.error) throw phasesRemote.error;
       if (milestonesRemote.error && !isMissingRemoteRelationError(milestonesRemote.error)) throw milestonesRemote.error;
@@ -1115,10 +1359,12 @@
       }
       writeState(state);
       if (!options.silent) setSyncStatus('synchronisiert');
+      if (!projectId || selectedProjectId === projectId) { workspaceReady=!notesRemote.error && !taskLinksRemote.error && (taskLinksRemote.data || []).every(link=>state.tasks.some(task=>task.id === link.id)); workspaceSyncMessage=workspaceReady ? 'Projektdaten synchronisiert' : 'Projekt geladen · Aufgaben oder Notizen noch nicht vollständig verfügbar'; }
       render();
     } catch (error) {
       if (!options.silent) setSyncStatus('Sync-Fehler');
       console.warn('[HabitFlow/projects] Sync fehlgeschlagen.', error);
+      if (selectedProjectId) { workspaceReady=false; workspaceSyncMessage='Abgleich fehlgeschlagen · lokal verfügbare Projektdaten.'; renderDetail(selectedProjectId); }
     } finally { syncing = false; }
   }
 
@@ -1142,6 +1388,7 @@
       if (!actionEl) return;
       const action = actionEl.dataset.action;
       const id = actionEl.dataset.id;
+      if (action.startsWith('workspace-')) { workspaceAction(action,id,actionEl); return; }
       if (action === 'toggle-project-form') openForm();
       if (action === 'close-project-form' || action === 'cancel-project-edit') closeForm();
       if (action === 'open-project-detail') openDetail(id);
@@ -1171,7 +1418,18 @@
         if (!loadedProjectDossiers.has(event.target.dataset.projectDossier)) { loadedProjectDossiers.add(event.target.dataset.projectDossier); void window.HabitFlowDossiersStore?.sync(event.target.dataset.projectDossier); }
       }
     }, true);
+    document.addEventListener('input', event => {
+      if (event.target.matches?.('[data-workspace-search]')) { knowledgeQuery=event.target.value; knowledgeLimit=20; refreshWorkspaceKnowledge(); }
+    });
+    window.addEventListener?.('habitflow:auth-change', () => {
+      projectAuthEpoch++; closeDetail({skipSync:true}); workspaceState=null; workspaceProject=''; workspaceTab='cockpit'; workspaceReady=false;
+      const content=document.getElementById('projectDetailContent'); if(content) content.innerHTML='';
+    });
     document.addEventListener('keydown', event => {
+      if (event.target?.closest?.('[data-workspace-tabs]') && ['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) {
+        event.preventDefault(); const tabs=['cockpit','planning','knowledge']; const index=tabs.indexOf(workspaceTab);
+        selectWorkspaceTab(tabs[event.key === 'Home' ? 0 : event.key === 'End' ? 2 : (index+(event.key === 'ArrowRight' ? 1 : 2))%3]); return;
+      }
       if (event.key === 'Escape' && !document.getElementById('projectDetailModal')?.classList.contains('hidden')) closeDetail();
     });
     document.getElementById('projectDetailModal')?.addEventListener('click', event => { if (event.target.id === 'projectDetailModal') closeDetail(); });
@@ -1192,7 +1450,7 @@
 
   window.HabitFlowRoadmapProjects = Object.freeze({
     badge: projectBadge,
-    refreshTasks: () => { const mount = document.querySelector('[data-project-tasks]'); if (mount && selectedProjectId) mount.innerHTML = renderProjectTaskList(projectTasks(readState(),selectedProjectId)); },
+    refreshTasks: () => { if (selectedProjectId) renderDetail(selectedProjectId); },
     snapshot: () => { const current = readState(); return { projects: current.projects, milestones: current.projectMilestones, taskLinks: current.tasks.map(task => ({ id: task.id, projectId: task.project_id })) }; },
     open: id => { if (readState().projects.some(project => project.id === id && !project.is_archived)) openDetail(id); }
   });

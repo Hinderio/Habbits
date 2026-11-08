@@ -290,7 +290,7 @@ test('task ownership and removed tasks are checked; stale links can still be rem
 test('overview aggregates include unopened dossiers without fetching entry bodies',async()=>{
   const app=harness();app.remote.dossiers=[{id:id(1),user_id:OWNER,title:'Unopened',created_at:stamp,updated_at:stamp}];
   app.remote.dossier_entries=Array.from({length:125},(_,i)=>({id:id(i+10),user_id:OWNER,dossier_id:id(1),body:'Remote',created_at:stamp,updated_at:'2026-10-04T12:00:00.000Z',is_archived:i===0}));
-  await app.api.sync('');const snap=app.api.snapshot();assert.equal(snap.entries.length,0);assert.equal(snap.metrics[id(1)].count,124);assert.equal(snap.metrics[id(1)].exact,true);assert.equal(snap.metrics[id(1)].updated_at,'2026-10-04T12:00:00.000Z');
+  await app.api.sync('');const snap=app.api.snapshot();assert.equal(snap.entries.length,0);assert.equal(snap.metrics[id(1)].count,124);assert.equal(snap.metrics[id(1)].exact,true);assert.equal(snap.metrics[id(1)].loaded,false);assert.equal(snap.metrics[id(1)].updated_at,'2026-10-04T12:00:00.000Z');
   assert.equal(app.requests.filter(r=>r.table==='dossier_entries').length,0);assert.equal(app.rpcCalls.length,1);
   assert.ok(!app.values.get('habitflow-state-v1').includes('entry_count'),'aggregates are derived, not a second persistent dataset');
   const metrics=snap.metrics;app.resetCounts();for(let i=0;i<20;i++)assert.equal(app.api.snapshot().metrics,metrics);assert.equal(app.counts.parses,0);
@@ -298,7 +298,7 @@ test('overview aggregates include unopened dossiers without fetching entry bodie
 test('local complete counts track entry creation and archive, with no image queries',async()=>{
   const app=harness();const d=app.api.saveDossier({title:'Local'});assert.equal(app.api.snapshot().metrics[d.id].count,0);
   const e=app.api.saveEntry({dossier_id:d.id,body:'Note'});assert.equal(app.api.snapshot().metrics[d.id].count,1);
-  app.api.saveEntry({...e,is_archived:true});assert.equal(app.api.snapshot().metrics[d.id].count,0);await app.api.sync(d.id);assert.equal(app.api.snapshot().metrics[d.id].count,0);
+  app.api.saveEntry({...e,is_archived:true});assert.equal(app.api.snapshot().metrics[d.id].count,0);await app.api.sync(d.id);assert.equal(app.api.snapshot().metrics[d.id].count,0);assert.equal(app.api.snapshot().metrics[d.id].loaded,true);
 });
 test('summary pagination exceeds 1000 dossiers and account changes clear aggregates',async()=>{
   const app=harness();app.remote.dossiers=Array.from({length:1001},(_,i)=>({id:id(i),user_id:OWNER,title:'D',created_at:stamp,updated_at:stamp}));

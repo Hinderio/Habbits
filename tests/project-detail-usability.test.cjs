@@ -44,7 +44,7 @@ function harness() {
     'renderTaskRow', 'suspendProjectForTask', 'clearProjectTaskReturn', 'bindEvents'];
   const closeStart = source.indexOf('  function closeDetail(');
   const closeEnd = source.indexOf('\n  async function ', closeStart);
-  vm.runInContext('let selectedProjectId = "p1", projectTaskReturn = null, dossierUnsubscribe = null;\n' + functions.map(extract).join('\n') + '\n' + source.slice(closeStart, closeEnd), context);
+  vm.runInContext('let selectedProjectId = "p1", projectTaskReturn = null, dossierUnsubscribe = null, workspaceGeneration=0, knowledgeBusy=false, knowledgeKey=null, knowledgeRows=[], workspaceRaf=0; const workspaceLoaded=new Set();\n' + functions.map(extract).join('\n') + '\n' + source.slice(closeStart, closeEnd), context);
   let focused = false;
   const trigger = { dataset: { action: 'open-task-detail', id: 't1' }, isConnected: true,
     closest: () => ({}), focus(options) { focused = options.preventScroll; } };

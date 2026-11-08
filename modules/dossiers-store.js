@@ -102,7 +102,7 @@
       snapshotCache.metrics = Object.freeze(Object.fromEntries(snapshotCache.dossiers.map(row => {
         const remote = pending.has(row.id) ? null : summaries[row.id], complete = completeDossiers.has(row.id);
         return [row.id, Object.freeze({ count: complete ? counts.get(row.id) || 0 : remote?.count ?? counts.get(row.id) ?? 0,
-          exact: complete || Boolean(remote), updated_at: [row.updated_at, activity.get(row.id) || '', remote?.updated_at || ''].sort().at(-1) })];
+          exact: complete || Boolean(remote), loaded: complete, updated_at: [row.updated_at, activity.get(row.id) || '', remote?.updated_at || ''].sort().at(-1) })];
       })));
 
     }

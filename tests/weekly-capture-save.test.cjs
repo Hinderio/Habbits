@@ -4,6 +4,11 @@ const path = require('node:path');
 const vm = require('node:vm');
 const test = require('node:test');
 const source = fs.readFileSync(path.resolve(__dirname, '../modules/lists.js'), 'utf8');
+// The capture fixture belongs to this week; it must not become read-only as real time advances.
+class FixtureDate extends Date {
+  constructor(...args) { super(...(args.length ? args : [2026, 8, 30, 12])); }
+  static now() { return new FixtureDate().getTime(); }
+}
 
 function harness({ localFails = false, noSession = false, noClient = false, remoteError = false, noAck = false, wait = null } = {}) {
   const storage = new Map([['habitflow-lists-v1', JSON.stringify({ activeListId: 'weekly', items: [{ id: 'existing', listId: 'gifts', title: 'Keep me' }] })]]);
@@ -47,7 +52,7 @@ function harness({ localFails = false, noSession = false, noClient = false, remo
   };
   const hook = 'getClient = async () => testClient; syncToSupabase = items => testSyncs.push(items); window.captureTest = { saveWeeklyThought, renderWeeklyWeekCard, drafts: weeklyCaptureDrafts, state: () => state };';
   vm.runInNewContext(source.replace('})(window, document);', hook + '\n})(window, document);'), {
-    window, document, console, Date, Intl, Map, Set, Math, URL, Event, setTimeout, clearTimeout,
+    window, document, console, Date: FixtureDate, Intl, Map, Set, Math, URL, Event, setTimeout, clearTimeout,
     testClient: noClient ? null : client, testSyncs: syncs
   });
   return { api: window.captureTest, form, message, button, storage, remoteRows, syncs, resets: () => resets, allowRemote: () => { rejectRemote = false; } };
@@ -112,7 +117,7 @@ test('double submit while saving does not duplicate and draft survives a render'
   await h.api.saveWeeklyThought(h.form);
   assert.equal(h.resets(), 0);
   assert.equal(h.form.elements.title.value, 'Mobile Notiz');
-  const html = h.api.renderWeeklyWeekCard('2026-09-28');
+  const html = h.api.renderWeeklyWeekCard('2026-09-28', { currentWeek: '2026-09-28' });
   assert.match(html, /value="Mobile Notiz" disabled/);
   h.api.state().items.push({ id: 'concurrent', listId: 'weekly', title: 'Another remote note' });
   release(); await first;

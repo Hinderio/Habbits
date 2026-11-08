@@ -27,7 +27,7 @@ assert.doesNotMatch(workerSource, /\.replace\(['"`]/);
   'modules/pause-period-edit.js?v=204'
 ].forEach(asset => assert.match(indexSource, new RegExp(asset.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))));
 
-assert.match(indexSource, /modules\/calendar-bubbles-native\.css\?v=319/);
+assert.ok(Number(indexSource.match(/modules\/calendar-bubbles-native\.css\?v=(\d+)/)?.[1]) >= 319, 'calendar stylesheet remains versioned at or after the original release');
 assert.match(workerSource, /\.\/modules\/calendar-bubbles-native\.css/);
 assert.match(calendarCss, /content: attr\(data-initials\)/);
 assert.match(calendarCss, /calendar-event-chip\.is-birthday/);

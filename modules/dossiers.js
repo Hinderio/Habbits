@@ -464,7 +464,15 @@
     open(id, options = {}) {
       if (!pane || dialog.open || (id && !store.snapshot().dossiers.some(row => row.id === id))) return false;
       if (!options.fromProject) show('dossiers');
-      if (id) { open(id); returnToCaller = typeof options.onDismiss === 'function' ? options.onDismiss : null; }
+      if (id || options.create) {
+        open(id || ''); returnToCaller = typeof options.onDismiss === 'function' ? options.onDismiss : null;
+        if (options.create && options.projectId) dialog.querySelector('[data-dossier-form]').elements.project_id.value = options.projectId;
+        if (id && options.entryId) jumpEntry(options.entryId);
+        if (id && ['thought','link'].includes(options.composer)) {
+          setComposer(true);
+          dialog.querySelector('[data-entry-form]').elements[options.composer === 'link' ? 'link' : 'body'].focus();
+        }
+      }
       return true;
     }
   });
